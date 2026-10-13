@@ -3,18 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>진자 운동 실험</title>
+    <title>단진자 운동 실험</title>
     <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
         body {
-            font-family: 'Pretendard', sans-serif;
+            font-family: 'SeoulNamsanL', sans-serif;
             background-color: #f4f7f6;
             margin: 0;
             padding: 20px;
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
+
+        /* 왼쪽 상단 메인 화면으로 돌아가기 버튼 */
         .back-btn {
+            align-self: flex-start;
             display: inline-block;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             padding: 8px 16px;
             background-color: #2c3e50;
             color: white;
@@ -22,128 +34,352 @@
             border-radius: 8px;
             font-weight: bold;
         }
-        canvas {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin: 20px auto;
-            display: block;
-        }
-        .controls {
-            background: white;
+
+        #physics-sim-wrapper {
+            position: relative;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 12px;
             padding: 20px;
-            border-radius: 10px;
-            display: inline-block;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 800px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
         }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
+
+        #physics-sim-wrapper.fullscreen-mode {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            padding: 15px !important;
+            background: #ffffff !important;
+            z-index: 99999 !important;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        h2 { margin-top: 0; text-align: center; }
+
+        .control-panel {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #aaa;
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .control-group input {
+            margin-top: 5px;
+            cursor: pointer;
+        }
+
+        /* 캔버스 래퍼 및 우측 하단 버튼 배치 */
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            background: #e0f7fa;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #physics-sim-wrapper.fullscreen-mode .canvas-container {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+        }
+
+        #simCanvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+            cursor: grab;
+        }
+        #simCanvas:active {
+            cursor: grabbing;
+        }
+
+        /* 우측 하단 고정 버튼 영역 */
+        .btn-bottom-right {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .action-btn {
+            padding: 10px 15px;
             border: none;
-            border-radius: 5px;
-            background-color: #3498db;
+            border-radius: 8px;
+            background: #34495e;
             color: white;
             cursor: pointer;
-            margin: 5px;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
-        button:hover {
-            background-color: #2980b9;
-        }
+        .action-btn:hover { background: #2c3e50; }
+        .reset-btn { background: #e74c3c; }
+        .reset-btn:hover { background: #c0392b; }
     </style>
 </head>
 <body>
 
     <a href="../index.html" class="back-btn">⬅ 메인 화면으로 돌아가기</a>
-    
-    <h2>⏱️ 진자 운동 가상 실험실</h2>
-    
-    <div class="controls">
-        <label>실의 길이 조절: <input type="range" id="lengthSlider" min="50" max="250" value="150"></label>
-        <br><br>
-        <button onclick="startSim()">실험 시작</button>
-        <button onclick="stopSim()">정지</button>
+
+    <div id="physics-sim-wrapper">
+        <h2>⏱️ 단진자 운동 가상 실험실</h2>
+
+        <div class="control-panel">
+            <div class="control-group">
+                <label>실의 길이: <span id="lengthVal" style="color:#2980b9;">20</span> cm</label>
+                <input type="range" id="lengthSlider" min="5" max="30" step="1" value="20">
+            </div>
+            <div class="control-group">
+                <label>중력가속도: <span id="gVal" style="color:#e67e22;">9.8</span> m/s²</label>
+                <input type="range" id="gSlider" min="0" max="9.8" step="0.1" value="9.8">
+            </div>
+        </div>
+
+        <div class="canvas-container" id="canvasContainer">
+            <canvas id="simCanvas" width="800" height="600"></canvas>
+            
+            <!-- 우측 하단 버튼 -->
+            <div class="btn-bottom-right">
+                <button id="btnStop" class="action-btn">정지 / 재개</button>
+                <button id="btnReset" class="action-btn reset-btn">초기화</button>
+                <button id="btnFullscreen" class="action-btn">⛶ 전체화면</button>
+            </div>
+        </div>
     </div>
 
-    <canvas id="simCanvas" width="400" height="400"></canvas>
-
     <script>
+    (function() {
+        const wrapper = document.getElementById('physics-sim-wrapper');
         const canvas = document.getElementById('simCanvas');
         const ctx = canvas.getContext('2d');
         const lengthSlider = document.getElementById('lengthSlider');
+        const lengthVal = document.getElementById('lengthVal');
+        const gSlider = document.getElementById('gSlider');
+        const gVal = document.getElementById('gVal');
+        const btnStop = document.getElementById('btnStop');
+        const btnReset = document.getElementById('btnReset');
+        const btnFullscreen = document.getElementById('btnFullscreen');
+
+        const logicWidth = 800;
+        const logicHeight = 600;
         
-        let length = parseInt(lengthSlider.value);
-        let angle = Math.PI / 4; // 시작 각도 (45도)
+        const originX = logicWidth / 2;
+        const originY = 80;
+
+        // 변수 설정 (길이 cm 단위를 픽셀 스케일로 변환, 1cm = 12px)
+        const scale = 12; 
+        let lengthCm = parseFloat(lengthSlider.value);
+        let gravity = parseFloat(gSlider.value);
+        
+        let angle = Math.PI / 4; // 초기 45도
         let angularVelocity = 0;
         let angularAcceleration = 0;
-        const gravity = 0.5; // 중력 가속도 임의값
-        let isRunning = false;
-        let animationId;
+        let isRunning = true;
+        let isDragging = false;
 
-        // 진자 그리기 함수
-        function drawPendulum() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // 마우스/터치 좌표 보정 (전체화면 및 레티나 대응)
+        function getCanvasPos(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const logicRatio = logicWidth / logicHeight;
+            const rectRatio = rect.width / rect.height;
             
-            const originX = canvas.width / 2;
-            const originY = 50;
-            
-            // 현재 실의 길이에 따른 추의 위치 계산
-            const bobX = originX + length * Math.sin(angle);
-            const bobY = originY + length * Math.cos(angle);
-            
-            // 실 그리기
+            let actualWidth = rect.width;
+            let actualHeight = rect.height;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            if (rectRatio > logicRatio) {
+                actualWidth = rect.height * logicRatio;
+                offsetX = (rect.width - actualWidth) / 2;
+            } else {
+                actualHeight = rect.width / logicRatio;
+                offsetY = (rect.height - actualHeight) / 2;
+            }
+
+            return {
+                x: (clientX - rect.left - offsetX) * (logicWidth / actualWidth),
+                y: (clientY - rect.top - offsetY) * (logicHeight / actualHeight)
+            };
+        }
+
+        // 드래그 시작 (추를 터치하거나 클릭할 때)
+        function handleStart(clientX, clientY) {
+            const pos = getCanvasPos(clientX, clientY);
+            let L = lengthCm * scale;
+            let bobX = originX + L * Math.sin(angle);
+            let bobY = originY + L * Math.cos(angle);
+
+            // 추 반경(25px) 안쪽을 클릭했는지 검사
+            let dist = Math.hypot(pos.x - bobX, pos.y - bobY);
+            if (dist < 35) {
+                isDragging = true;
+                angularVelocity = 0;
+            }
+        }
+
+        // 드래그 중 (각도 실시간 계산)
+        function handleMove(clientX, clientY) {
+            if (isDragging) {
+                const pos = getCanvasPos(clientX, clientY);
+                let dx = pos.x - originX;
+                let dy = pos.y - originY;
+                // 아크탄젠트를 이용해 연직선(아래쪽) 기준 각도 계산
+                angle = Math.atan2(dx, dy);
+                // 최대 각도 제한 (약 85도 까지만)
+                if (angle > 1.5) angle = 1.5;
+                if (angle < -1.5) angle = -1.5;
+            }
+        }
+
+        function handleEnd() {
+            isDragging = false;
+        }
+
+        canvas.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
+        window.addEventListener('mousemove', (e) => { if(isDragging) handleMove(e.clientX, e.clientY); });
+        window.addEventListener('mouseup', handleEnd);
+
+        canvas.addEventListener('touchstart', (e) => {
+            if(e.touches.length > 0) {
+                handleStart(e.touches[0].clientX, e.touches[0].clientY);
+                if(isDragging) e.preventDefault();
+            }
+        }, { passive: false });
+        window.addEventListener('touchmove', (e) => {
+            if(isDragging && e.touches.length > 0) {
+                handleMove(e.touches[0].clientX, e.touches[0].clientY);
+                e.preventDefault();
+            }
+        }, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+
+        // 버튼 제어
+        btnStop.addEventListener('click', () => { isRunning = !isRunning; });
+        btnReset.addEventListener('click', () => {
+            lengthSlider.value = 20;
+            gSlider.value = 9.8;
+            lengthCm = 20;
+            gravity = 9.8;
+            angle = Math.PI / 4;
+            angularVelocity = 0;
+            isRunning = true;
+        });
+
+        btnFullscreen.addEventListener('click', () => {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (wrapper.requestFullscreen) wrapper.requestFullscreen();
+                else if (wrapper.webkitRequestFullscreen) wrapper.webkitRequestFullscreen();
+                btnFullscreen.innerText = '🗗 창모드';
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                btnFullscreen.innerText = '⛶ 전체화면';
+            }
+        });
+
+        // 물리 연산 및 렌더링 루프
+        function loop() {
+            ctx.clearRect(0, 0, logicWidth, logicHeight);
+
+            lengthCm = parseFloat(lengthSlider.value);
+            gravity = parseFloat(gSlider.value);
+            lengthVal.innerText = lengthCm;
+            gVal.innerText = gravity.toFixed(1);
+
+            let L = lengthCm * scale; // 픽셀 단위 실 길이
+
+            if (isRunning && !isDragging) {
+                // 단진자 운동 방정식: 알파 = -(g / L) * sin(theta)
+                let g_scaled = gravity * 0.1; // 화면 연산 스케일 조절
+                angularAcceleration = -(g_scaled / (lengthCm * 0.05 + 0.1)) * Math.sin(angle);
+                angularVelocity += angularAcceleration;
+                angularVelocity *= 0.998; // 공기저항
+                angle += angularVelocity;
+            } else if (isDragging) {
+                angularVelocity = 0;
+            }
+
+            let bobX = originX + L * Math.sin(angle);
+            let bobY = originY + L * Math.cos(angle);
+
+            // --- 각도기 호(Arc) 및 각도 텍스트 표시 ---
+            ctx.beginPath();
+            ctx.arc(originX, originY, 60, Math.PI/2 - Math.sign(angle)*Math.abs(angle), Math.PI/2, angle > 0);
+            ctx.strokeStyle = 'rgba(52, 152, 219, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            let deg = (angle * (180 / Math.PI)).toFixed(1);
+            ctx.fillStyle = '#2980b9';
+            ctx.font = 'bold 15px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${deg}°`, originX + 35 * Math.sin(angle/2), originY + 45 * Math.cos(angle/2));
+
+            // --- 천장 및 고정점 ---
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fillRect(originX - 60, originY - 10, 120, 10);
+
+            // --- 실 그리기 ---
             ctx.beginPath();
             ctx.moveTo(originX, originY);
             ctx.lineTo(bobX, bobY);
             ctx.strokeStyle = '#333';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.stroke();
-            
-            // 추 그리기
+
+            // --- 추(Bob) 그리기 ---
             ctx.beginPath();
-            ctx.arc(bobX, bobY, 20, 0, Math.PI * 2);
+            ctx.arc(bobX, bobY, 25, 0, Math.PI * 2);
             ctx.fillStyle = '#e74c3c';
             ctx.fill();
+            ctx.strokeStyle = '#c0392b';
+            ctx.lineWidth = 3;
             ctx.stroke();
+
+            // 추 하이라이트 (입체감)
+            ctx.beginPath();
+            ctx.arc(bobX - 6, bobY - 6, 6, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.fill();
+
+            requestAnimationFrame(loop);
         }
 
-        // 물리 엔진 업데이트 함수
-        function updatePhysics() {
-            if (isRunning) {
-                // 단진자 운동 방정식: a = -(g/L) * sin(theta)
-                angularAcceleration = -(gravity / length) * Math.sin(angle);
-                angularVelocity += angularAcceleration;
-                // 공기 저항 (마찰) 추가
-                angularVelocity *= 0.995; 
-                angle += angularVelocity;
-            }
-        }
-
-        // 애니메이션 루프
-        function animate() {
-            updatePhysics();
-            drawPendulum();
-            animationId = requestAnimationFrame(animate);
-        }
-
-        // 슬라이더 조절 시 실시간 반영
-        lengthSlider.addEventListener('input', function() {
-            length = parseInt(this.value);
-            if (!isRunning) drawPendulum();
-        });
-
-        // 시작/정지 버튼 제어
-        function startSim() {
-            if (!isRunning) {
-                isRunning = true;
-            }
-        }
-        function stopSim() {
-            isRunning = false;
-        }
-
-        // 초기 화면 그리기 시작
-        drawPendulum();
-        animate();
+        loop();
+    })();
     </script>
 </body>
 </html>
