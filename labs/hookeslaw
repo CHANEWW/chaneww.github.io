@@ -1,0 +1,333 @@
+<p data-ke-size="size16">&nbsp;</p>
+<p data-ke-size="size16"></p>
+<div id="physics-sim-wrapper">
+<div class="sim-header">
+<h2 data-ke-size="size26">용수철 저울 탐구 실험</h2>
+</div>
+<div class="sim-desc">🧪 <b>탐구 목표:</b> [현재 길이]에서 [원래 길이]를 빼서 늘어난 길이를 직접 구해보세요. <br /><span>※ 추 1개(100g)가 누르는 힘(중력)은 약 0.98 N 입니다.</span></div>
+<div class="top-control-panel">
+<div class="control-group"><label for="kSlider">용수철 상수(k): <span style="color: #3498db;">5</span> N/m</label> <input id="kSlider" max="10" min="1" step="1" type="range" value="5" /></div>
+<div class="data-display-group">
+<div class="data-item">원래 길이: <span style="color: #27ae60;">50.0</span> cm</div>
+<div class="data-item">매달린 질량: <span>0</span> g</div>
+<div class="data-item">현재 전체 길이: <span>50.0</span> cm</div>
+</div>
+</div>
+<div class="canvas-container"><canvas id="simCanvas" width="800" height="800"></canvas>
+<div class="btn-bottom-left"><button id="btnReset" class="action-btn"><span>🔄</span> 초기화</button></div>
+<div class="btn-bottom-right"><button id="btnFullscreen" class="action-btn"> <span>⛶</span> <span>전체화면</span> </button></div>
+</div>
+</div>
+<script>
+(function() {
+    const wrapper = document.getElementById('physics-sim-wrapper');
+    const canvas = document.getElementById('simCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const kSlider = document.getElementById('kSlider');
+    const kValue = document.getElementById('kValue');
+    const massValue = document.getElementById('massValue');
+    const currentLengthValue = document.getElementById('currentLengthValue');
+    const btnReset = document.getElementById('btnReset');
+    const btnFullscreen = document.getElementById('btnFullscreen');
+    const fullscreenIcon = document.getElementById('fullscreenIcon');
+    const fullscreenText = document.getElementById('fullscreenText');
+
+    // 캔버스 논리적 크기 (1:1 비율)
+    const logicWidth = 800;
+    const logicHeight = 800;
+    
+    // 물리 상수 및 변수
+    const DEFAULT_K = 5;
+    const L0_cm = 50.0; // 용수철 원래 길이 (cm)
+    let currentL_cm = L0_cm; 
+    let vel = 0;
+    const k_spring_anim = 0.15; // 애니메이션 탄성 계수
+    const damping = 0.82;       // 진동 감쇠 계수
+
+    // 화면 렌더링 배율 (1cm당 0.9픽셀 적용하여 최대 550cm까지 표시)
+    const pxPerCm = 0.9;
+    const ceilingY = 70; // 0cm 시작점 (천장의 바닥면)
+
+    // 100g 추 5개 초기 위치 (화면 우측 하단)
+    const initialWeights = [
+        { id: 0, ox: 540, oy: 630 },
+        { id: 1, ox: 615, oy: 630 },
+        { id: 2, ox: 690, oy: 630 },
+        { id: 3, ox: 575, oy: 695 },
+        { id: 4, ox: 650, oy: 695 }
+    ];
+
+    let weights = [];
+    function resetWeights() {
+        weights = initialWeights.map(w => ({
+            id: w.id, ox: w.ox, oy: w.oy, x: w.ox, y: w.oy,
+            isAttached: false, isDragging: false
+        }));
+    }
+    resetWeights();
+
+    let draggedWeight = null;
+    let dragOffsetX = 0, dragOffsetY = 0;
+
+    // 터치/마우스 좌표 변환 (전체화면 object-fit 여백 보정 로직 적용)
+    function getCanvasPos(clientX, clientY) {
+        const rect = canvas.getBoundingClientRect();
+        
+        // CSS의 object-fit: contain 속성으로 인해 발생하는 상하/좌우 빈 여백 계산
+        const logicRatio = logicWidth / logicHeight;
+        const rectRatio = rect.width / rect.height;
+        
+        let actualWidth = rect.width;
+        let actualHeight = rect.height;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (rectRatio > logicRatio) {
+            // 좌우 여백(Pillarbox) 발생 시
+            actualWidth = rect.height * logicRatio;
+            offsetX = (rect.width - actualWidth) / 2;
+        } else {
+            // 상하 여백(Letterbox) 발생 시
+            actualHeight = rect.width / logicRatio;
+            offsetY = (rect.height - actualHeight) / 2;
+        }
+
+        const scaleX = logicWidth / actualWidth;
+        const scaleY = logicHeight / actualHeight;
+
+        return {
+            x: (clientX - rect.left - offsetX) * scaleX,
+            y: (clientY - rect.top - offsetY) * scaleY
+        };
+    }
+
+    function handleStart(clientX, clientY) {
+        const pos = getCanvasPos(clientX, clientY);
+        for (let i = weights.length - 1; i >= 0; i--) {
+            let w = weights[i];
+            if (pos.x > w.x - 30 && pos.x < w.x + 30 && pos.y > w.y - 15 && pos.y < w.y + 55) {
+                draggedWeight = w;
+                w.isDragging = true;
+                w.isAttached = false;
+                dragOffsetX = pos.x - w.x;
+                dragOffsetY = pos.y - w.y;
+                canvas.style.cursor = 'grabbing';
+                weights.splice(i, 1);
+                weights.push(w);
+                break;
+            }
+        }
+    }
+
+    function handleMove(clientX, clientY) {
+        if (draggedWeight) {
+            const pos = getCanvasPos(clientX, clientY);
+            draggedWeight.x = pos.x - dragOffsetX;
+            draggedWeight.y = pos.y - dragOffsetY;
+        }
+    }
+
+    function handleEnd() {
+        if (draggedWeight) {
+            if (Math.abs(draggedWeight.x - 400) < 90) {
+                draggedWeight.isAttached = true;
+            } else {
+                draggedWeight.isAttached = false;
+                draggedWeight.x = draggedWeight.ox;
+                draggedWeight.y = draggedWeight.oy;
+            }
+            draggedWeight.isDragging = false;
+            draggedWeight = null;
+            canvas.style.cursor = 'default';
+        }
+    }
+
+    canvas.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
+    window.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', handleEnd);
+
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+            handleStart(e.touches[0].clientX, e.touches[0].clientY);
+            if (draggedWeight) e.preventDefault();
+        }
+    }, { passive: false });
+    window.addEventListener('touchmove', (e) => {
+        if (draggedWeight && e.touches.length > 0) {
+            handleMove(e.touches[0].clientX, e.touches[0].clientY);
+            e.preventDefault();
+        }
+    }, { passive: false });
+    window.addEventListener('touchend', handleEnd);
+    window.addEventListener('touchcancel', handleEnd);
+
+    btnReset.addEventListener('click', () => {
+        kSlider.value = DEFAULT_K;
+        kValue.innerText = DEFAULT_K;
+        resetWeights();
+        vel = 0;
+        currentL_cm = L0_cm;
+    });
+
+    btnFullscreen.addEventListener('click', () => {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (wrapper.requestFullscreen) wrapper.requestFullscreen();
+            else if (wrapper.webkitRequestFullscreen) wrapper.webkitRequestFullscreen();
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        }
+    });
+
+    function updateFullscreenUI() {
+        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+        fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+    }
+    document.addEventListener('fullscreenchange', updateFullscreenUI);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+
+    function drawSpring(ctx, startX, startY, endY, coils) {
+        let width = 28;
+        let height = endY - startY;
+        let step = height / coils;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        for (let i = 0; i < coils; i++) {
+            let y = startY + i * step;
+            ctx.lineTo(startX - width/2, y + step * 0.25);
+            ctx.lineTo(startX + width/2, y + step * 0.75);
+        }
+        ctx.lineTo(startX, endY);
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+    }
+
+    function drawWeight(ctx, x, y, label) {
+        ctx.beginPath();
+        ctx.arc(x, y - 8, 8, 0, Math.PI * 2);
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        ctx.fillStyle = '#e67e22'; 
+        ctx.fillRect(x - 22, y, 44, 45);
+        ctx.strokeStyle = '#d35400';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - 22, y, 44, 45);
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y + 23);
+    }
+
+    function loop() {
+        ctx.clearRect(0, 0, logicWidth, logicHeight);
+        
+        let k = parseFloat(kSlider.value);
+        kValue.innerText = k;
+        
+        let attachedWeights = weights.filter(w => w.isAttached && !w.isDragging);
+        let mass = attachedWeights.length * 100; // g
+        
+        // 물리 공식: F = (mass(kg) * 9.8), x(cm) = (F / k) * 100
+        let realStretchCm = (mass * 0.98) / k; 
+        let targetL_cm = L0_cm + realStretchCm; 
+        
+        // 탄성 진동 모션 연산
+        let force = (targetL_cm - currentL_cm) * k_spring_anim;
+        vel = (vel + force) * damping;
+        currentL_cm += vel;
+        
+        // 미세 진동 방지 및 값 고정
+        if (Math.abs(vel) < 0.01 && Math.abs(targetL_cm - currentL_cm) < 0.05) {
+            currentL_cm = targetL_cm;
+            vel = 0;
+        }
+
+        massValue.innerText = mass;
+        currentLengthValue.innerText = currentL_cm.toFixed(1);
+        
+        // === 배경 및 눈금자 ===
+        // 천장 (바닥면이 Y = 70)
+        ctx.fillStyle = '#bdc3c7';
+        ctx.fillRect(300, 30, 200, 40);
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(300, 30, 200, 40);
+
+        // 눈금자 선 (0cm 위치는 ceilingY(70) 부터 시작)
+        ctx.beginPath();
+        ctx.moveTo(310, ceilingY);
+        ctx.lineTo(310, ceilingY + 550 * pxPerCm);
+        ctx.strokeStyle = '#2c3e50';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        ctx.fillStyle = '#2c3e50';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('cm', 290, ceilingY - 15);
+        
+        // 눈금 그리기 (10cm 단위)
+        for (let i = 0; i <= 550; i += 10) {
+            let y = ceilingY + i * pxPerCm;
+            ctx.beginPath();
+            ctx.moveTo(300, y);
+            ctx.lineTo(310, y);
+            ctx.stroke();
+            if (i % 50 === 0) ctx.fillText(i, 290, y); // 50cm 마다 숫자 라벨
+        }
+        
+        // 현재 길이 지시선 (빨간 점선)
+        let hookY = ceilingY + currentL_cm * pxPerCm;
+        ctx.beginPath();
+        ctx.moveTo(310, hookY);
+        ctx.lineTo(400, hookY);
+        ctx.strokeStyle = 'rgba(231, 76, 60, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // 용수철 그리기
+        drawSpring(ctx, 400, ceilingY, hookY, 18);
+        ctx.beginPath();
+        ctx.arc(400, hookY + 5, 5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // === 추 보관함 영역 및 추 그리기 ===
+        ctx.fillStyle = 'rgba(236, 240, 241, 0.6)';
+        ctx.strokeStyle = '#bdc3c7';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(500, 590, 270, 150); // 아래로 내려 배치
+        ctx.setLineDash([]);
+        
+        ctx.fillStyle = '#7f8c8d';
+        ctx.font = '13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('추 보관함 (100g × 5)', 635, 610);
+
+        let attachIndex = 0;
+        weights.forEach(w => {
+            if (w.isAttached && !w.isDragging) {
+                w.x = 400;
+                w.y = hookY + 18 + attachIndex * 45;
+                attachIndex++;
+            }
+            drawWeight(ctx, w.x, w.y, "100g");
+        });
+
+        requestAnimationFrame(loop);
+    }
+    
+    loop();
+})();
+</script>
