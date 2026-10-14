@@ -222,6 +222,27 @@
             width: 100%;
             accent-color: #007aff;
         }
+
+        /* 다크모드 대응 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.7);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.7);
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -335,7 +356,7 @@
         dirLight.shadow.mapSize.height = 2048;
         scene.add(dirLight);
 
-        // 3. 3D Stand & Grid Floor (첫 번째 사진 스탠드 환경 동일 연출)
+        // 3. 3D Stand & Grid Floor
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(20, 20),
             new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 })
@@ -383,13 +404,7 @@
         bobMesh.castShadow = true;
         pivotGroup.add(bobMesh);
 
-        // 5. Force Arrows (중력, 장력)
-        const gravityArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.5, 0x34c759, 0.1, 0.06);
-        const tensionArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.5, 0xff9500, 0.1, 0.06);
-        scene.add(gravityArrow);
-        scene.add(tensionArrow);
-
-        // 6. Physics Simulation Logic
+        // 5. Physics Simulation Logic
         let angle = Math.PI / 6;
         let angularVelocity = 0;
         let angularAcceleration = 0;
@@ -405,28 +420,17 @@
 
             angularAcceleration = -(gravity / rodLength) * Math.sin(angle);
             angularVelocity += angularAcceleration * dt;
-            angularVelocity *= 0.999; // 완만한 감쇠
+            angularVelocity *= 0.999; // 공기 저항 감쇠
             angle += angularVelocity * dt;
 
             pivotGroup.rotation.z = angle;
-
-            const bobWorldPos = new THREE.Vector3();
-            bobMesh.getWorldPosition(bobWorldPos);
-
-            gravityArrow.position.copy(bobWorldPos);
-            gravityArrow.setLength(0.4 + mass * 0.1);
-
-            tensionArrow.position.copy(bobWorldPos);
-            const tensionDir = new THREE.Vector3().subVectors(pivotGroup.position, bobWorldPos).normalize();
-            tensionArrow.setDirection(tensionDir);
-            tensionArrow.setLength(0.4 + Math.cos(angle) * 0.3);
 
             document.getElementById('val-angle').innerText = (angle * (180 / Math.PI)).toFixed(1) + '°';
             document.getElementById('val-period').innerText = (2 * Math.PI * Math.sqrt(rodLength / gravity)).toFixed(2) + 's';
             document.getElementById('val-speed').innerText = Math.abs(angularVelocity * rodLength).toFixed(2) + 'm/s';
         }
 
-        // 7. Touch & Drag Controls (Raycasting)
+        // 6. Touch & Drag Controls (Raycasting)
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -458,7 +462,9 @@
             if (intersectionPoint) {
                 const dx = intersectionPoint.x - pivotGroup.position.x;
                 const dy = intersectionPoint.y - pivotGroup.position.y;
-                angle = Math.atan2(-dx, -dy);
+                
+                // 마우스 드래그 방향과 추의 움직임 방향 매칭 (부호 수정)
+                angle = Math.atan2(dx, -dy);
                 angle = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, angle));
                 
                 pivotGroup.rotation.z = angle;
@@ -478,7 +484,7 @@
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
 
-        // 8. Event Listeners
+        // 7. Event Listeners
         const btnPlay = document.getElementById('btn-play');
         btnPlay.addEventListener('click', () => {
             isRunning = !isRunning;
@@ -537,7 +543,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Loop
+        // 8. Animation Loop
         function animate() {
             requestAnimationFrame(animate);
             updatePhysics(clock.getDelta());
