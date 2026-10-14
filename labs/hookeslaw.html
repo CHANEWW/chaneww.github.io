@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>용수철 저울 3D - visionOS / Apple HIG Style</title>
+    <title>추의 무게에 따른 용수철의 늘어난 길이 3D</title>
     <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -261,7 +261,7 @@
             <span>⬅</span> 메인
         </a>
         <div class="glass-panel tag-badge">
-            <span>용수철 저울 3D</span>
+            <span>추의 무게에 따른 용수철의 늘어난 길이</span>
             <span class="tag-pill">visionOS</span>
         </div>
     </div>
@@ -270,7 +270,7 @@
         <div class="glass-panel data-card">
             <div class="data-item">
                 <span class="data-label">원래 길이</span>
-                <span class="data-value" style="color:#34495e;">50.0 cm</span>
+                <span class="data-value" style="color:#34c759;">50.0 cm</span>
             </div>
             <div class="data-item">
                 <span class="data-label">매달린 질량</span>
@@ -320,7 +320,7 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0.2, 4.2);
+        camera.position.set(0, 0.1, 4.0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -332,7 +332,7 @@
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.target.set(0, -0.8, 0);
+        controls.target.set(0, -0.7, 0);
         controls.maxPolarAngle = Math.PI / 2 + 0.05;
 
         // --- 2. 조명 설정 ---
@@ -347,8 +347,8 @@
         scene.add(dirLight);
 
         // --- 스케일 및 물리 상수 연산 정의 ---
-        const ceilingY = 1.35;         // 용수철/눈금자 고정 Y좌표
-        const springX = 0;             // 스탠드 상단 막대 중심 X좌표 (용수철 위치)
+        const ceilingY = 1.35;         // 용수철/눈금자 고정 Y좌표 (스탠드 교차점)
+        const springX = 0;             // 용수철 중심 X좌표
         const CM_TO_WORLD = 0.012;     // 1cm당 월드 Y축 길이 (200cm = 2.4m)
         const L0_cm = 50.0;
         let currentL_cm = L0_cm;
@@ -370,18 +370,18 @@
         gridHelper.position.y = -1.79;
         scene.add(gridHelper);
 
-        // 지지대 스탠드 (용수철 고정 위치 springX=0 에 걸치도록 배치)
+        // 지지대 스탠드 (용수철 고정 상단 보 중심 springX=0 에 걸쳐지도록 정렬)
         const standGroup = new THREE.Group();
         const metalMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, metalness: 0.8, roughness: 0.2 });
 
         const basePole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3.2, 32), metalMat);
-        basePole.position.set(0.5, -0.2, -0.3);
+        basePole.position.set(0.5, -0.25, -0.2);
         basePole.castShadow = true;
         standGroup.add(basePole);
 
         const topCross = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 32), metalMat);
         topCross.rotation.z = Math.PI / 2;
-        topCross.position.set(0, ceilingY, -0.3);
+        topCross.position.set(0, ceilingY, -0.2);
         topCross.castShadow = true;
         standGroup.add(topCross);
 
@@ -398,7 +398,7 @@
         );
         rulerGroup.add(rulerBody);
 
-        // 200cm 눈금자 Canvas 텍스처 그리기
+        // 200cm 눈금자 Canvas 텍스처그리기
         const rulerCanvas = document.createElement('canvas');
         rulerCanvas.width = 256;
         rulerCanvas.height = 4096;
@@ -512,13 +512,20 @@
         function createWeightMesh() {
             const group = new THREE.Group();
             
+            // 몸통
             const body = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.12, 32), weightMat);
             body.castShadow = true;
             group.add(body);
 
+            // 상단 C 고리
             const topRing = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 16, 32), weightMat);
             topRing.position.y = 0.08;
             group.add(topRing);
+
+            // 하단 반C 고리 (연쇄 연결용)
+            const bottomRing = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 16, 32), weightMat);
+            bottomRing.position.y = -0.08;
+            group.add(bottomRing);
 
             return group;
         }
@@ -630,13 +637,13 @@
             updateSpringMesh();
             updateIndicator();
 
-            // 매달린 추 위치 업데이트
+            // 매달린 추 상하 교차 연쇄 배치
             const hookY = ceilingY - (currentL_cm * CM_TO_WORLD) - 0.08;
             attachedWeights.forEach((w, idx) => {
-                w.mesh.position.set(springX, hookY - (idx * 0.13), 0);
+                w.mesh.position.set(springX, hookY - (idx * 0.15), 0);
             });
 
-            // UI 숫자에 출력
+            // UI 수치 출력
             document.getElementById('val-mass').innerText = massG + ' g';
             document.getElementById('val-length').innerText = currentL_cm.toFixed(1) + ' cm';
         }
@@ -664,8 +671,8 @@
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 0.2, 4.2);
-            controls.target.set(0, -0.8, 0);
+            camera.position.set(0, 0.1, 4.0);
+            controls.target.set(0, -0.7, 0);
         });
 
         document.getElementById('theme-toggle').addEventListener('click', () => {
