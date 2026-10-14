@@ -275,7 +275,7 @@
     <!-- 3D Canvas Container -->
     <div id="canvas-container"></div>
 
-    <!-- 좌측 상단 헤더 (사진 레이아웃 일치) -->
+    <!-- 좌측 상단 헤더 -->
     <div class="top-left-bar">
         <a href="../index.html" class="glass-panel back-btn">
             <span>⬅</span> 메인
@@ -286,7 +286,7 @@
         </div>
     </div>
 
-    <!-- 우측 상단 실시간 데이터 패널 (괄호 기호 삭제 및 사진 레이아웃 일치) -->
+    <!-- 우측 상단 실시간 데이터 패널 -->
     <div class="top-right-bar">
         <div class="glass-panel data-card">
             <div class="data-item">
@@ -475,15 +475,15 @@
         let isDragging = false;
         let dragOffsetY = 0;
 
-        // --- 7. 마우스/터치 Raycasting 드래그 (스크롤 차단 적용) ---
+        // --- 7. 개선된 마우스/터치 Raycasting 드래그 로직 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
         const planeIntersect = new THREE.Vector3();
 
         function getMousePos(e) {
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(clientY / window.innerHeight) * 2 + 1;
         }
@@ -491,11 +491,13 @@
         function onPointerDown(e) {
             getMousePos(e);
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObject(boatMesh);
+            // 배 선체뿐만 아니라 선실 등 전체 그룹 내부 메쉬 클릭 감지
+            const intersects = raycaster.intersectObjects(boatGroup.children, true);
 
             if (intersects.length > 0) {
                 isDragging = true;
-                controls.enabled = false;
+                controls.enabled = false; // 드래그 시 카메라 회전 완전 차단
+                
                 raycaster.ray.intersectPlane(dragPlane, planeIntersect);
                 dragOffsetY = boatGroup.position.y - planeIntersect.y;
                 boatVy = 0;
@@ -503,8 +505,7 @@
                 const tooltip = document.getElementById('guide-tooltip');
                 if (tooltip) tooltip.style.opacity = '0';
 
-                // 스크롤 방지
-                if(e.cancelable) e.preventDefault(); 
+                if (e.cancelable) e.preventDefault(); 
             }
         }
 
@@ -514,22 +515,22 @@
             raycaster.setFromCamera(mouse, camera);
             if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                 let newY = planeIntersect.y + dragOffsetY;
-                newY = Math.max(-1.2, Math.min(0.5, newY));
+                // 수조 바닥까지 깊이 내려갈 수 있도록 범위를 충분히 확보 (-1.35 ~ 0.5)
+                newY = Math.max(-1.35, Math.min(0.5, newY));
                 boatGroup.position.y = newY;
             }
             
-            // 드래그 중 스크롤 완벽 차단
-            if(e.cancelable) e.preventDefault(); 
+            if (e.cancelable) e.preventDefault(); 
         }
 
         function onPointerUp() {
             if (isDragging) {
                 isDragging = false;
-                controls.enabled = true;
+                controls.enabled = true; // 드래그 종료 시 카메라 회전 기능 복구
             }
         }
 
-        // 캔버스 자체에 이벤트 리스너를 걸어 문서 전체 스크롤 간섭을 차단 (passive: false 중요)
+        // 캔버스 요소 및 전역 윈도우 이벤트 등록
         const canvasElement = renderer.domElement;
         
         canvasElement.addEventListener('mousedown', onPointerDown);
@@ -537,8 +538,7 @@
         window.addEventListener('mouseup', onPointerUp);
 
         canvasElement.addEventListener('touchstart', onPointerDown, { passive: false });
-        // touchmove 이벤트를 캔버스에 직접 걸고 passive를 false로 해야 e.preventDefault()가 작동하여 화면이 안움직임
-        canvasElement.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp);
 
         // --- 8. 물리 상태 연산 루프 ---
@@ -557,7 +557,7 @@
                 boatVy *= (1 - damping);
                 boatGroup.position.y += boatVy * dt;
 
-                if (boatGroup.position.y < -1.1) { boatGroup.position.y = -1.1; boatVy = 0; }
+                if (boatGroup.position.y < -1.35) { boatGroup.position.y = -1.35; boatVy = 0; }
                 if (boatGroup.position.y > 0.5) { boatGroup.position.y = 0.5; boatVy = 0; }
             }
 
@@ -571,14 +571,14 @@
             arrowGravity.visible = document.getElementById('chk-gravity').checked;
             arrowBuoyancy.visible = document.getElementById('chk-buoyancy').checked;
 
-            // UI 업데이트 (괄호 없이 깔끔하게)
+            // UI 실시간 정보 업데이트
             document.getElementById('val-g').innerText = currentG.toFixed(1) + ' m/s²';
             document.getElementById('val-fg').innerText = Fg.toFixed(1) + ' N';
             document.getElementById('val-fb').innerText = Fb.toFixed(1) + ' N';
             document.getElementById('val-depth').innerText = ((submergedDepth / boatHeight) * 100).toFixed(1) + ' %';
         }
 
-        // --- 9. 버튼 조작 이벤트 ---
+        // --- 9. 하단 버튼 이벤트 ---
         const btnTogglePhysics = document.getElementById('btn-toggle-physics');
         const physicsPanel = document.getElementById('physics-panel');
         btnTogglePhysics.addEventListener('click', () => {
@@ -617,7 +617,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- 10. 메인 애니메이션 루프 ---
+        // --- 10. 애니메이션 루프 ---
         const clock = new THREE.Clock();
 
         function animate() {
