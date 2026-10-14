@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>부력과 중력 평형 시뮬레이션</title>
+    <title>부력과 중력 평형 3D - visionOS / Apple HIG Style</title>
+    <!-- Three.js 및 OrbitControls 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         @font-face {
             font-family: 'SeoulNamsanL';
@@ -12,283 +15,416 @@
             font-style: normal;
         }
 
-        body {
-            margin: 0;
-            padding: 20px;
-            font-family: 'SeoulNamsanL', sans-serif;
-            background-color: #f4f7f6;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        * {
+            box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
         }
 
-        /* 왼쪽 상단 메인 버튼 */
-        .back-btn {
-            align-self: flex-start;
-            display: inline-block;
-            margin-bottom: 15px;
-            padding: 10px 20px;
-            background-color: #2c3e50;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: background 0.2s;
-        }
-        .back-btn:hover { background-color: #34495e; }
-
-        /* 시뮬레이션 전체 래퍼 */
-        #physics-sim-wrapper {
-            position: relative;
-            background: #ffffff;
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            padding: 20px;
-            width: 100%;
-            max-width: 900px;
-            box-sizing: border-box;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        h2 { margin-top: 0; color: #2c3e50; font-size: 22px; text-align: center; }
-
-        .sim-desc {
-            background: #f8f9fa;
-            padding: 12px 18px;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #333;
-            margin-bottom: 15px;
-            width: 100%;
-            box-sizing: border-box;
-            line-height: 1.5;
-            border-left: 4px solid #3498db;
-        }
-
-        /* 3D 캔버스 컨테이너 */
-        #canvasContainer {
-            position: relative;
-            width: 100%;
-            height: 500px;
-            border-radius: 8px;
-            overflow: hidden;
-            border: 1px solid #ccc;
-            background: #f0f4f8;
-            touch-action: none;
-        }
-
-        #simCanvas {
+        body, html {
+            margin: 0;
+            padding: 0;
             width: 100%;
             height: 100%;
-            display: block;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
         }
 
-        /* 우측 상단 실시간 데이터 패널 */
-        .info-panel {
+        #canvas-container {
+            width: 100%;
+            height: 100%;
             position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(255, 255, 255, 0.92);
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid #dcdcdc;
-            font-size: 13px;
-            font-weight: bold;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            pointer-events: none;
-            line-height: 1.6;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
             z-index: 10;
         }
-        .info-panel span { font-weight: normal; }
 
-        /* 하단 제어 패널 (물리 조절 및 체크박스) */
-        .control-panel {
-            width: 100%;
-            margin-top: 15px;
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #ddd;
+        /* 좌측 상단 헤더 */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
             display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
             align-items: center;
-            justify-content: space-between;
-            box-sizing: border-box;
+            gap: 10px;
+            z-index: 10;
         }
 
-        .checkbox-group {
+        .back-btn {
             display: flex;
-            gap: 15px;
-        }
-        .checkbox-group label {
-            cursor: pointer;
-            font-weight: bold;
-            color: #333;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
             font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
 
-        .slider-container {
-            flex: 1;
-            min-width: 220px;
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 우측 상단 실시간 데이터 표시 카드 */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            align-items: center;
         }
-        .slider-container label {
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 메세지 */
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 서브 물리 설정 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 320px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
             font-size: 13px;
             font-weight: bold;
-            color: #333;
-        }
-        .slider-container input[type="range"] {
-            width: 100%;
-            cursor: pointer;
-            accent-color: #3498db;
         }
 
-        /* 하단 버튼 그룹 */
-        .button-group {
+        input[type="range"] {
+            width: 100%;
+            accent-color: #007aff;
+            cursor: pointer;
+        }
+
+        .checkbox-row {
             display: flex;
-            gap: 12px;
-            margin-top: 15px;
-            width: 100%;
-        }
-        .btn {
-            flex: 1;
-            padding: 12px;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
+            justify-content: space-around;
+            font-size: 13px;
             font-weight: bold;
-            font-size: 14px;
-            font-family: inherit;
-            color: white;
-            transition: opacity 0.2s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding-top: 5px;
         }
-        .btn:hover { opacity: 0.9; }
-        #resetBtn { background-color: #27ae60; }
-        #viewResetBtn { background-color: #7f8c8d; }
-    </style>
+        .checkbox-row label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
 
-    <!-- Three.js 라이브러리 로드 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+    </style>
 </head>
 <body>
 
-    <!-- 왼쪽 상단 '메인' 버튼 -->
-    <a href="../index.html" class="back-btn">⬅ 메인</a>
+    <div id="canvas-container"></div>
 
-    <div id="physics-sim-wrapper">
-        <h2>부력과 중력 평형 3D 시뮬레이션</h2>
-        <div class="sim-desc">
-            <b>[실험 방법]</b><br>
-            1. 마우스나 손가락으로 <b>3D 배를 직접 드래그</b>하여 물속 깊이 넣거나 위로 올려보세요.<br>
-            2. 중력가속도 레버를 조절하며 배의 움직임과 힘의 변화를 관찰해 보세요.
-        </div>
-
-        <div id="canvasContainer">
-            <div class="info-panel" id="infoPanel">
-                <div>중력가속도 (g): <span id="valG">10.0</span> m/s²</div>
-                <div>중력: <span id="valFg" style="color:#e53935;">12.2 N</span></div>
-                <div>부력: <span id="valFb" style="color:#1e88e5;">12.2 N</span></div>
-                <div>잠긴 깊이: <span id="valDepth">50.0 %</span></div>
-            </div>
-            <canvas id="simCanvas"></canvas>
-        </div>
-
-        <div class="control-panel">
-            <div class="checkbox-group">
-                <label><input id="chkGravity" type="checkbox" checked> 🔴 중력 표시</label>
-                <label><input id="chkBuoyancy" type="checkbox" checked> 🔵 부력 표시</label>
-            </div>
-            <div class="slider-container">
-                <label for="gSlider">중력가속도 조절: <span id="gValue">10.0</span> m/s²</label>
-                <input id="gSlider" type="range" min="0" max="10" step="0.1" value="10.0">
-            </div>
-        </div>
-
-        <div class="button-group">
-            <button id="resetBtn" class="btn">배 위치 초기화</button>
-            <button id="viewResetBtn" class="btn">카메라 시점 정렬</button>
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <a href="../index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>부력 3D</span>
+            <span class="tag-pill">visionOS</span>
         </div>
     </div>
 
+    <!-- 우측 상단 실시간 데이터 패널 (Fg, Fb 기호 제거 후 순수 명칭 적용) -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">중력가속도</span>
+                <span class="data-value" id="val-g" style="color:#ff3b30;">10.0 m/s²</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">중력</span>
+                <span class="data-value" id="val-fg" style="color:#e53935;">12.2 N</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">부력</span>
+                <span class="data-value" id="val-fb" style="color:#1e88e5;">12.2 N</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">잠긴 깊이</span>
+                <span class="data-value" id="val-depth" style="color:#34c759;">50.0 %</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        ⚓ 배를 마우스/터치로 잡아서 물속으로 깊이 넣어보세요
+    </div>
+
+    <!-- 물리 조절 서브 패널 -->
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="slider-row">
+            <div class="slider-header">
+                <span>중력가속도 (g)</span>
+                <span id="txt-g">10.0 m/s²</span>
+            </div>
+            <input type="range" id="sld-g" min="0" max="10" step="0.1" value="10.0">
+        </div>
+        <div class="checkbox-row">
+            <label><input type="checkbox" id="chk-gravity" checked> 🔴 중력 표시</label>
+            <label><input type="checkbox" id="chk-buoyancy" checked> 🔵 부력 표시</label>
+        </div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>물리 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점정렬</span>
+        </button>
+    </div>
+
     <script>
-        const container = document.getElementById('canvasContainer');
-        const canvas = document.getElementById('simCanvas');
-
-        // Scene, Camera, Renderer
+        // --- 1. Three.js 기본 씬 & 카메라 & 렌더러 설정 ---
+        const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xf0f4f8);
+        scene.background = new THREE.Color(0xf2f2f7);
 
-        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera.position.set(0, 5, 12);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.8, 4.5);
 
-        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-        renderer.setSize(container.clientWidth, container.clientHeight);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.maxPolarAngle = Math.PI / 2 - 0.05; // 바닥 아래로 내려가지 않도록 제한
+        controls.maxPolarAngle = Math.PI / 2 + 0.05;
 
-        // 조명 설정
+        // --- 2. 조명 설정 ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(ambientLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(10, 20, 15);
+        dirLight.position.set(3, 5, 3);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
         scene.add(dirLight);
 
-        // 격자 바닥
-        const gridHelper = new THREE.GridHelper(20, 20, 0xcccccc, 0xe2e2e2);
-        gridHelper.position.y = -3;
+        // --- 3. 바닥, 수조, 물 메쉬 생성 ---
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(20, 20),
+            new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -1.8;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0xd1d1d6, 0xe5e5ea);
+        gridHelper.position.y = -1.79;
         scene.add(gridHelper);
 
-        // 수조 (투명 박스)
-        const tankWidth = 6, tankHeight = 4, tankDepth = 4;
-        const tankGeo = new THREE.BoxGeometry(tankWidth, tankHeight, tankDepth);
+        // 투명 수조 박스
+        const tankGeo = new THREE.BoxGeometry(3.2, 2.2, 2.2);
         const tankMat = new THREE.MeshPhysicalMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.15,
+            opacity: 0.2,
             roughness: 0.1,
-            metalness: 0.1,
-            side: THREE.BackSide
+            transmission: 0.9,
+            thickness: 0.5
         });
-        const tankMesh = new THREE.Mesh(tankGeo, tankMat);
-        tankMesh.position.y = -1;
-        scene.add(tankMesh);
+        const tank = new THREE.Mesh(tankGeo, tankMat);
+        tank.position.set(0, -0.4, 0);
+        scene.add(tank);
+
+        const tankEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(tankGeo),
+            new THREE.LineBasicMaterial({ color: 0x8e8e93, linewidth: 2 })
+        );
+        tankEdges.position.copy(tank.position);
+        scene.add(tankEdges);
 
         // 바닷물 메쉬
-        const waterGeo = new THREE.BoxGeometry(tankWidth - 0.05, tankHeight / 2, tankDepth - 0.05);
-        const waterMat = new THREE.MeshPhysicalMaterial({
+        const waterLevelY = -0.4;
+        const waterGeo = new THREE.BoxGeometry(3.16, 1.1, 2.16);
+        const waterMat = new THREE.MeshStandardMaterial({
             color: 0x006994,
             transparent: true,
-            opacity: 0.55,
-            roughness: 0.2
+            opacity: 0.6,
+            roughness: 0.1
         });
-        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
-        waterMesh.position.y = -1 - tankHeight/4; // 수면이 y = -1 위치 (중앙)
-        scene.add(waterMesh);
+        const water = new THREE.Mesh(waterGeo, waterMat);
+        water.position.set(0, waterLevelY - 0.55, 0);
+        scene.add(water);
 
-        // 배 모델 생성 (반투명 처리로 화살표 가시성 극대화)
+        // --- 4. 배 모델 생성 (반투명 처리로 화살표 가시성 개선) ---
         const boatGroup = new THREE.Group();
         
-        const hullGeo = new THREE.BoxGeometry(2.5, 1.2, 1.5);
-        // transparent: true 와 opacity: 0.55를 주어 배가 반투명해지며 내부/뒷편 화살표가 선명하게 보임
+        const hullGeo = new THREE.BoxGeometry(1.8, 0.8, 1.2);
         const hullMat = new THREE.MeshStandardMaterial({
             color: 0xd7ccc8,
             roughness: 0.4,
@@ -299,8 +435,7 @@
         hullMesh.castShadow = true;
         boatGroup.add(hullMesh);
 
-        // 상부 구조물 (선실)
-        const cabinGeo = new THREE.BoxGeometry(1.2, 0.7, 1.0);
+        const cabinGeo = new THREE.BoxGeometry(0.8, 0.5, 0.7);
         const cabinMat = new THREE.MeshStandardMaterial({
             color: 0x5d4037,
             roughness: 0.5,
@@ -308,191 +443,172 @@
             opacity: 0.65
         });
         const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
-        cabinMesh.position.set(0, 0.95, 0);
+        cabinMesh.position.set(0, 0.65, 0);
+        cabinMesh.castShadow = true;
         boatGroup.add(cabinMesh);
 
+        boatGroup.position.set(0, waterLevelY, 0);
         scene.add(boatGroup);
 
-        // 화살표 헬퍼 함수
-        function createArrow(color) {
-            const group = new THREE.Group();
-            const cylGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 8);
-            const mat = new THREE.MeshBasicMaterial({ color: color });
-            const cyl = new THREE.Mesh(cylGeo, mat);
-            cyl.position.y = 0.5;
-            group.add(cyl);
+        // --- 5. 힘 화살표 헬퍼 ---
+        const gravityArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), boatGroup.position, 1, 0xe53935, 0.15, 0.1);
+        const buoyancyArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), boatGroup.position, 1, 0x1e88e5, 0.15, 0.1);
+        scene.add(gravityArrow);
+        scene.add(buoyancyArrow);
 
-            const coneGeo = new THREE.ConeGeometry(0.12, 0.3, 8);
-            const cone = new THREE.Mesh(coneGeo, mat);
-            cone.position.y = 1.15;
-            group.add(cone);
-
-            group.visible = false;
-            scene.add(group);
-            return group;
-        }
-
-        const gravityArrow = createArrow(0xe53935); // 빨간색 (중력)
-        const buoyancyArrow = createArrow(0x1e88e5); // 파란색 (부력)
-
-        // 물리 변수
-        const waterLevel = -1.0;
-        const boatHeight = 1.2;
+        // --- 6. 물리 변수 ---
+        let currentG = 10.0;
+        const boatHeight = 0.8;
+        let boatVy = 0;
         const baseGravityForce = 12.2;
         const baseWaterDensity = baseGravityForce / (boatHeight / 2);
         const damping = 0.05;
-        let boatVy = 0;
+
         let isDragging = false;
-        let dragStartY = 0;
-        let initialBoatY = -1.0;
+        let dragOffsetY = 0;
 
-        boatGroup.position.y = initialBoatY;
-
-        // 레이캐스터 (마우스/터치 3D 객체 선택용)
+        // --- 7. 마우스 및 터치 드래그 연동 (Raycasting) ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const planeIntersect = new THREE.Vector3();
 
-        function getIntersectionPoint(clientX, clientY) {
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            
-            const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-            const target = new THREE.Vector3();
-            raycaster.ray.intersectPlane(planeZ, target);
-            return target;
+        function getMousePos(e) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
         }
 
-        renderer.domElement.addEventListener('pointerdown', (e) => {
-            const rect = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        function onPointerDown(e) {
+            getMousePos(e);
             raycaster.setFromCamera(mouse, camera);
-
             const intersects = raycaster.intersectObject(hullMesh);
+
             if (intersects.length > 0) {
                 isDragging = true;
-                controls.enabled = false; // 드래그 중 화면 회전 방지
-                const pt = getIntersectionPoint(e.clientX, e.clientY);
-                dragStartY = pt.y - boatGroup.position.y;
+                controls.enabled = false;
+                raycaster.ray.intersectPlane(dragPlane, planeIntersect);
+                dragOffsetY = boatGroup.position.y - planeIntersect.y;
                 boatVy = 0;
+                document.getElementById('guide-tooltip').style.opacity = '0';
             }
-        });
+        }
 
-        window.addEventListener('pointermove', (e) => {
+        function onPointerMove(e) {
             if (!isDragging) return;
-            const pt = getIntersectionPoint(e.clientX, e.clientY);
-            let newY = pt.y - dragStartY;
-            // 수조 내 이동 범위 제한
-            const minY = waterLevel - tankHeight/2 + boatHeight/2;
-            const maxY = waterLevel + tankHeight/2 - boatHeight/2;
-            boatGroup.position.y = Math.max(minY, Math.min(maxY, newY));
-        });
+            getMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+            if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                let newY = planeIntersect.y + dragOffsetY;
+                newY = Math.max(-1.1, Math.min(0.4, newY));
+                boatGroup.position.y = newY;
+            }
+        }
 
-        window.addEventListener('pointerup', () => {
+        function onPointerUp() {
             if (isDragging) {
                 isDragging = false;
                 controls.enabled = true;
             }
-        });
+        }
 
-        // UI 컨트롤 바인딩
-        const gSlider = document.getElementById('gSlider');
-        const gValue = document.getElementById('gValue');
-        const valG = document.getElementById('valG');
-        const valFg = document.getElementById('valFg');
-        const valFb = document.getElementById('valFb');
-        const valDepth = document.getElementById('valDepth');
-        const chkGravity = document.getElementById('chkGravity');
-        const chkBuoyancy = document.getElementById('chkBuoyancy');
-        const resetBtn = document.getElementById('resetBtn');
-        const viewResetBtn = document.getElementById('viewResetBtn');
+        window.addEventListener('mousedown', onPointerDown);
+        window.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('mouseup', onPointerUp);
+        window.addEventListener('touchstart', onPointerDown, { passive: false });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('touchend', onPointerUp);
 
-        resetBtn.addEventListener('click', () => {
-            boatGroup.position.y = waterLevel;
-            boatVy = 0;
-        });
-
-        viewResetBtn.addEventListener('click', () => {
-            camera.position.set(0, 5, 12);
-            controls.target.set(0, 0, 0);
-            controls.update();
-        });
-
-        // 애니메이션 루프
-        function animate() {
-            requestAnimationFrame(animate);
-
-            const currentG = parseFloat(gSlider.value);
-            gValue.innerText = currentG.toFixed(1);
-            valG.innerText = currentG.toFixed(1);
+        // --- 8. 물리 시뮬레이션 및 데이터 업데이트 루프 ---
+        function updatePhysics(dt) {
             const gRatio = currentG / 10.0;
-
-            // 잠긴 깊이 및 힘 계산
             const bottomOfBoat = boatGroup.position.y - boatHeight / 2;
-            const submergedDepth = Math.max(0, Math.min(boatHeight, waterLevel - bottomOfBoat));
+            const submergedDepth = Math.max(0, Math.min(boatHeight, waterLevelY - bottomOfBoat));
             const depthPercent = (submergedDepth / boatHeight) * 100;
 
             const Fg = baseGravityForce * gRatio;
             const Fb = baseWaterDensity * submergedDepth * gRatio;
 
-            // 물리 연산 (드래그 중이 아닐 때)
             if (!isDragging) {
-                const Fnet = Fb - Fg; // 위쪽이 양수
-                const acceleration = Fnet / 1.5;
-                boatVy += acceleration * 0.02;
+                const Fnet = Fb - Fg; // 위쪽 방향 양수
+                const acceleration = Fnet / 1.2;
+                boatVy += acceleration * dt;
                 boatVy *= (1 - damping);
-                boatGroup.position.y += boatVy;
+                boatGroup.position.y += boatVy * dt;
 
-                const minY = waterLevel - tankHeight/2 + boatHeight/2;
-                const maxY = waterLevel + tankHeight/2 - boatHeight/2;
-                if (boatGroup.position.y < minY) { boatGroup.position.y = minY; boatVy = 0; }
-                if (boatGroup.position.y > maxY) { boatGroup.position.y = maxY; boatVy = 0; }
+                if (boatGroup.position.y < -1.1) { boatGroup.position.y = -1.1; boatVy = 0; }
+                if (boatGroup.position.y > 0.4) { boatGroup.position.y = 0.4; boatVy = 0; }
             }
 
-            // 상단 우측 데이터 패널 업데이트 ($F_g, $F_b 기호 제거 후 순수 '중력', '부력'으로 표시)
-            valFg.innerText = Fg.toFixed(1) + ' N';
-            valFb.innerText = Fb.toFixed(1) + ' N';
-            valDepth.innerText = depthPercent.toFixed(1) + ' %';
+            // 화살표 갱신
+            gravityArrow.position.copy(boatGroup.position);
+            buoyancyArrow.position.copy(boatGroup.position);
 
-            // 힘 화살표 업데이트
-            const bx = boatGroup.position.x;
-            const by = boatGroup.position.y;
-            const bz = boatGroup.position.z;
+            const scaleFactor = 0.045;
+            gravityArrow.setLength(Math.max(0.01, Fg * scaleFactor), 0.12, 0.08);
+            buoyancyArrow.setLength(Math.max(0.01, Fb * scaleFactor), 0.12, 0.08);
 
-            if (chkGravity.checked && currentG > 0) {
-                gravityArrow.visible = true;
-                gravityArrow.position.set(bx, by, bz);
-                const scaleY = Math.max(0.1, Fg * 0.15);
-                gravityArrow.scale.set(1, scaleY, 1);
-                gravityArrow.rotation.z = Math.PI; // 아래쪽 향함
-            } else {
-                gravityArrow.visible = false;
-            }
+            gravityArrow.visible = document.getElementById('chk-gravity').checked && currentG > 0;
+            buoyancyArrow.visible = document.getElementById('chk-buoyancy').checked && submergedDepth > 0;
 
-            if (chkBuoyancy.checked && submergedDepth > 0) {
-                buoyancyArrow.visible = true;
-                buoyancyArrow.position.set(bx, by, bz);
-                const scaleY = Math.max(0.1, Fb * 0.15);
-                buoyancyArrow.scale.set(1, scaleY, 1);
-                buoyancyArrow.rotation.z = 0; // 위쪽 향함
-            } else {
-                buoyancyArrow.visible = false;
-            }
+            // UI 텍스트 갱신
+            document.getElementById('val-g').innerText = currentG.toFixed(1) + ' m/s²';
+            document.getElementById('val-fg').innerText = Fg.toFixed(1) + ' N';
+            document.getElementById('val-fb').innerText = Fb.toFixed(1) + ' N';
+            document.getElementById('val-depth').innerText = depthPercent.toFixed(1) + ' %';
+        }
 
+        // --- 9. UI 이벤트 리스너 ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        document.getElementById('sld-g').addEventListener('input', (e) => {
+            currentG = parseFloat(e.target.value);
+            document.getElementById('txt-g').innerText = currentG.toFixed(1) + ' m/s²';
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            currentG = 10.0;
+            document.getElementById('sld-g').value = 10.0;
+            document.getElementById('txt-g').innerText = '10.0 m/s²';
+            boatGroup.position.set(0, waterLevelY, 0);
+            boatVy = 0;
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 1.8, 4.5);
+            controls.target.set(0, 0, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 10. 애니메이션 루프 ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics(clock.getDelta() * 3);
             controls.update();
             renderer.render(scene, camera);
         }
 
         animate();
-
-        // 반응형 리사이즈
-        window.addEventListener('resize', () => {
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
-        });
     </script>
 </body>
 </html>
