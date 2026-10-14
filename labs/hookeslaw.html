@@ -270,7 +270,7 @@
         <div class="glass-panel data-card">
             <div class="data-item">
                 <span class="data-label">원래 길이</span>
-                <span class="data-value" style="color:#34c759;">50.0 cm</span>
+                <span class="data-value" style="color:#34495e;">50.0 cm</span>
             </div>
             <div class="data-item">
                 <span class="data-label">매달린 질량</span>
@@ -320,7 +320,7 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0.2, 3.8);
+        camera.position.set(0, 0.2, 4.2);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -347,8 +347,9 @@
         scene.add(dirLight);
 
         // --- 스케일 및 물리 상수 연산 정의 ---
-        const ceilingY = 1.35;         // 용수철/눈금자 0cm 고정 Y좌표
-        const CM_TO_WORLD = 0.024;     // 1cm당 월드 Y축 길이 (100cm = 2.4m)
+        const ceilingY = 1.35;         // 용수철/눈금자 고정 Y좌표
+        const springX = 0;             // 스탠드 상단 막대 중심 X좌표 (용수철 위치)
+        const CM_TO_WORLD = 0.012;     // 1cm당 월드 Y축 길이 (200cm = 2.4m)
         const L0_cm = 50.0;
         let currentL_cm = L0_cm;
         let targetL_cm = L0_cm;
@@ -369,25 +370,25 @@
         gridHelper.position.y = -1.79;
         scene.add(gridHelper);
 
-        // 지지대 스탠드
+        // 지지대 스탠드 (용수철 고정 위치 springX=0 에 걸치도록 배치)
         const standGroup = new THREE.Group();
         const metalMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, metalness: 0.8, roughness: 0.2 });
 
         const basePole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 3.2, 32), metalMat);
-        basePole.position.set(0.8, -0.2, -0.3);
+        basePole.position.set(0.5, -0.2, -0.3);
         basePole.castShadow = true;
         standGroup.add(basePole);
 
         const topCross = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 32), metalMat);
         topCross.rotation.z = Math.PI / 2;
-        topCross.position.set(0.3, ceilingY, -0.3);
+        topCross.position.set(0, ceilingY, -0.3);
         topCross.castShadow = true;
         standGroup.add(topCross);
 
         scene.add(standGroup);
 
-        // --- 4. 1m(100cm) 3D 눈금자 생성 ---
-        const rulerLengthWorld = 100 * CM_TO_WORLD; // 2.4m
+        // --- 4. 2m(200cm) 3D 눈금자 생성 ---
+        const rulerLengthWorld = 200 * CM_TO_WORLD; // 2.4m
         const rulerGroup = new THREE.Group();
         rulerGroup.position.set(-0.35, ceilingY - (rulerLengthWorld / 2), 0);
 
@@ -397,27 +398,27 @@
         );
         rulerGroup.add(rulerBody);
 
-        // 100cm 눈금자 Canvas 텍스처 그리기
+        // 200cm 눈금자 Canvas 텍스처 그리기
         const rulerCanvas = document.createElement('canvas');
         rulerCanvas.width = 256;
-        rulerCanvas.height = 2048;
+        rulerCanvas.height = 4096;
         const rCtx = rulerCanvas.getContext('2d');
         
         rCtx.fillStyle = '#ffffff';
-        rCtx.fillRect(0, 0, 256, 2048);
+        rCtx.fillRect(0, 0, 256, 4096);
         rCtx.fillStyle = '#1c1c1e';
         rCtx.strokeStyle = '#1c1c1e';
 
-        // 0cm ~ 100cm 눈금 표시
-        for (let i = 0; i <= 100; i++) {
-            let y = (i / 100) * 2000 + 24; // 상단 0cm, 하단 100cm
+        // 0cm ~ 200cm 눈금 표시
+        for (let i = 0; i <= 200; i++) {
+            let y = (i / 200) * 4000 + 48; // 상단 0cm, 하단 200cm
             rCtx.beginPath();
             rCtx.moveTo(256, y);
             
             if (i % 10 === 0) {
                 rCtx.lineWidth = 6;
                 rCtx.lineTo(256 - 80, y);
-                rCtx.font = 'bold 54px sans-serif';
+                rCtx.font = 'bold 50px sans-serif';
                 rCtx.fillText(i + '', 20, y + 18);
             } else if (i % 5 === 0) {
                 rCtx.lineWidth = 4;
@@ -466,7 +467,7 @@
             if (springMesh) scene.remove(springMesh);
             const geo = createSpringGeometry(currentL_cm);
             springMesh = new THREE.Mesh(geo, springMat);
-            springMesh.position.set(0, ceilingY, 0);
+            springMesh.position.set(springX, ceilingY, 0);
             springMesh.castShadow = true;
             scene.add(springMesh);
         }
@@ -486,11 +487,11 @@
 
         function updateIndicator() {
             const hookY = ceilingY - (currentL_cm * CM_TO_WORLD);
-            hookMesh.position.set(0, hookY - 0.04, 0);
+            hookMesh.position.set(springX, hookY - 0.04, 0);
 
             const points = [
                 new THREE.Vector3(-0.35, hookY, 0.02),
-                new THREE.Vector3(0.1, hookY, 0.02)
+                new THREE.Vector3(springX + 0.1, hookY, 0.02)
             ];
             indicatorGeo.setFromPoints(points);
             indicatorLine.computeLineDistances();
@@ -594,7 +595,7 @@
                 const pos = draggedWeight.mesh.position;
                 const hookY = ceilingY - (currentL_cm * CM_TO_WORLD) - 0.04;
 
-                const distToHook = Math.hypot(pos.x - 0, pos.y - hookY);
+                const distToHook = Math.hypot(pos.x - springX, pos.y - hookY);
                 if (distToHook < 0.35) {
                     draggedWeight.isAttached = true;
                 } else {
@@ -632,7 +633,7 @@
             // 매달린 추 위치 업데이트
             const hookY = ceilingY - (currentL_cm * CM_TO_WORLD) - 0.08;
             attachedWeights.forEach((w, idx) => {
-                w.mesh.position.set(0, hookY - (idx * 0.13), 0);
+                w.mesh.position.set(springX, hookY - (idx * 0.13), 0);
             });
 
             // UI 숫자에 출력
@@ -663,7 +664,7 @@
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 0.2, 3.8);
+            camera.position.set(0, 0.2, 4.2);
             controls.target.set(0, -0.8, 0);
         });
 
