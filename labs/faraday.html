@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>전자기 유도 3D</title>
+    <title>전자기 유도 3D - visionOS / Apple HIG Style</title>
     <!-- Three.js 및 OrbitControls 라이브러리 로드 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -361,7 +361,7 @@
         controls.target.set(0, 1.8, 0);
 
         // --- 2. 조명 설정 ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
@@ -383,7 +383,7 @@
         gridHelper.position.y = 0.01;
         scene.add(gridHelper);
 
-        // --- 4. 정밀 실물형 솔레노이드 코일 (Coil) 모델링 ---
+        // --- 4. 정밀 솔레노이드 코일 (Coil) 모델링 ---
         const coilY = 1.3;
         const coilGroup = new THREE.Group();
         coilGroup.position.set(0.6, coilY, 0);
@@ -426,30 +426,26 @@
 
         scene.add(coilGroup);
 
-        // --- 5. 대형 정밀 검류계 (Galvanometer) 모델링 (가운데 0 기준 대칭 눈금) ---
+        // --- 5. 이미지 참조 기반 실물 검류계 (Galvanometer) 모델링 ---
         const galvoGroup = new THREE.Group();
         galvoGroup.position.set(-2.8, 0.0, 0.5);
 
-        // 검류계 주황색 본체
-        const bodyShape = new THREE.Shape();
-        bodyShape.moveTo(-1.1, 0);
-        bodyShape.lineTo(1.1, 0);
-        bodyShape.lineTo(1.1, 0.5);
-        bodyShape.lineTo(0.9, 1.8);
-        bodyShape.lineTo(-0.9, 1.8);
-        bodyShape.lineTo(-1.1, 0.5);
-        bodyShape.closePath();
+        // 5-1. 검류계 주황색 외형 케이스 (이미지 양식 정밀 재현)
+        const outerCaseGeo = new THREE.BoxGeometry(2.2, 2.0, 1.8);
+        const outerCaseMat = new THREE.MeshStandardMaterial({ color: 0xe85a24, roughness: 0.3 });
+        const outerCase = new THREE.Mesh(outerCaseGeo, outerCaseMat);
+        outerCase.position.y = 1.0;
+        outerCase.castShadow = true;
+        galvoGroup.add(outerCase);
 
-        const extrudeSettings = { depth: 1.5, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.05, bevelThickness: 0.05 };
-        const galvoBodyGeo = new THREE.ExtrudeGeometry(bodyShape, extrudeSettings);
-        galvoBodyGeo.center();
-        const galvoBodyMat = new THREE.MeshStandardMaterial({ color: 0xd85828, roughness: 0.4 });
-        const galvoBody = new THREE.Mesh(galvoBodyGeo, galvoBodyMat);
-        galvoBody.position.y = 0.9;
-        galvoBody.castShadow = true;
-        galvoGroup.add(galvoBody);
+        // 5-2. 전면 경사 전선 연결 단자판 (흰색 영역)
+        const panelGeo = new THREE.PlaneGeometry(2.0, 0.8);
+        const panelMat = new THREE.MeshBasicMaterial({ color: 0xfafafa });
+        const panelMesh = new THREE.Mesh(panelGeo, panelMat);
+        panelMesh.position.set(0, 0.5, 0.91);
+        galvoGroup.add(panelMesh);
 
-        // [수정사항 1] 검류계 정면 흰색 눈금판 (가운데 0 기준 -500 ~ +500 대칭 눈금 생성)
+        // 5-3. 검류계 정면 흰색 눈금판 (이미지처럼 가운데 0 기준 대칭 눈금 제작)
         function createGalvoDialTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
@@ -463,23 +459,23 @@
             ctx.fillStyle = '#1c1c1e';
             ctx.textAlign = 'center';
 
-            // 눈금 아치선
+            // 상단 테두리 선 및 눈금 아치선
             ctx.beginPath();
-            ctx.arc(256, 320, 220, Math.PI * 1.25, Math.PI * 1.75);
+            ctx.arc(256, 310, 210, Math.PI * 1.22, Math.PI * 1.78);
             ctx.lineWidth = 3;
             ctx.stroke();
 
-            // 가운데 0 기준 좌우 눈금 (-500 ~ +500)
+            // 가운데 0 기준 좌우 대칭 눈금 (-500 ~ +500)
             const ticks = [-500, -400, -300, -200, -100, 0, 100, 200, 300, 400, 500];
             ticks.forEach((val) => {
-                const angle = Math.PI * 1.5 + (val / 500) * (Math.PI * 0.22);
-                const r1 = 220;
-                const r2 = val % 100 === 0 ? 195 : 205;
+                const angle = Math.PI * 1.5 + (val / 500) * (Math.PI * 0.24);
+                const r1 = 210;
+                const r2 = val % 100 === 0 ? 185 : 198;
 
                 const x1 = 256 + r1 * Math.cos(angle);
-                const y1 = 320 + r1 * Math.sin(angle);
+                const y1 = 310 + r1 * Math.sin(angle);
                 const x2 = 256 + r2 * Math.cos(angle);
-                const y2 = 320 + r2 * Math.sin(angle);
+                const y2 = 310 + r2 * Math.sin(angle);
 
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
@@ -488,74 +484,83 @@
                 ctx.stroke();
 
                 if (val % 100 === 0) {
-                    const tx = 256 + 170 * Math.cos(angle);
-                    const ty = 320 + 170 * Math.sin(angle) + 6;
-                    ctx.font = 'bold 18px sans-serif';
+                    const tx = 256 + 160 * Math.cos(angle);
+                    const ty = 310 + 160 * Math.sin(angle) + 6;
+                    ctx.font = 'bold 20px sans-serif';
                     ctx.fillText(Math.abs(val), tx, ty);
                 }
             });
 
             ctx.font = 'bold 26px sans-serif';
-            ctx.fillText('GALVANOMETER', 256, 110);
-            ctx.font = 'bold 20px sans-serif';
-            ctx.fillStyle = '#ff3b30';
-            ctx.fillText('–   0   +', 256, 145);
+            ctx.fillText('GALVANO', 256, 130);
+            
+            ctx.font = 'bold 28px sans-serif';
+            ctx.fillText('–', 100, 170);
+            ctx.fillText('+', 412, 170);
 
             return new THREE.CanvasTexture(canvas);
         }
 
-        const dialGeo = new THREE.PlaneGeometry(1.9, 1.4);
+        const dialGeo = new THREE.PlaneGeometry(2.0, 1.2);
         const dialMat = new THREE.MeshBasicMaterial({ map: createGalvoDialTexture() });
         const dialMesh = new THREE.Mesh(dialGeo, dialMat);
-        dialMesh.position.set(0, 1.15, 0.77);
-        dialMesh.rotation.x = -Math.PI * 0.08;
+        dialMesh.position.set(0, 1.4, 0.91);
         galvoGroup.add(dialMesh);
 
-        // 검류계 빨간색 지침 (Needle)
+        // 5-4. 검류계 중앙 회전 핀 (빨간색 바늘)
         const needleGeo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, 0, 0.01),
-            new THREE.Vector3(0, 0.85, 0.01)
+            new THREE.Vector3(0, -0.1, 0.02),
+            new THREE.Vector3(0, 0.85, 0.02)
         ]);
-        const needleMat = new THREE.LineBasicMaterial({ color: 0xff3b30, linewidth: 4 });
+        const needleMat = new THREE.LineBasicMaterial({ color: 0x1c1c1e, linewidth: 4 });
         const needle = new THREE.Line(needleGeo, needleMat);
-        needle.position.set(0, 0.55, 0.79);
-        needle.rotation.x = -Math.PI * 0.08;
+        needle.position.set(0, 1.0, 0.92);
         galvoGroup.add(needle);
 
-        // 검류계 접속 단자
-        const termRedGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.2, 16);
-        const termRedMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3 });
-        const galvoTermRed = new THREE.Mesh(termRedGeo, termRedMat);
-        galvoTermRed.position.set(0.6, 0.3, 0.7);
-        galvoGroup.add(galvoTermRed);
+        // 5-5. 중앙 투명 유리 돔 캡 회전축
+        const capGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 32);
+        const capMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, roughness: 0.1 });
+        const centerCap = new THREE.Mesh(capGeo, capMat);
+        centerCap.rotation.x = Math.PI / 2;
+        centerCap.position.set(0, 0.95, 0.95);
+        galvoGroup.add(centerCap);
 
-        const termBlackGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.2, 16);
+        // 5-6. 검류계 정면 하단 연결 단자 2개 (좌: 검은색 - / 우: 빨간색 +)
+        const termGeoGalvo = new THREE.CylinderGeometry(0.12, 0.12, 0.3, 16);
+        
         const termBlackMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.3 });
-        const galvoTermBlack = new THREE.Mesh(termBlackGeo, termBlackMat);
-        galvoTermBlack.position.set(-0.6, 0.3, 0.7);
+        const galvoTermBlack = new THREE.Mesh(termGeoGalvo, termBlackMat);
+        galvoTermBlack.position.set(-0.6, 0.45, 0.98);
+        galvoTermBlack.rotation.x = Math.PI * 0.15;
         galvoGroup.add(galvoTermBlack);
+
+        const termRedMat = new THREE.MeshStandardMaterial({ color: 0xd82828, roughness: 0.3 });
+        const galvoTermRed = new THREE.Mesh(termGeoGalvo, termRedMat);
+        galvoTermRed.position.set(0.6, 0.45, 0.98);
+        galvoTermRed.rotation.x = Math.PI * 0.15;
+        galvoGroup.add(galvoTermRed);
 
         scene.add(galvoGroup);
 
-        // --- 6. 검류계 ↔ 코일 간 3D 배선 ---
-        // 빨간색 도선 (+)
+        // --- 6. 검류계 단자 ↔ 코일 단자 간 정밀 전선 연결 ---
+        // 빨간색 도선 (+ 단자 연결)
         const redWireCurve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(-2.2, 0.3, 1.2),
-            new THREE.Vector3(-1.0, 0.25, 1.1),
-            new THREE.Vector3(0.1, 0.2, 0.5)
+            new THREE.Vector3(-2.2, 0.45, 1.48),
+            new THREE.Vector3(-1.0, 0.40, 1.20),
+            new THREE.Vector3(0.1, 0.20, 0.50)
         ]);
-        const redWireGeo = new THREE.TubeGeometry(redWireCurve, 60, 0.025, 8, false);
+        const redWireGeo = new THREE.TubeGeometry(redWireCurve, 60, 0.028, 8, false);
         const redWireMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.4 });
         scene.add(new THREE.Mesh(redWireGeo, redWireMat));
 
-        // [수정사항 2] 검은색 도선 (-) - 바닥에 파묻히지 않게 위쪽으로 들어 올려 선명하게 표시
+        // 검은색 도선 (- 단자 연결)
         const blackWireCurve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(-3.4, 0.3, 1.2),
-            new THREE.Vector3(-2.0, 0.4, 1.4),
-            new THREE.Vector3(0.0, 0.45, 1.2),
-            new THREE.Vector3(1.1, 0.2, 0.5)
+            new THREE.Vector3(-3.4, 0.45, 1.48),
+            new THREE.Vector3(-2.2, 0.35, 1.60),
+            new THREE.Vector3(0.0, 0.30, 1.30),
+            new THREE.Vector3(1.1, 0.20, 0.50)
         ]);
-        const blackWireGeo = new THREE.TubeGeometry(blackWireCurve, 60, 0.025, 8, false);
+        const blackWireGeo = new THREE.TubeGeometry(blackWireCurve, 60, 0.028, 8, false);
         const blackWireMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.4 });
         scene.add(new THREE.Mesh(blackWireGeo, blackWireMat));
 
@@ -583,8 +588,6 @@
         let magnetY = 3.5;
         magnetGroup.position.set(0.6, magnetY, 0);
         scene.add(magnetGroup);
-
-        // [수정사항 3] 자석 주위의 자기력선 시각화 기능 제거됨
 
         // --- 8. 물리 및 상태 연산 변수 ---
         const g = 9.80;
