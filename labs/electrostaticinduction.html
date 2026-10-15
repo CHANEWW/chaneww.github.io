@@ -398,7 +398,7 @@
         // --- 4. 사진 모양의 3D 검전기(Flask Jar Electroscope) 메쉬 생성 ---
         const electroscopeGroup = new THREE.Group();
 
-        // 약간 투명한 회색 금속 재질 (Semi-transparent Metallic Gray)
+        // 약간 투명한 회색 금속 재질
         const transMetalMat = new THREE.MeshStandardMaterial({
             color: 0x8a8a93,
             metalness: 0.8,
@@ -561,7 +561,7 @@
         }
         updateRodParticles('neg');
 
-        // --- 7. 대전체 어디든지 클릭해서 이동 가능한 드래그 인터랙션 ---
+        // --- 7. 표준 Pointer Event 기반 드래그 인터랙션 (단진자/용수철과 동일 방식) ---
         let currentPolarity = 'neg';
         let isDragging = false;
         const raycaster = new THREE.Raycaster();
@@ -570,23 +570,20 @@
         const planeIntersect = new THREE.Vector3();
         let dragOffset = new THREE.Vector3();
 
-        function getMousePos(e) {
-            const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
-            mouse.x = (clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+        function updateMousePos(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
         }
 
         function onPointerDown(e) {
-            getMousePos(e);
+            updateMousePos(e);
             raycaster.setFromCamera(mouse, camera);
             
-            // 대전체 그룹 자식 요소 전체를 검사하여 감지 보장
             const intersects = raycaster.intersectObjects(chargedRodGroup.children, true);
 
             if (intersects.length > 0) {
                 isDragging = true;
-                controls.enabled = false; // 드래그 중 시점 회전 비활성화
+                controls.enabled = false;
                 
                 if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                     dragOffset.copy(chargedRodGroup.position).sub(planeIntersect);
@@ -594,40 +591,33 @@
 
                 const tooltip = document.getElementById('guide-tooltip');
                 if (tooltip) tooltip.style.opacity = '0';
-                if (e.cancelable) e.preventDefault();
             }
         }
 
         function onPointerMove(e) {
             if (!isDragging) return;
-            getMousePos(e);
+            updateMousePos(e);
             raycaster.setFromCamera(mouse, camera);
             
             if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                 let targetPos = planeIntersect.add(dragOffset);
                 targetPos.x = Math.max(-1.6, Math.min(1.6, targetPos.x));
                 targetPos.y = Math.max(-0.3, Math.min(1.1, targetPos.y));
-                targetPos.z = 0; // 한 평면(Z=0) 유지
+                targetPos.z = 0;
                 chargedRodGroup.position.copy(targetPos);
             }
-            if (e.cancelable) e.preventDefault();
         }
 
         function onPointerUp() {
             if (isDragging) {
                 isDragging = false;
-                controls.enabled = true; // 시점 회전 재활성화
+                controls.enabled = true;
             }
         }
 
-        const canvasElement = renderer.domElement;
-        canvasElement.addEventListener('mousedown', onPointerDown);
-        window.addEventListener('mousemove', onPointerMove);
-        window.addEventListener('mouseup', onPointerUp);
-
-        canvasElement.addEventListener('touchstart', onPointerDown, { passive: false });
-        canvasElement.addEventListener('touchmove', onPointerMove, { passive: false });
-        window.addEventListener('touchend', onPointerUp);
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
 
         // --- 8. 물리 시뮬레이션 & 전하 이동 연산 루프 ---
         let targetLeafAngle = 0;
