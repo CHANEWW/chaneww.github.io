@@ -361,10 +361,10 @@
         controls.target.set(0, 1.8, 0);
 
         // --- 2. 조명 설정 ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
         dirLight.position.set(5, 12, 8);
         dirLight.castShadow = true;
         dirLight.shadow.mapSize.width = 2048;
@@ -383,54 +383,83 @@
         gridHelper.position.y = 0.01;
         scene.add(gridHelper);
 
-        // --- 4. 정밀 솔레노이드 코일 (Coil) 모델링 ---
+        // --- 4. 정밀 솔레노이드 코일 (크기 4/3 배 확대, 권선 구조 및 내부 자석 투시 기능) ---
         const coilY = 1.3;
         const coilGroup = new THREE.Group();
         coilGroup.position.set(0.6, coilY, 0);
 
-        // 상하 아이보리 플라스틱 프레임 Flange
-        const flangeGeo = new THREE.BoxGeometry(1.6, 0.15, 1.6);
+        // 상하 플라스틱 프레임 Flange (4/3 비율 연상)
+        const flangeGeo = new THREE.BoxGeometry(2.13, 0.20, 2.13);
         const flangeMat = new THREE.MeshStandardMaterial({ color: 0xe2e0d8, roughness: 0.4 });
         const topFlange = new THREE.Mesh(flangeGeo, flangeMat);
-        topFlange.position.y = 1.0;
+        topFlange.position.y = 1.33;
         topFlange.castShadow = true;
         const bottomFlange = new THREE.Mesh(flangeGeo, flangeMat);
-        bottomFlange.position.y = -1.0;
+        bottomFlange.position.y = -1.33;
         bottomFlange.castShadow = true;
         coilGroup.add(topFlange);
         coilGroup.add(bottomFlange);
 
-        // 코일 구리 원통 몸통
-        const coilBodyGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.85, 32);
-        const coilBodyMat = new THREE.MeshStandardMaterial({ color: 0x803018, roughness: 0.4, metalness: 0.3 });
-        const coilBody = new THREE.Mesh(coilBodyGeo, coilBodyMat);
-        coilBody.castShadow = true;
-        coilGroup.add(coilBody);
+        // 내부 반투명 아크릴 가이드 원통 (내부 자석이 보이도록 투명도 설정)
+        const acrylicGeo = new THREE.CylinderGeometry(0.55, 0.55, 2.66, 32, 1, true);
+        const acrylicMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0xffffff, 
+            transparent: true, 
+            opacity: 0.25, 
+            roughness: 0.1,
+            transmission: 0.8,
+            side: THREE.DoubleSide
+        });
+        const acrylicTube = new THREE.Mesh(acrylicGeo, acrylicMat);
+        coilGroup.add(acrylicTube);
 
-        // 코일 내부 중공 홀
-        const innerHoleGeo = new THREE.CylinderGeometry(0.35, 0.35, 2.05, 32, 1, true);
-        const innerHoleMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, side: THREE.DoubleSide });
-        const innerHole = new THREE.Mesh(innerHoleGeo, innerHoleMat);
-        coilGroup.add(innerHole);
+        // 구리 나선 코일 권선 (Spiraled Coils - 감은 형태로 내부 자석 사이 관찰 가능)
+        const coilTurns = 18;
+        const coilRadius = 0.80;
+        const coilHeight = 2.40;
+        const copperCurvePoints = [];
+        
+        for (let i = 0; i <= coilTurns * 50; i++) {
+            const t = i / (coilTurns * 50);
+            const angle = t * Math.PI * 2 * coilTurns;
+            const y = (t - 0.5) * coilHeight;
+            const x = coilRadius * Math.cos(angle);
+            const z = coilRadius * Math.sin(angle);
+            copperCurvePoints.push(new THREE.Vector3(x, y, z));
+        }
+
+        const copperCurve = new THREE.CatmullRomCurve3(copperCurvePoints);
+        const copperGeo = new THREE.TubeGeometry(copperCurve, 400, 0.05, 8, false);
+        const copperMat = new THREE.MeshStandardMaterial({ 
+            color: 0xb85d19, 
+            metalness: 0.8, 
+            roughness: 0.25,
+            transparent: true,
+            opacity: 0.85 
+        });
+        const copperCoilMesh = new THREE.Mesh(copperGeo, copperMat);
+        copperCoilMesh.castShadow = true;
+        coilGroup.add(copperCoilMesh);
 
         // 하단 코일 접속 단자 2개
-        const termGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.25, 16);
+        const termGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.3, 16);
         const termMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 });
         
         const coilTerm1 = new THREE.Mesh(termGeo, termMat); // Red (+)
-        coilTerm1.position.set(-0.5, -1.1, 0.5);
+        coilTerm1.position.set(-0.66, -1.45, 0.66);
         const coilTerm2 = new THREE.Mesh(termGeo, termMat); // Black (-)
-        coilTerm2.position.set(0.5, -1.1, 0.5);
+        coilTerm2.position.set(0.66, -1.45, 0.66);
         coilGroup.add(coilTerm1);
         coilGroup.add(coilTerm2);
 
         scene.add(coilGroup);
 
-        // --- 5. 이미지 참조 기반 실물 검류계 (Galvanometer) 모델링 ---
+        // --- 5. 실물 검류계 (크기 2/3 배 축소, -5 ~ +5 눈금 반영) ---
         const galvoGroup = new THREE.Group();
         galvoGroup.position.set(-2.8, 0.0, 0.5);
+        galvoGroup.scale.set(0.67, 0.67, 0.67); // 크기 2/3로 축소
 
-        // 5-1. 검류계 주황색 외형 케이스 (이미지 양식 정밀 재현)
+        // 5-1. 검류계 주황색 외형 케이스
         const outerCaseGeo = new THREE.BoxGeometry(2.2, 2.0, 1.8);
         const outerCaseMat = new THREE.MeshStandardMaterial({ color: 0xe85a24, roughness: 0.3 });
         const outerCase = new THREE.Mesh(outerCaseGeo, outerCaseMat);
@@ -445,7 +474,7 @@
         panelMesh.position.set(0, 0.5, 0.91);
         galvoGroup.add(panelMesh);
 
-        // 5-3. 검류계 정면 흰색 눈금판 (이미지처럼 가운데 0 기준 대칭 눈금 제작)
+        // 5-3. 검류계 정면 눈금판 (-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5 눈금 지정)
         function createGalvoDialTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
@@ -465,12 +494,12 @@
             ctx.lineWidth = 3;
             ctx.stroke();
 
-            // 가운데 0 기준 좌우 대칭 눈금 (-500 ~ +500)
-            const ticks = [-500, -400, -300, -200, -100, 0, 100, 200, 300, 400, 500];
+            // 가운데 0 기준 좌우 눈금 (-5 ~ +5)
+            const ticks = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
             ticks.forEach((val) => {
-                const angle = Math.PI * 1.5 + (val / 500) * (Math.PI * 0.24);
+                const angle = Math.PI * 1.5 + (val / 5) * (Math.PI * 0.24);
                 const r1 = 210;
-                const r2 = val % 100 === 0 ? 185 : 198;
+                const r2 = 185;
 
                 const x1 = 256 + r1 * Math.cos(angle);
                 const y1 = 310 + r1 * Math.sin(angle);
@@ -480,19 +509,17 @@
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
-                ctx.lineWidth = val % 100 === 0 ? 3 : 1.5;
+                ctx.lineWidth = 3;
                 ctx.stroke();
 
-                if (val % 100 === 0) {
-                    const tx = 256 + 160 * Math.cos(angle);
-                    const ty = 310 + 160 * Math.sin(angle) + 6;
-                    ctx.font = 'bold 20px sans-serif';
-                    ctx.fillText(Math.abs(val), tx, ty);
-                }
+                const tx = 256 + 155 * Math.cos(angle);
+                const ty = 310 + 155 * Math.sin(angle) + 6;
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillText(Math.abs(val), tx, ty);
             });
 
             ctx.font = 'bold 26px sans-serif';
-            ctx.fillText('GALVANO', 256, 130);
+            ctx.fillText('GALVANO', 256, 125);
             
             ctx.font = 'bold 28px sans-serif';
             ctx.fillText('–', 100, 170);
@@ -507,7 +534,7 @@
         dialMesh.position.set(0, 1.4, 0.91);
         galvoGroup.add(dialMesh);
 
-        // 5-4. 검류계 중앙 회전 핀 (빨간색 바늘)
+        // 5-4. 검류계 중앙 회전 핀 (바늘)
         const needleGeo = new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(0, -0.1, 0.02),
             new THREE.Vector3(0, 0.85, 0.02)
@@ -525,7 +552,7 @@
         centerCap.position.set(0, 0.95, 0.95);
         galvoGroup.add(centerCap);
 
-        // 5-6. 검류계 정면 하단 연결 단자 2개 (좌: 검은색 - / 우: 빨간색 +)
+        // 5-6. 검류계 하단 연결 단자 2개
         const termGeoGalvo = new THREE.CylinderGeometry(0.12, 0.12, 0.3, 16);
         
         const termBlackMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.3 });
@@ -545,9 +572,9 @@
         // --- 6. 검류계 단자 ↔ 코일 단자 간 정밀 전선 연결 ---
         // 빨간색 도선 (+ 단자 연결)
         const redWireCurve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(-2.2, 0.45, 1.48),
-            new THREE.Vector3(-1.0, 0.40, 1.20),
-            new THREE.Vector3(0.1, 0.20, 0.50)
+            new THREE.Vector3(-2.4, 0.30, 1.15),
+            new THREE.Vector3(-1.1, 0.35, 1.10),
+            new THREE.Vector3(-0.06, 0.20, 0.66)
         ]);
         const redWireGeo = new THREE.TubeGeometry(redWireCurve, 60, 0.028, 8, false);
         const redWireMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.4 });
@@ -555,10 +582,10 @@
 
         // 검은색 도선 (- 단자 연결)
         const blackWireCurve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(-3.4, 0.45, 1.48),
-            new THREE.Vector3(-2.2, 0.35, 1.60),
-            new THREE.Vector3(0.0, 0.30, 1.30),
-            new THREE.Vector3(1.1, 0.20, 0.50)
+            new THREE.Vector3(-3.2, 0.30, 1.15),
+            new THREE.Vector3(-2.0, 0.35, 1.50),
+            new THREE.Vector3(0.2, 0.25, 1.20),
+            new THREE.Vector3(1.26, 0.20, 0.66)
         ]);
         const blackWireGeo = new THREE.TubeGeometry(blackWireCurve, 60, 0.028, 8, false);
         const blackWireMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.4 });
@@ -677,7 +704,7 @@
 
             // 유도기전력 및 유도전류 연산
             const distToCoil = magnetY - coilY;
-            const fluxFactor = Math.exp(-Math.pow(distToCoil / 0.7, 2));
+            const fluxFactor = Math.exp(-Math.pow(distToCoil / 0.8, 2));
             const poleMultiplier = isTopN ? 1 : -1;
 
             const inducedCurrentuA = -currentSpeed * fluxFactor * 160.0 * poleMultiplier;
@@ -687,7 +714,7 @@
             document.getElementById('val-pos').innerText = magnetY.toFixed(2) + ' m';
             document.getElementById('val-current').innerText = currentVal.toFixed(0) + ' μA';
 
-            // 검류계 지침 회전 (-500 uA = -35도, +500 uA = +35도)
+            // 검류계 지침 회전 (-5 눈금 = -35도, +5 눈금 = +35도)
             const needleAngle = Math.max(-0.6, Math.min(0.6, (currentVal / 500) * 0.6));
             needle.rotation.z = -needleAngle;
             document.getElementById('val-galvo').innerText = (needleAngle * (180 / Math.PI)).toFixed(1) + '°';
