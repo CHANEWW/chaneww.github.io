@@ -485,6 +485,27 @@
         chargedRodGroup.position.set(1.0, 0.68, 0);
         scene.add(chargedRodGroup);
 
+        // --- 텍스트 텍스처 생성 함수 (검은색 +, - 텍스처) ---
+        function createTextSprite(text, scale = 0.035) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, 64, 64);
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 52px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 32, 34);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(scale, scale, 1);
+            return sprite;
+        }
+
         // --- 6. 전하 입자 (1:1 중성, 균일 양전하, 자유 전자 열운동 연산) ---
         const particlesGroup = new THREE.Group();
         scene.add(particlesGroup);
@@ -519,21 +540,31 @@
         const posMat = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
 
         posLocations.forEach(loc => {
-            const p = new THREE.Mesh(posGeo, posMat);
-            p.position.copy(loc);
-            particlesGroup.add(p);
-            posParticles.push(p);
+            const pGroup = new THREE.Group();
+            const sphere = new THREE.Mesh(posGeo, posMat);
+            const label = createTextSprite('+');
+            pGroup.add(sphere);
+            pGroup.add(label);
+
+            pGroup.position.copy(loc);
+            particlesGroup.add(pGroup);
+            posParticles.push(pGroup);
         });
 
         const negGeo = new THREE.SphereGeometry(0.014, 12, 12);
         const negMat = new THREE.MeshBasicMaterial({ color: 0x007aff });
 
         for (let i = 0; i < TOTAL_PAIRS; i++) {
-            const p = new THREE.Mesh(negGeo, negMat);
-            p.position.copy(posLocations[i]);
-            particlesGroup.add(p);
+            const nGroup = new THREE.Group();
+            const sphere = new THREE.Mesh(negGeo, negMat);
+            const label = createTextSprite('-');
+            nGroup.add(sphere);
+            nGroup.add(label);
+
+            nGroup.position.copy(posLocations[i]);
+            particlesGroup.add(nGroup);
             negParticles.push({
-                mesh: p,
+                group: nGroup,
                 basePos: posLocations[i].clone(),
                 currentPos: posLocations[i].clone(),
                 vx: (Math.random() - 0.5) * 0.002,
@@ -549,19 +580,26 @@
             while (rodChargeGroup.children.length > 0) rodChargeGroup.remove(rodChargeGroup.children[0]);
             const mat = new THREE.MeshBasicMaterial({ color: polarity === 'neg' ? 0x007aff : 0xff2d55 });
             const geo = new THREE.SphereGeometry(0.012, 8, 8);
+            const signText = polarity === 'neg' ? '-' : '+';
 
             for (let i = -0.3; i <= 0.3; i += 0.06) {
-                const p1 = new THREE.Mesh(geo, mat);
-                p1.position.set(i, 0.04, 0);
-                const p2 = new THREE.Mesh(geo, mat);
-                p2.position.set(i, -0.04, 0);
-                rodChargeGroup.add(p1);
-                rodChargeGroup.add(p2);
+                const p1Group = new THREE.Group();
+                p1Group.add(new THREE.Mesh(geo, mat));
+                p1Group.add(createTextSprite(signText, 0.03));
+                p1Group.position.set(i, 0.04, 0);
+
+                const p2Group = new THREE.Group();
+                p2Group.add(new THREE.Mesh(geo, mat));
+                p2Group.add(createTextSprite(signText, 0.03));
+                p2Group.position.set(i, -0.04, 0);
+
+                rodChargeGroup.add(p1Group);
+                rodChargeGroup.add(p2Group);
             }
         }
         updateRodParticles('neg');
 
-        // --- 7. 표준 Pointer Event 기반 드래그 인터랙션 (단진자/용수철과 동일 방식) ---
+        // --- 7. 표준 Pointer Event 기반 드래그 인터랙션 ---
         let currentPolarity = 'neg';
         let isDragging = false;
         const raycaster = new THREE.Raycaster();
@@ -648,15 +686,15 @@
                 targetY = Math.max(-0.42, Math.min(0.56, targetY));
 
                 np.currentPos.y += (targetY - np.currentPos.y) * 0.08;
-                np.mesh.position.y = np.currentPos.y;
+                np.group.position.y = np.currentPos.y;
 
                 if (np.currentPos.y < -0.22) {
                     const leafHeightRatio = (-0.22 - np.currentPos.y) / 0.2;
                     const side = np.basePos.x < 0 ? -1 : 1;
                     const spreadX = side * (0.015 + Math.sin(currentLeafAngle) * leafHeightRatio * 0.18) + np.vx;
-                    np.mesh.position.x = spreadX;
+                    np.group.position.x = spreadX;
                 } else {
-                    np.mesh.position.x = np.basePos.x + np.vx;
+                    np.group.position.x = np.basePos.x + np.vx;
                 }
             });
 
