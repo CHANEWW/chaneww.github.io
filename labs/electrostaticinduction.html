@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>검전기 3D - visionOS / Apple HIG Style</title>
+    <title>검전기 3D</title>
     <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -506,7 +506,7 @@
             return sprite;
         }
 
-        // --- 6. 전하 입자 (1:1 중성, 균일 양전하, 자유 전자 열운동 연산) ---
+        // --- 6. 전하 입자 (1:1 중성, 균일 양전하, 자유 전자 통로 이동 연산) ---
         const particlesGroup = new THREE.Group();
         scene.add(particlesGroup);
 
@@ -657,7 +657,7 @@
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
 
-        // --- 8. 물리 시뮬레이션 & 전하 이동 연산 루프 ---
+        // --- 8. 물리 시뮬레이션 & 전하 통로 내 이동 연산 루프 ---
         let targetLeafAngle = 0;
         let currentLeafAngle = 0;
 
@@ -688,14 +688,30 @@
                 np.currentPos.y += (targetY - np.currentPos.y) * 0.08;
                 np.group.position.y = np.currentPos.y;
 
-                if (np.currentPos.y < -0.22) {
-                    const leafHeightRatio = (-0.22 - np.currentPos.y) / 0.2;
+                // --- 금속 도체 내부로만 전하 이동 범위 제약 (원판, 막대, 박 통로) ---
+                const y = np.currentPos.y;
+                let boundaryX = 0.015; // 기본 금속막대 통로 폭
+                let boundaryZ = 0.015;
+
+                if (y > 0.52) {
+                    // 상단 금속 원판 내부 범위
+                    const discRadius = 0.22;
+                    boundaryX = discRadius;
+                    boundaryZ = discRadius;
+                } else if (y < -0.22) {
+                    // 하단 금속박 내부 범위
+                    const leafHeightRatio = (-0.22 - y) / 0.2;
                     const side = np.basePos.x < 0 ? -1 : 1;
-                    const spreadX = side * (0.015 + Math.sin(currentLeafAngle) * leafHeightRatio * 0.18) + np.vx;
-                    np.group.position.x = spreadX;
-                } else {
-                    np.group.position.x = np.basePos.x + np.vx;
+                    const spreadX = side * (0.015 + Math.sin(currentLeafAngle) * leafHeightRatio * 0.18);
+                    
+                    np.group.position.x = spreadX + np.vx * 0.5;
+                    np.group.position.z = Math.max(-0.01, Math.min(0.01, np.basePos.z + np.vz * 0.2));
+                    return;
                 }
+
+                // 금속막대 및 원판 내부 중심축 제한 연산
+                np.group.position.x = Math.max(-boundaryX, Math.min(boundaryX, np.basePos.x + np.vx));
+                np.group.position.z = Math.max(-boundaryZ, Math.min(boundaryZ, np.basePos.z + np.vz));
             });
 
             document.getElementById('val-distance').innerText = distance.toFixed(2) + ' m';
