@@ -313,7 +313,7 @@
 
     <!-- 중앙 안내 툴팁 -->
     <div class="glass-panel center-tooltip" id="guide-tooltip">
-        ⚡ 대전체를 마우스/터치로 잡고 검전기 금속판 가까이 이동시켜 보세요
+        ⚡ 대전체를 잡고 왼쪽/오른쪽으로 드래그하여 검전기에 접근시켜 보세요
     </div>
 
     <!-- 서브 물리 설정 패널 -->
@@ -356,7 +356,7 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0.3, 3.2);
+        camera.position.set(0, 0.2, 3.2);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -395,64 +395,76 @@
         gridHelper.position.y = -0.89;
         scene.add(gridHelper);
 
-        // --- 4. 3D 검전기(Electroscope) 메쉬 생성 ---
+        // --- 4. 사진 모양의 3D 검전기(Flask Jar Electroscope) 메쉬 생성 ---
         const electroscopeGroup = new THREE.Group();
-        const metalMat = new THREE.MeshStandardMaterial({ color: 0xd0d0d5, metalness: 0.85, roughness: 0.2 });
 
-        // (1) 상단 금속 원판
-        const discMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.04, 32), metalMat);
-        discMesh.position.y = 0.55;
+        // 약간 투명한 회색 금속 재질 (Semi-transparent Metallic Gray)
+        const transMetalMat = new THREE.MeshStandardMaterial({
+            color: 0x8a8a93,
+            metalness: 0.8,
+            roughness: 0.2,
+            transparent: true,
+            opacity: 0.55
+        });
+
+        // (1) 상단 평평한 금속 원판 (Flat Thin Disc Plate)
+        const discMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.015, 32), transMetalMat);
+        discMesh.position.y = 0.65;
         discMesh.castShadow = true;
         electroscopeGroup.add(discMesh);
 
-        // (2) 중앙 금속 Rod
-        const rodMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 16), metalMat);
+        // (2) 중앙 금속 막대 (Conductive Metal Rod)
+        const rodMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.95, 16), transMetalMat);
         rodMesh.position.y = 0.15;
         rodMesh.castShadow = true;
         electroscopeGroup.add(rodMesh);
 
-        // (3) 절연 마개
-        const corkMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.12, 0.1, 0.08, 24),
-            new THREE.MeshStandardMaterial({ color: 0x8d6e63, roughness: 0.6 })
-        );
-        corkMesh.position.y = 0.42;
+        // (3) 검은색 고무 마개 (Black Rubber Cork)
+        const corkMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.7 });
+        const corkMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.18, 32), corkMat);
+        corkMesh.position.y = 0.48;
+        corkMesh.castShadow = true;
         electroscopeGroup.add(corkMesh);
 
-        // (4) 유리기구 병
-        const jarMesh = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.42, 0.42, 0.7, 32, 1, true),
-            new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.28, roughness: 0.1, transmission: 0.92, thickness: 0.2 })
-        );
-        jarMesh.position.y = 0.05;
-        electroscopeGroup.add(jarMesh);
+        // (4) 사진과 같은 모양의 유리병 (Flask Glass Jar) LatheGeometry 회전체 모델링
+        const flaskPoints = [];
+        flaskPoints.push(new THREE.Vector2(0.12, 0.48)); // 병 입구
+        flaskPoints.push(new THREE.Vector2(0.13, 0.40)); // 병 목 상단
+        flaskPoints.push(new THREE.Vector2(0.14, 0.30)); // 병 목 하단
+        flaskPoints.push(new THREE.Vector2(0.28, 0.10)); // 어깨 커브
+        flaskPoints.push(new THREE.Vector2(0.42, -0.15)); // 몸통 곡선
+        flaskPoints.push(new THREE.Vector2(0.44, -0.38)); // 하단 테두리
+        flaskPoints.push(new THREE.Vector2(0.40, -0.42)); // 바닥 오목 부분
+        flaskPoints.push(new THREE.Vector2(0.0, -0.42));  // 바닥 중심
 
-        const rimMesh = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.02, 16, 32), metalMat);
-        rimMesh.rotation.x = Math.PI / 2;
-        rimMesh.position.y = 0.4;
-        electroscopeGroup.add(rimMesh);
+        const glassGeo = new THREE.LatheGeometry(flaskPoints, 48);
+        const glassMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.22,
+            roughness: 0.05,
+            transmission: 0.95,
+            thickness: 0.15
+        });
+        const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+        glassMesh.castShadow = true;
+        electroscopeGroup.add(glassMesh);
 
-        const bottomMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.44, 0.04, 32), metalMat);
-        bottomMesh.position.y = -0.32;
-        bottomMesh.receiveShadow = true;
-        electroscopeGroup.add(bottomMesh);
-
-        // (5) 금속박 (Gold Leaves)
+        // (5) 금속박 (Gold Leaves - 약간 투명한 회색 재질)
         const leafGroupLeft = new THREE.Group();
         const leafGroupRight = new THREE.Group();
 
-        const leafGeo = new THREE.BoxGeometry(0.08, 0.28, 0.005);
-        leafGeo.translate(0, -0.14, 0); // 피벗을 상단으로 이동
+        const leafGeo = new THREE.BoxGeometry(0.06, 0.26, 0.003);
+        leafGeo.translate(0, -0.13, 0); // 상단 피벗 이동
 
-        const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.15 });
-        const leafLeft = new THREE.Mesh(leafGeo, goldMat);
-        const leafRight = new THREE.Mesh(leafGeo, goldMat);
+        const leafLeft = new THREE.Mesh(leafGeo, transMetalMat);
+        const leafRight = new THREE.Mesh(leafGeo, transMetalMat);
 
         leafGroupLeft.add(leafLeft);
         leafGroupRight.add(leafRight);
 
-        leafGroupLeft.position.set(-0.02, -0.22, 0);
-        leafGroupRight.position.set(0.02, -0.22, 0);
+        leafGroupLeft.position.set(-0.015, -0.22, 0);
+        leafGroupRight.position.set(0.015, -0.22, 0);
 
         electroscopeGroup.add(leafGroupLeft);
         electroscopeGroup.add(leafGroupRight);
@@ -462,18 +474,19 @@
 
         // --- 5. 3D 대전체(Charged Rod) 생성 ---
         const chargedRodGroup = new THREE.Group();
-        const rodBodyGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.7, 24);
-        rodBodyGeo.rotateZ(Math.PI / 2);
+        const rodBodyGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.7, 24);
+        rodBodyGeo.rotateZ(Math.PI / 2); // 가로 형태 배치
 
         let rodMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3 });
         const chargedRodMesh = new THREE.Mesh(rodBodyGeo, rodMat);
         chargedRodMesh.castShadow = true;
         chargedRodGroup.add(chargedRodMesh);
 
-        chargedRodGroup.position.set(1.0, 0.6, 0);
+        // 대전체 초기 위치 (우측 상단 2D 평면)
+        chargedRodGroup.position.set(1.0, 0.68, 0);
         scene.add(chargedRodGroup);
 
-        // --- 6. 전하 입자 (1:1 중성 유지 및 유도 모듈) ---
+        // --- 6. 전하 입자 (1:1 중성, 균일 양전하, 자유 전자 열운동 연산) ---
         const particlesGroup = new THREE.Group();
         scene.add(particlesGroup);
 
@@ -481,34 +494,34 @@
         const posParticles = [];
         const negParticles = [];
 
-        // 균일 분포 좌표 연산
+        // 검전기 전체 균일 좌표 연산 (금속판, 막대, 금속박)
         const posLocations = [];
         for (let i = 0; i < TOTAL_PAIRS; i++) {
             let x, y, z;
             if (i < 12) {
-                // 금속 원판
-                const r = Math.sqrt(Math.random()) * 0.28;
+                // 상단 금속 원판 구역
+                const r = Math.sqrt(Math.random()) * 0.22;
                 const theta = Math.random() * Math.PI * 2;
                 x = Math.cos(theta) * r;
-                y = 0.46;
+                y = 0.55;
                 z = Math.sin(theta) * r;
             } else if (i < 22) {
-                // 막대
-                x = (Math.random() - 0.5) * 0.02;
-                y = 0.38 - (i - 12) * 0.06;
-                z = (Math.random() - 0.5) * 0.02;
+                // 중앙 금속 막대 구역
+                x = (Math.random() - 0.5) * 0.015;
+                y = 0.44 - (i - 12) * 0.065;
+                z = (Math.random() - 0.5) * 0.015;
             } else {
-                // 금속박
+                // 하단 금속박 구역
                 const side = (i % 2 === 0) ? -1 : 1;
-                x = side * 0.04;
+                x = side * 0.03;
                 y = -0.24 - Math.random() * 0.18;
-                z = (Math.random() - 0.5) * 0.02;
+                z = (Math.random() - 0.5) * 0.015;
             }
             posLocations.push(new THREE.Vector3(x, y, z));
         }
 
-        // 고정 양전하(+) 입자
-        const posGeo = new THREE.SphereGeometry(0.015, 12, 12);
+        // 고정 양전하(+) 입자 (Red Spheres - 균일 고정 분포)
+        const posGeo = new THREE.SphereGeometry(0.014, 12, 12);
         const posMat = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
 
         posLocations.forEach(loc => {
@@ -518,8 +531,8 @@
             posParticles.push(p);
         });
 
-        // 이동 자유전자(-) 입자
-        const negGeo = new THREE.SphereGeometry(0.015, 12, 12);
+        // 자유 오가는 음전하(-, 자유전자) 입자 (Blue Spheres)
+        const negGeo = new THREE.SphereGeometry(0.014, 12, 12);
         const negMat = new THREE.MeshBasicMaterial({ color: 0x007aff });
 
         for (let i = 0; i < TOTAL_PAIRS; i++) {
@@ -529,11 +542,15 @@
             negParticles.push({
                 mesh: p,
                 basePos: posLocations[i].clone(),
-                currentPos: posLocations[i].clone()
+                currentPos: posLocations[i].clone(),
+                // 랜덤 열운동 오프셋 속도
+                vx: (Math.random() - 0.5) * 0.002,
+                vy: (Math.random() - 0.5) * 0.002,
+                vz: (Math.random() - 0.5) * 0.002
             });
         }
 
-        // 대전체 표면 입자
+        // 대전체 표면 입자 시각화
         const rodChargeGroup = new THREE.Group();
         chargedRodGroup.add(rodChargeGroup);
 
@@ -544,16 +561,16 @@
 
             for (let i = -0.3; i <= 0.3; i += 0.06) {
                 const p1 = new THREE.Mesh(geo, mat);
-                p1.position.set(i, 0.045, 0);
+                p1.position.set(i, 0.04, 0);
                 const p2 = new THREE.Mesh(geo, mat);
-                p2.position.set(i, -0.045, 0);
+                p2.position.set(i, -0.04, 0);
                 rodChargeGroup.add(p1);
                 rodChargeGroup.add(p2);
             }
         }
         updateRodParticles('neg');
 
-        // --- 7. 평면 Raycasting 드래그 컨트롤 ---
+        // --- 7. 대전체 클릭 및 좌/우 2D 평면 드래그 인터랙션 ---
         let currentPolarity = 'neg'; // 'neg' / 'pos'
         let isDragging = false;
         const raycaster = new THREE.Raycaster();
@@ -576,7 +593,7 @@
 
             if (intersects.length > 0) {
                 isDragging = true;
-                controls.enabled = false;
+                controls.enabled = false; // 드래그 시 3D 화면 회전 금지
                 raycaster.ray.intersectPlane(dragPlane, planeIntersect);
                 dragOffset.copy(chargedRodGroup.position).sub(planeIntersect);
 
@@ -592,9 +609,10 @@
             raycaster.setFromCamera(mouse, camera);
             if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                 let targetPos = planeIntersect.add(dragOffset);
-                targetPos.x = Math.max(-1.5, Math.min(1.5, targetPos.x));
-                targetPos.y = Math.max(-0.4, Math.min(1.2, targetPos.y));
-                targetPos.z = 0; // 한 평면 유지
+                // 좌/우 (X축) 및 상/하 (Y축) 드래그 이동 한계 지정
+                targetPos.x = Math.max(-1.6, Math.min(1.6, targetPos.x));
+                targetPos.y = Math.max(-0.3, Math.min(1.1, targetPos.y));
+                targetPos.z = 0; // 한 평면(Z=0)상 조작 유지
                 chargedRodGroup.position.copy(targetPos);
             }
             if (e.cancelable) e.preventDefault();
@@ -616,39 +634,50 @@
         canvasElement.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp);
 
-        // --- 8. 물리 시뮬레이션 연산 루프 ---
+        // --- 8. 물리 시뮬레이션 & 전하 이동 연산 루프 ---
         let targetLeafAngle = 0;
         let currentLeafAngle = 0;
 
         function updatePhysics() {
-            const discWorldPos = new THREE.Vector3(0, 0.45, 0);
+            // 상단 금속 원판 중심점
+            const discWorldPos = new THREE.Vector3(0, 0.55, 0);
             const distance = chargedRodGroup.position.distanceTo(discWorldPos);
 
-            let inductionFactor = Math.max(0, Math.min(1, (1.2 - distance) / 1.0));
+            // 대전체 거리 인덕션 연산
+            let inductionFactor = Math.max(0, Math.min(1, (1.3 - distance) / 1.1));
             inductionFactor = Math.pow(inductionFactor, 1.8);
 
-            targetLeafAngle = inductionFactor * (Math.PI / 4.2);
+            targetLeafAngle = inductionFactor * (Math.PI / 4.0);
             currentLeafAngle += (targetLeafAngle - currentLeafAngle) * 0.1;
 
             leafGroupLeft.rotation.z = -currentLeafAngle;
             leafGroupRight.rotation.z = currentLeafAngle;
 
-            const migrationShift = (currentPolarity === 'neg' ? -1 : 1) * inductionFactor * 0.45;
+            // 정전기 유도 이동 거리
+            const migrationShift = (currentPolarity === 'neg' ? -1 : 1) * inductionFactor * 0.52;
 
             negParticles.forEach((np) => {
-                let targetY = np.basePos.y + migrationShift;
-                targetY = Math.max(-0.42, Math.min(0.48, targetY));
+                // 1) 랜덤 열운동 (Random Brownian Motion)
+                np.vx += (Math.random() - 0.5) * 0.0004;
+                np.vy += (Math.random() - 0.5) * 0.0004;
+                np.vx *= 0.92;
+                np.vy *= 0.92;
+
+                // 2) 유도력 위치 계산
+                let targetY = np.basePos.y + migrationShift + np.vy;
+                targetY = Math.max(-0.42, Math.min(0.56, targetY));
 
                 np.currentPos.y += (targetY - np.currentPos.y) * 0.08;
                 np.mesh.position.y = np.currentPos.y;
 
+                // 금속박 구간의 X축 벌어짐 동기화
                 if (np.currentPos.y < -0.22) {
                     const leafHeightRatio = (-0.22 - np.currentPos.y) / 0.2;
                     const side = np.basePos.x < 0 ? -1 : 1;
-                    const spreadX = side * (0.02 + Math.sin(currentLeafAngle) * leafHeightRatio * 0.2);
+                    const spreadX = side * (0.015 + Math.sin(currentLeafAngle) * leafHeightRatio * 0.18) + np.vx;
                     np.mesh.position.x = spreadX;
                 } else {
-                    np.mesh.position.x = np.basePos.x;
+                    np.mesh.position.x = np.basePos.x + np.vx;
                 }
             });
 
@@ -656,7 +685,7 @@
             document.getElementById('val-leaf-angle').innerText = (currentLeafAngle * (180 / Math.PI)).toFixed(1) + '°';
         }
 
-        // --- 9. 버튼 조작 이벤트 ---
+        // --- 9. 버튼 조작 및 제어 이벤트 ---
         const btnTogglePhysics = document.getElementById('btn-toggle-physics');
         const physicsPanel = document.getElementById('physics-panel');
         btnTogglePhysics.addEventListener('click', () => {
@@ -699,12 +728,12 @@
         });
 
         document.getElementById('btn-reset').addEventListener('click', () => {
-            chargedRodGroup.position.set(1.0, 0.6, 0);
+            chargedRodGroup.position.set(1.0, 0.68, 0);
             setPolarity('neg');
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 0.3, 3.2);
+            camera.position.set(0, 0.2, 3.2);
             controls.target.set(0, 0, 0);
         });
 
