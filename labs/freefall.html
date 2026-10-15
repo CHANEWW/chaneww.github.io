@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>자유 낙하 운동 3D</title>
+    <title>자유 낙하 운동 3D - visionOS / Apple HIG Style</title>
     <!-- Three.js 및 OrbitControls 라이브러리 로드 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -30,7 +30,7 @@
             font-family: 'SeoulNamsanL', -apple-system, sans-serif;
             background-color: #f2f2f7;
             color: #1c1c1e;
-            touch-action: none; /* 브라우저 기본 스크롤 차단 */
+            touch-action: none;
         }
 
         #canvas-container {
@@ -54,7 +54,7 @@
             z-index: 10;
         }
 
-        /* 좌측 상단 헤더 */
+        /* 좌측 상단 헤더 및 지구/달 선택 탭 */
         .top-left-bar {
             position: absolute;
             top: 20px;
@@ -96,14 +96,40 @@
             font-weight: bold;
         }
 
-        /* 우측 상단 실시간 데이터 표시 카드 */
+        /* 환경 (지구 / 달) 세그먼트 컨트롤 */
+        .env-toggle-group {
+            display: flex;
+            padding: 3px;
+            border-radius: 14px;
+        }
+
+        .env-btn {
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            background: transparent;
+            color: #8e8e93;
+            cursor: pointer;
+            border-radius: 11px;
+            transition: all 0.2s;
+        }
+
+        .env-btn.active {
+            background: #ffffff;
+            color: #007aff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* 우측 상단 실시간 데이터 및 그래프 영역 */
         .top-right-bar {
             position: absolute;
             top: 20px;
             right: 20px;
             display: flex;
-            align-items: center;
-            gap: 10px;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
             z-index: 10;
         }
 
@@ -146,7 +172,33 @@
             transition: all 0.2s;
         }
 
-        /* 중앙 안내 메시지 */
+        /* 그래프 패널 */
+        .graph-panel {
+            padding: 12px 16px;
+            width: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .graph-header {
+            font-size: 12px;
+            font-weight: bold;
+            color: #1c1c1e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        canvas.graph-canvas {
+            width: 100%;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        /* 중앙 안내 툴팁 */
         .center-tooltip {
             position: absolute;
             top: 10%;
@@ -208,7 +260,7 @@
             width: 300px;
             display: none;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
             z-index: 10;
         }
 
@@ -216,14 +268,15 @@
 
         .checkbox-row {
             display: flex;
-            justify-content: center;
-            font-size: 14px;
+            justify-content: space-between;
+            font-size: 13px;
             font-weight: bold;
         }
+
         .checkbox-row label {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             cursor: pointer;
         }
 
@@ -239,7 +292,7 @@
             color: #f2f2f7;
         }
 
-        body.dark-mode .data-value, body.dark-mode .back-btn {
+        body.dark-mode .data-value, body.dark-mode .back-btn, body.dark-mode .graph-header {
             color: #f2f2f7;
         }
 
@@ -247,40 +300,76 @@
             background: rgba(40, 40, 40, 0.75);
             color: #fff;
         }
+
+        body.dark-mode .env-btn.active {
+            background: #3a3a3c;
+            color: #0a84ff;
+        }
+
+        body.dark-mode canvas.graph-canvas {
+            background: rgba(0, 0, 0, 0.3);
+        }
     </style>
 </head>
 <body>
 
     <div id="canvas-container"></div>
 
-    <!-- 좌측 상단 헤더 -->
+    <!-- 좌측 상단 헤더 & 지구/달 전환 -->
     <div class="top-left-bar">
         <a href="../index.html" class="glass-panel back-btn">
             <span>⬅</span> 메인
         </a>
         <div class="glass-panel tag-badge">
-            <span>자유 낙하 운동 3D</span>
+            <span>자유 낙하 3D</span>
             <span class="tag-pill">visionOS</span>
+        </div>
+        <div class="glass-panel env-toggle-group">
+            <button class="env-btn active" id="btn-env-earth">🌍 지구</button>
+            <button class="env-btn" id="btn-env-moon">🌕 달</button>
         </div>
     </div>
 
-    <!-- 우측 상단 실시간 데이터 패널 -->
+    <!-- 우측 상단 실시간 데이터 및 그래프 -->
     <div class="top-right-bar">
-        <div class="glass-panel data-card">
-            <div class="data-item">
-                <span class="data-label">위치 (높이)</span>
-                <span class="data-value" id="val-pos" style="color:#007aff;">0.40 m</span>
+        <div style="display: flex; gap: 10px;">
+            <div class="glass-panel data-card">
+                <div class="data-item">
+                    <span class="data-label">위치 (높이)</span>
+                    <span class="data-value" id="val-pos" style="color:#007aff;">0.40 m</span>
+                </div>
+                <div class="data-item">
+                    <span class="data-label">속력</span>
+                    <span class="data-value" id="val-vel" style="color:#34c759;">0.00 m/s</span>
+                </div>
+                <div class="data-item">
+                    <span class="data-label">가속도</span>
+                    <span class="data-value" id="val-acc" style="color:#ff9500;">0.00 m/s²</span>
+                </div>
             </div>
-            <div class="data-item">
-                <span class="data-label">속력</span>
-                <span class="data-value" id="val-vel" style="color:#34c759;">0.00 m/s</span>
-            </div>
-            <div class="data-item">
-                <span class="data-label">가속도</span>
-                <span class="data-value" id="val-acc" style="color:#ff9500;">0.00 m/s²</span>
-            </div>
+            <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
         </div>
-        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+
+        <!-- 실시간 2D 그래프 패널 -->
+        <div class="glass-panel graph-panel">
+            <div class="graph-header">
+                <span>위치-시간 (y-t)</span>
+                <span style="color:#007aff;">m</span>
+            </div>
+            <canvas id="canvas-pos-graph" class="graph-canvas" width="250" height="70"></canvas>
+
+            <div class="graph-header">
+                <span>속도-시간 (v-t)</span>
+                <span style="color:#34c759;">m/s</span>
+            </div>
+            <canvas id="canvas-vel-graph" class="graph-canvas" width="250" height="70"></canvas>
+
+            <div class="graph-header">
+                <span>가속도-시간 (a-t)</span>
+                <span style="color:#ff9500;">m/s²</span>
+            </div>
+            <canvas id="canvas-acc-graph" class="graph-canvas" width="250" height="70"></canvas>
+        </div>
     </div>
 
     <!-- 중앙 안내 툴팁 -->
@@ -291,7 +380,8 @@
     <!-- 물리 조절 서브 패널 -->
     <div class="glass-panel sub-panel" id="physics-panel">
         <div class="checkbox-row">
-            <label><input type="checkbox" id="chk-gravity-arrow" checked> 🔴 중력 화살표 표시</label>
+            <label><input type="checkbox" id="chk-gravity-arrow" checked> 🔴 중력 화살표</label>
+            <label><input type="checkbox" id="chk-velocity-arrow" checked> 🟢 속력 화살표</label>
         </div>
     </div>
 
@@ -318,7 +408,6 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // 초기 카메라 시점 조정 (사진처럼 멀리 떨어진 시점)
         camera.position.set(0, 3.5, 12);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -360,7 +449,7 @@
         gridHelper.position.y = floorY + 0.01;
         scene.add(gridHelper);
 
-        // --- 4. 축구공 3D 텍스처 메쉬 생성 ---
+        // --- 4. 축구공 3D 메쉬 생성 ---
         function createSoccerBallTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
@@ -398,7 +487,8 @@
         ball.castShadow = true;
         scene.add(ball);
 
-        // --- 5. 빨간색 중력 화살표 헬퍼 ---
+        // --- 5. 3D 힘 및 속력 벡터 화살표 ---
+        // 🔴 빨간색 중력 화살표
         const gravityArrow = new THREE.ArrowHelper(
             new THREE.Vector3(0, -1, 0),
             ball.position,
@@ -409,17 +499,92 @@
         );
         scene.add(gravityArrow);
 
-        // --- 6. 물리 및 드래그 상태 변수 ---
-        const g = 9.80; // 중력가속도 (m/s²)
-        let posY = floorY + ballRadius; // 바닥에 접한 초기 위치
-        let velY = 0; // 초기 속력
+        // 🟢 초록색 속력 화살표
+        const velocityArrow = new THREE.ArrowHelper(
+            new THREE.Vector3(0, -1, 0),
+            ball.position,
+            0.1,
+            0x34c759,
+            0.25,
+            0.15
+        );
+        scene.add(velocityArrow);
+
+        // --- 6. 물리 및 환경 상태 변수 ---
+        let currentEnv = 'earth'; // 'earth' or 'moon'
+        let g = 9.80; // 지구: 9.80 m/s², 달: 1.63 m/s²
+        let posY = floorY + ballRadius;
+        let velY = 0;
         let isFalling = false;
         let isDragging = false;
         let dragOffsetY = 0;
 
         ball.position.set(0, posY, 0);
 
-        // --- 7. 포인터(마우스/터치) 드래그 연동 ---
+        // --- 7. 실시간 그래프 기록용 데이터 변수 ---
+        let fallTime = 0;
+        const graphData = []; // { t, pos, vel, acc } 저장 array
+        const maxGraphTime = 2.0; // 그래프 X축 최대 시간 (2초)
+
+        const cvsPos = document.getElementById('canvas-pos-graph');
+        const cvsVel = document.getElementById('canvas-vel-graph');
+        const cvsAcc = document.getElementById('canvas-acc-graph');
+
+        function clearAndDrawGraphGrid(canvas, color, maxY, unit) {
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // 가로 및 세로 안내선
+            ctx.strokeStyle = 'rgba(142, 142, 147, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(30, 10); ctx.lineTo(30, h - 15);
+            ctx.moveTo(30, h - 15); ctx.lineTo(w - 10, h - 15);
+            ctx.stroke();
+
+            // 최대 Y축 눈금 표시
+            ctx.fillStyle = '#8e8e93';
+            ctx.font = '9px sans-serif';
+            ctx.fillText(maxY.toFixed(1), 2, 12);
+            ctx.fillText('0', 18, h - 13);
+            ctx.fillText(maxGraphTime + 's', w - 22, h - 3);
+
+            if (graphData.length < 2) return;
+
+            // 데이터 곡선 그리기
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            for (let i = 0; i < graphData.length; i++) {
+                const d = graphData[i];
+                const x = 30 + (d.t / maxGraphTime) * (w - 40);
+                let val = 0;
+                if (canvas === cvsPos) val = d.pos;
+                else if (canvas === cvsVel) val = d.vel;
+                else if (canvas === cvsAcc) val = d.acc;
+
+                const y = (h - 15) - (val / maxY) * (h - 25);
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        function renderGraphs() {
+            const maxPosScale = 8.0;
+            const maxVelScale = currentEnv === 'earth' ? 15.0 : 5.0;
+            const maxAccScale = currentEnv === 'earth' ? 12.0 : 3.0;
+
+            clearAndDrawGraphGrid(cvsPos, '#007aff', maxPosScale, 'm');
+            clearAndDrawGraphGrid(cvsVel, '#34c759', maxVelScale, 'm/s');
+            clearAndDrawGraphGrid(cvsAcc, '#ff9500', maxAccScale, 'm/s²');
+        }
+
+        // --- 8. 포인터(마우스/터치) 드래그 연동 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -432,6 +597,18 @@
             mouse.y = -(clientY / window.innerHeight) * 2 + 1;
         }
 
+        function resetSimulation() {
+            isFalling = false;
+            isDragging = false;
+            velY = 0;
+            fallTime = 0;
+            posY = floorY + ballRadius;
+            ball.position.set(0, posY, 0);
+            graphData.length = 0; // 그래프 데이터 초기화
+            renderGraphs();
+            document.getElementById('guide-tooltip').style.opacity = '1';
+        }
+
         function onPointerDown(e) {
             updateMousePos(e);
             raycaster.setFromCamera(mouse, camera);
@@ -441,7 +618,9 @@
                 isDragging = true;
                 isFalling = false;
                 velY = 0;
-                controls.enabled = false; // 드래그 중 회전 차단
+                fallTime = 0;
+                graphData.length = 0; // 새로 잡았을 때 이전 그래프 초기화
+                controls.enabled = false;
                 raycaster.ray.intersectPlane(dragPlane, planeIntersect);
                 dragOffsetY = ball.position.y - planeIntersect.y;
                 document.getElementById('guide-tooltip').style.opacity = '0';
@@ -454,7 +633,6 @@
             raycaster.setFromCamera(mouse, camera);
             if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                 let newY = planeIntersect.y + dragOffsetY;
-                // 바닥 최하단 ~ 상단 한계 높이 제한 (0.4m ~ 8.0m)
                 newY = Math.max(floorY + ballRadius, Math.min(8.0, newY));
                 ball.position.y = newY;
                 posY = newY;
@@ -465,10 +643,11 @@
             if (isDragging) {
                 isDragging = false;
                 controls.enabled = true;
-                // 바닥에서 공을 떼어 올린 상태이면 낙하 개시
                 if (ball.position.y > floorY + ballRadius + 0.001) {
                     isFalling = true;
                     velY = 0;
+                    fallTime = 0;
+                    graphData.length = 0;
                 }
             }
         }
@@ -477,27 +656,36 @@
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
 
-        // --- 8. 물리 시뮬레이션 및 데이터 업데이트 루프 ---
+        // --- 9. 물리 시뮬레이션 및 데이터 업데이트 루프 ---
         const clock = new THREE.Clock();
 
         function updatePhysics() {
             const dt = clock.getDelta();
 
-            // 자유 낙하 운동 연산 (v = v0 + gt, y = y0 - vt)
             if (isFalling && !isDragging) {
+                fallTime += dt;
                 velY += g * dt;
                 posY -= velY * dt;
 
-                // 바닥 충돌 시 완전 정지
+                // 바닥 충돌 시 완전 정지 (그래프는 마지막 상태로 보존)
                 if (posY <= floorY + ballRadius) {
                     posY = floorY + ballRadius;
                     velY = 0;
                     isFalling = false;
                 }
                 ball.position.y = posY;
+
+                // 실시간 그래프 데이터 기록 (낙하 진행 중일 때만 추가)
+                const currentHeight = posY - floorY;
+                graphData.push({
+                    t: fallTime,
+                    pos: currentHeight,
+                    vel: velY,
+                    acc: g
+                });
+                renderGraphs();
             }
 
-            // 바닥 기준 물체 중심까지의 위치(높이 m)
             const heightFromFloor = ball.position.y - floorY;
 
             // 오른쪽 상단 실시간 데이터 반영
@@ -505,13 +693,41 @@
             document.getElementById('val-vel').innerText = velY.toFixed(2) + ' m/s';
             document.getElementById('val-acc').innerText = (heightFromFloor > ballRadius + 0.001 || isFalling ? g.toFixed(2) : '0.00') + ' m/s²';
 
-            // 중력 화살표 위치 및 표시 제어
+            // 중력 및 속력 화살표 위치 및 크기 조절
             gravityArrow.position.copy(ball.position);
-            const showArrow = document.getElementById('chk-gravity-arrow').checked;
-            gravityArrow.visible = showArrow;
+            velocityArrow.position.copy(ball.position);
+
+            const showGravity = document.getElementById('chk-gravity-arrow').checked;
+            const showVelocity = document.getElementById('chk-velocity-arrow').checked;
+
+            gravityArrow.visible = showGravity;
+            velocityArrow.visible = showVelocity && velY > 0.05;
+
+            // 속력이 빨라질수록 초록색 속력 화살표 길이를 실시간 연동 (스케일 조정)
+            velocityArrow.setLength(Math.min(3.5, velY * 0.25), 0.25, 0.15);
         }
 
-        // --- 9. UI 이벤트 리스너 ---
+        // --- 10. 지구 / 달 환경 버튼 제어 ---
+        const btnEarth = document.getElementById('btn-env-earth');
+        const btnMoon = document.getElementById('btn-env-moon');
+
+        btnEarth.addEventListener('click', () => {
+            currentEnv = 'earth';
+            g = 9.80;
+            btnEarth.classList.add('active');
+            btnMoon.classList.remove('active');
+            resetSimulation();
+        });
+
+        btnMoon.addEventListener('click', () => {
+            currentEnv = 'moon';
+            g = 1.63;
+            btnMoon.classList.add('active');
+            btnEarth.classList.remove('active');
+            resetSimulation();
+        });
+
+        // --- 11. 기타 UI 버튼 이벤트 ---
         const btnTogglePhysics = document.getElementById('btn-toggle-physics');
         const physicsPanel = document.getElementById('physics-panel');
         btnTogglePhysics.addEventListener('click', () => {
@@ -519,14 +735,7 @@
             btnTogglePhysics.classList.toggle('active');
         });
 
-        document.getElementById('btn-reset').addEventListener('click', () => {
-            isFalling = false;
-            isDragging = false;
-            velY = 0;
-            posY = floorY + ballRadius;
-            ball.position.set(0, posY, 0);
-            document.getElementById('guide-tooltip').style.opacity = '1';
-        });
+        document.getElementById('btn-reset').addEventListener('click', resetSimulation);
 
         document.getElementById('btn-align').addEventListener('click', () => {
             camera.position.set(0, 3.5, 12);
@@ -538,6 +747,7 @@
             const isDark = document.body.classList.contains('dark-mode');
             scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
             floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+            renderGraphs();
         });
 
         window.addEventListener('resize', () => {
@@ -546,7 +756,10 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- 10. 메인 랜더링 애니메이션 루프 ---
+        // 초기 그래프 그리드 출력
+        renderGraphs();
+
+        // --- 12. 메인 애니메이션 루프 ---
         function animate() {
             requestAnimationFrame(animate);
             updatePhysics();
