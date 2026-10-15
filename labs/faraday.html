@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>전자기 유도 3D</title>
+    <!-- Three.js 및 OrbitControls 라이브러리 로드 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* 좌측 상단 헤더 */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 우측 상단 실시간 데이터 표시 카드 */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 메시지 */
+        .center-tooltip {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 서브 물리 설정 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 320px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .toggle-btn {
+            padding: 6px 12px;
+            border-radius: 10px;
+            border: 1px solid #d1d1d6;
+            background: #ffffff;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn.active-n {
+            background: #ff3b30;
+            color: #ffffff;
+            border-color: #ff3b30;
+        }
+
+        .toggle-btn.active-s {
+            background: #007aff;
+            color: #ffffff;
+            border-color: #007aff;
+        }
+
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <a href="../index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>전자기 유도 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 실시간 데이터 패널 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">자석 높이</span>
+                <span class="data-value" id="val-pos" style="color:#007aff;">2.50 m</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">유도 기전력(전압)</span>
+                <span class="data-value" id="val-emf" style="color:#ff9500;">0.00 V</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">검류계 바늘</span>
+                <span class="data-value" id="val-galvo" style="color:#34c759;">0.0°</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        🧲 막대자석을 클릭/터치하여 올린 후 놓거나, 원하는 높이에서 드래그하여 낙하시켜 보세요
+    </div>
+
+    <!-- 물리 조절 서브 패널 -->
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="control-row">
+            <span>상단 극성 선택</span>
+            <div class="btn-group">
+                <button class="toggle-btn active-n" id="btn-pole-n">N극 상단</button>
+                <button class="toggle-btn" id="btn-pole-s">S극 상단</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>물리 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점정렬</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. Three.js 씬, 카메라, 렌더러 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3.5, 11);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 2.0, 0);
+
+        // --- 2. 조명 설정 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(5, 12, 8);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // --- 3. 바닥 및 눈금 격자 ---
+        const floorGeo = new THREE.PlaneGeometry(20, 20);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0xd1d1d6, 0xe5e5ea);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // --- 4. 코일(Coil) 및 검류계(Galvanometer) 생성 ---
+        const coilY = 1.0; // 코일 중심 높이
+        const coilGroup = new THREE.Group();
+        coilGroup.position.set(0, coilY, 0);
+
+        // 솔레노이드 코일 나선 렌더링
+        const coilRadius = 0.7;
+        const coilHeight = 1.2;
+        const coilTurns = 12;
+        const curvePoints = [];
+        for (let i = 0; i <= 200; i++) {
+            const t = i / 200;
+            const angle = t * Math.PI * 2 * coilTurns;
+            const y = (t - 0.5) * coilHeight;
+            const x = coilRadius * Math.cos(angle);
+            const z = coilRadius * Math.sin(angle);
+            curvePoints.push(new THREE.Vector3(x, y, z));
+        }
+        const coilCurve = new THREE.CatmullRomCurve3(curvePoints);
+        const coilGeo = new THREE.TubeGeometry(coilCurve, 200, 0.04, 8, false);
+        const coilMat = new THREE.MeshStandardMaterial({ color: 0xb87333, metalness: 0.8, roughness: 0.3 });
+        const coilMesh = new THREE.Mesh(coilGeo, coilMat);
+        coilMesh.castShadow = true;
+        coilGroup.add(coilMesh);
+
+        // 코일 투명 아크릴 받침대
+        const standGeo = new THREE.CylinderGeometry(coilRadius + 0.02, coilRadius + 0.02, coilHeight, 32, 1, true);
+        const standMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, roughness: 0.1 });
+        const standMesh = new THREE.Mesh(standGeo, standMat);
+        coilGroup.add(standMesh);
+
+        scene.add(coilGroup);
+
+        // 검류계 (Galvanometer) 모델링
+        const galvoGroup = new THREE.Group();
+        galvoGroup.position.set(2.2, 0.5, 0.5);
+
+        const galvoBodyGeo = new THREE.BoxGeometry(1.2, 1.0, 0.8);
+        const galvoBodyMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.5 });
+        const galvoBody = new THREE.Mesh(galvoBodyGeo, galvoBodyMat);
+        galvoBody.castShadow = true;
+        galvoGroup.add(galvoBody);
+
+        // 검류계 표시창
+        const dialGeo = new THREE.PlaneGeometry(1.0, 0.6);
+        const dialMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const dial = new THREE.Mesh(dialGeo, dialMat);
+        dial.position.set(0, 0.1, 0.41);
+        galvoGroup.add(dial);
+
+        // 검류계 바늘
+        const needleGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, 0.01),
+            new THREE.Vector3(0, 0.25, 0.01)
+        ]);
+        const needleMat = new THREE.LineBasicMaterial({ color: 0xff3b30, linewidth: 3 });
+        const needle = new THREE.Line(needleGeo, needleMat);
+        needle.position.set(0, -0.05, 0.42);
+        galvoGroup.add(needle);
+
+        scene.add(galvoGroup);
+
+        // 도선 연결선
+        const wireMat = new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 2 });
+        const wireGeo1 = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, coilY - 0.6, 0.7),
+            new THREE.Vector3(1.0, 0.1, 0.7),
+            new THREE.Vector3(2.2, 0.1, 0.5)
+        ]);
+        scene.add(new THREE.Line(wireGeo1, wireMat));
+
+        // --- 5. 막대 자석 (Magnet) 생성 ---
+        const magnetGroup = new THREE.Group();
+        const magWidth = 0.4, magHeight = 1.2, magDepth = 0.4;
+
+        // N극 (빨간색) 및 S극 (파란색)
+        const nGeo = new THREE.BoxGeometry(magWidth, magHeight / 2, magDepth);
+        const nMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3 });
+        const nMesh = new THREE.Mesh(nGeo, nMat);
+        nMesh.position.y = magHeight / 4;
+        nMesh.castShadow = true;
+
+        const sGeo = new THREE.BoxGeometry(magWidth, magHeight / 2, magDepth);
+        const sMat = new THREE.MeshStandardMaterial({ color: 0x007aff, roughness: 0.3 });
+        const sMesh = new THREE.Mesh(sGeo, sMat);
+        sMesh.position.y = -magHeight / 4;
+        sMesh.castShadow = true;
+
+        magnetGroup.add(nMesh);
+        magnetGroup.add(sMesh);
+
+        let isTopN = true; // 상단 N극 여부
+        let magnetY = 3.5; // 초기 자석 높이
+        magnetGroup.position.set(0, magnetY, 0);
+        scene.add(magnetGroup);
+
+        // --- 6. 물리 및 낙하 상태 변수 ---
+        const g = 9.80;
+        let velY = 0;
+        let isFalling = false;
+        let isDragging = false;
+        let dragOffsetY = 0;
+        let lastY = magnetY;
+
+        // --- 7. 포인터(마우스/터치) 드래그 연동 ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const planeIntersect = new THREE.Vector3();
+
+        function updateMousePos(e) {
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onPointerDown(e) {
+            updateMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(magnetGroup.children);
+
+            if (intersects.length > 0) {
+                isDragging = true;
+                isFalling = false;
+                velY = 0;
+                controls.enabled = false;
+                raycaster.ray.intersectPlane(dragPlane, planeIntersect);
+                dragOffsetY = magnetGroup.position.y - planeIntersect.y;
+                document.getElementById('guide-tooltip').style.opacity = '0';
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!isDragging) return;
+            updateMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+            if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                let newY = planeIntersect.y + dragOffsetY;
+                newY = Math.max(0.6, Math.min(6.0, newY)); // 높이 제한
+                magnetGroup.position.y = newY;
+                magnetY = newY;
+            }
+        }
+
+        function onPointerUp() {
+            if (isDragging) {
+                isDragging = false;
+                controls.enabled = true;
+                if (magnetGroup.position.y > 0.61) {
+                    isFalling = true;
+                    velY = 0;
+                }
+            }
+        }
+
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+
+        // --- 8. 물리 및 패러데이 법칙 전자기 유도 연산 ---
+        const clock = new THREE.Clock();
+
+        function updatePhysics() {
+            const dt = clock.getDelta();
+
+            // 낙하 운동 연산
+            if (isFalling && !isDragging) {
+                velY += g * dt;
+                magnetY -= velY * dt;
+
+                // 바닥/코일 하단 충돌 시 정지
+                if (magnetY <= 0.6) {
+                    magnetY = 0.6;
+                    velY = 0;
+                    isFalling = false;
+                }
+                magnetGroup.position.y = magnetY;
+            }
+
+            // 실시간 자석 속도 연산 (v = dy/dt)
+            const currentSpeed = (magnetY - lastY) / (dt || 0.016);
+            lastY = magnetY;
+
+            // 자기선속 변화 및 유도기전력(EMF) 계산
+            // EMF = -N * (dPhi/dt), 코일 중심 근처에서 효과 최대화
+            const distToCoil = magnetY - coilY;
+            const fluxFactor = Math.exp(-Math.pow(distToCoil / 0.8, 2)); // 가우시안 분포 모델링
+            const poleMultiplier = isTopN ? 1 : -1;
+            
+            let emf = -currentSpeed * fluxFactor * 8.0 * poleMultiplier;
+
+            if (Math.abs(emf) < 0.01) emf = 0;
+
+            // 우측 상단 실시간 데이터 연동
+            document.getElementById('val-pos').innerText = magnetY.toFixed(2) + ' m';
+            document.getElementById('val-emf').innerText = emf.toFixed(2) + ' V';
+            document.getElementById('val-galvo').innerText = (emf * 15).toFixed(1) + '°';
+
+            // 검류계 바늘 회전 시각화
+            needle.rotation.z = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, -emf * 0.25));
+        }
+
+        // --- 9. UI 및 자석 극성 제어 ---
+        const btnPoleN = document.getElementById('btn-pole-n');
+        const btnPoleS = document.getElementById('btn-pole-s');
+
+        function setPolarity(topN) {
+            isTopN = topN;
+            if (isTopN) {
+                nMesh.position.y = magHeight / 4;
+                sMesh.position.y = -magHeight / 4;
+                btnPoleN.classList.add('active-n');
+                btnPoleS.classList.remove('active-s');
+            } else {
+                sMesh.position.y = magHeight / 4;
+                nMesh.position.y = -magHeight / 4;
+                btnPoleS.classList.add('active-s');
+                btnPoleN.classList.remove('active-n');
+            }
+        }
+
+        btnPoleN.addEventListener('click', () => setPolarity(true));
+        btnPoleS.addEventListener('click', () => setPolarity(false));
+
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            isFalling = false;
+            isDragging = false;
+            velY = 0;
+            magnetY = 3.5;
+            magnetGroup.position.set(0, magnetY, 0);
+            setPolarity(true);
+            document.getElementById('guide-tooltip').style.opacity = '1';
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 3.5, 11);
+            controls.target.set(0, 2.0, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 10. 메인 랜더링 루프 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            updatePhysics();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
