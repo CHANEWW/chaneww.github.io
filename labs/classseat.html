@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>3D 자리 배치 추첨 - visionOS / Apple HIG Style</title>
+    <!-- Three.js 및 OrbitControls 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 툴팁 */
+        .center-tooltip {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 하단 컨트롤 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 72px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active, .control-tab-btn.primary {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 서브 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 300px;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        input[type="number"] {
+            width: 60px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            border: 1px solid #c7c7cc;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value {
+            color: #f2f2f7;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <div class="glass-panel tag-badge">
+            <span>교실 자리 배치 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 실시간 데이터 카드 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">전체 좌석</span>
+                <span class="data-value" id="val-total">30석</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">배치 완료</span>
+                <span class="data-value" id="val-assigned" style="color:#007aff;">0석</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        🎓 하단의 '🎲 자리 추첨' 버튼을 눌러 자리를 배치해 보세요
+    </div>
+
+    <!-- 서브 조작 패널 -->
+    <div class="glass-panel sub-panel" id="config-panel">
+        <div class="control-row">
+            <span>가로 (열 수)</span>
+            <input type="number" id="input-cols" min="2" max="8" value="6">
+        </div>
+        <div class="control-row">
+            <span>세로 (행 수)</span>
+            <input type="number" id="input-rows" min="2" max="8" value="5">
+        </div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn primary" id="btn-draw">
+            <span>🎲</span>
+            <span>자리 추첨</span>
+        </button>
+        <button class="control-tab-btn" id="btn-toggle-config">
+            <span>⚙️</span>
+            <span>배치 설정</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점정렬</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. Three.js 기본 씬, 카메라, 렌더러 설정 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 6, 9);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, -1);
+
+        // --- 2. 조명 설정 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(4, 10, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // --- 3. 바닥 및 원목 교실 바닥 연출 ---
+        const floorGeo = new THREE.PlaneGeometry(24, 24);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xd7ccc8, roughness: 0.6 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.01;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(24, 24, 0xbdc3c7, 0xe5e5ea);
+        gridHelper.position.y = 0.0;
+        scene.add(gridHelper);
+
+        // --- 4. 정면 교실 칠판 생성 ---
+        const boardGroup = new THREE.Group();
+        
+        // 칠판 프레임 및 녹색 면
+        const boardFrame = new THREE.Mesh(
+            new THREE.BoxGeometry(7, 2.2, 0.1),
+            new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.3 })
+        );
+        const boardSurface = new THREE.Mesh(
+            new THREE.PlaneGeometry(6.8, 2.0),
+            new THREE.MeshStandardMaterial({ color: 0x1e4620, roughness: 0.8 })
+        );
+        boardSurface.position.z = 0.055;
+        boardGroup.add(boardFrame);
+        boardGroup.add(boardSurface);
+
+        // 칠판 상단 "정면 (칠판)" 안내 문구
+        const boardCanvas = document.createElement('canvas');
+        boardCanvas.width = 1024;
+        boardCanvas.height = 256;
+        const bCtx = boardCanvas.getContext('2d');
+        bCtx.fillStyle = '#ffffff';
+        bCtx.font = 'bold 80px sans-serif';
+        bCtx.textAlign = 'center';
+        bCtx.fillText('칠 판 (정 면)', 512, 150);
+
+        const boardTex = new THREE.CanvasTexture(boardCanvas);
+        const boardTextGeo = new THREE.PlaneGeometry(3.5, 0.875);
+        const boardTextMat = new THREE.MeshBasicMaterial({ map: boardTex, transparent: true });
+        const boardTextMesh = new THREE.Mesh(boardTextGeo, boardTextMat);
+        boardTextMesh.position.z = 0.06;
+        boardGroup.add(boardTextMesh);
+
+        boardGroup.position.set(0, 2.2, -6.5);
+        scene.add(boardGroup);
+
+        // --- 5. 3D 책상 & 의자 개별 및 그룹 생성 ---
+        let rows = 5;
+        let cols = 6;
+        let desks = [];
+
+        function createDeskMesh() {
+            const group = new THREE.Group();
+
+            // 책상 상판 Material
+            const topMat = new THREE.MeshStandardMaterial({ color: 0xe0a96d, roughness: 0.4 });
+            const legMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5 });
+
+            // (1) 책상 상판
+            const topMesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.55), topMat);
+            topMesh.position.y = 0.7;
+            topMesh.castShadow = true;
+            topMesh.name = "deskTop";
+            group.add(topMesh);
+
+            // (2) 책상 다리 4개
+            const legGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.7, 16);
+            const legPositions = [
+                [-0.35, 0.35, -0.22], [0.35, 0.35, -0.22],
+                [-0.35, 0.35, 0.22], [0.35, 0.35, 0.22]
+            ];
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, legMat);
+                leg.position.set(...pos);
+                leg.castShadow = true;
+                group.add(leg);
+            });
+
+            // (3) 의자
+            const chairMat = new THREE.MeshStandardMaterial({ color: 0x8d5b4c, roughness: 0.5 });
+            const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.04, 0.42), chairMat);
+            chairSeat.position.set(0, 0.42, 0.5);
+            chairSeat.castShadow = true;
+            group.add(chairSeat);
+
+            const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.35, 0.04), chairMat);
+            chairBack.position.set(0, 0.62, 0.69);
+            chairBack.castShadow = true;
+            group.add(chairBack);
+
+            return group;
+        }
+
+        // 책상 위에 번호를 그려서 텍스처로 새기는 함수
+        function createNumberTexture(num) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#f39c12'; // 원형 노란색 배경
+            ctx.beginPath();
+            ctx.arc(128, 128, 110, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 110px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(num + '', 128, 130);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function renderClassroom() {
+            // 기존 책상 제거
+            desks.forEach(d => scene.remove(d.group));
+            desks = [];
+
+            const spacingX = 1.2;
+            const spacingZ = 1.2;
+            const startX = -((cols - 1) * spacingX) / 2;
+            const startZ = -3.5 + (rows * spacingZ) / 2;
+
+            document.getElementById('val-total').innerText = (rows * cols) + '석';
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const deskGroup = createDeskMesh();
+                    const posX = startX + c * spacingX;
+                    const posZ = startZ - r * spacingZ;
+
+                    deskGroup.position.set(posX, 0, posZ);
+                    scene.add(deskGroup);
+
+                    desks.push({
+                        row: r,
+                        col: c,
+                        group: deskGroup,
+                        number: null,
+                        numMesh: null
+                    });
+                }
+            }
+        }
+
+        renderClassroom();
+
+        // --- 6. 추첨 및 번호 배치 알고리즘 ---
+        let currentAssignedCount = 0;
+
+        function drawSeats() {
+            const totalSeats = rows * cols;
+            let numbers = Array.from({ length: totalSeats }, (_, i) => i + 1);
+            
+            // 배열 무작위 셔플 (Fisher-Yates)
+            for (let i = numbers.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+            }
+
+            desks.forEach((desk, idx) => {
+                const num = numbers[idx];
+                desk.number = num;
+
+                // 기존 번호 메쉬 삭제
+                if (desk.numMesh) desk.group.remove(desk.numMesh);
+
+                // 책상 상판 위 3D 원형 번호 라벨 배치
+                const tex = createNumberTexture(num);
+                const numGeo = new THREE.PlaneGeometry(0.35, 0.35);
+                const numMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+                const numMesh = new THREE.Mesh(numGeo, numMat);
+
+                numMesh.rotation.x = -Math.PI / 2;
+                numMesh.position.set(0, 0.73, 0); // 책상 상판 바로 위에 밀착
+                desk.group.add(numMesh);
+                desk.numMesh = numMesh;
+            });
+
+            currentAssignedCount = totalSeats;
+            document.getElementById('val-assigned').innerText = currentAssignedCount + '석';
+            document.getElementById('guide-tooltip').style.opacity = '0';
+        }
+
+        function resetSeats() {
+            desks.forEach(desk => {
+                if (desk.numMesh) {
+                    desk.group.remove(desk.numMesh);
+                    desk.numMesh = null;
+                }
+                desk.number = null;
+            });
+            currentAssignedCount = 0;
+            document.getElementById('val-assigned').innerText = '0석';
+            document.getElementById('guide-tooltip').style.opacity = '1';
+        }
+
+        // --- 7. UI 및 컨트롤 이벤트 ---
+        document.getElementById('btn-draw').addEventListener('click', drawSeats);
+        document.getElementById('btn-reset').addEventListener('click', resetSeats);
+
+        const btnToggleConfig = document.getElementById('btn-toggle-config');
+        const configPanel = document.getElementById('config-panel');
+        btnToggleConfig.addEventListener('click', () => {
+            configPanel.classList.toggle('show');
+            btnToggleConfig.classList.toggle('active');
+        });
+
+        document.getElementById('input-cols').addEventListener('change', (e) => {
+            cols = parseInt(e.target.value);
+            renderClassroom();
+            resetSeats();
+        });
+
+        document.getElementById('input-rows').addEventListener('change', (e) => {
+            rows = parseInt(e.target.value);
+            renderClassroom();
+            resetSeats();
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 6, 9);
+            controls.target.set(0, 0, -1);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floorMat.color.setHex(isDark ? 0x2c2c2e : 0xd7ccc8);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 8. 애니메이션 루프 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
