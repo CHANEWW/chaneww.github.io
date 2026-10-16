@@ -304,7 +304,7 @@
 
     <!-- 중앙 안내 툴팁 -->
     <div class="glass-panel center-tooltip" id="guide-tooltip">
-        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요 (벽에 빛이 차단되는 위치를 확인해 보세요)
+        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요
     </div>
 
     <!-- 서브 물리 설정 패널 -->
@@ -523,7 +523,7 @@
         eyeTarget.position.set(0, 0.44, 0.162);
         personGroup.add(eyeTarget);
 
-        personGroup.position.set(-1.1, -0.15, 0);
+        personGroup.position.set(1.1, -0.15, 0);
         scene.add(personGroup);
 
         // --- 5. 광선 (Light Rays & Arrows) 시각화 및 가림 판정 연산 ---
@@ -566,19 +566,16 @@
             const wallYMin = objectGroup.position.y - wallHeight / 2;
             const wallYMax = objectGroup.position.y + wallHeight / 2;
 
-            // 두 점 사이에 벽의 X위치가 존재하는지 체크
             const minX = Math.min(startPos.x, endPos.x);
             const maxX = Math.max(startPos.x, endPos.x);
 
             if (wallX < minX || wallX > maxX) {
-                return false; // X축상으로 벽을 지나지 않음
+                return false;
             }
 
-            // X = wallX 일 때의 Y 높이 보간 연산
             const t = (wallX - startPos.x) / (endPos.x - startPos.x);
             const intersectY = startPos.y + t * (endPos.y - startPos.y);
 
-            // 해당 교차점의 Y가 벽의 상하 범위 내에 수반되면 가려진 것으로 판정
             return (intersectY >= wallYMin && intersectY <= wallYMax);
         }
 
@@ -609,19 +606,24 @@
             const targetPoint = objectGroup.position.clone();
             personGroup.lookAt(targetPoint.x, personGroup.position.y, targetPoint.z);
 
-            // 광원 -> 눈 직접 광선이 벽에 가려지는지 연산
+            // 1. 광원 -> 눈 직접 광선 가림 여부 연산
             const directBlocked = isRayBlockedByWall(lightPos, eyePos);
-            // 물체 -> 눈 반사 광선이 벽/위치에 의해 차단되는지 연산
-            const reflectedBlocked = isRayBlockedByWall(objPos, eyePos) || (personGroup.position.x < objectGroup.position.x && lightPos.x < objectGroup.position.x);
 
-            // 1. Ray 1: 광원 -> 물체 (항상 도달)
+            // 2. 벽을 기준으로 전등과 사람이 같은 편에 위치하는지 판정
+            const sameSide = (lightPos.x >= objectGroup.position.x && personGroup.position.x >= objectGroup.position.x) ||
+                             (lightPos.x <= objectGroup.position.x && personGroup.position.x <= objectGroup.position.x);
+
+            // 물체 -> 눈 반사 광선 차단 조건 연산
+            const reflectedBlocked = !sameSide || isRayBlockedByWall(objPos, eyePos);
+
+            // Ray 1: 광원 -> 물체 (항상 도달)
             const dir1 = new THREE.Vector3().subVectors(objPos, lightPos);
             const len1 = dir1.length();
             rayLightToObj.mesh.scale.set(1, len1, 1);
             rayLightToObj.mesh.position.copy(lightPos).add(objPos).multiplyScalar(0.5);
             rayLightToObj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
 
-            // 2. Ray 2: 광원 -> 사람 눈 (주황색 직접 광선: 벽에 가려지면 사라지고, 가리지 않으면 바로 들어옴)
+            // Ray 2: 광원 -> 사람 눈 (주황색 직접 광선)
             if (directBlocked) {
                 rayLightToEye.mesh.visible = false;
             } else {
@@ -633,7 +635,7 @@
                 rayLightToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirDirect.clone().normalize());
             }
 
-            // 3. Ray 3: 물체 -> 사람 눈 (황금색 반사 광선)
+            // Ray 3: 물체 -> 사람 눈 (전등과 사람이 같은 편에 있을 때 반사광 생성)
             if (reflectedBlocked) {
                 rayObjToEye.mesh.visible = false;
             } else {
@@ -645,7 +647,7 @@
                 rayObjToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
             }
 
-            // 실시간 상단 상태 업데이트
+            // 실시간 상태 라벨 업데이트
             if (reflectedBlocked && directBlocked) {
                 txtVisibility.innerText = '안 보임 (벽에 가려짐)';
                 txtVisibility.style.color = '#ff3b30';
@@ -658,7 +660,7 @@
             }
         }
 
-        // --- 6. 드래그 인터랙션 (PC/모바일 공용) ---
+        // --- 6. 드래그 인터랙션 ---
         let draggedObject = null;
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
@@ -762,7 +764,7 @@
         document.getElementById('btn-reset').addEventListener('click', () => {
             lightGroup.position.set(0.4, 0.8, 0);
             objectGroup.position.set(-0.3, 0.05, 0);
-            personGroup.position.set(-1.1, -0.15, 0);
+            personGroup.position.set(1.1, -0.15, 0);
             setLightState(true);
         });
 
