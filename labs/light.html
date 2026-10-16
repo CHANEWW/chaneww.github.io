@@ -304,7 +304,7 @@
 
     <!-- 중앙 안내 툴팁 -->
     <div class="glass-panel center-tooltip" id="guide-tooltip">
-        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요 (벽 뒤로 넘어가면 빛이 차단됩니다)
+        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요 (벽에 빛이 차단되는 위치를 확인해 보세요)
     </div>
 
     <!-- 서브 물리 설정 패널 -->
@@ -415,7 +415,11 @@
 
         // (2) 물체 (Object - 벽 가림판)
         const objectGroup = new THREE.Group();
-        const objGeo = new THREE.BoxGeometry(0.18, 0.65, 0.45);
+        const wallWidth = 0.18;
+        const wallHeight = 0.65;
+        const wallDepth = 0.45;
+
+        const objGeo = new THREE.BoxGeometry(wallWidth, wallHeight, wallDepth);
         const objMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.4, metalness: 0.1 });
         const objMesh = new THREE.Mesh(objGeo, objMat);
         objMesh.castShadow = true;
@@ -425,7 +429,7 @@
         objectGroup.position.set(-0.3, 0.05, 0);
         scene.add(objectGroup);
 
-        // (3) 사람 (Person - 두 눈 구현 및 벽/광원 방향 회전)
+        // (3) 사람 (Person)
         const personGroup = new THREE.Group();
         const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.5 });
         const clothMat = new THREE.MeshStandardMaterial({ color: 0x007aff, roughness: 0.6 });
@@ -447,7 +451,7 @@
         hairMesh.position.set(0, 0.45, -0.02);
         personGroup.add(hairMesh);
 
-        // [수정사항 1] 두 눈 (Left & Right Eyes) 생성
+        // 두 눈 (Eyes)
         const eyeWhiteGeo = new THREE.SphereGeometry(0.028, 16, 16);
         const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         
@@ -519,10 +523,10 @@
         eyeTarget.position.set(0, 0.44, 0.162);
         personGroup.add(eyeTarget);
 
-        personGroup.position.set(1.1, -0.15, 0);
+        personGroup.position.set(-1.1, -0.15, 0);
         scene.add(personGroup);
 
-        // --- 5. 광선 (Light Rays & Arrows) 시각화 및 벽 차단 로직 ---
+        // --- 5. 광선 (Light Rays & Arrows) 시각화 및 가림 판정 연산 ---
         const rayGroup = new THREE.Group();
         scene.add(rayGroup);
 
@@ -556,6 +560,28 @@
         rayGroup.add(rayObjToEye.mesh);
         rayGroup.add(rayLightToEye.mesh);
 
+        // 광선이 벽에 차단되는지 정밀 교차 검사하는 함수
+        function isRayBlockedByWall(startPos, endPos) {
+            const wallX = objectGroup.position.x;
+            const wallYMin = objectGroup.position.y - wallHeight / 2;
+            const wallYMax = objectGroup.position.y + wallHeight / 2;
+
+            // 두 점 사이에 벽의 X위치가 존재하는지 체크
+            const minX = Math.min(startPos.x, endPos.x);
+            const maxX = Math.max(startPos.x, endPos.x);
+
+            if (wallX < minX || wallX > maxX) {
+                return false; // X축상으로 벽을 지나지 않음
+            }
+
+            // X = wallX 일 때의 Y 높이 보간 연산
+            const t = (wallX - startPos.x) / (endPos.x - startPos.x);
+            const intersectY = startPos.y + t * (endPos.y - startPos.y);
+
+            // 해당 교차점의 Y가 벽의 상하 범위 내에 수반되면 가려진 것으로 판정
+            return (intersectY >= wallYMin && intersectY <= wallYMax);
+        }
+
         function updateRays() {
             const txtVisibility = document.getElementById('val-visibility');
 
@@ -579,24 +605,24 @@
             const eyePos = new THREE.Vector3();
             eyeTarget.getWorldPosition(eyePos);
 
-            // [수정사항 1] 사람이 항상 물체(벽)와 광원을 가리키며 동적으로 바라보도록 몸 회전
+            // 사람이 항상 물체(벽)쪽을 바라보도록 몸 회전
             const targetPoint = objectGroup.position.clone();
             personGroup.lookAt(targetPoint.x, personGroup.position.y, targetPoint.z);
 
-            // [수정사항 2] 광원과 눈 사이에 벽(물체)이 가로막고 있는지 충돌 검사
-            const isDirectBlocked = (personGroup.position.x < objectGroup.position.x && lightPos.x > objectGroup.position.x) ||
-                                    (personGroup.position.x > objectGroup.position.x && lightPos.x < objectGroup.position.x);
+            // 광원 -> 눈 직접 광선이 벽에 가려지는지 연산
+            const directBlocked = isRayBlockedByWall(lightPos, eyePos);
+            // 물체 -> 눈 반사 광선이 벽/위치에 의해 차단되는지 연산
+            const reflectedBlocked = isRayBlockedByWall(objPos, eyePos) || (personGroup.position.x < objectGroup.position.x && lightPos.x < objectGroup.position.x);
 
-            // Ray 1: 광원 -> 물체
+            // 1. Ray 1: 광원 -> 물체 (항상 도달)
             const dir1 = new THREE.Vector3().subVectors(objPos, lightPos);
             const len1 = dir1.length();
             rayLightToObj.mesh.scale.set(1, len1, 1);
             rayLightToObj.mesh.position.copy(lightPos).add(objPos).multiplyScalar(0.5);
             rayLightToObj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
 
-            // Ray 2: 광원 -> 사람 눈 (직접 광선 - 벽 차단 수정)
-            if (isDirectBlocked) {
-                // 벽 뒤에 숨어 광원 빛이 직접 가려진 경우 주황색 직접 광선 숨김
+            // 2. Ray 2: 광원 -> 사람 눈 (주황색 직접 광선: 벽에 가려지면 사라지고, 가리지 않으면 바로 들어옴)
+            if (directBlocked) {
                 rayLightToEye.mesh.visible = false;
             } else {
                 rayLightToEye.mesh.visible = true;
@@ -607,11 +633,9 @@
                 rayLightToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirDirect.clone().normalize());
             }
 
-            // Ray 3: 물체 -> 사람 눈 (반사 광선)
-            if (isDirectBlocked) {
+            // 3. Ray 3: 물체 -> 사람 눈 (황금색 반사 광선)
+            if (reflectedBlocked) {
                 rayObjToEye.mesh.visible = false;
-                txtVisibility.innerText = '안 보임 (벽에 가려짐)';
-                txtVisibility.style.color = '#ff3b30';
             } else {
                 rayObjToEye.mesh.visible = true;
                 const dir2 = new THREE.Vector3().subVectors(eyePos, objPos);
@@ -619,7 +643,16 @@
                 rayObjToEye.mesh.scale.set(1, len2, 1);
                 rayObjToEye.mesh.position.copy(objPos).add(eyePos).multiplyScalar(0.5);
                 rayObjToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
+            }
 
+            // 실시간 상단 상태 업데이트
+            if (reflectedBlocked && directBlocked) {
+                txtVisibility.innerText = '안 보임 (벽에 가려짐)';
+                txtVisibility.style.color = '#ff3b30';
+            } else if (reflectedBlocked) {
+                txtVisibility.innerText = '반사광 가려짐 (직접광만 보임)';
+                txtVisibility.style.color = '#ff9500';
+            } else {
                 txtVisibility.innerText = '보임';
                 txtVisibility.style.color = '#34c759';
             }
@@ -729,7 +762,7 @@
         document.getElementById('btn-reset').addEventListener('click', () => {
             lightGroup.position.set(0.4, 0.8, 0);
             objectGroup.position.set(-0.3, 0.05, 0);
-            personGroup.position.set(1.1, -0.15, 0);
+            personGroup.position.set(-1.1, -0.15, 0);
             setLightState(true);
         });
 
