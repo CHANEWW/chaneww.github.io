@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>물체를 보는 과정 3D</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* 좌측 상단 헤더 */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 우측 상단 데이터 패널 */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 툴팁 */
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 서브 조절 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 16px 20px;
+            width: 320px;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .toggle-btn {
+            padding: 6px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.5);
+            color: #1c1c1e;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .toggle-btn.active-on {
+            background: #ff9500;
+            color: white;
+            border-color: #ff9500;
+        }
+        .toggle-btn.active-off {
+            background: #8e8e93;
+            color: white;
+            border-color: #8e8e93;
+        }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <a href="../index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>물체를 보는 과정 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 실시간 데이터 패널 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">광원 상태</span>
+                <span class="data-value" id="val-light-status" style="color:#ff9500;">ON (켜짐)</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">물체 인식</span>
+                <span class="data-value" id="val-visibility" style="color:#34c759;">보임</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 광원, 물체, 사람을 마우스나 터치로 직접 끌어서 이동시켜 보세요
+    </div>
+
+    <!-- 서브 물리 설정 패널 -->
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="control-row">
+            <span>광원 전원 스위치</span>
+            <div class="btn-group">
+                <button class="toggle-btn active-on" id="btn-light-on">켜기 (ON)</button>
+                <button class="toggle-btn" id="btn-light-off">끄기 (OFF)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>설정 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점정렬</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. Three.js 기본 씬 & 카메라 연출 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0.6, 4.0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.05;
+
+        // --- 2. 조명 설정 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(3, 5, 3);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- 3. 바닥 및 원점 격자 스페이스 ---
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(20, 20),
+            new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.9;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0xd1d1d6, 0xe5e5ea);
+        gridHelper.position.y = -0.89;
+        scene.add(gridHelper);
+
+        // --- 4. 3D 드래그 가능 요소들 생성 (광원, 물체, 사람) ---
+
+        // (1) 광원 (Light Source - 전등)
+        const lightGroup = new THREE.Group();
+        
+        // 천장 줄
+        const wireGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.8, 16);
+        const wireMat = new THREE.MeshBasicMaterial({ color: 0x3a3a3c });
+        const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+        wireMesh.position.y = 0.4;
+        lightGroup.add(wireMesh);
+
+        // 갓 (Lamp Shade)
+        const shadeGeo = new THREE.ConeGeometry(0.28, 0.22, 32, 1, true);
+        const shadeMat = new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.3, side: THREE.DoubleSide });
+        const shadeMesh = new THREE.Mesh(shadeGeo, shadeMat);
+        shadeMesh.position.y = 0.08;
+        lightGroup.add(shadeMesh);
+
+        // 전구 (Bulb)
+        const bulbGeo = new THREE.SphereGeometry(0.12, 24, 24);
+        const bulbMat = new THREE.MeshStandardMaterial({
+            color: 0xffcc00,
+            emissive: 0xffaa00,
+            emissiveIntensity: 1.0,
+            roughness: 0.2
+        });
+        const bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+        bulbMesh.position.y = -0.02;
+        lightGroup.add(bulbMesh);
+
+        // 실제 점광원
+        const pointLight = new THREE.PointLight(0xffaa00, 1.8, 8);
+        pointLight.position.y = -0.02;
+        lightGroup.add(pointLight);
+
+        lightGroup.position.set(0.3, 0.8, 0);
+        scene.add(lightGroup);
+
+        // (2) 물체 (Object - 회색 직육면체 판)
+        const objectGroup = new THREE.Group();
+        const objGeo = new THREE.BoxGeometry(0.18, 0.55, 0.42);
+        const objMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.4, metalness: 0.1 });
+        const objMesh = new THREE.Mesh(objGeo, objMat);
+        objMesh.castShadow = true;
+        objMesh.receiveShadow = true;
+        objectGroup.add(objMesh);
+
+        objectGroup.position.set(-1.1, 0.1, 0);
+        scene.add(objectGroup);
+
+        // (3) 사람 (Person - 두상 & 눈 강조 모델)
+        const personGroup = new THREE.Group();
+        
+        // 피부 재질
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.5 });
+        
+        // 머리 (Head)
+        const headGeo = new THREE.SphereGeometry(0.24, 32, 32);
+        headGeo.scale(0.85, 1.1, 0.95);
+        const headMesh = new THREE.Mesh(headGeo, skinMat);
+        headMesh.castShadow = true;
+        personGroup.add(headMesh);
+
+        // 머리카락 (Hair)
+        const hairGeo = new THREE.SphereGeometry(0.25, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.55);
+        hairGeo.scale(0.88, 1.05, 0.98);
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x2c1d11, roughness: 0.8 });
+        const hairMesh = new THREE.Mesh(hairGeo, hairMat);
+        hairMesh.position.set(0, 0.03, -0.02);
+        personGroup.add(hairMesh);
+
+        // 눈 (Eye Shell) - 흰자위
+        const eyeWhiteGeo = new THREE.SphereGeometry(0.045, 16, 16);
+        const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        
+        const leftEyeWhite = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
+        leftEyeWhite.position.set(-0.08, 0.04, 0.18);
+        personGroup.add(leftEyeWhite);
+
+        // 눈동자 (Pupil) - 검은자위
+        const pupilGeo = new THREE.SphereGeometry(0.022, 16, 16);
+        const pupilMat = new THREE.MeshBasicMaterial({ color: 0x1c1c1e });
+        
+        const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
+        leftPupil.position.set(-0.08, 0.04, 0.21);
+        personGroup.add(leftPupil);
+
+        // 속눈썹/눈썹 (Eyebrow)
+        const browGeo = new THREE.BoxGeometry(0.08, 0.012, 0.015);
+        const browMesh = new THREE.Mesh(browGeo, hairMat);
+        browMesh.position.set(-0.08, 0.11, 0.20);
+        browMesh.rotation.z = -0.1;
+        personGroup.add(browMesh);
+
+        // 사람 눈의 기준 좌표점 (보조 객체)
+        const eyeTarget = new THREE.Object3D();
+        eyeTarget.position.set(-0.08, 0.04, 0.21);
+        personGroup.add(eyeTarget);
+
+        personGroup.position.set(1.1, 0.0, 0);
+        personGroup.rotation.y = -Math.PI * 0.22; // 물체를 바라보도록 회전
+        scene.add(personGroup);
+
+        // --- 5. 광선 (Light Rays & Arrows) 시각화 ---
+        const rayGroup = new THREE.Group();
+        scene.add(rayGroup);
+
+        let isLightOn = true;
+
+        // 화살표 광선 튜브 생성 함수
+        function createRayTube() {
+            const geom = new THREE.CylinderGeometry(0.018, 0.018, 1, 16);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xffcc00,
+                emissive: 0xffaa00,
+                emissiveIntensity: 0.8,
+                roughness: 0.2,
+                transparent: true,
+                opacity: 0.85
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            
+            // 화살표 촉
+            const coneGeom = new THREE.ConeGeometry(0.045, 0.12, 16);
+            const coneMesh = new THREE.Mesh(coneGeom, mat);
+            coneMesh.position.y = 0.5;
+            mesh.add(coneMesh);
+            
+            return { mesh, mat };
+        }
+
+        const ray1 = createRayTube(); // 광원 -> 물체
+        const ray2 = createRayTube(); // 물체 -> 눈
+
+        rayGroup.add(ray1.mesh);
+        rayGroup.add(ray2.mesh);
+
+        function updateRays() {
+            if (!isLightOn) {
+                rayGroup.visible = false;
+                objMat.color.setHex(0x2c2c2e); // 물체가 어두워짐
+                return;
+            }
+
+            rayGroup.visible = true;
+            objMat.color.setHex(0x8e8e93);
+
+            // 광원 중심점
+            const lightPos = new THREE.Vector3();
+            bulbMesh.getWorldPosition(lightPos);
+
+            // 물체 전면 중심점
+            const objPos = new THREE.Vector3();
+            objMesh.getWorldPosition(objPos);
+            objPos.x += 0.09; // 표면으로 맞춤
+
+            // 사람 눈 위치
+            const eyePos = new THREE.Vector3();
+            eyeTarget.getWorldPosition(eyePos);
+
+            // Ray 1: 광원 -> 물체
+            const dir1 = new THREE.Vector3().subVectors(objPos, lightPos);
+            const len1 = dir1.length();
+            ray1.mesh.scale.set(1, len1, 1);
+            ray1.mesh.position.copy(lightPos).add(objPos).multiplyScalar(0.5);
+            ray1.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
+
+            // Ray 2: 물체 -> 눈
+            const dir2 = new THREE.Vector3().subVectors(eyePos, objPos);
+            const len2 = dir2.length();
+            ray2.mesh.scale.set(1, len2, 1);
+            ray2.mesh.position.copy(objPos).add(eyePos).multiplyScalar(0.5);
+            ray2.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
+        }
+
+        // --- 6. 드래그 인터랙션 (Pointer Event 기반 PC/모바일 호환) ---
+        let draggedObject = null;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const planeIntersect = new THREE.Vector3();
+        let dragOffset = new THREE.Vector3();
+
+        // 감지 대상 메쉬 리스트
+        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, headMesh, hairMesh];
+
+        function updateMousePos(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onPointerDown(e) {
+            updateMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(interactableMeshes);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0].object;
+                
+                // 그룹 찾기
+                if (hit === shadeMesh || hit === bulbMesh) draggedObject = lightGroup;
+                else if (hit === objMesh) draggedObject = objectGroup;
+                else if (hit === headMesh || hit === hairMesh) draggedObject = personGroup;
+
+                if (draggedObject) {
+                    controls.enabled = false; // 드래그 중 시점 이동 금지
+                    if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                        dragOffset.copy(draggedObject.position).sub(planeIntersect);
+                    }
+
+                    const tooltip = document.getElementById('guide-tooltip');
+                    if (tooltip) tooltip.style.opacity = '0';
+                }
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!draggedObject) return;
+            updateMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+
+            if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                let targetPos = planeIntersect.add(dragOffset);
+                targetPos.x = Math.max(-1.8, Math.min(1.8, targetPos.x));
+                targetPos.y = Math.max(-0.4, Math.min(1.2, targetPos.y));
+                targetPos.z = 0; // 한 평면(Z=0) 유지
+                draggedObject.position.copy(targetPos);
+                
+                // 사람이 이동 시 물체를 계속 바라보도록 회전 연산
+                if (draggedObject === personGroup || draggedObject === objectGroup) {
+                    const lookTarget = objectGroup.position.clone();
+                    personGroup.lookAt(lookTarget.x, personGroup.position.y, lookTarget.z);
+                    personGroup.rotateY(Math.PI / 2);
+                }
+            }
+        }
+
+        function onPointerUp() {
+            if (draggedObject) {
+                draggedObject = null;
+                controls.enabled = true;
+            }
+        }
+
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+
+        // --- 7. UI 제어 및 이벤트 ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        const btnLightOn = document.getElementById('btn-light-on');
+        const btnLightOff = document.getElementById('btn-light-off');
+        const txtLightStatus = document.getElementById('val-light-status');
+        const txtVisibility = document.getElementById('val-visibility');
+
+        function setLightState(on) {
+            isLightOn = on;
+            if (isLightOn) {
+                btnLightOn.className = 'toggle-btn active-on';
+                btnLightOff.className = 'toggle-btn';
+                txtLightStatus.innerText = 'ON (켜짐)';
+                txtLightStatus.style.color = '#ff9500';
+                txtVisibility.innerText = '보임';
+                txtVisibility.style.color = '#34c759';
+                
+                bulbMat.emissiveIntensity = 1.0;
+                pointLight.intensity = 1.8;
+            } else {
+                btnLightOn.className = 'toggle-btn';
+                btnLightOff.className = 'toggle-btn active-off';
+                txtLightStatus.innerText = 'OFF (꺼짐)';
+                txtLightStatus.style.color = '#8e8e93';
+                txtVisibility.innerText = '안 보임 (보이지 않음)';
+                txtVisibility.style.color = '#ff3b30';
+
+                bulbMat.emissiveIntensity = 0.0;
+                pointLight.intensity = 0.0;
+            }
+        }
+
+        btnLightOn.addEventListener('click', () => setLightState(true));
+        btnLightOff.addEventListener('click', () => setLightState(false));
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            lightGroup.position.set(0.3, 0.8, 0);
+            objectGroup.position.set(-1.1, 0.1, 0);
+            personGroup.position.set(1.1, 0.0, 0);
+            personGroup.rotation.set(0, -Math.PI * 0.22, 0);
+            setLightState(true);
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 0.6, 4.0);
+            controls.target.set(0, 0, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 8. 메인 애니메이션 루프 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            updateRays();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
