@@ -304,7 +304,7 @@
 
     <!-- 중앙 안내 툴팁 -->
     <div class="glass-panel center-tooltip" id="guide-tooltip">
-        💡 광원, 물체, 사람을 마우스나 터치로 직접 끌어서 이동시켜 보세요
+        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요 (벽 뒤로 넘어가면 빛이 가려집니다)
     </div>
 
     <!-- 서브 물리 설정 패널 -->
@@ -341,7 +341,7 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0.6, 4.0);
+        camera.position.set(0, 0.6, 4.5);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -356,10 +356,10 @@
         controls.maxPolarAngle = Math.PI / 2 + 0.05;
 
         // --- 2. 조명 설정 ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
         scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
         dirLight.position.set(3, 5, 3);
         dirLight.castShadow = true;
         scene.add(dirLight);
@@ -378,26 +378,23 @@
         gridHelper.position.y = -0.89;
         scene.add(gridHelper);
 
-        // --- 4. 3D 드래그 가능 요소들 생성 (광원, 물체, 사람) ---
+        // --- 4. 3D 드래그 가능 요소들 생성 ---
 
-        // (1) 광원 (Light Source - 전등)
+        // (1) 광원 (Light Source)
         const lightGroup = new THREE.Group();
         
-        // 천장 줄
         const wireGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.8, 16);
         const wireMat = new THREE.MeshBasicMaterial({ color: 0x3a3a3c });
         const wireMesh = new THREE.Mesh(wireGeo, wireMat);
         wireMesh.position.y = 0.4;
         lightGroup.add(wireMesh);
 
-        // 갓 (Lamp Shade)
         const shadeGeo = new THREE.ConeGeometry(0.28, 0.22, 32, 1, true);
         const shadeMat = new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.3, side: THREE.DoubleSide });
         const shadeMesh = new THREE.Mesh(shadeGeo, shadeMat);
         shadeMesh.position.y = 0.08;
         lightGroup.add(shadeMesh);
 
-        // 전구 (Bulb)
         const bulbGeo = new THREE.SphereGeometry(0.12, 24, 24);
         const bulbMat = new THREE.MeshStandardMaterial({
             color: 0xffcc00,
@@ -409,91 +406,123 @@
         bulbMesh.position.y = -0.02;
         lightGroup.add(bulbMesh);
 
-        // 실제 점광원
         const pointLight = new THREE.PointLight(0xffaa00, 1.8, 8);
         pointLight.position.y = -0.02;
         lightGroup.add(pointLight);
 
-        lightGroup.position.set(0.3, 0.8, 0);
+        lightGroup.position.set(0.4, 0.8, 0);
         scene.add(lightGroup);
 
-        // (2) 물체 (Object - 회색 직육면체 판)
+        // (2) 물체 (Object - 벽 가림판)
         const objectGroup = new THREE.Group();
-        const objGeo = new THREE.BoxGeometry(0.18, 0.55, 0.42);
+        const objGeo = new THREE.BoxGeometry(0.18, 0.65, 0.45);
         const objMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.4, metalness: 0.1 });
         const objMesh = new THREE.Mesh(objGeo, objMat);
         objMesh.castShadow = true;
         objMesh.receiveShadow = true;
         objectGroup.add(objMesh);
 
-        objectGroup.position.set(-1.1, 0.1, 0);
+        objectGroup.position.set(-0.3, 0.05, 0);
         scene.add(objectGroup);
 
-        // (3) 사람 (Person - 두상 & 눈 강조 모델)
+        // (3) 사람 (Person - 눈/코/입 및 똑바로 서 있는 몸, 팔, 다리 전체 구현)
         const personGroup = new THREE.Group();
-        
-        // 피부 재질
         const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.5 });
-        
+        const clothMat = new THREE.MeshStandardMaterial({ color: 0x007aff, roughness: 0.6 }); // 파란 상의
+        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.7 }); // 검은 바지
+
         // 머리 (Head)
-        const headGeo = new THREE.SphereGeometry(0.24, 32, 32);
-        headGeo.scale(0.85, 1.1, 0.95);
+        const headGeo = new THREE.SphereGeometry(0.18, 32, 32);
+        headGeo.scale(0.85, 1.05, 0.95);
         const headMesh = new THREE.Mesh(headGeo, skinMat);
+        headMesh.position.y = 0.42;
         headMesh.castShadow = true;
         personGroup.add(headMesh);
 
         // 머리카락 (Hair)
-        const hairGeo = new THREE.SphereGeometry(0.25, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.55);
+        const hairGeo = new THREE.SphereGeometry(0.19, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.55);
         hairGeo.scale(0.88, 1.05, 0.98);
         const hairMat = new THREE.MeshStandardMaterial({ color: 0x2c1d11, roughness: 0.8 });
         const hairMesh = new THREE.Mesh(hairGeo, hairMat);
-        hairMesh.position.set(0, 0.03, -0.02);
+        hairMesh.position.set(0, 0.45, -0.02);
         personGroup.add(hairMesh);
 
-        // 눈 (Eye Shell) - 흰자위
-        const eyeWhiteGeo = new THREE.SphereGeometry(0.045, 16, 16);
+        // 눈 (Eyes) - 흰자위 & 검은자위
+        const eyeWhiteGeo = new THREE.SphereGeometry(0.032, 16, 16);
         const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        
         const leftEyeWhite = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
-        leftEyeWhite.position.set(-0.08, 0.04, 0.18);
+        leftEyeWhite.position.set(-0.06, 0.45, 0.14);
         personGroup.add(leftEyeWhite);
 
-        // 눈동자 (Pupil) - 검은자위
-        const pupilGeo = new THREE.SphereGeometry(0.022, 16, 16);
+        const pupilGeo = new THREE.SphereGeometry(0.016, 16, 16);
         const pupilMat = new THREE.MeshBasicMaterial({ color: 0x1c1c1e });
-        
         const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
-        leftPupil.position.set(-0.08, 0.04, 0.21);
+        leftPupil.position.set(-0.06, 0.45, 0.165);
         personGroup.add(leftPupil);
 
-        // 속눈썹/눈썹 (Eyebrow)
-        const browGeo = new THREE.BoxGeometry(0.08, 0.012, 0.015);
-        const browMesh = new THREE.Mesh(browGeo, hairMat);
-        browMesh.position.set(-0.08, 0.11, 0.20);
-        browMesh.rotation.z = -0.1;
-        personGroup.add(browMesh);
+        // 코 (Nose)
+        const noseGeo = new THREE.ConeGeometry(0.025, 0.06, 16);
+        const noseMesh = new THREE.Mesh(noseGeo, skinMat);
+        noseMesh.rotation.x = Math.PI / 2;
+        noseMesh.position.set(-0.06, 0.41, 0.16);
+        personGroup.add(noseMesh);
 
-        // 사람 눈의 기준 좌표점 (보조 객체)
+        // 입 (Mouth)
+        const mouthGeo = new THREE.TorusGeometry(0.025, 0.005, 8, 16, Math.PI);
+        const mouthMat = new THREE.MeshBasicMaterial({ color: 0xc0392b });
+        const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+        mouthMesh.rotation.x = Math.PI;
+        mouthMesh.position.set(-0.06, 0.36, 0.155);
+        personGroup.add(mouthMesh);
+
+        // 몸통 (Torso)
+        const bodyGeo = new THREE.CylinderGeometry(0.12, 0.11, 0.40, 16);
+        const bodyMesh = new THREE.Mesh(bodyGeo, clothMat);
+        bodyMesh.position.y = 0.12;
+        bodyMesh.castShadow = true;
+        personGroup.add(bodyMesh);
+
+        // 팔 2개 (Arms)
+        const armGeo = new THREE.CylinderGeometry(0.032, 0.03, 0.35, 16);
+        const armLeft = new THREE.Mesh(armGeo, skinMat);
+        armLeft.position.set(-0.16, 0.12, 0);
+        personGroup.add(armLeft);
+
+        const armRight = new THREE.Mesh(armGeo, skinMat);
+        armRight.position.set(0.16, 0.12, 0);
+        personGroup.add(armRight);
+
+        // 다리 2개 (Legs)
+        const legGeo = new THREE.CylinderGeometry(0.04, 0.035, 0.45, 16);
+        const legLeft = new THREE.Mesh(legGeo, pantsMat);
+        legLeft.position.set(-0.06, -0.28, 0);
+        legLeft.castShadow = true;
+        personGroup.add(legLeft);
+
+        const legRight = new THREE.Mesh(legGeo, pantsMat);
+        legRight.position.set(0.06, -0.28, 0);
+        legRight.castShadow = true;
+        personGroup.add(legRight);
+
+        // 사람 눈 타겟점
         const eyeTarget = new THREE.Object3D();
-        eyeTarget.position.set(-0.08, 0.04, 0.21);
+        eyeTarget.position.set(-0.06, 0.45, 0.165);
         personGroup.add(eyeTarget);
 
-        personGroup.position.set(1.1, 0.0, 0);
-        personGroup.rotation.y = -Math.PI * 0.22; // 물체를 바라보도록 회전
+        personGroup.position.set(-1.1, -0.15, 0);
         scene.add(personGroup);
 
-        // --- 5. 광선 (Light Rays & Arrows) 시각화 ---
+        // --- 5. 광선 (Light Rays & Arrows) 시각화 연산 ---
         const rayGroup = new THREE.Group();
         scene.add(rayGroup);
 
         let isLightOn = true;
 
-        // 화살표 광선 튜브 생성 함수
-        function createRayTube() {
-            const geom = new THREE.CylinderGeometry(0.018, 0.018, 1, 16);
+        function createRayTube(colorHex) {
+            const geom = new THREE.CylinderGeometry(0.016, 0.016, 1, 16);
             const mat = new THREE.MeshStandardMaterial({
-                color: 0xffcc00,
-                emissive: 0xffaa00,
+                color: colorHex,
+                emissive: colorHex,
                 emissiveIntensity: 0.8,
                 roughness: 0.2,
                 transparent: true,
@@ -501,8 +530,7 @@
             });
             const mesh = new THREE.Mesh(geom, mat);
             
-            // 화살표 촉
-            const coneGeom = new THREE.ConeGeometry(0.045, 0.12, 16);
+            const coneGeom = new THREE.ConeGeometry(0.04, 0.11, 16);
             const coneMesh = new THREE.Mesh(coneGeom, mat);
             coneMesh.position.y = 0.5;
             mesh.add(coneMesh);
@@ -510,16 +538,22 @@
             return { mesh, mat };
         }
 
-        const ray1 = createRayTube(); // 광원 -> 물체
-        const ray2 = createRayTube(); // 물체 -> 눈
+        const rayLightToObj = createRayTube(0xffcc00); // 광원 -> 물체
+        const rayObjToEye = createRayTube(0xffcc00);   // 물체 -> 눈 (반사 광선)
+        const rayLightToEye = createRayTube(0xff9500); // 광원 -> 눈 (직접 광선)
 
-        rayGroup.add(ray1.mesh);
-        rayGroup.add(ray2.mesh);
+        rayGroup.add(rayLightToObj.mesh);
+        rayGroup.add(rayObjToEye.mesh);
+        rayGroup.add(rayLightToEye.mesh);
 
         function updateRays() {
+            const txtVisibility = document.getElementById('val-visibility');
+
             if (!isLightOn) {
                 rayGroup.visible = false;
-                objMat.color.setHex(0x2c2c2e); // 물체가 어두워짐
+                objMat.color.setHex(0x2c2c2e);
+                txtVisibility.innerText = '안 보임 (광원 OFF)';
+                txtVisibility.style.color = '#ff3b30';
                 return;
             }
 
@@ -530,31 +564,52 @@
             const lightPos = new THREE.Vector3();
             bulbMesh.getWorldPosition(lightPos);
 
-            // 물체 전면 중심점
+            // 물체 표면 중심점
             const objPos = new THREE.Vector3();
             objMesh.getWorldPosition(objPos);
-            objPos.x += 0.09; // 표면으로 맞춤
 
             // 사람 눈 위치
             const eyePos = new THREE.Vector3();
             eyeTarget.getWorldPosition(eyePos);
 
+            // 벽 차단 여부 연산 (사람이 벽 뒤편에 숨어있는지 검사)
+            const isBehindWall = (personGroup.position.x < objectGroup.position.x && lightPos.x > objectGroup.position.x) ||
+                                 (personGroup.position.x > objectGroup.position.x && lightPos.x < objectGroup.position.x);
+
             // Ray 1: 광원 -> 물체
             const dir1 = new THREE.Vector3().subVectors(objPos, lightPos);
             const len1 = dir1.length();
-            ray1.mesh.scale.set(1, len1, 1);
-            ray1.mesh.position.copy(lightPos).add(objPos).multiplyScalar(0.5);
-            ray1.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
+            rayLightToObj.mesh.scale.set(1, len1, 1);
+            rayLightToObj.mesh.position.copy(lightPos).add(objPos).multiplyScalar(0.5);
+            rayLightToObj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
 
-            // Ray 2: 물체 -> 눈
-            const dir2 = new THREE.Vector3().subVectors(eyePos, objPos);
-            const len2 = dir2.length();
-            ray2.mesh.scale.set(1, len2, 1);
-            ray2.mesh.position.copy(objPos).add(eyePos).multiplyScalar(0.5);
-            ray2.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
+            // Ray 2: 광원 -> 사람 눈 (직접 광선)
+            const dirDirect = new THREE.Vector3().subVectors(eyePos, lightPos);
+            const lenDirect = dirDirect.length();
+            rayLightToEye.mesh.scale.set(1, lenDirect, 1);
+            rayLightToEye.mesh.position.copy(lightPos).add(eyePos).multiplyScalar(0.5);
+            rayLightToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirDirect.clone().normalize());
+
+            // Ray 3: 물체 -> 사람 눈 (반사 광선 - 벽 가림 물리 적용)
+            if (isBehindWall) {
+                // 벽 뒤로 넘어간 상태: 반사 광선 도달 불가
+                rayObjToEye.mesh.visible = false;
+                txtVisibility.innerText = '안 보임 (벽에 가려짐)';
+                txtVisibility.style.color = '#ff3b30';
+            } else {
+                rayObjToEye.mesh.visible = true;
+                const dir2 = new THREE.Vector3().subVectors(eyePos, objPos);
+                const len2 = dir2.length();
+                rayObjToEye.mesh.scale.set(1, len2, 1);
+                rayObjToEye.mesh.position.copy(objPos).add(eyePos).multiplyScalar(0.5);
+                rayObjToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
+
+                txtVisibility.innerText = '보임';
+                txtVisibility.style.color = '#34c759';
+            }
         }
 
-        // --- 6. 드래그 인터랙션 (Pointer Event 기반 PC/모바일 호환) ---
+        // --- 6. 드래그 인터랙션 (PC/모바일 공용) ---
         let draggedObject = null;
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
@@ -562,8 +617,7 @@
         const planeIntersect = new THREE.Vector3();
         let dragOffset = new THREE.Vector3();
 
-        // 감지 대상 메쉬 리스트
-        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, headMesh, hairMesh];
+        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, headMesh, hairMesh, bodyMesh];
 
         function updateMousePos(e) {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -579,13 +633,12 @@
             if (intersects.length > 0) {
                 const hit = intersects[0].object;
                 
-                // 그룹 찾기
                 if (hit === shadeMesh || hit === bulbMesh) draggedObject = lightGroup;
                 else if (hit === objMesh) draggedObject = objectGroup;
-                else if (hit === headMesh || hit === hairMesh) draggedObject = personGroup;
+                else if (hit === headMesh || hit === hairMesh || hit === bodyMesh) draggedObject = personGroup;
 
                 if (draggedObject) {
-                    controls.enabled = false; // 드래그 중 시점 이동 금지
+                    controls.enabled = false;
                     if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                         dragOffset.copy(draggedObject.position).sub(planeIntersect);
                     }
@@ -605,10 +658,9 @@
                 let targetPos = planeIntersect.add(dragOffset);
                 targetPos.x = Math.max(-1.8, Math.min(1.8, targetPos.x));
                 targetPos.y = Math.max(-0.4, Math.min(1.2, targetPos.y));
-                targetPos.z = 0; // 한 평면(Z=0) 유지
+                targetPos.z = 0;
                 draggedObject.position.copy(targetPos);
                 
-                // 사람이 이동 시 물체를 계속 바라보도록 회전 연산
                 if (draggedObject === personGroup || draggedObject === objectGroup) {
                     const lookTarget = objectGroup.position.clone();
                     personGroup.lookAt(lookTarget.x, personGroup.position.y, lookTarget.z);
@@ -639,7 +691,6 @@
         const btnLightOn = document.getElementById('btn-light-on');
         const btnLightOff = document.getElementById('btn-light-off');
         const txtLightStatus = document.getElementById('val-light-status');
-        const txtVisibility = document.getElementById('val-visibility');
 
         function setLightState(on) {
             isLightOn = on;
@@ -648,8 +699,6 @@
                 btnLightOff.className = 'toggle-btn';
                 txtLightStatus.innerText = 'ON (켜짐)';
                 txtLightStatus.style.color = '#ff9500';
-                txtVisibility.innerText = '보임';
-                txtVisibility.style.color = '#34c759';
                 
                 bulbMat.emissiveIntensity = 1.0;
                 pointLight.intensity = 1.8;
@@ -658,8 +707,6 @@
                 btnLightOff.className = 'toggle-btn active-off';
                 txtLightStatus.innerText = 'OFF (꺼짐)';
                 txtLightStatus.style.color = '#8e8e93';
-                txtVisibility.innerText = '안 보임 (보이지 않음)';
-                txtVisibility.style.color = '#ff3b30';
 
                 bulbMat.emissiveIntensity = 0.0;
                 pointLight.intensity = 0.0;
@@ -670,15 +717,15 @@
         btnLightOff.addEventListener('click', () => setLightState(false));
 
         document.getElementById('btn-reset').addEventListener('click', () => {
-            lightGroup.position.set(0.3, 0.8, 0);
-            objectGroup.position.set(-1.1, 0.1, 0);
-            personGroup.position.set(1.1, 0.0, 0);
-            personGroup.rotation.set(0, -Math.PI * 0.22, 0);
+            lightGroup.position.set(0.4, 0.8, 0);
+            objectGroup.position.set(-0.3, 0.05, 0);
+            personGroup.position.set(-1.1, -0.15, 0);
+            personGroup.rotation.set(0, 0, 0);
             setLightState(true);
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 0.6, 4.0);
+            camera.position.set(0, 0.6, 4.5);
             controls.target.set(0, 0, 0);
         });
 
