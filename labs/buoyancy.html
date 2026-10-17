@@ -148,7 +148,7 @@
             transition: all 0.2s;
         }
 
-        /* 중앙 안내 메세지 */
+        /* 중앙 안내 툴팁 */
         .center-tooltip {
             position: absolute;
             top: 12%;
@@ -352,7 +352,8 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.8, 4.5);
+        // 카메라 Z축 거리를 4.5 -> 6.5로 늘려 초기 시점을 줌아웃 설정
+        camera.position.set(0, 1.8, 6.5);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -475,13 +476,11 @@
         let isDragging = false;
         let dragOffsetY = 0;
 
-        // 수조 바닥 한계점 연산:
-        // 수조 바닥 Y = -1.5, 배 중심에서 밑면까지의 거리 = 0.3 (boatHeight / 2)
-        // 따라서 배가 수조 바닥에 닿는 중심 Y의 최솟값 = -1.20
+        // 수조 바닥 한계점 연산
         const minBoatY = -1.20; 
         const maxBoatY = 0.60;
 
-        // --- 7. 마우스/터치 Pointer Event 통합 드래그 로직 (단진자/용수철과 동일 방식) ---
+        // --- 7. 마우스/터치 Pointer Event 통합 드래그 로직 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -496,12 +495,11 @@
             updateMousePos(e);
             raycaster.setFromCamera(mouse, camera);
 
-            // 배 그룹 내의 모든 메쉬(선체, 캐빈 등) 클릭 감지
             const intersects = raycaster.intersectObjects(boatGroup.children, true);
 
             if (intersects.length > 0) {
                 isDragging = true;
-                controls.enabled = false; // 드래그 중 시점 이동 차단
+                controls.enabled = false;
 
                 raycaster.ray.intersectPlane(dragPlane, planeIntersect);
                 dragOffsetY = boatGroup.position.y - planeIntersect.y;
@@ -520,8 +518,6 @@
 
             if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                 let targetY = planeIntersect.y + dragOffsetY;
-
-                // [중요] 수조 바닥 밑으로 절대 내려가지 않도록 엄격하게 위치 제어 제한
                 targetY = Math.max(minBoatY, Math.min(maxBoatY, targetY));
                 boatGroup.position.y = targetY;
             }
@@ -530,11 +526,10 @@
         function onPointerUp() {
             if (isDragging) {
                 isDragging = false;
-                controls.enabled = true; // 드래그 종료 시 OrbitControls 복구
+                controls.enabled = true;
             }
         }
 
-        // Pointer Events 등록 (마우스/터치 통합 대응)
         window.addEventListener('pointerdown', onPointerDown);
         window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerup', onPointerUp);
@@ -548,7 +543,6 @@
             let Fb = baseWaterDensity * submergedDepth * gRatio;
             let Fg = baseGravityForce * gRatio;
 
-            // 드래그 중이 아닐 때만 부력과 중력의 알짜힘으로 수중 모션 연산
             if (!isDragging) {
                 let Fnet = Fg - Fb;
                 let acc = -Fnet / boatMass; 
@@ -556,7 +550,6 @@
                 boatVy *= (1 - damping);
                 boatGroup.position.y += boatVy * dt;
 
-                // 물리 운동 시에도 수조 바닥 밑으로 넘어가지 않도록 제한
                 if (boatGroup.position.y < minBoatY) { 
                     boatGroup.position.y = minBoatY; 
                     boatVy = 0; 
@@ -567,7 +560,6 @@
                 }
             }
 
-            // 힘 화살표 위치 및 크기 동적 반영
             arrowGravity.position.copy(boatGroup.position);
             arrowBuoyancy.position.copy(boatGroup.position);
 
@@ -578,7 +570,6 @@
             arrowGravity.visible = document.getElementById('chk-gravity').checked;
             arrowBuoyancy.visible = document.getElementById('chk-buoyancy').checked;
 
-            // UI 실시간 지표 표시
             document.getElementById('val-g').innerText = currentG.toFixed(1) + ' m/s²';
             document.getElementById('val-fg').innerText = Fg.toFixed(1) + ' N';
             document.getElementById('val-fb').innerText = Fb.toFixed(1) + ' N';
@@ -607,7 +598,8 @@
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 1.8, 4.5);
+            // 시점정렬 클릭 시에도 동일하게 줌아웃된 위치로 복구
+            camera.position.set(0, 1.8, 6.5);
             controls.target.set(0, 0, 0);
         });
 
