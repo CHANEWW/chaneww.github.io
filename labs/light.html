@@ -335,362 +335,6 @@
     </div>
 
     <script>
-        // --- 1. Three.js 기본 씬 & 카메라 연출 ---
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xf2f2f7);
-
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 0.6, 4.5);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        요청하신 대로 다른 기존 코드와 물리 연산 로직은 모두 그대로 유지하고, **물체(벽 가림판)에 반 고흐의 '해바라기' 그림이 그려진 액자(Painting Frame)를 추가**하도록 구현했습니다.
-
-외부 이미지 파일 로딩 시 발생할 수 있는 CORS 및 로딩 실패 문제없이 단일 파일로 동작하도록 **HTML Canvas 2D 연산을 활용하여 고흐 특유의 황금빛 해바라기 캔버스 텍스처를 동적 생성**한 뒤, 나무 액자 틀과 함께 3D 물체(`objectGroup`) 양면에 정교하게 부착했습니다.
-
----
-
-### 💻 수정된 전체 HTML 코드 (`vision.html`)
-
-```html
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>물체를 보는 과정 3D</title>
-    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
-    <script src="[https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js](https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js)"></script>
-    <script src="[https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js](https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js)"></script>
-    <style>
-        @font-face {
-            font-family: 'SeoulNamsanL';
-            src: url('[https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff](https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff)') format('woff');
-            font-weight: normal;
-            font-style: normal;
-        }
-
-        * {
-            box-sizing: border-box;
-            user-select: none;
-            -webkit-user-select: none;
-            -webkit-touch-callout: none;
-        }
-
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
-            background-color: #f2f2f7;
-            color: #1c1c1e;
-            touch-action: none;
-        }
-
-        #canvas-container {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-            touch-action: none;
-        }
-
-        /* Apple visionOS Glassmorphic UI */
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.5);
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            z-index: 10;
-        }
-
-        /* 좌측 상단 헤더 */
-        .top-left-bar {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 10;
-        }
-
-        .back-btn {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-            color: #1c1c1e;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .tag-badge {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-
-        .tag-pill {
-            background: rgba(0, 122, 255, 0.15);
-            color: #007aff;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-
-        /* 우측 상단 데이터 패널 */
-        .top-right-bar {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 10;
-        }
-
-        .data-card {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 10px 20px;
-        }
-
-        .data-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .data-label {
-            font-size: 11px;
-            color: #8e8e93;
-            font-weight: bold;
-        }
-
-        .data-value {
-            font-size: 15px;
-            font-weight: bold;
-            color: #1c1c1e;
-        }
-
-        .icon-btn {
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(20px);
-            transition: all 0.2s;
-        }
-
-        /* 중앙 안내 툴팁 */
-        .center-tooltip {
-            position: absolute;
-            top: 12%;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 8px 18px;
-            font-size: 13px;
-            color: #8e8e93;
-            border-radius: 30px;
-            pointer-events: none;
-            z-index: 5;
-            transition: opacity 0.5s ease;
-        }
-
-        /* 서브 조절 패널 */
-        .sub-panel {
-            position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 16px 20px;
-            width: 320px;
-            display: none;
-            flex-direction: column;
-            gap: 14px;
-            z-index: 10;
-        }
-
-        .sub-panel.show { display: flex; }
-
-        .control-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 13px;
-            font-weight: bold;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 6px;
-        }
-
-        .toggle-btn {
-            padding: 6px 14px;
-            border-radius: 12px;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            background: rgba(255, 255, 255, 0.5);
-            color: #1c1c1e;
-            font-weight: bold;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .toggle-btn.active-on {
-            background: #ff9500;
-            color: white;
-            border-color: #ff9500;
-        }
-        .toggle-btn.active-off {
-            background: #8e8e93;
-            color: white;
-            border-color: #8e8e93;
-        }
-
-        /* 하단 제어 바 */
-        .bottom-control-bar {
-            position: absolute;
-            bottom: 25px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px;
-            z-index: 10;
-        }
-
-        .control-tab-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 8px 14px;
-            min-width: 68px;
-            border-radius: 14px;
-            border: none;
-            background: transparent;
-            color: #1c1c1e;
-            font-size: 12px;
-            font-weight: bold;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .control-tab-btn.active {
-            background: #007aff;
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
-        }
-
-        /* 다크 모드 */
-        body.dark-mode {
-            background-color: #121212;
-            color: #f2f2f7;
-        }
-
-        body.dark-mode .glass-panel {
-            background: rgba(30, 30, 30, 0.75);
-            border-color: rgba(255, 255, 255, 0.15);
-            color: #f2f2f7;
-        }
-
-        body.dark-mode .data-value, body.dark-mode .back-btn {
-            color: #f2f2f7;
-        }
-
-        body.dark-mode .icon-btn {
-            background: rgba(40, 40, 40, 0.75);
-            color: #fff;
-        }
-    </style>
-</head>
-<body>
-
-    <div id="canvas-container"></div>
-
-    <!-- 좌측 상단 헤더 -->
-    <div class="top-left-bar">
-        <a href="../index.html" class="glass-panel back-btn">
-            <span>⬅</span> 메인
-        </a>
-        <div class="glass-panel tag-badge">
-            <span>물체를 보는 과정 3D</span>
-            <span class="tag-pill">visionOS</span>
-        </div>
-    </div>
-
-    <!-- 우측 상단 실시간 데이터 패널 -->
-    <div class="top-right-bar">
-        <div class="glass-panel data-card">
-            <div class="data-item">
-                <span class="data-label">광원 상태</span>
-                <span class="data-value" id="val-light-status" style="color:#ff9500;">ON (켜짐)</span>
-            </div>
-            <div class="data-item">
-                <span class="data-label">물체 인식</span>
-                <span class="data-value" id="val-visibility" style="color:#34c759;">보임</span>
-            </div>
-        </div>
-        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
-    </div>
-
-    <!-- 중앙 안내 툴팁 -->
-    <div class="glass-panel center-tooltip" id="guide-tooltip">
-        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요
-    </div>
-
-    <!-- 서브 물리 설정 패널 -->
-    <div class="glass-panel sub-panel" id="physics-panel">
-        <div class="control-row">
-            <span>광원 전원 스위치</span>
-            <div class="btn-group">
-                <button class="toggle-btn active-on" id="btn-light-on">켜기 (ON)</button>
-                <button class="toggle-btn" id="btn-light-off">끄기 (OFF)</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 하단 제어 바 -->
-    <div class="glass-panel bottom-control-bar">
-        <button class="control-tab-btn" id="btn-toggle-physics">
-            <span>⚙️</span>
-            <span>설정 조절</span>
-        </button>
-        <button class="control-tab-btn" id="btn-reset">
-            <span>🔄</span>
-            <span>초기화</span>
-        </button>
-        <button class="control-tab-btn" id="btn-align">
-            <span>📷</span>
-            <span>시점정렬</span>
-        </button>
-    </div>
-
-    <script>
         // --- 반 고흐 '해바라기' 캔버스 텍스처 생성 함수 ---
         function createSunflowersTexture() {
             const canvas = document.createElement('canvas');
@@ -698,11 +342,11 @@
             canvas.height = 640;
             const ctx = canvas.getContext('2d');
 
-            // 배경 (고흐 특유의 노란빛 캔버스 배경)
+            // 배경
             ctx.fillStyle = '#f3e5ab';
             ctx.fillRect(0, 0, 512, 640);
 
-            // 화병 (Vase)
+            // 화병
             ctx.fillStyle = '#f4c430';
             ctx.beginPath();
             ctx.arc(256, 460, 110, 0, Math.PI);
@@ -710,16 +354,14 @@
             ctx.fillStyle = '#e6b800';
             ctx.fillRect(146, 380, 220, 80);
 
-            // 화병 테두리 선
             ctx.strokeStyle = '#8b5a2b';
             ctx.lineWidth = 6;
             ctx.beginPath();
             ctx.arc(256, 460, 110, 0, Math.PI);
             ctx.stroke();
 
-            // 해바라기 꽃들 그리기
+            // 해바라기
             function drawSunflower(x, y, radius, petalColor) {
-                // 꽃잎
                 ctx.fillStyle = petalColor;
                 for (let i = 0; i < 16; i++) {
                     const angle = (i * Math.PI) / 8;
@@ -729,7 +371,6 @@
                     ctx.ellipse(px, py, radius * 0.5, radius * 0.25, angle, 0, Math.PI * 2);
                     ctx.fill();
                 }
-                // 씨앗 씨눈
                 ctx.fillStyle = '#5c4033';
                 ctx.beginPath();
                 ctx.arc(x, y, radius * 0.7, 0, Math.PI * 2);
@@ -740,7 +381,6 @@
                 ctx.fill();
             }
 
-            // 구도 잡아서 여러 송이 해바라기 배치
             drawSunflower(256, 260, 35, '#ffcc00');
             drawSunflower(200, 200, 40, '#ffd700');
             drawSunflower(310, 210, 38, '#ffa500');
@@ -750,7 +390,6 @@
             drawSunflower(210, 330, 30, '#ffa500');
             drawSunflower(300, 340, 32, '#ff8c00');
 
-            // 서명 (Vincent)
             ctx.font = 'italic bold 22px serif';
             ctx.fillStyle = '#1c1c1e';
             ctx.fillText('Vincent', 220, 440);
@@ -836,7 +475,7 @@
         lightGroup.position.set(0.4, 0.8, 0);
         scene.add(lightGroup);
 
-        // (2) 물체 (Object - 벽 가림판 + 반 고흐 해바라기 액자)
+        // (2) 물체 (벽 가림판 + 오른쪽에만 그림 액자 배치)
         const objectGroup = new THREE.Group();
         const wallWidth = 0.18;
         const wallHeight = 0.65;
@@ -849,17 +488,15 @@
         objMesh.receiveShadow = true;
         objectGroup.add(objMesh);
 
-        // [액자 생성] 고흐 해바라기 그림 액자
+        // 오른쪽에만 해바라기 그림 부착
         const sunflowersTexture = createSunflowersTexture();
         const frameWidth = 0.03;
         const frameHeight = 0.45;
         const frameDepth = 0.35;
 
-        // 원목 액자 틀
         const frameGeo = new THREE.BoxGeometry(frameWidth, frameHeight, frameDepth);
         const frameMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.6 });
         
-        // 오른쪽 면 액자
         const rightFrameMesh = new THREE.Mesh(frameGeo, frameMat);
         rightFrameMesh.position.set(wallWidth / 2 + frameWidth / 2, 0, 0);
         objectGroup.add(rightFrameMesh);
@@ -872,16 +509,6 @@
         rightCanvasMesh.position.set(wallWidth / 2 + frameWidth + 0.001, 0, 0);
         objectGroup.add(rightCanvasMesh);
 
-        // 왼쪽 면 액자
-        const leftFrameMesh = new THREE.Mesh(frameGeo, frameMat);
-        leftFrameMesh.position.set(-wallWidth / 2 - frameWidth / 2, 0, 0);
-        objectGroup.add(leftFrameMesh);
-
-        const leftCanvasMesh = new THREE.Mesh(canvasGeo, canvasMat);
-        leftCanvasMesh.rotation.y = -Math.PI / 2;
-        leftCanvasMesh.position.set(-wallWidth / 2 - frameWidth - 0.001, 0, 0);
-        objectGroup.add(leftCanvasMesh);
-
         objectGroup.position.set(-0.3, 0.05, 0);
         scene.add(objectGroup);
 
@@ -891,7 +518,7 @@
         const clothMat = new THREE.MeshStandardMaterial({ color: 0x007aff, roughness: 0.6 });
         const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.7 });
 
-        // 머리 (Head)
+        // 머리
         const headGeo = new THREE.SphereGeometry(0.18, 32, 32);
         headGeo.scale(0.85, 1.05, 0.95);
         const headMesh = new THREE.Mesh(headGeo, skinMat);
@@ -899,7 +526,7 @@
         headMesh.castShadow = true;
         personGroup.add(headMesh);
 
-        // 머리카락 (Hair)
+        // 머리카락
         const hairGeo = new THREE.SphereGeometry(0.19, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.55);
         hairGeo.scale(0.88, 1.05, 0.98);
         const hairMat = new THREE.MeshStandardMaterial({ color: 0x2c1d11, roughness: 0.8 });
@@ -907,7 +534,7 @@
         hairMesh.position.set(0, 0.45, -0.02);
         personGroup.add(hairMesh);
 
-        // 두 눈 (Eyes)
+        // 두 눈
         const eyeWhiteGeo = new THREE.SphereGeometry(0.028, 16, 16);
         const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
         
@@ -930,14 +557,14 @@
         rightPupil.position.set(0.045, 0.44, 0.162);
         personGroup.add(rightPupil);
 
-        // 코 (Nose)
+        // 코
         const noseGeo = new THREE.ConeGeometry(0.022, 0.05, 16);
         const noseMesh = new THREE.Mesh(noseGeo, skinMat);
         noseMesh.rotation.x = Math.PI / 2;
         noseMesh.position.set(0, 0.40, 0.155);
         personGroup.add(noseMesh);
 
-        // 입 (Mouth)
+        // 입
         const mouthGeo = new THREE.TorusGeometry(0.022, 0.004, 8, 16, Math.PI);
         const mouthMat = new THREE.MeshBasicMaterial({ color: 0xc0392b });
         const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
@@ -945,14 +572,14 @@
         mouthMesh.position.set(0, 0.36, 0.15);
         personGroup.add(mouthMesh);
 
-        // 몸통 (Torso)
+        // 몸통
         const bodyGeo = new THREE.CylinderGeometry(0.12, 0.11, 0.40, 16);
         const bodyMesh = new THREE.Mesh(bodyGeo, clothMat);
         bodyMesh.position.y = 0.12;
         bodyMesh.castShadow = true;
         personGroup.add(bodyMesh);
 
-        // 팔 (Arms)
+        // 팔
         const armGeo = new THREE.CylinderGeometry(0.032, 0.03, 0.35, 16);
         const armLeft = new THREE.Mesh(armGeo, skinMat);
         armLeft.position.set(-0.16, 0.12, 0);
@@ -962,7 +589,7 @@
         armRight.position.set(0.16, 0.12, 0);
         personGroup.add(armRight);
 
-        // 다리 (Legs)
+        // 다리
         const legGeo = new THREE.CylinderGeometry(0.04, 0.035, 0.45, 16);
         const legLeft = new THREE.Mesh(legGeo, pantsMat);
         legLeft.position.set(-0.06, -0.28, 0);
@@ -974,7 +601,7 @@
         legRight.castShadow = true;
         personGroup.add(legRight);
 
-        // 사람 눈 기준 좌표
+        // 사람 눈 타겟점
         const eyeTarget = new THREE.Object3D();
         eyeTarget.position.set(0, 0.44, 0.162);
         personGroup.add(eyeTarget);
@@ -982,7 +609,7 @@
         personGroup.position.set(1.1, -0.15, 0);
         scene.add(personGroup);
 
-        // --- 5. 광선 (Light Rays & Arrows) 시각화 및 가림 판정 연산 ---
+        // --- 5. 광선 시각화 및 물체 인식 연산 ---
         const rayGroup = new THREE.Group();
         scene.add(rayGroup);
 
@@ -1008,15 +635,14 @@
             return { mesh, mat };
         }
 
-        const rayLightToObj = createRayTube(0xffcc00); // 광원 -> 물체
-        const rayObjToEye = createRayTube(0xffcc00);   // 물체 -> 눈 (반사 광선)
-        const rayLightToEye = createRayTube(0xff9500); // 광원 -> 눈 (직접 광선)
+        const rayLightToObj = createRayTube(0xffcc00); // 광원 -> 그림
+        const rayObjToEye = createRayTube(0xffcc00);   // 그림 -> 눈 (반사광)
+        const rayLightToEye = createRayTube(0xff9500); // 광원 -> 눈 (직접광)
 
         rayGroup.add(rayLightToObj.mesh);
         rayGroup.add(rayObjToEye.mesh);
         rayGroup.add(rayLightToEye.mesh);
 
-        // 광선이 벽에 차단되는지 정밀 교차 검사하는 함수
         function isRayBlockedByWall(startPos, endPos) {
             const wallX = objectGroup.position.x;
             const wallYMin = objectGroup.position.y - wallHeight / 2;
@@ -1025,9 +651,7 @@
             const minX = Math.min(startPos.x, endPos.x);
             const maxX = Math.max(startPos.x, endPos.x);
 
-            if (wallX < minX || wallX > maxX) {
-                return false;
-            }
+            if (wallX < minX || wallX > maxX) return false;
 
             const t = (wallX - startPos.x) / (endPos.x - startPos.x);
             const intersectY = startPos.y + t * (endPos.y - startPos.y);
@@ -1052,43 +676,41 @@
             const lightPos = new THREE.Vector3();
             bulbMesh.getWorldPosition(lightPos);
 
-            const objPos = new THREE.Vector3();
-            objMesh.getWorldPosition(objPos);
-
             const eyePos = new THREE.Vector3();
             eyeTarget.getWorldPosition(eyePos);
 
-            // 사람이 항상 물체(벽)쪽을 바라보도록 몸 회전
-            const targetPoint = objectGroup.position.clone();
-            personGroup.lookAt(targetPoint.x, personGroup.position.y, targetPoint.z);
+            // 오른쪽에 부착된 그림 위치
+            const picturePos = objectGroup.position.clone();
+            picturePos.x += wallWidth / 2 + frameWidth;
 
-            // 1. 광원 -> 눈 직접 광선 가림 여부 연산
+            // 사람을 물체쪽으로 바라보게 설정
+            personGroup.lookAt(objectGroup.position.x, personGroup.position.y, objectGroup.position.z);
+
+            const wallX = objectGroup.position.x;
+
+            // 광원과 사람이 둘 다 벽 오른쪽에 위치하는지 검사 (오른쪽 그림을 비추고 볼 수 있는지 조건)
+            const isLightOnRight = lightPos.x >= wallX;
+            const isPersonOnRight = personGroup.position.x >= wallX;
+
+            // 1. 직접광 가림 판정
             const directBlocked = isRayBlockedByWall(lightPos, eyePos);
 
-            // 2. 벽을 기준으로 전등과 사람이 같은 편에 위치하는지 판정
-            const wallX = objectGroup.position.x;
-            const sameSide = (lightPos.x >= wallX && personGroup.position.x >= wallX) ||
-                             (lightPos.x <= wallX && personGroup.position.x <= wallX);
+            // 2. 그림 반사광 유효성 판정 (광원과 사람이 모두 오른쪽 영역에 있을 때)
+            const isPictureReflected = isLightOnRight && isPersonOnRight && !isRayBlockedByWall(picturePos, eyePos);
 
-            // 반사 표면 계산: 사람이 가리키는 벽 측면 지점
-            const surfaceObjPos = objPos.clone();
-            if (personGroup.position.x >= wallX) {
-                surfaceObjPos.x += wallWidth / 2 + frameWidth;
+            // Ray 1: 광원 -> 그림
+            if (isLightOnRight) {
+                rayLightToObj.mesh.visible = true;
+                const dir1 = new THREE.Vector3().subVectors(picturePos, lightPos);
+                const len1 = dir1.length();
+                rayLightToObj.mesh.scale.set(1, len1, 1);
+                rayLightToObj.mesh.position.copy(lightPos).add(picturePos).multiplyScalar(0.5);
+                rayLightToObj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
             } else {
-                surfaceObjPos.x -= (wallWidth / 2 + frameWidth);
+                rayLightToObj.mesh.visible = false;
             }
 
-            // 물체 -> 눈 반사 광선 차단 조건 연산
-            const reflectedBlocked = !sameSide || isRayBlockedByWall(surfaceObjPos, eyePos);
-
-            // Ray 1: 광원 -> 물체
-            const dir1 = new THREE.Vector3().subVectors(surfaceObjPos, lightPos);
-            const len1 = dir1.length();
-            rayLightToObj.mesh.scale.set(1, len1, 1);
-            rayLightToObj.mesh.position.copy(lightPos).add(surfaceObjPos).multiplyScalar(0.5);
-            rayLightToObj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
-
-            // Ray 2: 광원 -> 사람 눈 (주황색 직접 광선)
+            // Ray 2: 광원 -> 눈 (직접광)
             if (directBlocked) {
                 rayLightToEye.mesh.visible = false;
             } else {
@@ -1100,28 +722,25 @@
                 rayLightToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirDirect.clone().normalize());
             }
 
-            // Ray 3: 물체 -> 사람 눈 (전등과 사람이 같은 편일 때 반사광)
-            if (reflectedBlocked) {
-                rayObjToEye.mesh.visible = false;
-            } else {
+            // Ray 3: 그림 -> 눈 (반사광)
+            if (isPictureReflected) {
                 rayObjToEye.mesh.visible = true;
-                const dir2 = new THREE.Vector3().subVectors(eyePos, surfaceObjPos);
+                const dir2 = new THREE.Vector3().subVectors(eyePos, picturePos);
                 const len2 = dir2.length();
                 rayObjToEye.mesh.scale.set(1, len2, 1);
-                rayObjToEye.mesh.position.copy(surfaceObjPos).add(eyePos).multiplyScalar(0.5);
+                rayObjToEye.mesh.position.copy(picturePos).add(eyePos).multiplyScalar(0.5);
                 rayObjToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
+            } else {
+                rayObjToEye.mesh.visible = false;
             }
 
-            // 실시간 상태 라벨 업데이트
-            if (reflectedBlocked && directBlocked) {
-                txtVisibility.innerText = '안 보임 (벽에 가려짐)';
-                txtVisibility.style.color = '#ff3b30';
-            } else if (reflectedBlocked) {
-                txtVisibility.innerText = '반사광 가려짐 (직접광만 보임)';
-                txtVisibility.style.color = '#ff9500';
-            } else {
+            // 물체 인식 상태 업데이트 (그림에 도달한 반사광이 눈으로 전달되는지 여부)
+            if (isPictureReflected) {
                 txtVisibility.innerText = '보임';
                 txtVisibility.style.color = '#34c759';
+            } else {
+                txtVisibility.innerText = '안 보임 (그림 반사광 차단)';
+                txtVisibility.style.color = '#ff3b30';
             }
         }
 
@@ -1133,7 +752,7 @@
         const planeIntersect = new THREE.Vector3();
         let dragOffset = new THREE.Vector3();
 
-        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, rightFrameMesh, rightCanvasMesh, leftFrameMesh, leftCanvasMesh, headMesh, hairMesh, bodyMesh];
+        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, rightFrameMesh, rightCanvasMesh, headMesh, hairMesh, bodyMesh];
 
         function updateMousePos(e) {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -1150,7 +769,7 @@
                 const hit = intersects[0].object;
                 
                 if (hit === shadeMesh || hit === bulbMesh) draggedObject = lightGroup;
-                else if (hit === objMesh || hit === rightFrameMesh || hit === rightCanvasMesh || hit === leftFrameMesh || hit === leftCanvasMesh) draggedObject = objectGroup;
+                else if (hit === objMesh || hit === rightFrameMesh || hit === rightCanvasMesh) draggedObject = objectGroup;
                 else if (hit === headMesh || hit === hairMesh || hit === bodyMesh) draggedObject = personGroup;
 
                 if (draggedObject) {
