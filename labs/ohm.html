@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>전기 회로 가상실험 3D - visionOS / Apple HIG Style</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* 좌측 상단 헤더 */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 우측 상단 데이터 패널 */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 툴팁 */
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 서브 물리 설정 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 18px 24px;
+            width: 340px;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .control-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.1);
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #007aff;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,122,255,0.4);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.5);
+            color: #1c1c1e;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .toggle-btn.active-on {
+            background: #34c759;
+            color: white;
+            border-color: #34c759;
+        }
+        .toggle-btn.active-off {
+            background: #ff3b30;
+            color: white;
+            border-color: #ff3b30;
+        }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <a href="../index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>전기 회로 가상실험 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 실시간 데이터 패널 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">전압 (V)</span>
+                <span class="data-value" id="val-voltage" style="color:#007aff;">6.0 V</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">저항 (R)</span>
+                <span class="data-value" id="val-resistance" style="color:#ff9500;">10.0 Ω</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">전류 (I)</span>
+                <span class="data-value" id="val-current" style="color:#34c759;">0.60 A</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 스위치, 전구/저항, 측정 단자를 드래그하여 움직이거나 클릭할 수 있습니다.
+    </div>
+
+    <!-- 서브 조절 패널 -->
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="control-row">
+            <div class="control-header">
+                <span>전원 전압 (V)</span>
+                <span id="txt-voltage" style="color:#007aff;">6.0 V</span>
+            </div>
+            <input type="range" id="sld-voltage" min="1" max="12" step="0.5" value="6">
+        </div>
+        <div class="control-row">
+            <div class="control-header">
+                <span>전구/저항값 (R)</span>
+                <span id="txt-resistance" style="color:#ff9500;">10.0 Ω</span>
+            </div>
+            <input type="range" id="sld-resistance" min="2" max="30" step="1" value="10">
+        </div>
+        <div class="control-row">
+            <span>스위치 개폐</span>
+            <div class="btn-group">
+                <button class="toggle-btn active-off" id="btn-switch-toggle">스위치 열림 (OFF)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>회로 설정</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점정렬</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. Three.js 기본 씬 & 카메라 설정 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2.2, 4.2);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2.1;
+
+        // --- 2. 조명 연출 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(4, 6, 3);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- 3. 바닥 및 원점 격자 스페이스 ---
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(20, 20),
+            new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.5;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0xd1d1d6, 0xe5e5ea);
+        gridHelper.position.y = -0.49;
+        scene.add(gridHelper);
+
+        // --- 4. 회로 변수 및 상태 ---
+        let voltage = 6.0;
+        let resistance = 10.0;
+        let isClosed = false;
+
+        // 회로 트랙 정점 정의 (사각 루프 회로)
+        const pathPoints = [
+            new THREE.Vector3(-1.8, 0, -1.0), // 0: 좌측 상단 (배터리 -)
+            new THREE.Vector3(1.8, 0, -1.0),  // 1: 우측 상단 (배터리 +)
+            new THREE.Vector3(1.8, 0, 1.0),   // 2: 우측 하단 (스위치)
+            new THREE.Vector3(-1.8, 0, 1.0)   // 3: 좌측 하단 (전구/저항)
+        ];
+
+        // --- 5. 3D 회로 구성 요소 모델링 ---
+        const circuitGroup = new THREE.Group();
+        scene.add(circuitGroup);
+
+        // (1) 구리 도선 패스 시각화
+        function createWireSegment(p1, p2) {
+            const dir = new THREE.Vector3().subVectors(p2, p1);
+            const len = dir.length();
+            const wireGeo = new THREE.CylinderGeometry(0.02, 0.02, len, 16);
+            const wireMat = new THREE.MeshStandardMaterial({ color: 0xb87333, metalness: 0.8, roughness: 0.3 });
+            const mesh = new THREE.Mesh(wireGeo, wireMat);
+            mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+            return mesh;
+        }
+
+        circuitGroup.add(createWireSegment(pathPoints[0], pathPoints[1]));
+        circuitGroup.add(createWireSegment(pathPoints[1], pathPoints[2]));
+        circuitGroup.add(createWireSegment(pathPoints[2], pathPoints[3]));
+        circuitGroup.add(createWireSegment(pathPoints[3], pathPoints[0]));
+
+        // (2) 직류 전원 (DC Battery)
+        const batteryGroup = new THREE.Group();
+        batteryGroup.position.set(0, 0, -1.0);
+
+        const batBodyGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.7, 24);
+        const batBodyMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5 });
+        const batBody = new THREE.Mesh(batBodyGeo, batBodyMat);
+        batBody.rotation.z = Math.PI / 2;
+        batteryGroup.add(batBody);
+
+        const batPosCapGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.1, 16);
+        const batPosCapMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, metalness: 0.8 });
+        const batPosCap = new THREE.Mesh(batPosCapGeo, batPosCapMat);
+        batPosCap.rotation.z = Math.PI / 2;
+        batPosCap.position.x = 0.38;
+        batteryGroup.add(batPosCap);
+
+        circuitGroup.add(batteryGroup);
+
+        // (3) 나이프 스위치 (Switch)
+        const switchGroup = new THREE.Group();
+        switchGroup.position.copy(pathPoints[2]).add(pathPoints[3]).multiplyScalar(0.5);
+
+        const swBaseGeo = new THREE.BoxGeometry(0.4, 0.06, 0.2);
+        const swBaseMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.4 });
+        const swBase = new THREE.Mesh(swBaseGeo, swBaseMat);
+        switchGroup.add(swBase);
+
+        const swArmGeo = new THREE.BoxGeometry(0.35, 0.03, 0.04);
+        const swArmMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9, roughness: 0.2 });
+        const swArm = new THREE.Mesh(swArmGeo, swArmMat);
+        swArm.position.set(-0.12, 0.05, 0);
+        
+        const swPivot = new THREE.Group();
+        swPivot.position.set(0.15, 0.04, 0);
+        swArm.position.x = -0.15;
+        swPivot.add(swArm);
+        switchGroup.add(swPivot);
+
+        circuitGroup.add(switchGroup);
+
+        // (4) 전구 / 저항 (Bulb & Resistor)
+        const bulbGroup = new THREE.Group();
+        bulbGroup.position.copy(pathPoints[0]).add(pathPoints[3]).multiplyScalar(0.5);
+
+        const socketGeo = new THREE.CylinderGeometry(0.14, 0.16, 0.12, 24);
+        const socketMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3c, metalness: 0.5 });
+        const socketMesh = new THREE.Mesh(socketGeo, socketMat);
+        bulbGroup.add(socketMesh);
+
+        const glassGeo = new THREE.SphereGeometry(0.18, 24, 24);
+        const glassMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.6,
+            roughness: 0.1
+        });
+        const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+        glassMesh.position.y = 0.18;
+        bulbGroup.add(glassMesh);
+
+        const filamentGeo = new THREE.SphereGeometry(0.05, 12, 12);
+        const filamentMat = new THREE.MeshStandardMaterial({
+            color: 0xffcc00,
+            emissive: 0xffaa00,
+            emissiveIntensity: 0.0
+        });
+        const filamentMesh = new THREE.Mesh(filamentGeo, filamentMat);
+        filamentMesh.position.y = 0.18;
+        bulbGroup.add(filamentMesh);
+
+        const bulbLight = new THREE.PointLight(0xffaa00, 0, 3);
+        bulbLight.position.y = 0.18;
+        bulbGroup.add(bulbLight);
+
+        circuitGroup.add(bulbGroup);
+
+        // (5) 이동하는 자유전자 파티클 (Electrons)
+        const numElectrons = 28;
+        const electrons = [];
+        const electronGeo = new THREE.SphereGeometry(0.035, 12, 12);
+        const electronMat = new THREE.MeshBasicMaterial({ color: 0x007aff });
+
+        for (let i = 0; i < numElectrons; i++) {
+            const mesh = new THREE.Mesh(electronGeo, electronMat);
+            scene.add(mesh);
+            electrons.push({ mesh, progress: i / numElectrons });
+        }
+
+        function getCircuitPosition(t) {
+            t = (t % 1 + 1) % 1;
+            const seg = t * 4;
+            const idx = Math.floor(seg);
+            const subT = seg - idx;
+            const pA = pathPoints[idx];
+            const pB = pathPoints[(idx + 1) % 4];
+            return new THREE.Vector3().lerpVectors(pA, pB, subT);
+        }
+
+        // --- 6. 드래그 인터랙션 컨트롤 (PC & 모바일 전용 Pointer Events) ---
+        let draggedObject = null;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const planeIntersect = new THREE.Vector3();
+        let dragOffset = new THREE.Vector3();
+
+        const interactableMeshes = [swArm, glassMesh, batBody];
+
+        function getMousePos(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function toggleSwitchState(closed) {
+            isClosed = closed !== undefined ? closed : !isClosed;
+            const btn = document.getElementById('btn-switch-toggle');
+            if (isClosed) {
+                swPivot.rotation.z = 0;
+                btn.className = 'toggle-btn active-on';
+                btn.innerText = '스위치 닫힘 (ON)';
+            } else {
+                swPivot.rotation.z = Math.PI / 4.5;
+                btn.className = 'toggle-btn active-off';
+                btn.innerText = '스위치 열림 (OFF)';
+            }
+        }
+
+        function onPointerDown(e) {
+            getMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(interactableMeshes);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0].object;
+
+                if (hit === swArm) {
+                    toggleSwitchState();
+                    return;
+                } else if (hit === glassMesh) {
+                    draggedObject = bulbGroup;
+                } else if (hit === batBody) {
+                    draggedObject = batteryGroup;
+                }
+
+                if (draggedObject) {
+                    controls.enabled = false;
+                    if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                        dragOffset.copy(draggedObject.position).sub(planeIntersect);
+                    }
+                    const tooltip = document.getElementById('guide-tooltip');
+                    if (tooltip) tooltip.style.opacity = '0';
+                }
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!draggedObject) return;
+            getMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+
+            if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                let targetPos = planeIntersect.add(dragOffset);
+                targetPos.x = Math.max(-2.2, Math.min(2.2, targetPos.x));
+                targetPos.z = Math.max(-1.8, Math.min(1.8, targetPos.z));
+                targetPos.y = 0;
+                draggedObject.position.copy(targetPos);
+            }
+        }
+
+        function onPointerUp() {
+            if (draggedObject) {
+                draggedObject = null;
+                controls.enabled = true;
+            }
+        }
+
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+
+        // --- 7. UI 및 슬라이더 제어 ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        const sldVoltage = document.getElementById('sld-voltage');
+        const sldResistance = document.getElementById('sld-resistance');
+
+        sldVoltage.addEventListener('input', (e) => {
+            voltage = parseFloat(e.target.value);
+            document.getElementById('txt-voltage').innerText = voltage.toFixed(1) + ' V';
+            document.getElementById('val-voltage').innerText = voltage.toFixed(1) + ' V';
+        });
+
+        sldResistance.addEventListener('input', (e) => {
+            resistance = parseFloat(e.target.value);
+            document.getElementById('txt-resistance').innerText = resistance.toFixed(1) + ' Ω';
+            document.getElementById('val-resistance').innerText = resistance.toFixed(1) + ' Ω';
+        });
+
+        document.getElementById('btn-switch-toggle').addEventListener('click', () => toggleSwitchState());
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            voltage = 6.0;
+            resistance = 10.0;
+            sldVoltage.value = 6;
+            sldResistance.value = 10;
+            document.getElementById('txt-voltage').innerText = '6.0 V';
+            document.getElementById('val-voltage').innerText = '6.0 V';
+            document.getElementById('txt-resistance').innerText = '10.0 Ω';
+            document.getElementById('val-resistance').innerText = '10.0 Ω';
+            batteryGroup.position.set(0, 0, -1.0);
+            bulbGroup.position.copy(pathPoints[0]).add(pathPoints[3]).multiplyScalar(0.5);
+            toggleSwitchState(false);
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 2.2, 4.2);
+            controls.target.set(0, 0, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 초기 스위치 각도 설정
+        toggleSwitchState(false);
+
+        // --- 8. 물리 시뮬레이션 및 메인 연산 루프 ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            // 옴의 법칙 연산
+            const current = isClosed ? (voltage / resistance) : 0;
+            document.getElementById('val-current').innerText = current.toFixed(2) + ' A';
+
+            // 전구 발광 및 조명 강도 업데이트
+            const powerRatio = isClosed ? Math.min(1.0, (voltage * current) / 12) : 0;
+            filamentMat.emissiveIntensity = powerRatio * 2.5;
+            bulbLight.intensity = powerRatio * 2.0;
+
+            // 전자 이동 시뮬레이션 (전류 크기에 비례하는 이동 속도)
+            const speed = current * 0.12;
+            electrons.forEach((e) => {
+                if (isClosed) {
+                    e.progress += delta * speed;
+                }
+                const pos = getCircuitPosition(e.progress);
+                e.mesh.position.copy(pos);
+                e.mesh.position.y += 0.04;
+                e.mesh.visible = isClosed;
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
