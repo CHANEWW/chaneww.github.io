@@ -345,6 +345,429 @@
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        요청하신 대로 다른 기존 코드와 물리 연산 로직은 모두 그대로 유지하고, **물체(벽 가림판)에 반 고흐의 '해바라기' 그림이 그려진 액자(Painting Frame)를 추가**하도록 구현했습니다.
+
+외부 이미지 파일 로딩 시 발생할 수 있는 CORS 및 로딩 실패 문제없이 단일 파일로 동작하도록 **HTML Canvas 2D 연산을 활용하여 고흐 특유의 황금빛 해바라기 캔버스 텍스처를 동적 생성**한 뒤, 나무 액자 틀과 함께 3D 물체(`objectGroup`) 양면에 정교하게 부착했습니다.
+
+---
+
+### 💻 수정된 전체 HTML 코드 (`vision.html`)
+
+```html
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>물체를 보는 과정 3D</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js](https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js)"></script>
+    <script src="[https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js](https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js)"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('[https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff](https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff)') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* 좌측 상단 헤더 */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 우측 상단 데이터 패널 */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 툴팁 */
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 서브 조절 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 16px 20px;
+            width: 320px;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .toggle-btn {
+            padding: 6px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.5);
+            color: #1c1c1e;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .toggle-btn.active-on {
+            background: #ff9500;
+            color: white;
+            border-color: #ff9500;
+        }
+        .toggle-btn.active-off {
+            background: #8e8e93;
+            color: white;
+            border-color: #8e8e93;
+        }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <a href="../index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>물체를 보는 과정 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 실시간 데이터 패널 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">광원 상태</span>
+                <span class="data-value" id="val-light-status" style="color:#ff9500;">ON (켜짐)</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">물체 인식</span>
+                <span class="data-value" id="val-visibility" style="color:#34c759;">보임</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요
+    </div>
+
+    <!-- 서브 물리 설정 패널 -->
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="control-row">
+            <span>광원 전원 스위치</span>
+            <div class="btn-group">
+                <button class="toggle-btn active-on" id="btn-light-on">켜기 (ON)</button>
+                <button class="toggle-btn" id="btn-light-off">끄기 (OFF)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>설정 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점정렬</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 반 고흐 '해바라기' 캔버스 텍스처 생성 함수 ---
+        function createSunflowersTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 640;
+            const ctx = canvas.getContext('2d');
+
+            // 배경 (고흐 특유의 노란빛 캔버스 배경)
+            ctx.fillStyle = '#f3e5ab';
+            ctx.fillRect(0, 0, 512, 640);
+
+            // 화병 (Vase)
+            ctx.fillStyle = '#f4c430';
+            ctx.beginPath();
+            ctx.arc(256, 460, 110, 0, Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#e6b800';
+            ctx.fillRect(146, 380, 220, 80);
+
+            // 화병 테두리 선
+            ctx.strokeStyle = '#8b5a2b';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(256, 460, 110, 0, Math.PI);
+            ctx.stroke();
+
+            // 해바라기 꽃들 그리기
+            function drawSunflower(x, y, radius, petalColor) {
+                // 꽃잎
+                ctx.fillStyle = petalColor;
+                for (let i = 0; i < 16; i++) {
+                    const angle = (i * Math.PI) / 8;
+                    const px = x + Math.cos(angle) * (radius * 1.5);
+                    const py = y + Math.sin(angle) * (radius * 1.5);
+                    ctx.beginPath();
+                    ctx.ellipse(px, py, radius * 0.5, radius * 0.25, angle, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                // 씨앗 씨눈
+                ctx.fillStyle = '#5c4033';
+                ctx.beginPath();
+                ctx.arc(x, y, radius * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#8b4513';
+                ctx.beginPath();
+                ctx.arc(x, y, radius * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 구도 잡아서 여러 송이 해바라기 배치
+            drawSunflower(256, 260, 35, '#ffcc00');
+            drawSunflower(200, 200, 40, '#ffd700');
+            drawSunflower(310, 210, 38, '#ffa500');
+            drawSunflower(160, 280, 32, '#ff8c00');
+            drawSunflower(350, 290, 35, '#ffcc00');
+            drawSunflower(256, 150, 42, '#ffd700');
+            drawSunflower(210, 330, 30, '#ffa500');
+            drawSunflower(300, 340, 32, '#ff8c00');
+
+            // 서명 (Vincent)
+            ctx.font = 'italic bold 22px serif';
+            ctx.fillStyle = '#1c1c1e';
+            ctx.fillText('Vincent', 220, 440);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- 1. Three.js 기본 씬 & 카메라 연출 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0.6, 4.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -413,7 +836,7 @@
         lightGroup.position.set(0.4, 0.8, 0);
         scene.add(lightGroup);
 
-        // (2) 물체 (Object - 벽 가림판)
+        // (2) 물체 (Object - 벽 가림판 + 반 고흐 해바라기 액자)
         const objectGroup = new THREE.Group();
         const wallWidth = 0.18;
         const wallHeight = 0.65;
@@ -425,6 +848,39 @@
         objMesh.castShadow = true;
         objMesh.receiveShadow = true;
         objectGroup.add(objMesh);
+
+        // [액자 생성] 고흐 해바라기 그림 액자
+        const sunflowersTexture = createSunflowersTexture();
+        const frameWidth = 0.03;
+        const frameHeight = 0.45;
+        const frameDepth = 0.35;
+
+        // 원목 액자 틀
+        const frameGeo = new THREE.BoxGeometry(frameWidth, frameHeight, frameDepth);
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.6 });
+        
+        // 오른쪽 면 액자
+        const rightFrameMesh = new THREE.Mesh(frameGeo, frameMat);
+        rightFrameMesh.position.set(wallWidth / 2 + frameWidth / 2, 0, 0);
+        objectGroup.add(rightFrameMesh);
+
+        const canvasGeo = new THREE.PlaneGeometry(frameDepth - 0.04, frameHeight - 0.04);
+        const canvasMat = new THREE.MeshStandardMaterial({ map: sunflowersTexture, roughness: 0.3 });
+        
+        const rightCanvasMesh = new THREE.Mesh(canvasGeo, canvasMat);
+        rightCanvasMesh.rotation.y = Math.PI / 2;
+        rightCanvasMesh.position.set(wallWidth / 2 + frameWidth + 0.001, 0, 0);
+        objectGroup.add(rightCanvasMesh);
+
+        // 왼쪽 면 액자
+        const leftFrameMesh = new THREE.Mesh(frameGeo, frameMat);
+        leftFrameMesh.position.set(-wallWidth / 2 - frameWidth / 2, 0, 0);
+        objectGroup.add(leftFrameMesh);
+
+        const leftCanvasMesh = new THREE.Mesh(canvasGeo, canvasMat);
+        leftCanvasMesh.rotation.y = -Math.PI / 2;
+        leftCanvasMesh.position.set(-wallWidth / 2 - frameWidth - 0.001, 0, 0);
+        objectGroup.add(leftCanvasMesh);
 
         objectGroup.position.set(-0.3, 0.05, 0);
         scene.add(objectGroup);
@@ -617,9 +1073,9 @@
             // 반사 표면 계산: 사람이 가리키는 벽 측면 지점
             const surfaceObjPos = objPos.clone();
             if (personGroup.position.x >= wallX) {
-                surfaceObjPos.x += wallWidth / 2;
+                surfaceObjPos.x += wallWidth / 2 + frameWidth;
             } else {
-                surfaceObjPos.x -= wallWidth / 2;
+                surfaceObjPos.x -= (wallWidth / 2 + frameWidth);
             }
 
             // 물체 -> 눈 반사 광선 차단 조건 연산
@@ -677,7 +1133,7 @@
         const planeIntersect = new THREE.Vector3();
         let dragOffset = new THREE.Vector3();
 
-        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, headMesh, hairMesh, bodyMesh];
+        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, rightFrameMesh, rightCanvasMesh, leftFrameMesh, leftCanvasMesh, headMesh, hairMesh, bodyMesh];
 
         function updateMousePos(e) {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -694,7 +1150,7 @@
                 const hit = intersects[0].object;
                 
                 if (hit === shadeMesh || hit === bulbMesh) draggedObject = lightGroup;
-                else if (hit === objMesh) draggedObject = objectGroup;
+                else if (hit === objMesh || hit === rightFrameMesh || hit === rightCanvasMesh || hit === leftFrameMesh || hit === leftCanvasMesh) draggedObject = objectGroup;
                 else if (hit === headMesh || hit === hairMesh || hit === bodyMesh) draggedObject = personGroup;
 
                 if (draggedObject) {
