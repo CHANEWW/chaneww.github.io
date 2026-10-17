@@ -610,17 +610,26 @@
             const directBlocked = isRayBlockedByWall(lightPos, eyePos);
 
             // 2. 벽을 기준으로 전등과 사람이 같은 편에 위치하는지 판정
-            const sameSide = (lightPos.x >= objectGroup.position.x && personGroup.position.x >= objectGroup.position.x) ||
-                             (lightPos.x <= objectGroup.position.x && personGroup.position.x <= objectGroup.position.x);
+            const wallX = objectGroup.position.x;
+            const sameSide = (lightPos.x >= wallX && personGroup.position.x >= wallX) ||
+                             (lightPos.x <= wallX && personGroup.position.x <= wallX);
+
+            // 반사 표면 계산: 사람이 가리키는 벽 측면 지점
+            const surfaceObjPos = objPos.clone();
+            if (personGroup.position.x >= wallX) {
+                surfaceObjPos.x += wallWidth / 2;
+            } else {
+                surfaceObjPos.x -= wallWidth / 2;
+            }
 
             // 물체 -> 눈 반사 광선 차단 조건 연산
-            const reflectedBlocked = !sameSide || isRayBlockedByWall(objPos, eyePos);
+            const reflectedBlocked = !sameSide || isRayBlockedByWall(surfaceObjPos, eyePos);
 
-            // Ray 1: 광원 -> 물체 (항상 도달)
-            const dir1 = new THREE.Vector3().subVectors(objPos, lightPos);
+            // Ray 1: 광원 -> 물체
+            const dir1 = new THREE.Vector3().subVectors(surfaceObjPos, lightPos);
             const len1 = dir1.length();
             rayLightToObj.mesh.scale.set(1, len1, 1);
-            rayLightToObj.mesh.position.copy(lightPos).add(objPos).multiplyScalar(0.5);
+            rayLightToObj.mesh.position.copy(lightPos).add(surfaceObjPos).multiplyScalar(0.5);
             rayLightToObj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
 
             // Ray 2: 광원 -> 사람 눈 (주황색 직접 광선)
@@ -635,15 +644,15 @@
                 rayLightToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirDirect.clone().normalize());
             }
 
-            // Ray 3: 물체 -> 사람 눈 (전등과 사람이 같은 편에 있을 때 반사광 생성)
+            // Ray 3: 물체 -> 사람 눈 (전등과 사람이 같은 편일 때 반사광)
             if (reflectedBlocked) {
                 rayObjToEye.mesh.visible = false;
             } else {
                 rayObjToEye.mesh.visible = true;
-                const dir2 = new THREE.Vector3().subVectors(eyePos, objPos);
+                const dir2 = new THREE.Vector3().subVectors(eyePos, surfaceObjPos);
                 const len2 = dir2.length();
                 rayObjToEye.mesh.scale.set(1, len2, 1);
-                rayObjToEye.mesh.position.copy(objPos).add(eyePos).multiplyScalar(0.5);
+                rayObjToEye.mesh.position.copy(surfaceObjPos).add(eyePos).multiplyScalar(0.5);
                 rayObjToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
             }
 
