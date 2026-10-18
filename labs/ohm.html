@@ -169,7 +169,7 @@
             left: 50%;
             transform: translateX(-50%);
             padding: 18px 24px;
-            width: 340px;
+            width: 350px;
             display: none;
             flex-direction: column;
             gap: 14px;
@@ -214,7 +214,7 @@
         .btn-group {
             display: flex;
             gap: 6px;
-            margin-top: 4px;
+            margin-top: 2px;
         }
 
         .toggle-btn {
@@ -229,15 +229,23 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
+
         .toggle-btn.active-on {
             background: #34c759;
             color: white;
             border-color: #34c759;
         }
+
         .toggle-btn.active-off {
             background: #ff3b30;
             color: white;
             border-color: #ff3b30;
+        }
+
+        .toggle-btn.selected {
+            background: #007aff;
+            color: white;
+            border-color: #007aff;
         }
 
         /* 하단 제어 바 */
@@ -329,13 +337,17 @@
                 <span class="data-label">전류 (I)</span>
                 <span class="data-value" id="val-current" style="color:#34c759;">0.60 A</span>
             </div>
+            <div class="data-item">
+                <span class="data-label">전력 (P)</span>
+                <span class="data-value" id="val-power" style="color:#ff2d55;">3.60 W</span>
+            </div>
         </div>
         <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
     </div>
 
     <!-- 중앙 안내 툴팁 -->
     <div class="glass-panel center-tooltip" id="guide-tooltip">
-        💡 스위치, 전구/저항, 측정 단자를 드래그하여 움직이거나 클릭할 수 있습니다.
+        💡 스위치를 클릭하여 회로를 연결하거나 열 수 있습니다.
     </div>
 
     <!-- 서브 조절 패널 -->
@@ -358,6 +370,19 @@
             <span>스위치 개폐</span>
             <div class="btn-group">
                 <button class="toggle-btn active-off" id="btn-switch-toggle">스위치 열림 (OFF)</button>
+            </div>
+        </div>
+        <div class="control-row">
+            <span>전지 극성 전환</span>
+            <div class="btn-group">
+                <button class="toggle-btn" id="btn-battery-reverse">전지 방향 반전 (현재: 정방향)</button>
+            </div>
+        </div>
+        <div class="control-row">
+            <span>흐름 시각화 선택</span>
+            <div class="btn-group">
+                <button class="toggle-btn selected" id="btn-mode-electron">전자 흐름 (-)</button>
+                <button class="toggle-btn" id="btn-mode-current">전류 방향 (➔)</button>
             </div>
         </div>
     </div>
@@ -385,7 +410,7 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 2.2, 4.2);
+        camera.position.set(0, 3.2, 4.5);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -426,20 +451,23 @@
         let voltage = 6.0;
         let resistance = 10.0;
         let isClosed = false;
+        let isBatteryReversed = false; // 전지 극성 상태
+        let viewMode = 'electron';    // 'electron' 또는 'current'
 
-        // 회로 트랙 정점 정의 (사각 루프 회로)
+        // 사각 회로 정점 정의 (시계 방향 순서: 좌하(전구) -> 좌상 -> 우상(스위치) -> 우하)
+        // 아래쪽 패스(3 -> 0)에 전지가 위치함
         const pathPoints = [
-            new THREE.Vector3(-1.8, 0, -1.0), // 0: 좌측 상단 (배터리 -)
-            new THREE.Vector3(1.8, 0, -1.0),  // 1: 우측 상단 (배터리 +)
-            new THREE.Vector3(1.8, 0, 1.0),   // 2: 우측 하단 (스위치)
-            new THREE.Vector3(-1.8, 0, 1.0)   // 3: 좌측 하단 (전구/저항)
+            new THREE.Vector3(-1.8, 0, -1.0), // 0: 좌측 상단
+            new THREE.Vector3(1.8, 0, -1.0),  // 1: 우측 상단
+            new THREE.Vector3(1.8, 0, 1.0),   // 2: 우측 하단
+            new THREE.Vector3(-1.8, 0, 1.0)   // 3: 좌측 하단
         ];
 
         // --- 5. 3D 회로 구성 요소 모델링 ---
         const circuitGroup = new THREE.Group();
         scene.add(circuitGroup);
 
-        // (1) 구리 도선 패스 시각화
+        // (1) 구리 도선 패스 생성 함수
         function createWireSegment(p1, p2) {
             const dir = new THREE.Vector3().subVectors(p2, p1);
             const len = dir.length();
@@ -456,9 +484,9 @@
         circuitGroup.add(createWireSegment(pathPoints[2], pathPoints[3]));
         circuitGroup.add(createWireSegment(pathPoints[3], pathPoints[0]));
 
-        // (2) 직류 전원 (DC Battery)
+        // (2) 직류 전원 (DC Battery) - 회로 아래쪽(시선의 가까운 쪽, pathPoints[3]과 pathPoints[2] 사이)에 배치
         const batteryGroup = new THREE.Group();
-        batteryGroup.position.set(0, 0, -1.0);
+        batteryGroup.position.set(0, 0, 1.0);
 
         const batBodyGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.7, 24);
         const batBodyMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5 });
@@ -475,29 +503,48 @@
 
         circuitGroup.add(batteryGroup);
 
-        // (3) 나이프 스위치 (Switch)
+        // (3) 나이프 스위치 (Switch) - 오른쪽 회로 변(pathPoints[1]과 pathPoints[2] 사이)에 배치
         const switchGroup = new THREE.Group();
-        switchGroup.position.copy(pathPoints[2]).add(pathPoints[3]).multiplyScalar(0.5);
+        switchGroup.position.copy(pathPoints[1]).add(pathPoints[2]).multiplyScalar(0.5);
 
-        const swBaseGeo = new THREE.BoxGeometry(0.4, 0.06, 0.2);
+        // 스위치 베이스
+        const swBaseGeo = new THREE.BoxGeometry(0.2, 0.06, 0.5);
         const swBaseMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.4 });
         const swBase = new THREE.Mesh(swBaseGeo, swBaseMat);
         switchGroup.add(swBase);
 
-        const swArmGeo = new THREE.BoxGeometry(0.35, 0.03, 0.04);
+        // 단자 고정대 2개 (남/북 측)
+        const termGeo = new THREE.BoxGeometry(0.08, 0.12, 0.08);
+        const termMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9, roughness: 0.2 });
+        const term1 = new THREE.Mesh(termGeo, termMat);
+        term1.position.set(0, 0.08, -0.18);
+        const term2 = new THREE.Mesh(termGeo, termMat);
+        term2.position.set(0, 0.08, 0.18);
+        switchGroup.add(term1);
+        switchGroup.add(term2);
+
+        // 스위치 암 (피벗 중심: 남쪽 단자 term2 위치)
+        const swPivot = new THREE.Group();
+        swPivot.position.set(0, 0.1, 0.18); // 남쪽 단자 피벗
+
+        const swArmGeo = new THREE.BoxGeometry(0.04, 0.03, 0.38);
         const swArmMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9, roughness: 0.2 });
         const swArm = new THREE.Mesh(swArmGeo, swArmMat);
-        swArm.position.set(-0.12, 0.05, 0);
-        
-        const swPivot = new THREE.Group();
-        swPivot.position.set(0.15, 0.04, 0);
-        swArm.position.x = -0.15;
+        swArm.position.set(0, 0, -0.19); // 피벗축 기준으로 북쪽으로 뻗음
+
+        // 손잡이
+        const handleGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.12, 16);
+        const handleMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3 });
+        const handle = new THREE.Mesh(handleGeo, handleMat);
+        handle.position.set(0, 0.08, -0.35);
+        swArm.add(handle);
+
         swPivot.add(swArm);
         switchGroup.add(swPivot);
 
         circuitGroup.add(switchGroup);
 
-        // (4) 전구 / 저항 (Bulb & Resistor)
+        // (4) 전구 / 저항 (Bulb & Resistor) - 왼쪽 회로 변(pathPoints[0]과 pathPoints[3] 사이)에 배치
         const bulbGroup = new THREE.Group();
         bulbGroup.position.copy(pathPoints[0]).add(pathPoints[3]).multiplyScalar(0.5);
 
@@ -527,43 +574,86 @@
         filamentMesh.position.y = 0.18;
         bulbGroup.add(filamentMesh);
 
-        const bulbLight = new THREE.PointLight(0xffaa00, 0, 3);
+        const bulbLight = new THREE.PointLight(0xffaa00, 0, 4);
         bulbLight.position.y = 0.18;
         bulbGroup.add(bulbLight);
 
         circuitGroup.add(bulbGroup);
 
-        // (5) 이동하는 자유전자 파티클 (Electrons)
-        const numElectrons = 28;
-        const electrons = [];
-        const electronGeo = new THREE.SphereGeometry(0.035, 12, 12);
-        const electronMat = new THREE.MeshBasicMaterial({ color: 0x007aff });
+        // --- 6. 전자/전류 시각화용 입자 생성 ---
+        const numParticles = 28;
 
-        for (let i = 0; i < numElectrons; i++) {
-            const mesh = new THREE.Mesh(electronGeo, electronMat);
-            scene.add(mesh);
-            electrons.push({ mesh, progress: i / numElectrons });
+        // (1) 전자 텍스처 캔버스 생성 (- 마크)
+        function createElectronTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#007aff';
+            ctx.beginPath();
+            ctx.arc(64, 64, 60, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#1c1c1e';
+            ctx.fillRect(32, 54, 64, 20);
+
+            return new THREE.CanvasTexture(canvas);
         }
 
-        function getCircuitPosition(t) {
+        const electronTex = createElectronTexture();
+        const electronGeo = new THREE.SphereGeometry(0.045, 16, 16);
+        const electronMat = new THREE.MeshBasicMaterial({ map: electronTex });
+
+        const electrons = [];
+        for (let i = 0; i < numParticles; i++) {
+            const mesh = new THREE.Mesh(electronGeo, electronMat);
+            mesh.rotation.x = -Math.PI / 2; // - 마크가 위로 보이도록 회전
+            scene.add(mesh);
+            electrons.push({ mesh, progress: i / numParticles });
+        }
+
+        // (2) 전류 방향 화살표 입자 생성
+        function createArrowMesh() {
+            const group = new THREE.Group();
+            const stemGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.08, 8);
+            const headGeo = new THREE.ConeGeometry(0.04, 0.06, 8);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+
+            const stem = new THREE.Mesh(stemGeo, mat);
+            stem.rotation.x = Math.PI / 2;
+            const head = new THREE.Mesh(headGeo, mat);
+            head.rotation.x = -Math.PI / 2;
+            head.position.z = -0.06;
+
+            group.add(stem);
+            group.add(head);
+            return group;
+        }
+
+        const currents = [];
+        for (let i = 0; i < numParticles; i++) {
+            const mesh = createArrowMesh();
+            scene.add(mesh);
+            currents.push({ mesh, progress: i / numParticles });
+        }
+
+        // 회로 트랙 상의 위치 및 진행 방향 반환 함수
+        function getCircuitTrackInfo(t) {
             t = (t % 1 + 1) % 1;
             const seg = t * 4;
             const idx = Math.floor(seg);
             const subT = seg - idx;
             const pA = pathPoints[idx];
             const pB = pathPoints[(idx + 1) % 4];
-            return new THREE.Vector3().lerpVectors(pA, pB, subT);
+            const pos = new THREE.Vector3().lerpVectors(pA, pB, subT);
+            const dir = new THREE.Vector3().subVectors(pB, pA).normalize();
+            return { pos, dir };
         }
 
-        // --- 6. 드래그 인터랙션 컨트롤 (PC & 모바일 전용 Pointer Events) ---
-        let draggedObject = null;
+        // --- 7. 인터랙션 및 상태 제어 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        const planeIntersect = new THREE.Vector3();
-        let dragOffset = new THREE.Vector3();
-
-        const interactableMeshes = [swArm, glassMesh, batBody];
 
         function getMousePos(e) {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -574,11 +664,13 @@
             isClosed = closed !== undefined ? closed : !isClosed;
             const btn = document.getElementById('btn-switch-toggle');
             if (isClosed) {
-                swPivot.rotation.z = 0;
+                // 스위치 ON: X축 회전 각도를 0으로 만들어 전선과 수평하게 연결
+                swPivot.rotation.x = 0;
                 btn.className = 'toggle-btn active-on';
                 btn.innerText = '스위치 닫힘 (ON)';
             } else {
-                swPivot.rotation.z = Math.PI / 4.5;
+                // 스위치 OFF: 대각선 위로 들려 올려 연결 해제
+                swPivot.rotation.x = Math.PI / 4;
                 btn.className = 'toggle-btn active-off';
                 btn.innerText = '스위치 열림 (OFF)';
             }
@@ -588,57 +680,18 @@
             getMousePos(e);
             raycaster.setFromCamera(mouse, camera);
 
-            const intersects = raycaster.intersectObjects(interactableMeshes);
-
+            // 스위치 부품 클릭 감지
+            const intersects = raycaster.intersectObjects([swArm, handle, swBase, term1, term2], true);
             if (intersects.length > 0) {
-                const hit = intersects[0].object;
-
-                if (hit === swArm) {
-                    toggleSwitchState();
-                    return;
-                } else if (hit === glassMesh) {
-                    draggedObject = bulbGroup;
-                } else if (hit === batBody) {
-                    draggedObject = batteryGroup;
-                }
-
-                if (draggedObject) {
-                    controls.enabled = false;
-                    if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
-                        dragOffset.copy(draggedObject.position).sub(planeIntersect);
-                    }
-                    const tooltip = document.getElementById('guide-tooltip');
-                    if (tooltip) tooltip.style.opacity = '0';
-                }
-            }
-        }
-
-        function onPointerMove(e) {
-            if (!draggedObject) return;
-            getMousePos(e);
-            raycaster.setFromCamera(mouse, camera);
-
-            if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
-                let targetPos = planeIntersect.add(dragOffset);
-                targetPos.x = Math.max(-2.2, Math.min(2.2, targetPos.x));
-                targetPos.z = Math.max(-1.8, Math.min(1.8, targetPos.z));
-                targetPos.y = 0;
-                draggedObject.position.copy(targetPos);
-            }
-        }
-
-        function onPointerUp() {
-            if (draggedObject) {
-                draggedObject = null;
-                controls.enabled = true;
+                toggleSwitchState();
+                const tooltip = document.getElementById('guide-tooltip');
+                if (tooltip) tooltip.style.opacity = '0';
             }
         }
 
         window.addEventListener('pointerdown', onPointerDown);
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
 
-        // --- 7. UI 및 슬라이더 제어 ---
+        // --- 8. UI 컨트롤 이벤트 ---
         const btnTogglePhysics = document.getElementById('btn-toggle-physics');
         const physicsPanel = document.getElementById('physics-panel');
         btnTogglePhysics.addEventListener('click', () => {
@@ -663,6 +716,30 @@
 
         document.getElementById('btn-switch-toggle').addEventListener('click', () => toggleSwitchState());
 
+        // 전지 방향 반전 버튼
+        document.getElementById('btn-battery-reverse').addEventListener('click', () => {
+            isBatteryReversed = !isBatteryReversed;
+            batteryGroup.rotation.y = isBatteryReversed ? Math.PI : 0;
+            const btn = document.getElementById('btn-battery-reverse');
+            btn.innerText = isBatteryReversed ? '전지 방향 반전 (현재: 역방향)' : '전지 방향 반전 (현재: 정방향)';
+        });
+
+        // 흐름 시각화 선택 (전자 / 전류)
+        const btnElectron = document.getElementById('btn-mode-electron');
+        const btnCurrent = document.getElementById('btn-mode-current');
+
+        btnElectron.addEventListener('click', () => {
+            viewMode = 'electron';
+            btnElectron.classList.add('selected');
+            btnCurrent.classList.remove('selected');
+        });
+
+        btnCurrent.addEventListener('click', () => {
+            viewMode = 'current';
+            btnCurrent.classList.add('selected');
+            btnElectron.classList.remove('selected');
+        });
+
         document.getElementById('btn-reset').addEventListener('click', () => {
             voltage = 6.0;
             resistance = 10.0;
@@ -672,13 +749,20 @@
             document.getElementById('val-voltage').innerText = '6.0 V';
             document.getElementById('txt-resistance').innerText = '10.0 Ω';
             document.getElementById('val-resistance').innerText = '10.0 Ω';
-            batteryGroup.position.set(0, 0, -1.0);
-            bulbGroup.position.copy(pathPoints[0]).add(pathPoints[3]).multiplyScalar(0.5);
+            
+            isBatteryReversed = false;
+            batteryGroup.rotation.y = 0;
+            document.getElementById('btn-battery-reverse').innerText = '전지 방향 반전 (현재: 정방향)';
+
+            viewMode = 'electron';
+            btnElectron.classList.add('selected');
+            btnCurrent.classList.remove('selected');
+
             toggleSwitchState(false);
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 2.2, 4.2);
+            camera.position.set(0, 3.2, 4.5);
             controls.target.set(0, 0, 0);
         });
 
@@ -695,35 +779,68 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // 초기 스위치 각도 설정
+        // 초기 스위치 각도 설정 (OFF)
         toggleSwitchState(false);
 
-        // --- 8. 물리 시뮬레이션 및 메인 연산 루프 ---
+        // --- 9. 시뮬레이션 및 연산 애니메이션 루프 ---
         const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
 
-            // 옴의 법칙 연산
+            // 1. 옴의 법칙 및 전력 연산
             const current = isClosed ? (voltage / resistance) : 0;
+            const power = isClosed ? (voltage * current) : 0; // P = V * I
+
             document.getElementById('val-current').innerText = current.toFixed(2) + ' A';
+            document.getElementById('val-power').innerText = power.toFixed(2) + ' W';
 
-            // 전구 발광 및 조명 강도 업데이트
-            const powerRatio = isClosed ? Math.min(1.0, (voltage * current) / 12) : 0;
-            filamentMat.emissiveIntensity = powerRatio * 2.5;
-            bulbLight.intensity = powerRatio * 2.0;
+            // 2. 전력 계산 기반 전구 밝기 조절
+            // 기준 전력 3.6W일 때 적정 밝기, 최대 72W 범위에 맞춰 커브 적용
+            const brightness = isClosed ? Math.min(1.0, power / 15.0) : 0;
+            filamentMat.emissiveIntensity = brightness * 3.0;
+            bulbLight.intensity = brightness * 3.5;
 
-            // 전자 이동 시뮬레이션 (전류 크기에 비례하는 이동 속도)
-            const speed = current * 0.12;
+            // 3. 전자 / 전류 이동 연산
+            // 속도는 전류 크기에 비례
+            const flowSpeed = current * 0.12;
+
+            // 전지 방향에 따른 전자 이동 방향 (정방향일 때 -극인 좌측에서 출구)
+            const electronDirection = isBatteryReversed ? -1 : 1;
+            // 전류 방향은 전자의 이동 방향과 항상 반대
+            const currentDirection = -electronDirection;
+
+            // (1) 전자 애니메이션
             electrons.forEach((e) => {
-                if (isClosed) {
-                    e.progress += delta * speed;
+                if (isClosed && viewMode === 'electron') {
+                    e.progress += delta * flowSpeed * electronDirection;
+                    const track = getCircuitTrackInfo(e.progress);
+                    e.mesh.position.copy(track.pos);
+                    e.mesh.position.y += 0.04;
+                    e.mesh.visible = true;
+                } else {
+                    e.mesh.visible = false;
                 }
-                const pos = getCircuitPosition(e.progress);
-                e.mesh.position.copy(pos);
-                e.mesh.position.y += 0.04;
-                e.mesh.visible = isClosed;
+            });
+
+            // (2) 전류 화살표 애니메이션
+            currents.forEach((c) => {
+                if (isClosed && viewMode === 'current') {
+                    c.progress += delta * flowSpeed * currentDirection;
+                    const track = getCircuitTrackInfo(c.progress);
+                    c.mesh.position.copy(track.pos);
+                    c.mesh.position.y += 0.04;
+
+                    // 화살표가 이동 방향을 바라보도록 설정
+                    const lookTarget = track.pos.clone().add(track.dir.clone().multiplyScalar(currentDirection));
+                    lookTarget.y += 0.04;
+                    c.mesh.lookAt(lookTarget);
+
+                    c.mesh.visible = true;
+                } else {
+                    c.mesh.visible = false;
+                }
             });
 
             controls.update();
