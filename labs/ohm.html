@@ -162,17 +162,16 @@
             transition: opacity 0.5s ease;
         }
 
-        /* 서브 물리 설정 패널 */
+        /* 서브 물리 설정 패널 - 회로를 가리지 않도록 위치 조정 */
         .sub-panel {
             position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 18px 24px;
-            width: 350px;
+            bottom: 95px;
+            right: 20px;
+            padding: 18px 22px;
+            width: 320px;
             display: none;
             flex-direction: column;
-            gap: 14px;
+            gap: 12px;
             z-index: 10;
         }
 
@@ -350,7 +349,7 @@
         💡 스위치를 클릭하여 회로를 연결하거나 열 수 있습니다.
     </div>
 
-    <!-- 서브 조절 패널 -->
+    <!-- 서브 조절 패널 (우측 하단 배치) -->
     <div class="glass-panel sub-panel" id="physics-panel">
         <div class="control-row">
             <div class="control-header">
@@ -454,8 +453,7 @@
         let isBatteryReversed = false; // 전지 극성 상태
         let viewMode = 'electron';    // 'electron' 또는 'current'
 
-        // 사각 회로 정점 정의 (시계 방향 순서: 좌하(전구) -> 좌상 -> 우상(스위치) -> 우하)
-        // 아래쪽 패스(3 -> 0)에 전지가 위치함
+        // 사각 회로 정점 정의 (0: 좌상 -> 1: 우상 -> 2: 우하 -> 3: 좌하)
         const pathPoints = [
             new THREE.Vector3(-1.8, 0, -1.0), // 0: 좌측 상단
             new THREE.Vector3(1.8, 0, -1.0),  // 1: 우측 상단
@@ -467,7 +465,6 @@
         const circuitGroup = new THREE.Group();
         scene.add(circuitGroup);
 
-        // (1) 구리 도선 패스 생성 함수
         function createWireSegment(p1, p2) {
             const dir = new THREE.Vector3().subVectors(p2, p1);
             const len = dir.length();
@@ -484,7 +481,7 @@
         circuitGroup.add(createWireSegment(pathPoints[2], pathPoints[3]));
         circuitGroup.add(createWireSegment(pathPoints[3], pathPoints[0]));
 
-        // (2) 직류 전원 (DC Battery) - 회로 아래쪽(시선의 가까운 쪽, pathPoints[3]과 pathPoints[2] 사이)에 배치
+        // 전지 배치 (아래쪽 변 3->2)
         const batteryGroup = new THREE.Group();
         batteryGroup.position.set(0, 0, 1.0);
 
@@ -503,17 +500,15 @@
 
         circuitGroup.add(batteryGroup);
 
-        // (3) 나이프 스위치 (Switch) - 오른쪽 회로 변(pathPoints[1]과 pathPoints[2] 사이)에 배치
+        // 스위치 배치 (오른쪽 변 1->2)
         const switchGroup = new THREE.Group();
         switchGroup.position.copy(pathPoints[1]).add(pathPoints[2]).multiplyScalar(0.5);
 
-        // 스위치 베이스
         const swBaseGeo = new THREE.BoxGeometry(0.2, 0.06, 0.5);
         const swBaseMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.4 });
         const swBase = new THREE.Mesh(swBaseGeo, swBaseMat);
         switchGroup.add(swBase);
 
-        // 단자 고정대 2개 (남/북 측)
         const termGeo = new THREE.BoxGeometry(0.08, 0.12, 0.08);
         const termMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9, roughness: 0.2 });
         const term1 = new THREE.Mesh(termGeo, termMat);
@@ -523,20 +518,20 @@
         switchGroup.add(term1);
         switchGroup.add(term2);
 
-        // 스위치 암 (피벗 중심: 남쪽 단자 term2 위치)
+        // 스위치 피벗 및 레버 (손잡이 위치 정확 정렬)
         const swPivot = new THREE.Group();
-        swPivot.position.set(0, 0.1, 0.18); // 남쪽 단자 피벗
+        swPivot.position.set(0, 0.08, 0.18); // 남쪽 단자 피벗
 
-        const swArmGeo = new THREE.BoxGeometry(0.04, 0.03, 0.38);
+        const swArmGeo = new THREE.BoxGeometry(0.04, 0.03, 0.36);
         const swArmMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.9, roughness: 0.2 });
         const swArm = new THREE.Mesh(swArmGeo, swArmMat);
-        swArm.position.set(0, 0, -0.19); // 피벗축 기준으로 북쪽으로 뻗음
+        swArm.position.set(0, 0.015, -0.18); // 레버 중심 보정
 
-        // 손잡이
-        const handleGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.12, 16);
+        // 빨간색 손잡이 (레버 북쪽 상단 끝에 정확 연결)
+        const handleGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.14, 16);
         const handleMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3 });
         const handle = new THREE.Mesh(handleGeo, handleMat);
-        handle.position.set(0, 0.08, -0.35);
+        handle.position.set(0, 0.07, -0.15); // 레버 상단 끝 위치
         swArm.add(handle);
 
         swPivot.add(swArm);
@@ -544,7 +539,7 @@
 
         circuitGroup.add(switchGroup);
 
-        // (4) 전구 / 저항 (Bulb & Resistor) - 왼쪽 회로 변(pathPoints[0]과 pathPoints[3] 사이)에 배치
+        // 전구 배치 (왼쪽 변 0->3)
         const bulbGroup = new THREE.Group();
         bulbGroup.position.copy(pathPoints[0]).add(pathPoints[3]).multiplyScalar(0.5);
 
@@ -580,10 +575,9 @@
 
         circuitGroup.add(bulbGroup);
 
-        // --- 6. 전자/전류 시각화용 입자 생성 ---
+        // --- 6. 전자/전류 시각화 입자 생성 ---
         const numParticles = 28;
 
-        // (1) 전자 텍스처 캔버스 생성 (- 마크)
         function createElectronTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 128;
@@ -608,23 +602,26 @@
         const electrons = [];
         for (let i = 0; i < numParticles; i++) {
             const mesh = new THREE.Mesh(electronGeo, electronMat);
-            mesh.rotation.x = -Math.PI / 2; // - 마크가 위로 보이도록 회전
+            mesh.rotation.x = -Math.PI / 2;
             scene.add(mesh);
             electrons.push({ mesh, progress: i / numParticles });
         }
 
-        // (2) 전류 방향 화살표 입자 생성
+        // 전류 방향 뾰족한 화살표 모델 (LookAt 방향 정렬)
         function createArrowMesh() {
             const group = new THREE.Group();
             const stemGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.08, 8);
-            const headGeo = new THREE.ConeGeometry(0.04, 0.06, 8);
+            const headGeo = new THREE.ConeGeometry(0.045, 0.07, 8);
             const mat = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+
+            // Cone 피벗을 머리 앞쪽(+Z)을 향하도록 세팅
+            const head = new THREE.Mesh(headGeo, mat);
+            head.rotation.x = Math.PI / 2;
+            head.position.z = 0.035;
 
             const stem = new THREE.Mesh(stemGeo, mat);
             stem.rotation.x = Math.PI / 2;
-            const head = new THREE.Mesh(headGeo, mat);
-            head.rotation.x = -Math.PI / 2;
-            head.position.z = -0.06;
+            stem.position.z = -0.035;
 
             group.add(stem);
             group.add(head);
@@ -638,7 +635,6 @@
             currents.push({ mesh, progress: i / numParticles });
         }
 
-        // 회로 트랙 상의 위치 및 진행 방향 반환 함수
         function getCircuitTrackInfo(t) {
             t = (t % 1 + 1) % 1;
             const seg = t * 4;
@@ -664,12 +660,10 @@
             isClosed = closed !== undefined ? closed : !isClosed;
             const btn = document.getElementById('btn-switch-toggle');
             if (isClosed) {
-                // 스위치 ON: X축 회전 각도를 0으로 만들어 전선과 수평하게 연결
                 swPivot.rotation.x = 0;
                 btn.className = 'toggle-btn active-on';
                 btn.innerText = '스위치 닫힘 (ON)';
             } else {
-                // 스위치 OFF: 대각선 위로 들려 올려 연결 해제
                 swPivot.rotation.x = Math.PI / 4;
                 btn.className = 'toggle-btn active-off';
                 btn.innerText = '스위치 열림 (OFF)';
@@ -680,7 +674,6 @@
             getMousePos(e);
             raycaster.setFromCamera(mouse, camera);
 
-            // 스위치 부품 클릭 감지
             const intersects = raycaster.intersectObjects([swArm, handle, swBase, term1, term2], true);
             if (intersects.length > 0) {
                 toggleSwitchState();
@@ -716,7 +709,6 @@
 
         document.getElementById('btn-switch-toggle').addEventListener('click', () => toggleSwitchState());
 
-        // 전지 방향 반전 버튼
         document.getElementById('btn-battery-reverse').addEventListener('click', () => {
             isBatteryReversed = !isBatteryReversed;
             batteryGroup.rotation.y = isBatteryReversed ? Math.PI : 0;
@@ -724,7 +716,6 @@
             btn.innerText = isBatteryReversed ? '전지 방향 반전 (현재: 역방향)' : '전지 방향 반전 (현재: 정방향)';
         });
 
-        // 흐름 시각화 선택 (전자 / 전류)
         const btnElectron = document.getElementById('btn-mode-electron');
         const btnCurrent = document.getElementById('btn-mode-current');
 
@@ -779,36 +770,28 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // 초기 스위치 각도 설정 (OFF)
         toggleSwitchState(false);
 
-        // --- 9. 시뮬레이션 및 연산 애니메이션 루프 ---
+        // --- 9. 시뮬레이션 애니메이션 루프 ---
         const clock = new THREE.Clock();
 
         function animate() {
             requestAnimationFrame(animate);
             const delta = clock.getDelta();
 
-            // 1. 옴의 법칙 및 전력 연산
             const current = isClosed ? (voltage / resistance) : 0;
-            const power = isClosed ? (voltage * current) : 0; // P = V * I
+            const power = isClosed ? (voltage * current) : 0;
 
             document.getElementById('val-current').innerText = current.toFixed(2) + ' A';
             document.getElementById('val-power').innerText = power.toFixed(2) + ' W';
 
-            // 2. 전력 계산 기반 전구 밝기 조절
-            // 기준 전력 3.6W일 때 적정 밝기, 최대 72W 범위에 맞춰 커브 적용
             const brightness = isClosed ? Math.min(1.0, power / 15.0) : 0;
             filamentMat.emissiveIntensity = brightness * 3.0;
             bulbLight.intensity = brightness * 3.5;
 
-            // 3. 전자 / 전류 이동 연산
-            // 속도는 전류 크기에 비례
             const flowSpeed = current * 0.12;
 
-            // 전지 방향에 따른 전자 이동 방향 (정방향일 때 -극인 좌측에서 출구)
             const electronDirection = isBatteryReversed ? -1 : 1;
-            // 전류 방향은 전자의 이동 방향과 항상 반대
             const currentDirection = -electronDirection;
 
             // (1) 전자 애니메이션
@@ -824,7 +807,7 @@
                 }
             });
 
-            // (2) 전류 화살표 애니메이션
+            // (2) 전류 화살표 애니메이션 (뾰족한 머리 방향으로 직진)
             currents.forEach((c) => {
                 if (isClosed && viewMode === 'current') {
                     c.progress += delta * flowSpeed * currentDirection;
@@ -832,7 +815,7 @@
                     c.mesh.position.copy(track.pos);
                     c.mesh.position.y += 0.04;
 
-                    // 화살표가 이동 방향을 바라보도록 설정
+                    // 화살표 머리가 이동 전방을 바라보도록 정밀 방향 계산
                     const lookTarget = track.pos.clone().add(track.dir.clone().multiplyScalar(currentDirection));
                     lookTarget.y += 0.04;
                     c.mesh.lookAt(lookTarget);
