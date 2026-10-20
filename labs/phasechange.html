@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>물질의 상태 변화 3D</title>
+    <!-- Three.js & OrbitControls Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(25px) saturate(190%);
+            -webkit-backdrop-filter: blur(25px) saturate(190%);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 22px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* Top Left Header */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* Top Right Control Buttons */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.25s ease;
+            font-size: 18px;
+        }
+
+        .icon-btn:hover {
+            transform: scale(1.08);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        /* Center Tooltip */
+        .center-tooltip {
+            position: absolute;
+            top: 85px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 22px;
+            font-size: 13.5px;
+            color: #48484a;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        /* Bottom Control Bar */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 16px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 13px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .control-tab-btn:hover {
+            background: rgba(0, 122, 255, 0.08);
+            color: #007aff;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(0, 122, 255, 0.35);
+        }
+
+        /* Overlay HTML Labels for 3D Triangle Nodes */
+        .node-label {
+            position: absolute;
+            padding: 6px 14px;
+            border-radius: 14px;
+            font-size: 13px;
+            font-weight: bold;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            z-index: 8;
+            transition: opacity 0.3s;
+        }
+
+        /* Arrow Transition Buttons (Reveal & Detail Triggers) */
+        .arrow-btn {
+            position: absolute;
+            padding: 7px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 9;
+            transform: translate(-50%, -50%);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        .arrow-btn.hidden-state {
+            background: rgba(255, 255, 255, 0.85);
+            color: #8e8e93;
+        }
+
+        .arrow-btn.revealed-state {
+            background: rgba(255, 255, 255, 0.95);
+            color: #007aff;
+            border-color: #007aff;
+            transform: translate(-50%, -50%) scale(1.08);
+            box-shadow: 0 6px 20px rgba(0, 122, 255, 0.25);
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+        }
+
+        /* Detailed Modal Glass Card */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            width: 90%;
+            max-width: 480px;
+            padding: 28px;
+            transform: translateY(20px) scale(0.95);
+            transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-overlay.show .modal-card {
+            transform: translateY(0) scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1c1c1e;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-badge {
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 10px;
+            background: rgba(0, 122, 255, 0.12);
+            color: #007aff;
+        }
+
+        .modal-close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.05);
+            color: #8e8e93;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-close-btn:hover {
+            background: rgba(255, 59, 48, 0.15);
+            color: #ff3b30;
+        }
+
+        .modal-body {
+            font-size: 14.5px;
+            line-height: 1.65;
+            color: #3a3a3c;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .example-item {
+            background: rgba(255, 255, 255, 0.6);
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+        }
+
+        .example-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #007aff;
+            margin-bottom: 4px;
+        }
+
+        .example-desc {
+            font-size: 14px;
+            color: #1c1c1e;
+            word-break: keep-all;
+        }
+
+        /* Dark Mode Styling */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.78);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .back-btn, body.dark-mode .control-tab-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.78);
+            color: #fff;
+        }
+
+        body.dark-mode .center-tooltip {
+            color: #aeaeb2;
+        }
+
+        body.dark-mode .arrow-btn.hidden-state {
+            background: rgba(45, 45, 48, 0.85);
+            color: #8e8e93;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-mode .arrow-btn.revealed-state {
+            background: rgba(30, 30, 30, 0.95);
+            color: #0a84ff;
+            border-color: #0a84ff;
+        }
+
+        body.dark-mode .modal-card {
+            background: rgba(32, 32, 35, 0.88);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        body.dark-mode .modal-title, body.dark-mode .example-desc {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .example-item {
+            background: rgba(20, 20, 22, 0.5);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        body.dark-mode .modal-close-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #aeaeb2;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- Top Left Header -->
+    <div class="top-left-bar">
+        <a href="#" class="glass-panel back-btn" onclick="location.reload();">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>물질의 상태 변화 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- Top Right Bar -->
+    <div class="top-right-bar">
+        <button class="icon-btn glass-panel" id="theme-toggle" title="테마 전환">🌙</button>
+    </div>
+
+    <!-- Center Guide Tooltip -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        ✨ 상태 변화 화살표 버튼을 누르면 명칭과 예시를 확인할 수 있습니다
+    </div>
+
+    <!-- 3D Node Labels (Solid, Liquid, Gas) -->
+    <div class="glass-panel node-label" id="label-solid" style="color: #ff3b30;">고체 (Solid)</div>
+    <div class="glass-panel node-label" id="label-liquid" style="color: #007aff;">액체 (Liquid)</div>
+    <div class="glass-panel node-label" id="label-gas" style="color: #34c759;">기체 (Gas)</div>
+
+    <!-- Transition Reveal Buttons (Interactive Arrows) -->
+    <button class="glass-panel arrow-btn hidden-state" id="btn-trans-0"><span>❓</span><span>클릭하여 확인</span></button>
+    <button class="glass-panel arrow-btn hidden-state" id="btn-trans-1"><span>❓</span><span>클릭하여 확인</span></button>
+    <button class="glass-panel arrow-btn hidden-state" id="btn-trans-2"><span>❓</span><span>클릭하여 확인</span></button>
+    <button class="glass-panel arrow-btn hidden-state" id="btn-trans-3"><span>❓</span><span>클릭하여 확인</span></button>
+    <button class="glass-panel arrow-btn hidden-state" id="btn-trans-4"><span>❓</span><span>클릭하여 확인</span></button>
+    <button class="glass-panel arrow-btn hidden-state" id="btn-trans-5"><span>❓</span><span>클릭하여 확인</span></button>
+
+    <!-- Bottom Control Bar -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-reveal-all">
+            <span>✨</span>
+            <span>모두 공개</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점 정렬</span>
+        </button>
+    </div>
+
+    <!-- Real-World Example Detail Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="glass-panel modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span id="modal-name">융해</span>
+                    <span class="modal-badge" id="modal-direction">고체 ➔ 액체</span>
+                </div>
+                <button class="modal-close-btn" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="example-item">
+                    <div class="example-title">💡 대표 예시 1</div>
+                    <div class="example-desc" id="modal-ex1">설명이 들어갑니다.</div>
+                </div>
+                <div class="example-item">
+                    <div class="example-title">💡 대표 예시 2</div>
+                    <div class="example-desc" id="modal-ex2">설명이 들어갑니다.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Three.js Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 6.2, 10.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 0, 0);
+        controls.maxPolarAngle = Math.PI / 2 - 0.05; // Prevent camera going under floor
+
+        // --- 2. Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(6, 12, 8);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // --- 3. Floor Grid ---
+        const floorGeo = new THREE.PlaneGeometry(25, 25);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.85 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.05;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(25, 25, 0xd1d1d6, 0xe5e5ea);
+        gridHelper.position.y = 0;
+        scene.add(gridHelper);
+
+        // --- 4. Triangle Node Positions (Equilateral Triangle Layout) ---
+        const R = 3.8; // Radius from origin
+        const nodePositions = {
+            solid: new THREE.Vector3(-R * Math.sin(Math.PI / 3), 0.8, R * Math.cos(Math.PI / 3)),   // Bottom Left
+            liquid: new THREE.Vector3(R * Math.sin(Math.PI / 3), 0.8, R * Math.cos(Math.PI / 3)),   // Bottom Right
+            gas: new THREE.Vector3(0, 0.8, -R * 0.85)                                              // Top Center
+        };
+
+        // --- 5. Create Translucent Particle Bounding Spheres & Particle Groups ---
+        const sphereGeo = new THREE.SphereGeometry(1.25, 32, 32);
+        
+        function createContainerSphere(pos, colorHex) {
+            const mat = new THREE.MeshPhysicalMaterial({
+                color: colorHex,
+                transparent: true,
+                opacity: 0.18,
+                roughness: 0.1,
+                transmission: 0.85,
+                thickness: 0.5
+            });
+            const mesh = new THREE.Mesh(sphereGeo, mat);
+            mesh.position.copy(pos);
+            scene.add(mesh);
+
+            // Wireframe ring around bottom base
+            const ringGeo = new THREE.RingGeometry(1.25, 1.32, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.4 });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.set(pos.x, 0.01, pos.z);
+            scene.add(ring);
+
+            return mesh;
+        }
+
+        createContainerSphere(nodePositions.solid, 0xff3b30);
+        createContainerSphere(nodePositions.liquid, 0x007aff);
+        createContainerSphere(nodePositions.gas, 0x34c759);
+
+        // --- Particle Generation & Kinetic Simulation ---
+        const particleGeo = new THREE.SphereGeometry(0.12, 16, 16);
+        const pMatSolid = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3, metalness: 0.2 });
+        const pMatLiquid = new THREE.MeshStandardMaterial({ color: 0x007aff, roughness: 0.3, metalness: 0.2 });
+        const pMatGas = new THREE.MeshStandardMaterial({ color: 0x34c759, roughness: 0.3, metalness: 0.2 });
+
+        // A. Solid Particles (Tight Regular Lattice Vibration)
+        const solidParticles = [];
+        const solidGridSize = 3;
+        const spacing = 0.35;
+        for (let x = -1; x <= 1; x++) {
+            for (let y = -1; y <= 1; y++) {
+                for (let z = -1; z <= 1; z++) {
+                    const mesh = new THREE.Mesh(particleGeo, pMatSolid);
+                    const basePos = new THREE.Vector3(
+                        nodePositions.solid.x + x * spacing,
+                        nodePositions.solid.y + y * spacing,
+                        nodePositions.solid.z + z * spacing
+                    );
+                    mesh.position.copy(basePos);
+                    scene.add(mesh);
+                    solidParticles.push({ mesh, basePos });
+                }
+            }
+        }
+
+        // B. Liquid Particles (Fluid-like sliding inside bounded sphere)
+        const liquidParticles = [];
+        const liquidCount = 28;
+        for (let i = 0; i < liquidCount; i++) {
+            const mesh = new THREE.Mesh(particleGeo, pMatLiquid);
+            const r = Math.random() * 0.95;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const pos = new THREE.Vector3(
+                nodePositions.liquid.x + r * Math.sin(phi) * Math.cos(theta),
+                nodePositions.liquid.y + r * Math.sin(phi) * Math.sin(theta) - 0.2, // settle lower
+                nodePositions.liquid.z + r * Math.cos(phi)
+            );
+            mesh.position.copy(pos);
+            scene.add(mesh);
+            liquidParticles.push({
+                mesh,
+                vel: new THREE.Vector3((Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.8)
+            });
+        }
+
+        // C. Gas Particles (High speed random chaotic travel)
+        const gasParticles = [];
+        const gasCount = 22;
+        for (let i = 0; i < gasCount; i++) {
+            const mesh = new THREE.Mesh(particleGeo, pMatGas);
+            const r = Math.random() * 1.0;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const pos = new THREE.Vector3(
+                nodePositions.gas.x + r * Math.sin(phi) * Math.cos(theta),
+                nodePositions.gas.y + r * Math.sin(phi) * Math.sin(theta),
+                nodePositions.gas.z + r * Math.cos(phi)
+            );
+            mesh.position.copy(pos);
+            scene.add(mesh);
+            gasParticles.push({
+                mesh,
+                vel: new THREE.Vector3((Math.random() - 0.5) * 2.8, (Math.random() - 0.5) * 2.8, (Math.random() - 0.5) * 2.8)
+            });
+        }
+
+        // --- 6. 3D Bidirectional Arrow Connectors ---
+        const transitions = [
+            { id: 0, name: "융해", dirName: "고체 ➔ 액체", from: nodePositions.solid, to: nodePositions.liquid, offset: 0.35, color: 0xff9500, ex1: "냉장고에서 꺼낸 얼음이 방 안에서 점점 녹아 물이 되는 현상입니다.", ex2: "손안에 쥐고 있던 단단한 초콜릿이 체온에 의해 녹아 흐르는 현상입니다." },
+            { id: 1, name: "응고", dirName: "액체 ➔ 고체", from: nodePositions.liquid, to: nodePositions.solid, offset: -0.35, color: 0x007aff, ex1: "액체 상태의 물을 영하의 촛농에 넣으면 얼어붙어 단단한 얼음이 되는 현상입니다.", ex2: "촛불을 켜서 흘러내린 촛농이 식으면서 다시 고체 상태로 굳는 현상입니다." },
+            { id: 2, name: "기화", dirName: "액체 ➔ 기체", from: nodePositions.liquid, to: nodePositions.gas, offset: 0.35, color: 0xff3b30, ex1: "젖은 빨래를 햇빛에 말리면 옷 속의 물이 수증기가 되어 날아가는 현상입니다.", ex2: "어항에 받아둔 물이 시간이 지남에 따라 점차 줄어드는 현상입니다." },
+            { id: 3, name: "액화", dirName: "기체 ➔ 액체", from: nodePositions.gas, to: nodePositions.liquid, offset: -0.35, color: 0x34c759, ex1: "차가운 음료수 캔 표면에 공기 중 수증기가 물방울이 되어 맺히는 현상입니다.", ex2: "따뜻한 목욕탕 천장에 수증기가 닿아 이슬처럼 물방울이 맺히는 현상입니다." },
+            { id: 4, name: "승화", dirName: "고체 ➔ 기체", from: nodePositions.solid, to: nodePositions.gas, offset: -0.35, color: 0xaf52de, ex1: "드라이아이스를 가만히 두면 액체를 거치지 않고 흰 연기처럼 기화하여 크기가 줄어드는 현상입니다.", ex2: "옷장에 넣어둔 옷장용 나프탈렌의 크기가 시간이 지남에 따라 점차 작아지는 현상입니다." },
+            { id: 5, name: "승화", dirName: "기체 ➔ 고체", from: nodePositions.gas, to: nodePositions.solid, offset: 0.35, color: 0x5856d6, ex1: "추운 겨울날 밖의 공기 중 수증기가 차가운 유리창에 얼어붙어 서리가 내리는 현상입니다.", ex2: "높은 하늘의 수증기가 바로 얼어붙어 눈 결정(눈꽃)이 만들어지는 현상입니다." }
+        ];
+
+        // Create 3D Arrow Lines
+        transitions.forEach((t) => {
+            const start = t.from.clone();
+            const end = t.to.clone();
+
+            // Offset vector perpendicular to direction for dual parallel arrows
+            const dir = new THREE.Vector3().subVectors(end, start).normalize();
+            const perp = new THREE.Vector3(-dir.z, 0, dir.x).normalize().multiplyScalar(t.offset);
+
+            start.add(perp);
+            end.add(perp);
+
+            // Shorten line slightly so arrowheads don't intersect container spheres
+            const margin = 1.35;
+            const realStart = start.clone().add(dir.clone().multiplyScalar(margin));
+            const realEnd = end.clone().sub(dir.clone().multiplyScalar(margin));
+
+            const arrowLen = realStart.distanceTo(realEnd);
+            const arrowHelper = new THREE.ArrowHelper(dir, realStart, arrowLen, t.color, 0.4, 0.25);
+            scene.add(arrowHelper);
+
+            // Midpoint position for HTML UI Button
+            t.midPos = new THREE.Vector3().addVectors(realStart, realEnd).multiplyScalar(0.5);
+            t.midPos.y += 0.15; // slightly above floor
+        });
+
+        // --- 7. State Reveal Logic & UI Sync ---
+        const revealedStates = new Array(6).fill(false);
+
+        function updateOverlayPositions() {
+            // Project 3D node coordinates to 2D screen coordinates
+            const proj = (pos) => {
+                const p = pos.clone().project(camera);
+                return {
+                    x: (p.x * 0.5 + 0.5) * window.innerWidth,
+                    y: (-(p.y * 0.5) + 0.5) * window.innerHeight
+                };
+            };
+
+            // Update Labels
+            const pSolid = proj(nodePositions.solid.clone().add(new THREE.Vector3(0, 1.4, 0)));
+            const pLiquid = proj(nodePositions.liquid.clone().add(new THREE.Vector3(0, 1.4, 0)));
+            const pGas = proj(nodePositions.gas.clone().add(new THREE.Vector3(0, 1.4, 0)));
+
+            document.getElementById('label-solid').style.left = pSolid.x + 'px';
+            document.getElementById('label-solid').style.top = pSolid.y + 'px';
+
+            document.getElementById('label-liquid').style.left = pLiquid.x + 'px';
+            document.getElementById('label-liquid').style.top = pLiquid.y + 'px';
+
+            document.getElementById('label-gas').style.left = pGas.x + 'px';
+            document.getElementById('label-gas').style.top = pGas.y + 'px';
+
+            // Update 6 Transition Arrow Buttons
+            transitions.forEach((t) => {
+                const pMid = proj(t.midPos);
+                const btn = document.getElementById(`btn-trans-${t.id}`);
+                btn.style.left = pMid.x + 'px';
+                btn.style.top = pMid.y + 'px';
+            });
+        }
+
+        // Handle Arrow Button Click
+        transitions.forEach((t) => {
+            const btn = document.getElementById(`btn-trans-${t.id}`);
+            btn.addEventListener('click', () => {
+                if (!revealedStates[t.id]) {
+                    // 짜잔! Reveal Animation
+                    revealedStates[t.id] = true;
+                    btn.className = "glass-panel arrow-btn revealed-state";
+                    btn.innerHTML = `<span>✨</span><span>${t.name} (${t.dirName})</span>`;
+                }
+                // Open Modal Example Details
+                openModal(t);
+            });
+        });
+
+        // Modal Controls
+        const modalOverlay = document.getElementById('modal-overlay');
+        function openModal(t) {
+            document.getElementById('modal-name').innerText = t.name;
+            document.getElementById('modal-direction').innerText = t.dirName;
+            document.getElementById('modal-ex1').innerText = t.ex1;
+            document.getElementById('modal-ex2').innerText = t.ex2;
+            modalOverlay.classList.add('show');
+        }
+
+        document.getElementById('modal-close').addEventListener('click', () => modalOverlay.classList.remove('show'));
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) modalOverlay.classList.remove('show');
+        });
+
+        // Bottom Bar Buttons
+        document.getElementById('btn-reveal-all').addEventListener('click', () => {
+            transitions.forEach((t) => {
+                revealedStates[t.id] = true;
+                const btn = document.getElementById(`btn-trans-${t.id}`);
+                btn.className = "glass-panel arrow-btn revealed-state";
+                btn.innerHTML = `<span>✨</span><span>${t.name} (${t.dirName})</span>`;
+            });
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            transitions.forEach((t) => {
+                revealedStates[t.id] = false;
+                const btn = document.getElementById(`btn-trans-${t.id}`);
+                btn.className = "glass-panel arrow-btn hidden-state";
+                btn.innerHTML = `<span>❓</span><span>클릭하여 확인</span>`;
+            });
+            modalOverlay.classList.remove('show');
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 6.2, 10.5);
+            controls.target.set(0, 0, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 8. Particle Kinetic Animation Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            const dt = clock.getDelta();
+
+            // A. Solid Particles: Tiny rapid vibration around base positions
+            solidParticles.forEach((p) => {
+                p.mesh.position.x = p.basePos.x + Math.sin(time * 25 + p.basePos.y) * 0.025;
+                p.mesh.position.y = p.basePos.y + Math.cos(time * 22 + p.basePos.x) * 0.025;
+                p.mesh.position.z = p.basePos.z + Math.sin(time * 20 + p.basePos.z) * 0.025;
+            });
+
+            // B. Liquid Particles: Medium speed fluid flow bounded in sphere radius ~0.95
+            liquidParticles.forEach((p) => {
+                p.mesh.position.addScaledVector(p.vel, 0.018);
+                const dist = p.mesh.position.distanceTo(nodePositions.liquid);
+                if (dist > 0.95) {
+                    const normal = new THREE.Vector3().subVectors(p.mesh.position, nodePositions.liquid).normalize();
+                    p.vel.reflect(normal).multiplyScalar(0.85); // Bounce back inside
+                }
+            });
+
+            // C. Gas Particles: High speed chaotic thermal bounce in sphere radius ~1.15
+            gasParticles.forEach((p) => {
+                p.mesh.position.addScaledVector(p.vel, 0.022);
+                const dist = p.mesh.position.distanceTo(nodePositions.gas);
+                if (dist > 1.15) {
+                    const normal = new THREE.Vector3().subVectors(p.mesh.position, nodePositions.gas).normalize();
+                    p.vel.reflect(normal); // Elastic reflection
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+            updateOverlayPositions();
+        }
+
+        animate();
+    </script>
+</body>
+</html>
