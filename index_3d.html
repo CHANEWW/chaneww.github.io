@@ -85,7 +85,7 @@
         /* Central Guide Tooltip */
         .center-tooltip {
             position: absolute;
-            top: 100px;
+            top: 95px;
             left: 50%;
             transform: translateX(-50%);
             padding: 8px 20px;
@@ -246,10 +246,11 @@
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x05050d, 0.015);
 
-        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // 상단 가림을 막기 위해 수직 화각(FOV)을 50 -> 55로 넓힘
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        // 원형 배치의 정중앙에 사용자 시점 위치 (x=0, y=1.8, z=0)
-        camera.position.set(0, 1.8, 0);
+        // 카메라 높이를 기존 y=1.8에서 y=3.2로 높여 카테고리까지 내려다보이게 설정
+        camera.position.set(0, 3.2, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -261,15 +262,15 @@
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         
-        // 휠/핀치 확대 축소 기능 (Zoom)
+        // 휠/핀치 확대 축소 기능 (Zoom 범위 확장 maxDistance: 5.0 -> 12.0)
         controls.enableZoom = true;
         controls.minDistance = 0.1;
-        controls.maxDistance = 5.0;
+        controls.maxDistance = 12.0;
         
         controls.enablePan = false;
         controls.rotateSpeed = -0.4;
         
-        // 회전 중심점(target)을 카메라 위치와 동일하게 세팅하여 완벽한 제자리 회전 구현
+        // 시선 회전 중심점(target)은 카드 중심 높이(1.8)를 바라보아 시선이 자연스럽게 하향 각도를 유지
         controls.target.set(0, 1.8, -0.001);
 
         // --- 3. 조명 설정 ---
@@ -367,7 +368,7 @@
         // --- 7. 동일 반지름 원형 3D 카드 배치 ---
         const cardsGroup = new THREE.Group();
         const cardMeshes = [];
-        const orbitRadius = 7.5; // 카드가 위치할 완벽한 동일 반지름
+        const orbitRadius = 7.5;
 
         const allLabs = [];
         labCategories.forEach(cat => {
@@ -386,7 +387,6 @@
         const angleStep = (Math.PI * 2) / totalCards;
 
         allLabs.forEach((lab, idx) => {
-            // 각 카드간 동일 각도 간격 배치
             const angle = idx * angleStep;
             const x = Math.sin(angle) * orbitRadius;
             const z = -Math.cos(angle) * orbitRadius;
@@ -405,7 +405,7 @@
             const cardMesh = new THREE.Mesh(cardGeo, cardMat);
             cardMesh.position.set(x, baseY, z);
             
-            // 중앙의 정확한 카메라 좌표(0, 1.8, 0)를 바라보도록 설정
+            // Central origin (0, baseY, 0) 바라보기
             cardMesh.lookAt(0, baseY, 0);
 
             cardMesh.userData = { 
@@ -423,7 +423,7 @@
 
         scene.add(cardsGroup);
 
-        // --- 8. 마우스/터치 인터랙션, 호버(Hover) 떠오름 및 클릭 이벤트 ---
+        // --- 8. 마우스/터치 인터랙션 및 클릭 이벤트 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
@@ -434,7 +434,6 @@
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(cardMeshes);
 
-            // 초기화
             cardMeshes.forEach(mesh => {
                 mesh.userData.targetY = mesh.userData.baseY;
                 mesh.userData.targetScale = 1.0;
@@ -475,7 +474,7 @@
 
         // --- 9. 시점 정렬 기능 ---
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 1.8, 0);
+            camera.position.set(0, 3.2, 0);
             controls.target.set(0, 1.8, -0.001);
             controls.update();
         });
@@ -495,7 +494,6 @@
 
             earth.rotation.y += delta * 0.03;
 
-            // 마우스 호버 시 부드러운 떠오름 보정 (Lerp)
             cardMeshes.forEach(mesh => {
                 mesh.position.y += (mesh.userData.targetY - mesh.position.y) * 0.1;
                 
