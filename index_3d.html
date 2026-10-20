@@ -175,7 +175,7 @@
 
     <!-- Guide Tooltip -->
     <div class="glass-panel center-tooltip">
-        🌌 드래그하여 화면을 회전하고, 마우스 휠로 확대/축소할 수 있습니다
+        🌌 드래그하여 주변을 둘러보고, 실험 클립에 마우스를 올려보세요
     </div>
 
     <!-- Bottom Center Alignment -->
@@ -247,8 +247,8 @@
         scene.fog = new THREE.FogExp2(0x05050d, 0.015);
 
         const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-        // 지구의 정중앙 x=0, z=0 정중앙 높은 위치에 카메라 배치
-        camera.position.set(0, 2.2, 0.1);
+        // 사용자 시점을 카드 배치의 정중앙(x=0, y=1.8, z=0)으로 설정
+        camera.position.set(0, 1.8, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -260,17 +260,11 @@
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         
-        // 1) 마우스 휠 확대/축소 활성화 및 범위 설정
-        controls.enableZoom = true;
-        controls.minDistance = 1.0;
-        controls.maxDistance = 18.0;
-        
+        // 중앙 시점 조종에 맞춘 OrbitControls 회전 설정
+        controls.enableZoom = false; // 중앙 시점이므로 줌 차단 또는 최소화
         controls.enablePan = false;
-        
-        // 3) 드래그 화면 움직임 방향 반전 수정 (자연스러운 뷰 조종)
-        controls.rotateSpeed = -0.8;
-        
-        controls.target.set(0, 1.8, -5);
+        controls.rotateSpeed = -0.5; // 자연스러운 시선 회전 방향
+        controls.target.set(0, 1.8, -5); // 정면 카드를 바라보도록 타겟 지정
 
         // --- 3. 조명 설정 ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
@@ -292,7 +286,7 @@
         const starField = new THREE.Points(starsGeo, starsMat);
         scene.add(starField);
 
-        // --- 5. 발 밑 정가운데 대형 3D 지구 (Earth) ---
+        // --- 5. 발 밑 대형 3D 지구 (Earth) ---
         function createEarthTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 1024;
@@ -319,8 +313,7 @@
             metalness: 0.1
         });
         const earth = new THREE.Mesh(earthGeo, earthMat);
-        // 지구를 정중앙(x=0, z=0)에 정확히 대칭 배치
-        earth.position.set(0, -earthRadius, 0);
+        earth.position.set(0, -earthRadius - 1.5, 0);
         scene.add(earth);
 
         const atmosphereGeo = new THREE.SphereGeometry(earthRadius + 0.3, 64, 64);
@@ -334,7 +327,7 @@
         atmosphere.position.copy(earth.position);
         scene.add(atmosphere);
 
-        // --- 6. 3D 카드 캔버스 텍스처 생성기 (이모티콘 폰트 호환 보장) ---
+        // --- 6. 3D 카드 캔버스 텍스처 생성기 ---
         function createCardTexture(category, title, icon, colorHex) {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
@@ -353,7 +346,6 @@
             ctx.font = 'bold 22px "SeoulNamsanL", sans-serif';
             ctx.fillText(`• ${category}`, 30, 60);
 
-            // 2) 이모티콘 기호가 모바일/PC 상관없이 깨지지 않도록 다중 지원 폰트 설정
             ctx.font = '72px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -391,21 +383,31 @@
             const angle = idx * angleStep - Math.PI / 2;
             const x = Math.sin(angle) * orbitRadius;
             const z = -Math.cos(angle) * orbitRadius;
+            const baseY = 1.8; // 기본 높이
 
             const cardGeo = new THREE.PlaneGeometry(2.0, 1.17);
             const texture = createCardTexture(lab.category, lab.title, lab.icon, lab.color);
             const cardMat = new THREE.MeshStandardMaterial({
                 map: texture,
                 transparent: true,
-                opacity: 0.95,
+                opacity: 0.92,
                 roughness: 0.2,
                 side: THREE.DoubleSide
             });
 
             const cardMesh = new THREE.Mesh(cardGeo, cardMat);
-            cardMesh.position.set(x, 1.8, z);
-            cardMesh.lookAt(0, 1.8, 0);
-            cardMesh.userData = { url: lab.url, title: lab.title };
+            cardMesh.position.set(x, baseY, z);
+            cardMesh.lookAt(0, baseY, 0); // 중앙의 시점(사용자)을 바라봄
+
+            // 떠오르는 동작을 위한 userData 속성 등록
+            cardMesh.userData = { 
+                url: lab.url, 
+                title: lab.title,
+                baseY: baseY,
+                targetY: baseY,
+                targetScale: 1.0,
+                currentScale: 1.0
+            };
 
             cardsGroup.add(cardMesh);
             cardMeshes.push(cardMesh);
@@ -413,9 +415,34 @@
 
         scene.add(cardsGroup);
 
-        // --- 8. 마우스/터치 인터랙션 & 카드 클릭 이동 ---
+        // --- 8. 마우스/터치 인터랙션, 호버(Hover) 떠오름 & 클릭 이벤트 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
+        let hoveredCard = null;
+
+        function onPointerMove(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cardMeshes);
+
+            // 초기화
+            cardMeshes.forEach(mesh => {
+                mesh.userData.targetY = mesh.userData.baseY;
+                mesh.userData.targetScale = 1.0;
+            });
+
+            if (intersects.length > 0) {
+                const card = intersects[0].object;
+                // 호버 시 위로 떠오르는 느낌 (Y축 0.35 상승, 크기 1.1배 확대)
+                card.userData.targetY = card.userData.baseY + 0.35;
+                card.userData.targetScale = 1.1;
+                document.body.style.cursor = 'pointer';
+            } else {
+                document.body.style.cursor = 'default';
+            }
+        }
 
         function onPointerClick(e) {
             if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.closest('.glass-panel')) return;
@@ -430,18 +457,19 @@
                 const clickedCard = intersects[0].object;
                 const targetUrl = clickedCard.userData.url;
 
-                clickedCard.scale.set(1.15, 1.15, 1.15);
+                clickedCard.scale.set(1.2, 1.2, 1.2);
                 setTimeout(() => {
                     window.location.href = targetUrl;
                 }, 200);
             }
         }
 
+        window.addEventListener('pointermove', onPointerMove);
         window.addEventListener('pointerdown', onPointerClick);
 
         // --- 9. 시점 정렬 기능 ---
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 2.2, 0.1);
+            camera.position.set(0, 1.8, 0);
             controls.target.set(0, 1.8, -5);
         });
 
@@ -451,7 +479,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- 10. 애니메이션 루프 ---
+        // --- 10. 애니메이션 루프 (부드러운 떠오름 Lerp 연산) ---
         const clock = new THREE.Clock();
 
         function animate() {
@@ -459,6 +487,17 @@
             const delta = clock.getDelta();
 
             earth.rotation.y += delta * 0.03;
+
+            // 마우스 커서 반응 카드 부드러운 떠오름(Floating) 애니메이션
+            cardMeshes.forEach(mesh => {
+                // Y축 위치 부드럽게 보정 (Lerp)
+                mesh.position.y += (mesh.userData.targetY - mesh.position.y) * 0.1;
+                
+                // 크기 부드럽게 보정 (Lerp)
+                mesh.userData.currentScale += (mesh.userData.targetScale - mesh.userData.currentScale) * 0.1;
+                const s = mesh.userData.currentScale;
+                mesh.scale.set(s, s, s);
+            });
 
             controls.update();
             renderer.render(scene, camera);
