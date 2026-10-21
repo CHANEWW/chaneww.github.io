@@ -178,7 +178,7 @@
             position: absolute;
             bottom: 95px;
             left: 20px;
-            width: 280px;
+            width: 300px;
             padding: 16px;
             display: none;
             flex-direction: column;
@@ -426,25 +426,15 @@
     <!-- 상단 중앙 안내 -->
     <div class="glass-panel center-tooltip" id="hint"></div>
 
-    <!-- 오른손 법칙 가이드 패널 (좌측) -->
+    <!-- 오른손 법칙 3D 미니 뷰어 패널 (좌측) -->
     <div class="glass-panel righthand-panel" id="righthand-panel">
         <div class="panel-title">
-            <span>✋ 오른손 법칙 (손바닥 밀기)</span>
+            <span>✋ 오른손 법칙 (3D 시점)</span>
         </div>
-        <!-- 손바닥 및 화살표 시각화 컨테이너 -->
-        <div class="hand-container" style="position: relative; width: 220px; height: 220px; margin: 10px auto; background: rgba(255,255,255,0.4); border-radius: 20px; padding: 10px; border: 1px solid rgba(0,0,0,0.05);">
-            <!-- 베이스가 되는 오른손 바닥 이미지 (SVG) -->
-            <svg viewBox="0 0 24 24" style="width:100%; height:100%; transform: scale(-1, 1); opacity:0.15; stroke:#1c1c1e; stroke-width:0.8; fill:none; stroke-linecap:round; stroke-linejoin:round;">
-                <path d="M18 11V6a2 2 0 0 0-4 0v4"></path>
-                <path d="M14 10V4a2 2 0 0 0-4 0v6"></path>
-                <path d="M10 10.5V5a2 2 0 0 0-4 0v7"></path>
-                <path d="M6 13H5a2 2 0 0 0-2 2v1a6 6 0 0 0 6 6h5a7 7 0 0 0 7-7v-4a2 2 0 0 0-4 0"></path>
-            </svg>
-            <!-- 전류, 자기장, 힘 화살표 -->
-            <div id="hand-arrow-i" class="hand-arrow" style="position:absolute; background:#ff3b30; width:80px; height:6px; top:65%; left:50%; transform:translate(-50%, -50%); transition:all 0.3s;"></div>
-            <div id="hand-arrow-b" class="hand-arrow" style="position:absolute; background:#007aff; width:6px; height:80px; top:35%; left:50%; transform:translate(-50%, -50%); transition:all 0.3s;"></div>
-            <div id="hand-force-f" class="hand-force" style="position:absolute; color:#34c759; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; transition:all 0.3s;"></div>
+        <!-- 3D 캔버스가 들어갈 컨테이너 -->
+        <div id="hand-canvas-container" style="position: relative; width: 100%; height: 240px; margin: 10px auto; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.04); border: 1px inset rgba(255,255,255,0.5); cursor: grab;">
         </div>
+        <div style="font-size: 11px; color: #8e8e93; text-align: center; font-weight: 700;">마우스로 상하좌우 드래그하여 돌려보세요</div>
     </div>
 
     <!-- 서브 물리 제어 패널 (우측 하단) -->
@@ -489,7 +479,6 @@
 
     <!-- 하단 제어 바 -->
     <div class="glass-panel bottom-control-bar">
-        <!-- 왼/오른쪽 패널 토글 버튼 추가 -->
         <button class="control-tab-btn" id="btn-toggle-righthand">
             <span>✋</span>
             <span>오른손 법칙</span>
@@ -500,7 +489,6 @@
         </button>
 
         <div class="vec-chip-group">
-            <!-- 라벨명 변경 -->
             <button class="vec-chip active-i" id="chip-i">전류 방향</button>
             <button class="vec-chip active-b" id="chip-b">자기장 방향</button>
             <button class="vec-chip active-f" id="chip-f">힘 방향</button>
@@ -518,7 +506,7 @@
 
     <script>
         // =====================================================
-        // 1. Three.js 기본 씬, 카메라, 렌더러
+        // 1. Three.js 기본 씬, 카메라, 렌더러 (메인 씬)
         // =====================================================
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
@@ -553,7 +541,7 @@
         }
         controls.addEventListener('start', () => { viewTween = null; });
 
-        // 조명 설정
+        // 메인 씬 조명 설정
         scene.add(new THREE.AmbientLight(0xffffff, 0.75));
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
@@ -561,10 +549,6 @@
         dirLight.castShadow = true;
         dirLight.shadow.mapSize.width = 2048;
         dirLight.shadow.mapSize.height = 2048;
-        dirLight.shadow.camera.left = -5;
-        dirLight.shadow.camera.right = 5;
-        dirLight.shadow.camera.top = 5;
-        dirLight.shadow.camera.bottom = -5;
         dirLight.shadow.bias = -0.0001;
         scene.add(dirLight);
 
@@ -572,7 +556,7 @@
         fillLight.position.set(-3, 3, -2);
         scene.add(fillLight);
 
-        // 바닥 및 그리드
+        // 메인 씬 바닥 및 그리드
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(20, 20),
             new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8, metalness: 0.1 })
@@ -614,7 +598,7 @@
         const ARM_Z1 = 0.7;
 
         // =====================================================
-        // 3. 실험 장치 모델링 구현
+        // 3. 메인 실험 장치 모델링 구현
         // =====================================================
         const labGroup = new THREE.Group();
         scene.add(labGroup);
@@ -793,17 +777,23 @@
         addMesh(new THREE.SphereGeometry(0.032, 16, 16), matA, -0.9, 2.44, 0);
         addMesh(new THREE.SphereGeometry(0.032, 16, 16), matB,  0.9, 2.44, 0);
 
-        function makeBadge(text, color, size) {
+        function makeBadge(text, color, size, alwaysOnTop = true) {
             const c = document.createElement('canvas');
             c.width = 128; c.height = 128;
             const tex = new THREE.CanvasTexture(c);
-            const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+            const spr = new THREE.Sprite(new THREE.SpriteMaterial({ 
+                map: tex, 
+                transparent: true, 
+                depthTest: !alwaysOnTop, 
+                depthWrite: !alwaysOnTop 
+            }));
             spr.scale.set(size, size, 1);
-            spr.renderOrder = 1000;
+            if (alwaysOnTop) spr.renderOrder = 1000;
             spr.userData = { c, tex };
             drawBadge(spr, text, color);
             return spr;
         }
+        
         function drawBadge(spr, text, color) {
             const ctx = spr.userData.c.getContext('2d');
             ctx.clearRect(0, 0, 128, 128);
@@ -838,13 +828,19 @@
         }
 
         // =====================================================
-        // 4. 물리량 화살표 표시 (항상 진하게, 꺼져있을 땐 숨김)
+        // 4. 물리량 화살표 표시 (ThickArrow 클래스)
         // =====================================================
         class ThickArrow {
-            constructor(color, shaftR, headR, headL) {
+            constructor(color, shaftR, headR, headL, alwaysOnTop = true) {
                 this.headL = headL;
                 this.group = new THREE.Group();
-                this.mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+                this.mat = new THREE.MeshBasicMaterial({ 
+                    color, 
+                    transparent: true, 
+                    opacity: 1, 
+                    depthTest: !alwaysOnTop, 
+                    depthWrite: !alwaysOnTop 
+                });
 
                 const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, 1, 16);
                 shaftGeo.translate(0, 0.5, 0);
@@ -853,8 +849,12 @@
 
                 this.shaft = new THREE.Mesh(shaftGeo, this.mat);
                 this.head = new THREE.Mesh(headGeo, this.mat);
-                this.shaft.renderOrder = 999;
-                this.head.renderOrder = 999;
+                
+                if (alwaysOnTop) {
+                    this.shaft.renderOrder = 999;
+                    this.head.renderOrder = 999;
+                }
+                
                 this.group.add(this.shaft, this.head);
             }
             set(origin, dir, length) {
@@ -866,10 +866,12 @@
                 this.head.scale.set(1, hl, 1);
             }
             setVisible(v) { this.group.visible = v; }
+            setOpacity(a) { this.mat.opacity = a; }
         }
 
         const COLOR_I = 0xff3b30, COLOR_B = 0x007aff, COLOR_F = 0x34c759;
 
+        // 메인 씬용 화살표 생성
         const arrowI = new ThickArrow(COLOR_I, 0.03, 0.085, 0.22);
         swingPivot.add(arrowI.group);
         const badgeI = makeBadge('I', '#ff3b30', 0.3);
@@ -885,8 +887,87 @@
         const badgeF = makeBadge('F', '#34c759', 0.3);
         labGroup.add(badgeF);
 
+
         // =====================================================
-        // 5. 실시간 물리 계산 및 UI/가이드 연동
+        // 5. 오른손 법칙 3D 미니 뷰어 세팅 (가이드 패널 내장)
+        // =====================================================
+        const handContainer = document.getElementById('hand-canvas-container');
+        const handScene = new THREE.Scene();
+        const handCamera = new THREE.PerspectiveCamera(45, handContainer.clientWidth / handContainer.clientHeight || 1, 0.1, 100);
+        handCamera.position.set(4, 3.5, 6.5);
+
+        const handRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        handRenderer.setSize(handContainer.clientWidth, handContainer.clientHeight || 240);
+        handRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        handContainer.appendChild(handRenderer.domElement);
+
+        const handControls = new THREE.OrbitControls(handCamera, handRenderer.domElement);
+        handControls.enableDamping = true;
+        handControls.dampingFactor = 0.1;
+        handControls.enableZoom = true;
+        handControls.minDistance = 2.0;
+        handControls.maxDistance = 15.0;
+
+        handScene.add(new THREE.AmbientLight(0xffffff, 0.85));
+        const handLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        handLight.position.set(3, 5, 4);
+        handScene.add(handLight);
+
+        // 3D 오른손 뼈대 생성
+        const handGroup = new THREE.Group();
+        handScene.add(handGroup);
+
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffcc99, roughness: 0.5, metalness: 0.1 });
+
+        // 손바닥
+        const palmObj = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.5, 0.35), skinMat);
+        palmObj.position.set(0, 0.15, 0);
+        handGroup.add(palmObj);
+
+        // 손목
+        const wristObj = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.6, 0.3), skinMat);
+        wristObj.position.set(0, -0.9, 0);
+        handGroup.add(wristObj);
+
+        // 네 손가락 (자기장 B 방향)
+        const fPos = [-0.5, -0.16, 0.16, 0.5];
+        const fLen = [0.8, 0.95, 0.9, 0.75];
+        for(let i=0; i<4; i++) {
+            const fingerObj = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, fLen[i], 16), skinMat);
+            fingerObj.position.set(fPos[i], 0.9 + fLen[i]/2, 0);
+            handGroup.add(fingerObj);
+        }
+
+        // 엄지 손가락 (전류 I 방향, +X)
+        const thumbObj = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.8, 16), skinMat);
+        thumbObj.rotation.z = -Math.PI / 2;
+        thumbObj.position.set(1.1, -0.1, 0);
+        handGroup.add(thumbObj);
+
+        // 미니 씬 화살표 (입체감을 위해 DepthTest On = alwaysOnTop: false 적용)
+        const handArrowI = new ThickArrow(COLOR_I, 0.05, 0.16, 0.35, false);
+        handArrowI.set(new THREE.Vector3(1.6, -0.1, 0), new THREE.Vector3(1, 0, 0), 1.5);
+        handGroup.add(handArrowI.group);
+        const badgeHandI = makeBadge('I', '#ff3b30', 0.45, false);
+        badgeHandI.position.set(3.4, -0.1, 0);
+        handGroup.add(badgeHandI);
+
+        const handArrowB = new ThickArrow(COLOR_B, 0.05, 0.16, 0.35, false);
+        handArrowB.set(new THREE.Vector3(0, 2.0, 0), new THREE.Vector3(0, 1, 0), 1.6);
+        handGroup.add(handArrowB.group);
+        const badgeHandB = makeBadge('B', '#007aff', 0.45, false);
+        badgeHandB.position.set(0, 4.0, 0);
+        handGroup.add(badgeHandB);
+
+        const handArrowF = new ThickArrow(COLOR_F, 0.05, 0.16, 0.35, false);
+        handArrowF.set(new THREE.Vector3(0, 0.15, 0.25), new THREE.Vector3(0, 0, 1), 1.8);
+        handGroup.add(handArrowF.group);
+        const badgeHandF = makeBadge('F', '#34c759', 0.45, false);
+        badgeHandF.position.set(0, 0.15, 2.3);
+        handGroup.add(badgeHandF);
+
+        // =====================================================
+        // 6. 실시간 물리 계산 및 UI 연동
         // =====================================================
         let derived = {};
         function derive() {
@@ -912,32 +993,6 @@
             el('val-bfield').innerText = d.B.toFixed(2) + ' T';
             el('val-force').innerText = (on ? d.F : 0).toFixed(2) + ' N';
 
-            // 오른손 법칙 이미지/화살표 가이드 UI 동적 업데이트 (왼쪽 패널)
-            const op = on ? 1.0 : 0.4; // 전원 꺼졌을 땐 연하게
-            el('hand-arrow-i').style.opacity = op;
-            el('hand-force-f').style.opacity = op;
-
-            // 전류(I) 화살표 (오른쪽/왼쪽)
-            if (d.dI > 0) {
-                el('hand-arrow-i').innerHTML = '<div style="position:absolute; right:-10px; top:-5px; border-top:8px solid transparent; border-bottom:8px solid transparent; border-left:12px solid #ff3b30;"></div><div style="position:absolute; left:0px; top:-22px; font-size:12px; font-weight:800; color:#ff3b30; white-space:nowrap;">전류 방향</div>';
-            } else {
-                el('hand-arrow-i').innerHTML = '<div style="position:absolute; left:-10px; top:-5px; border-top:8px solid transparent; border-bottom:8px solid transparent; border-right:12px solid #ff3b30;"></div><div style="position:absolute; right:0px; top:-22px; font-size:12px; font-weight:800; color:#ff3b30; white-space:nowrap;">전류 방향</div>';
-            }
-
-            // 자기장(B) 화살표 (위쪽/아래쪽)
-            if (d.dB > 0) {
-                el('hand-arrow-b').innerHTML = '<div style="position:absolute; top:-10px; left:-5px; border-left:8px solid transparent; border-right:8px solid transparent; border-bottom:12px solid #007aff;"></div><div style="position:absolute; left:15px; top:0px; font-size:12px; font-weight:800; color:#007aff; white-space:nowrap;">자기장 방향</div>';
-            } else {
-                el('hand-arrow-b').innerHTML = '<div style="position:absolute; bottom:-10px; left:-5px; border-left:8px solid transparent; border-right:8px solid transparent; border-top:12px solid #007aff;"></div><div style="position:absolute; left:15px; bottom:0px; font-size:12px; font-weight:800; color:#007aff; white-space:nowrap;">자기장 방향</div>';
-            }
-
-            // 힘(F) 기호 (앞쪽/뒤쪽)
-            if (d.dF > 0) {
-                el('hand-force-f').innerHTML = '<div style="font-size:38px; line-height:1;">⊙</div><div style="font-size:12px; font-weight:800; white-space:nowrap;">힘 방향 (앞쪽)</div>';
-            } else {
-                el('hand-force-f').innerHTML = '<div style="font-size:38px; line-height:1;">⊗</div><div style="font-size:12px; font-weight:800; white-space:nowrap;">힘 방향 (뒤쪽)</div>';
-            }
-
             el('hint').innerText = on ? '그네가 힘 방향으로 움직입니다.' : '전원을 켜면 전류, 자기장, 힘의 방향에 따라 그네가 움직입니다.';
 
             updatePolarityVisual();
@@ -949,36 +1004,52 @@
 
         function updateArrows() {
             const d = derived;
+            const on = isPowerOn;
             
-            // 전류 I와 힘 F 화살표는 전원이 켜져 있을 때만 보임 (투명 표시 제거)
-            arrowI.setVisible(showI && isPowerOn);
-            badgeI.visible = showI && isPowerOn;
+            // 1. 메인 씬 화살표
+            arrowI.setVisible(showI && on);
+            badgeI.visible = showI && on;
             
             arrowB.setVisible(showB);
             badgeB.visible = showB;
             
-            arrowF.setVisible(showF && isPowerOn);
-            badgeF.visible = showF && isPowerOn;
+            arrowF.setVisible(showF && on);
+            badgeF.visible = showF && on;
 
-            // 전류 I
             arrowI.set(_v.set(-0.55 * d.dI, -WIRE_LEN, 0), _d.set(d.dI, 0, 0), 1.1);
             badgeI.position.set(0.82 * d.dI, -WIRE_LEN, 0);
 
-            // 자기장 B (항상 존재)
             arrowB.set(_v.set(0.27, MAG_Y - 0.65 * d.dB, 0.2), _d.set(0, d.dB, 0), 1.3);
             badgeB.position.set(0.27, MAG_Y + 0.87 * d.dB, 0.2);
 
-            // 자기력 F 
             const th = currentSwingAngle;
             const rodY = BAR_Y - WIRE_LEN * Math.cos(th);
             const rodZ = WIRE_LEN * Math.sin(th);
             const lenF = Math.min(1.3, 0.45 + 0.5 * d.F);
             arrowF.set(_v.set(-0.2, rodY, rodZ), _d.set(0, 0, d.dF), lenF);
             badgeF.position.set(-0.2, rodY, rodZ + d.dF * (lenF + 0.22));
+
+            // 2. 미니 씬 3D 손 애니메이션 및 방향 업데이트
+            if (typeof handGroup !== 'undefined') {
+                const alpha = on ? 1.0 : 0.25;
+                handArrowI.setOpacity(alpha); badgeHandI.material.opacity = alpha;
+                handArrowF.setOpacity(alpha); badgeHandF.material.opacity = alpha;
+                
+                // 오른손 법칙 조합에 따른 X,Y,Z 회전 매핑
+                let rotX = 0, rotY = 0, rotZ = 0;
+                if (d.dI > 0 && d.dB > 0) { rotX = 0; rotY = 0; rotZ = 0; }
+                if (d.dI < 0 && d.dB > 0) { rotX = 0; rotY = Math.PI; rotZ = 0; }
+                if (d.dI > 0 && d.dB < 0) { rotX = Math.PI; rotY = 0; rotZ = 0; }
+                if (d.dI < 0 && d.dB < 0) { rotX = 0; rotY = 0; rotZ = Math.PI; }
+                
+                // 애니메이션 Slerp 부드러운 전환을 위해 Quaternion 사용
+                const targetQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotX, rotY, rotZ));
+                handGroup.quaternion.slerp(targetQuat, 0.1);
+            }
         }
 
         // =====================================================
-        // 6. UI 이벤트 및 인터랙션 컨트롤
+        // 7. UI 이벤트 및 인터랙션 컨트롤
         // =====================================================
         const btnPowerToggle = el('btn-power-toggle');
         btnPowerToggle.addEventListener('click', () => {
@@ -1012,26 +1083,23 @@
             refreshUI();
         });
 
-        // 자석 방향 단일 버튼 토글
         el('btn-mag-pole').addEventListener('click', () => {
             isMagnetReversed = !isMagnetReversed;
             updateMagnetVisuals();
             refreshUI();
         });
 
-        // 전원 극성 단일 버튼 토글
         el('btn-power-polarity').addEventListener('click', () => {
             isPowerReversed = !isPowerReversed;
             refreshUI();
         });
 
-        // 벡터 화살표 표시 제어
         const chipI = el('chip-i'), chipB = el('chip-b'), chipF = el('chip-f');
         chipI.addEventListener('click', () => { showI = !showI; chipI.classList.toggle('active-i', showI); });
         chipB.addEventListener('click', () => { showB = !showB; chipB.classList.toggle('active-b', showB); });
         chipF.addEventListener('click', () => { showF = !showF; chipF.classList.toggle('active-f', showF); });
 
-        // 패널 열기/닫기 (탭 컨트롤)
+        // 패널 열기/닫기 토글
         const btnTogglePhysics = el('btn-toggle-physics');
         const physicsPanel = el('physics-panel');
         btnTogglePhysics.addEventListener('click', () => {
@@ -1044,9 +1112,19 @@
         btnToggleRighthand.addEventListener('click', () => {
             righthandPanel.classList.toggle('show');
             btnToggleRighthand.classList.toggle('active');
+
+            // 탭 오픈 시 3D 미니 뷰어 캔버스 해상도 재정렬
+            if (righthandPanel.classList.contains('show')) {
+                const hw = handContainer.clientWidth;
+                const hh = handContainer.clientHeight;
+                if(hw && hh) {
+                    handCamera.aspect = hw / hh;
+                    handCamera.updateProjectionMatrix();
+                    handRenderer.setSize(hw, hh);
+                }
+            }
         });
 
-        // 초기화 버튼
         el('btn-reset').addEventListener('click', () => {
             isPowerOn = false;
             voltage = 6.0;
@@ -1072,10 +1150,13 @@
             goView('iso');
         });
 
-        // 시점 정렬
-        el('btn-align').addEventListener('click', () => goView('iso'));
+        el('btn-align').addEventListener('click', () => {
+            goView('iso');
+            // 미니 씬 카메라도 정렬
+            handCamera.position.set(4, 3.5, 6.5);
+            handControls.target.set(0, 0, 0);
+        });
 
-        // 테마
         el('theme-toggle').addEventListener('click', () => {
             document.body.classList.toggle('dark-mode');
             const isDark = document.body.classList.contains('dark-mode');
@@ -1087,10 +1168,20 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+
+            if (righthandPanel.classList.contains('show')) {
+                const hw = handContainer.clientWidth;
+                const hh = handContainer.clientHeight;
+                if(hw && hh) {
+                    handCamera.aspect = hw / hh;
+                    handCamera.updateProjectionMatrix();
+                    handRenderer.setSize(hw, hh);
+                }
+            }
         });
 
         // =====================================================
-        // 7. 메인 렌더 애니메이션 루프
+        // 8. 메인 렌더 애니메이션 루프
         // =====================================================
         let lastAngleText = '';
 
@@ -1121,6 +1212,12 @@
 
             controls.update();
             renderer.render(scene, camera);
+
+            // 가이드 패널이 열려있을 때만 3D 손 캔버스 렌더링 최적화
+            if (righthandPanel.classList.contains('show')) {
+                handControls.update();
+                handRenderer.render(handScene, handCamera);
+            }
         }
 
         updateMagnetVisuals();
