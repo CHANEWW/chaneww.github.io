@@ -246,10 +246,10 @@
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x05050d, 0.015);
 
-        // 상단 가림을 막기 위해 수직 화각(FOV)을 50 -> 55로 넓힘
+        // 상단 가림 방지를 위해 FOV 55 적용
         const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
         
-        // 카메라 높이를 기존 y=1.8에서 y=3.2로 높여 카테고리까지 내려다보이게 설정
+        // 첨부된 스크린샷과 동일한 고각 시점 설정 (높이 y=3.2)
         camera.position.set(0, 3.2, 0);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -262,7 +262,7 @@
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         
-        // 휠/핀치 확대 축소 기능 (Zoom 범위 확장 maxDistance: 5.0 -> 12.0)
+        // 휠/핀치 확대 축소 기능
         controls.enableZoom = true;
         controls.minDistance = 0.1;
         controls.maxDistance = 12.0;
@@ -270,7 +270,7 @@
         controls.enablePan = false;
         controls.rotateSpeed = -0.4;
         
-        // 시선 회전 중심점(target)은 카드 중심 높이(1.8)를 바라보아 시선이 자연스럽게 하향 각도를 유지
+        // 시선 회전 중심점을 카드의 높이(1.8) 정면 방향으로 지정
         controls.target.set(0, 1.8, -0.001);
 
         // --- 3. 조명 설정 ---
@@ -334,33 +334,45 @@
         atmosphere.position.copy(earth.position);
         scene.add(atmosphere);
 
-        // --- 6. 3D 카드 캔버스 텍스처 생성기 ---
+        // --- 6. 정밀 정렬된 3D 카드 캔버스 텍스처 생성기 ---
         function createCardTexture(category, title, icon, colorHex) {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
             canvas.height = 300;
             const ctx = canvas.getContext('2d');
 
+            // 카드 배경
             ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
             ctx.roundRect(0, 0, 512, 300, 24);
             ctx.fill();
 
+            // 상단 카테고리 컬러 바
             ctx.fillStyle = colorHex;
             ctx.roundRect(0, 0, 512, 16, [24, 24, 0, 0]);
             ctx.fill();
 
+            // 카테고리 라벨 (좌측 상단)
             ctx.fillStyle = colorHex;
-            ctx.font = 'bold 22px "SeoulNamsanL", sans-serif';
-            ctx.fillText(`• ${category}`, 30, 60);
+            ctx.font = 'bold 22px "SeoulNamsanL", -apple-system, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(`• ${category}`, 30, 38);
 
-            ctx.font = '72px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+            // 1) 이모티콘 그림 정중앙 배치 (X=256, Y=140)
+            ctx.font = '76px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(icon, 256, 150);
+            ctx.fillText(icon, 256, 140);
 
+            // 2) 제목 글씨 정중앙 배치 (X=256, Y=235) 및 긴 제목 자동 축소
             ctx.fillStyle = '#2c3e50';
-            ctx.font = 'bold 30px "SeoulNamsanL", sans-serif';
-            ctx.fillText(title, 256, 240);
+            let fontSize = 30;
+            if (title.length > 8) fontSize = 24;
+            if (title.length > 12) fontSize = 20;
+            ctx.font = `bold ${fontSize}px "SeoulNamsanL", -apple-system, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(title, 256, 235);
 
             return new THREE.CanvasTexture(canvas);
         }
@@ -405,7 +417,7 @@
             const cardMesh = new THREE.Mesh(cardGeo, cardMat);
             cardMesh.position.set(x, baseY, z);
             
-            // Central origin (0, baseY, 0) 바라보기
+            // 중앙 원점 (0, baseY, 0)을 향해 똑바로 바라보도록 설정
             cardMesh.lookAt(0, baseY, 0);
 
             cardMesh.userData = { 
@@ -422,6 +434,17 @@
         });
 
         scene.add(cardsGroup);
+
+        // WebFont 로드 완료 시 카드 텍스처 갱신 (글꼴 엇갈림 방지)
+        if (document.fonts) {
+            document.fonts.ready.then(() => {
+                cardMeshes.forEach((mesh, idx) => {
+                    const lab = allLabs[idx];
+                    mesh.material.map = createCardTexture(lab.category, lab.title, lab.icon, lab.color);
+                    mesh.material.needsUpdate = true;
+                });
+            });
+        }
 
         // --- 8. 마우스/터치 인터랙션 및 클릭 이벤트 ---
         const raycaster = new THREE.Raycaster();
