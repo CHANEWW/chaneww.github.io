@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>플랑크 상수 측정 3D</title>
+    <style>
+        /* =========================================
+           1. CSS 변수 및 전역 설정
+           ========================================= */
+        :root {
+            box-sizing: border-box;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+            
+            /* Light Theme Colors */
+            --bg1: #dfe9ff;
+            --bg2: #f1e2ff;
+            --glass: rgba(255, 255, 255, 0.62);
+            --glass2: rgba(255, 255, 255, 0.45);
+            --line: rgba(255, 255, 255, 0.8);
+            --tx: #14161c;
+            --sub: #5b6070;
+            --acc: #0a84ff;
+            --shadow: 0 20px 50px rgba(40, 60, 120, 0.2);
+        }
+
+        :root[data-theme="dark"] {
+            /* Dark Theme Colors */
+            --bg1: #0b1226;
+            --bg2: #1d1233;
+            --glass: rgba(30, 36, 60, 0.55);
+            --glass2: rgba(255, 255, 255, 0.07);
+            --line: rgba(255, 255, 255, 0.16);
+            --tx: #f2f4fa;
+            --sub: #a3a9bd;
+            --shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+        }
+
+        html { height: 100%; }
+        
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100%;
+            font-family: -apple-system, "SF Pro Display", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+            color: var(--tx);
+            background: 
+                radial-gradient(900px 600px at 10% 0%, var(--bg1), transparent 60%),
+                radial-gradient(800px 600px at 100% 100%, var(--bg2), transparent 60%), 
+                var(--bg1);
+            background-attachment: fixed;
+        }
+
+        /* =========================================
+           2. 레이아웃 및 캔버스
+           ========================================= */
+        #stage {
+            position: fixed;
+            inset: 0;
+            touch-action: none;
+        }
+
+        #stage canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+
+        /* Glassmorphism 공통 클래스 */
+        .glass {
+            background: var(--glass);
+            backdrop-filter: blur(30px) saturate(1.6);
+            -webkit-backdrop-filter: blur(30px) saturate(1.6);
+            border: 1px solid var(--line);
+            border-radius: 26px;
+            box-shadow: var(--shadow);
+        }
+
+        /* =========================================
+           3. UI 컴포넌트
+           ========================================= */
+        .title {
+            position: absolute;
+            left: 16px;
+            top: calc(16px + env(safe-area-inset-top, 0px));
+            padding: 12px 18px;
+            font-weight: 700;
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        .title small {
+            display: block;
+            color: var(--sub);
+            font-weight: 500;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .panel {
+            position: fixed;
+            right: 16px;
+            top: calc(16px + env(safe-area-inset-top, 0px));
+            bottom: 16px;
+            width: 350px;
+            overflow-y: auto;
+            padding: 18px;
+        }
+
+        @media (max-width: 820px) {
+            #stage {
+                position: relative;
+                height: 50vh;
+            }
+            .panel {
+                position: static;
+                width: auto;
+                margin: 12px;
+            }
+        }
+
+        .head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .head b { font-size: 17px; }
+
+        .ib {
+            border: 1px solid var(--line);
+            background: var(--glass2);
+            color: var(--tx);
+            border-radius: 999px;
+            font-size: 15px;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        /* 데이터 카드 */
+        .cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .card {
+            background: var(--glass2);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 10px 12px;
+        }
+        .card span {
+            font-size: 11px;
+            color: var(--sub);
+            font-weight: 600;
+            display: block;
+        }
+        .card b {
+            font-size: 20px;
+            font-variant-numeric: tabular-nums;
+        }
+        .card.hi {
+            grid-column: span 2;
+            background: rgba(48, 209, 88, 0.14);
+        }
+        .card.hi b {
+            font-size: 34px;
+            color: #1fa84a;
+            font-family: ui-monospace, Menlo, monospace;
+        }
+        :root[data-theme="dark"] .card.hi b { color: #7dffb0; }
+
+        /* 컨트롤러 요소 */
+        .lbl {
+            font-size: 12px;
+            color: var(--sub);
+            font-weight: 700;
+            margin: 14px 0 8px;
+        }
+
+        .btn {
+            width: 100%;
+            border: 0;
+            border-radius: 999px;
+            padding: 13px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            background: var(--acc);
+            color: #fff;
+        }
+        .btn.off { background: #ff453a; }
+        .btn.on { background: #30d158; color: #04210d; }
+        .btn.ghost {
+            background: var(--glass2);
+            color: var(--tx);
+            border: 1px solid var(--line);
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .colors { display: flex; gap: 8px; }
+        .cbtn {
+            flex: 1;
+            border: 1px solid var(--line);
+            background: var(--glass2);
+            color: var(--tx);
+            border-radius: 999px;
+            padding: 11px 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .cbtn i { width: 12px; height: 12px; border-radius: 50%; }
+        .cbtn.on { background: var(--tx); color: var(--bg1); }
+
+        .row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .row b {
+            font-size: 24px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        input[type=range] {
+            width: 100%;
+            height: 34px;
+            accent-color: var(--acc);
+        }
+
+        #msg {
+            font-size: 12px;
+            color: var(--sub);
+            min-height: 16px;
+            margin: 8px 2px;
+        }
+
+        /* 테이블 및 기타 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+        }
+        th, td {
+            padding: 7px 2px;
+            text-align: center;
+            border-bottom: 1px solid var(--line);
+        }
+        th { color: var(--sub); font-size: 11px; }
+
+        .two {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        details {
+            font-size: 12.5px;
+            line-height: 1.7;
+            color: var(--sub);
+            margin-top: 12px;
+        }
+        summary {
+            cursor: pointer;
+            color: var(--tx);
+            font-weight: 700;
+            font-size: 14px;
+        }
+        details b { color: var(--tx); }
+    </style>
+</head>
+<body>
+    <div id="stage">
+        <div class="title glass">
+            플랑크 상수 측정 3D
+            <small>드래그: 회전 · 휠/핀치: 확대</small>
+        </div>
+    </div>
+    
+    <div class="panel glass">
+        <div class="head">
+            <b>실험 제어</b>
+            <button class="ib" id="theme">🌙</button>
+        </div>
+        
+        <div class="cards">
+            <div class="card">
+                <span>전원 상태</span>
+                <b id="cOn">OFF</b>
+            </div>
+            <div class="card">
+                <span>전류 (I)</span>
+                <b id="cI">0.000 mA</b>
+            </div>
+            <div class="card hi">
+                <span>전압센서 · LED 양단 전압</span>
+                <b id="cV">0.0 V</b>
+            </div>
+        </div>
+        
+        <button class="btn off" id="pw">⚡ 전원 켜기 (ON)</button>
+        
+        <div class="lbl">공급 전압 조절</div>
+        <div class="row">
+            <span style="color:var(--sub); font-size:13px">0 ~ 5 V</span>
+            <b id="supB">0.0 V</b>
+        </div>
+        <input type="range" id="sup" min="0" max="5" step="0.1" value="0" aria-label="공급 전압">
+        
+        <div class="lbl">LED 색 선택</div>
+        <div class="colors" id="colors"></div>
+        
+        <div class="lbl">측정</div>
+        <button class="btn" id="rec">지금 전압 기록하기</button>
+        <div id="msg">전원을 켜고 전압을 천천히 올리며 LED가 막 켜지는 순간을 찾아보세요.</div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>LED</th>
+                    <th>λ(nm)</th>
+                    <th>V(V)</th>
+                    <th>h (×10⁻³⁴ J·s)</th>
+                </tr>
+            </thead>
+            <tbody id="tb"></tbody>
+        </table>
+        
+        <div class="row" style="margin-top:10px">
+            <span style="font-size:12px; color:var(--sub)">평균 h · 오차</span>
+            <b style="font-size:14px" id="avg">-</b>
+        </div>
+        
+        <div class="two">
+            <button class="btn ghost" id="reset">🔄 초기화</button>
+            <button class="btn ghost" id="align">📷 시점정렬</button>
+        </div>
+        
+        <details>
+            <summary>📘 원리와 과학적 검증 노트</summary>
+            <p><b>h = eVλ/c</b> : 전자가 얻은 에너지 eV가 광자 에너지 hc/λ와 같다고 보면 문턱 전압으로 h를 구할 수 있습니다. 파장이 짧은 파랑일수록 문턱 전압이 높습니다.</p>
+            <p><b>회로</b> : 1.2 kΩ 저항과 LED가 직렬, 전압센서(노란 선)가 LED와 병렬입니다. 전압센서는 LED 양단 전압을 직접 잽니다.</p>
+            <p><b>모델</b> : 다이오드 지수 특성(n=2)과 전원 = V<sub>LED</sub> + IR을 풀어 계산하며, 전류 약 20 μA부터 켜진 것으로 봅니다. 문턱 전압은 빨강 1.85 V, 초록 2.20 V, 파랑 2.50 V로 실제 LED 범위에 맞췄습니다.</p>
+            <p><b>오차</b> : 눈으로 켜짐을 판단하는 기준과 내부 손실 때문에 h는 참값(6.63×10⁻³⁴)보다 5~10 % 작게 나오는 경우가 많습니다.</p>
+        </details>
+    </div>
+
+    <!-- Three.js 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        /* =========================================
+           1. 전역 변수 및 물리 상수 설정
+           ========================================= */
+        const E = 1.602e-19;    // 기본 전하량
+        const C = 2.998e8;      // 빛의 속도
+        const H0 = 6.626e-34;   // 플랑크 상수 참값
+        const R = 1200;         // 직렬 저항 (1.2kΩ)
+        const NVT = 0.0517;     // 다이오드 열전압 관련 상수 (n=2 기준)
+        const ION = 20e-6;      // LED 켜짐 기준 전류 (20 μA)
+        
+        const LEDS = {
+            red: { n: "빨강", lam: 630, von: 1.85, c: "#ff3b30" },
+            green: { n: "초록", lam: 525, von: 2.2, c: "#30d158" },
+            blue: { n: "파랑", lam: 465, von: 2.5, c: "#0a84ff" }
+        };
+        
+        let cur = "red";
+        let on = false;
+        let rec = {};
+        
+        const $ = id => document.getElementById(id);
+        const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+        const root = document.documentElement;
+        let dark = matchMedia("(prefers-color-scheme: dark)").matches;
+
+        /* =========================================
+           2. Three.js 기본 씬 설정
+           ========================================= */
+        const stage = $("stage");
+        const ren = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        ren.setPixelRatio(Math.min(devicePixelRatio, 2));
+        stage.appendChild(ren.domElement);
+        const cv = ren.domElement;
+        
+        const scene = new THREE.Scene();
+        const cam = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+        
+        // 조명 설정
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x8890aa, 0.95));
+        const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+        dl.position.set(5, 10, 6);
+        scene.add(dl);
+
+        /* =========================================
+           3. 3D 오브젝트 유틸리티 함수
+           ========================================= */
+        const std = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.45, metalness: 0.1 }, o));
+        const add = (g, m, x, y, z) => {
+            const o = new THREE.Mesh(g, m);
+            o.position.set(x, y, z);
+            scene.add(o);
+            return o;
+        };
+        const V3 = (p) => new THREE.Vector3(p[0], p[1], p[2]);
+
+        // 도선 생성 함수
+        function wire(pts, col) {
+            const m = std(col, { roughness: 0.3 });
+            const V = pts.map(V3);
+            V.forEach((p, i) => {
+                add(new THREE.SphereGeometry(0.075, 12, 8), m, p.x, p.y, p.z); // 조인트 구
+                if (i) {
+                    const d = p.clone().sub(V[i - 1]);
+                    const L = d.length();
+                    const c = add(new THREE.CylinderGeometry(0.075, 0.075, L, 12), m, 0, 0, 0); // 선 실린더
+                    c.position.copy(V[i - 1]).addScaledVector(d, 0.5);
+                    c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+                }
+            });
+        }
+
+        // 스크린(Canvas Texture) 생성 함수
+        function screen(w, h, pw, ph, x, y, z) {
+            const c = document.createElement("canvas");
+            c.width = w;
+            c.height = h;
+            const t = new THREE.CanvasTexture(c);
+            t.anisotropy = 4;
+            add(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: t }), x, y, z);
+            return { g: c.getContext("2d"), t, w, h };
+        }
+
+        // 텍스트 라벨 생성 함수
+        function label(txt, x, y, z) {
+            const c = document.createElement("canvas");
+            c.width = 512;
+            c.height = 128;
+            const g = c.getContext("2d");
+            g.fillStyle = "rgba(20,24,40,.78)";
+            g.beginPath();
+            if (g.roundRect) {
+                g.roundRect(16, 24, 480, 84, 42);
+            } else {
+                g.rect(16, 24, 480, 84);
+            }
+            g.fill();
+            g.font = '700 48px -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+            g.textAlign = "center";
+            g.fillStyle = "#fff";
+            g.fillText(txt, 256, 82);
+            
+            const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
+            s.position.set(x, y, z);
+            s.scale.set(3.2, 0.8, 1);
+            scene.add(s);
+        }
+
+        /* =========================================
+           4. 3D 실험 환경 구성 (바닥 및 장비)
+           ========================================= */
+        const ground = add(new THREE.BoxGeometry(16, 0.3, 9.5), std(0xe9eefb, { roughness: 0.2, metalness: 0.05 }), 0, -0.15, 0.6);
+        
+        // 4.1 전원장치
+        add(new THREE.BoxGeometry(3.2, 1.6, 2.4), std(0xcfd5e6), -5, 0.8, 0);
+        const sSup = screen(512, 256, 2.6, 1.3, -5, 0.95, 1.21);
+        add(new THREE.SphereGeometry(0.14, 16, 12), std(0xff453a), -3.4, 0.3, -0.6); // 빨간 단자
+        add(new THREE.SphereGeometry(0.14, 16, 12), std(0x222633), -3.4, 0.3, 0.6);  // 검은 단자
+        label("전원장치", -5, 2.4, 0);
+        
+        // 4.2 저항 1.2kΩ (갈-빨-빨-금)
+        const rz = -2.6, ry = 0.5;
+        add(new THREE.CylinderGeometry(0.3, 0.3, 2, 24), std(0xd9bd8c), -0.5, ry, rz).rotation.z = Math.PI / 2;
+        [
+            [-1.1, 0x6b3a1e], // 갈색
+            [-0.8, 0xd32f2f], // 빨간색
+            [-0.5, 0xd32f2f], // 빨간색
+            [ 0.2, 0xd4af37]  // 금색
+        ].forEach(b => {
+            add(new THREE.CylinderGeometry(0.315, 0.315, 0.12, 24), std(b[1]), b[0], ry, rz).rotation.z = Math.PI / 2;
+        });
+        add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), std(0xb8bcc8), -1.9, ry, rz).rotation.z = Math.PI / 2;
+        add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), std(0xb8bcc8), 0.9, ry, rz).rotation.z = Math.PI / 2;
+        label("저항 1.2 kΩ", -0.5, 1.5, rz);
+        
+        // 4.3 LED
+        const lx = 5;
+        add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), std(0xb8bcc8), lx, 0.6, -0.35); // 리드선
+        add(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), std(0xb8bcc8), lx, 0.6, 0.35);
+        add(new THREE.CylinderGeometry(0.58, 0.58, 0.14, 28), std(0xdddddd, { transparent: true, opacity: 0.85 }), lx, 1.05, 0); // 베이스
+        
+        const ledMat = std(0xff3b30, { transparent: true, opacity: 0.82, emissive: 0xff3b30, emissiveIntensity: 0.05, roughness: 0.15 });
+        add(new THREE.CylinderGeometry(0.45, 0.45, 0.8, 28), ledMat, lx, 1.5, 0);
+        add(new THREE.SphereGeometry(0.45, 28, 16), ledMat, lx, 1.9, 0); // 전구 머리
+        
+        const ledLight = new THREE.PointLight(0xff3b30, 0, 9);
+        ledLight.position.set(lx, 1.8, 0);
+        scene.add(ledLight);
+        
+        // LED 발광 효과 (Halo)
+        const hc = document.createElement("canvas");
+        hc.width = hc.height = 128;
+        const hg = hc.getContext("2d");
+        const gr = hg.createRadialGradient(64, 64, 0, 64, 64, 64);
+        gr.addColorStop(0, "rgba(255,255,255,1)");
+        gr.addColorStop(0.4, "rgba(255,255,255,.5)");
+        gr.addColorStop(1, "rgba(255,255,255,0)");
+        hg.fillStyle = gr;
+        hg.fillRect(0, 0, 128, 128);
+        const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(hc), color: 0xff3b30, transparent: true, opacity: 0, depthTest: false }));
+        halo.position.set(lx, 1.7, 0);
+        halo.scale.set(5, 5, 1);
+        scene.add(halo);
+        label("LED", lx, 3.1, 0);
+        
+        // 4.4 전압센서
+        add(new THREE.BoxGeometry(3.6, 1.6, 2.2), std(0x2b3042), 1.5, 0.8, 2.2);
+        const sV = screen(512, 192, 3.2, 1.2, 1.5, 0.85, 3.31);
+        add(new THREE.SphereGeometry(0.14, 16, 12), std(0xffd60a), 3.3, 0.5, 1.6);
+        add(new THREE.SphereGeometry(0.14, 16, 12), std(0x222633), 3.3, 0.5, 2.8);
+        label("전압센서 (LED와 병렬)", 1.5, 2.3, 2.2);
+        
+        // 4.5 회로 도선 연결
+        wire([[-3.4, 0.3, -0.6], [-3, 0.3, -0.6], [-3, 0.5, rz], [-2.3, ry, rz]], 0xff453a); // 전원(+) ~ 저항
+        wire([[1.2, ry, rz], [lx, ry, rz], [lx, ry, -0.35]], 0xff453a); // 저항 ~ LED(+)
+        wire([[lx, 0.25, 0.35], [lx, 0.2, 0.35], [-3, 0.2, 0.35], [-3, 0.2, 0.6], [-3.4, 0.3, 0.6]], 0x5b6483); // LED(-) ~ 전원(-)
+        wire([[3.3, 0.5, 1.6], [4.2, 0.5, 1.6], [4.2, 0.5, -0.35], [lx, 0.5, -0.35]], 0xffd60a); // 전압센서(+) ~ LED(+) 병렬
+        wire([[3.3, 0.5, 2.8], [3.9, 0.5, 2.8], [3.9, 0.2, 2.8], [3.9, 0.2, 0.35]], 0xffd60a); // 전압센서(-) ~ LED(-) 병렬
+
+        /* =========================================
+           5. 카메라 조작 (드래그 회전 / 핀치 줌)
+           ========================================= */
+        const TG = new THREE.Vector3(0, 0.9, 0.3);
+        let az = 0.25, pol = 0.95, rad = 16;
+        let dragged = false;
+        
+        const fit = () => {
+            const a = cam.aspect;
+            return a > 1.5 ? 15 : 15 * Math.min(1.9, 1.5 / a);
+        };
+        
+        function size() {
+            const w = stage.clientWidth, h = stage.clientHeight;
+            ren.setSize(w, h, false);
+            cam.aspect = w / h;
+            cam.updateProjectionMatrix();
+            if (!dragged) rad = fit();
+        }
+        new ResizeObserver(size).observe(stage);
+        
+        const ptr = new Map();
+        const pinch = () => {
+            const a = [...ptr.values()];
+            return Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]);
+        };
+        let pd = 0;
+        
+        cv.addEventListener("pointerdown", e => {
+            cv.setPointerCapture(e.pointerId);
+            ptr.set(e.pointerId, [e.clientX, e.clientY]);
+            if (ptr.size == 2) pd = pinch();
+        });
+        cv.addEventListener("pointermove", e => {
+            const o = ptr.get(e.pointerId);
+            if (!o) return;
+            ptr.set(e.pointerId, [e.clientX, e.clientY]);
+            dragged = true;
+            if (ptr.size == 1) {
+                az -= (e.clientX - o[0]) * 0.008;
+                pol = clamp(pol - (e.clientY - o[1]) * 0.008, 0.25, 1.5);
+            } else if (ptr.size == 2) {
+                const d = pinch();
+                rad = clamp(rad * pd / d, 7, 28);
+                pd = d;
+            }
+        });
+        ["pointerup", "pointercancel"].forEach(t => cv.addEventListener(t, e => ptr.delete(e.pointerId)));
+        cv.addEventListener("wheel", e => {
+            e.preventDefault();
+            dragged = true;
+            rad = clamp(rad * (1 + e.deltaY * 0.001), 7, 28);
+        }, { passive: false });
+        
+        $("align").onclick = () => {
+            az = 0.25;
+            pol = 0.95;
+            dragged = false;
+            rad = fit();
+        };
+        
+        (function loop() {
+            cam.position.set(
+                TG.x + rad * Math.sin(pol) * Math.sin(az),
+                TG.y + rad * Math.cos(pol),
+                TG.z + rad * Math.sin(pol) * Math.cos(az)
+            );
+            cam.lookAt(TG);
+            ren.render(scene, cam);
+            requestAnimationFrame(loop);
+        })();
+
+        /* =========================================
+           6. 물리 및 회로 시뮬레이션 로직
+           ========================================= */
+        function solve(S, von) {
+            let lo = 0, hi = S;
+            for (let i = 0; i < 60; i++) {
+                const m = (lo + hi) / 2;
+                if (ION * Math.exp((m - von) / NVT) > (S - m) / R) {
+                    hi = m;
+                } else {
+                    lo = m;
+                }
+            }
+            const v = (lo + hi) / 2;
+            return { v, i: (S - v) / R };
+        }
+
+        // 전원장치 화면 그리기
+        function drawSup() {
+            const g = sSup.g, w = sSup.w, h = sSup.h;
+            g.fillStyle = "#0b1020";
+            g.fillRect(0, 0, w, h);
+            g.textAlign = "center";
+            g.fillStyle = on ? "#7de3ff" : "#3a4260";
+            g.font = "700 130px ui-monospace, Menlo, monospace";
+            g.fillText((+$("sup").value).toFixed(1), w * 0.4, h * 0.62);
+            g.font = "700 48px sans-serif";
+            g.fillText("V", w * 0.88, h * 0.62);
+            g.fillStyle = on ? "#30d158" : "#ff453a";
+            g.font = "700 38px sans-serif";
+            g.fillText(on ? "ON" : "OFF", w / 2, h * 0.93);
+            sSup.t.needsUpdate = true;
+        }
+
+        // 전압센서 화면 그리기
+        function drawV(v) {
+            const g = sV.g, w = sV.w, h = sV.h;
+            g.fillStyle = "#0b1020";
+            g.fillRect(0, 0, w, h);
+            g.textAlign = "center";
+            g.fillStyle = "#7dffb0";
+            g.font = "700 170px ui-monospace, Menlo, monospace";
+            g.fillText(v.toFixed(1), w * 0.42, h * 0.78);
+            g.font = "700 56px sans-serif";
+            g.fillText("V", w * 0.9, h * 0.78);
+            sV.t.needsUpdate = true;
+        }
+
+        function update() {
+            const L = LEDS[cur];
+            const S = on ? +$("sup").value : 0;
+            const r = solve(S, L.von);
+            const lit = r.i >= ION;
+            const b = lit ? Math.min(1, Math.log10(r.i / ION) / 2.7) : 0;
+            
+            // LED 시각적 업데이트
+            ledMat.color.set(L.c);
+            ledMat.emissive.set(L.c);
+            ledMat.emissiveIntensity = 0.05 + b * 2.4;
+            ledLight.color.set(L.c);
+            ledLight.intensity = b * 3;
+            halo.material.color.set(L.c);
+            halo.material.opacity = b * 0.9;
+            
+            // UI 업데이트
+            $("supB").textContent = (+$("sup").value).toFixed(1) + " V";
+            $("cOn").textContent = on ? "ON" : "OFF";
+            $("cI").textContent = (r.i * 1000).toFixed(3) + " mA";
+            $("cV").textContent = r.v.toFixed(1) + " V";
+            
+            const p = $("pw");
+            p.textContent = on ? "⏻ 전원 끄기 (OFF)" : "⚡ 전원 켜기 (ON)";
+            p.className = "btn " + (on ? "on" : "off");
+            
+            drawSup();
+            drawV(r.v);
+            return { r, lit };
+        }
+
+        /* =========================================
+           7. UI 이벤트 및 관리
+           ========================================= */
+        function colors() {
+            $("colors").innerHTML = "";
+            for (const k in LEDS) {
+                const b = document.createElement("button");
+                b.className = "cbtn" + (k === cur ? " on" : "");
+                b.innerHTML = '<i style="background:' + LEDS[k].c + '"></i>' + LEDS[k].n;
+                b.onclick = () => {
+                    cur = k;
+                    colors();
+                    update();
+                };
+                $("colors").appendChild(b);
+            }
+        }
+
+        function table() {
+            let rows = "", hs = [];
+            for (const k in LEDS) {
+                const L = LEDS[k];
+                const v = rec[k];
+                if (v == null) {
+                    rows += '<tr><td style="color:' + L.c + '">● ' + L.n + '</td><td>' + L.lam + '</td><td>-</td><td>-</td></tr>';
+                    continue;
+                }
+                const h = E * v * L.lam * 1e-9 / C;
+                hs.push(h);
+                rows += '<tr><td style="color:' + L.c + '">● ' + L.n + '</td><td>' + L.lam + '</td><td>' + v.toFixed(1) + '</td><td><b>' + (h * 1e34).toFixed(2) + '</b></td></tr>';
+            }
+            $("tb").innerHTML = rows;
+            if (hs.length) {
+                const a = hs.reduce((x, y) => x + y) / hs.length;
+                $("avg").textContent = (a * 1e34).toFixed(2) + " · " + (Math.abs(a - H0) / H0 * 100).toFixed(1) + " %";
+            } else {
+                $("avg").textContent = "-";
+            }
+        }
+
+        function theme() {
+            root.dataset.theme = dark ? "dark" : "light";
+            $("theme").textContent = dark ? "☀️" : "🌙";
+            ground.material.color.set(dark ? 0x1a2036 : 0xe9eefb);
+        }
+
+        $("sup").addEventListener("input", () => {
+            $("msg").textContent = "";
+            update();
+        });
+        
+        $("pw").onclick = () => {
+            on = !on;
+            update();
+        };
+        
+        $("theme").onclick = () => {
+            dark = !dark;
+            theme();
+        };
+        
+        $("rec").onclick = () => {
+            const { r, lit } = update();
+            if (!on) {
+                $("msg").textContent = "전원이 꺼져 있어요. 먼저 전원을 켜 주세요.";
+                return;
+            }
+            if (!lit) {
+                $("msg").textContent = "아직 LED가 켜지지 않았어요. 전압을 조금 더 올려 보세요.";
+                return;
+            }
+            rec[cur] = Math.round(r.v * 10) / 10;
+            $("msg").textContent = LEDS[cur].n + " LED 점등 전압 " + rec[cur].toFixed(1) + " V 기록! 막 켜진 순간의 값이 문턱 전압이에요.";
+            table();
+        };
+        
+        $("reset").onclick = () => {
+            on = false;
+            rec = {};
+            $("sup").value = 0;
+            cur = "red";
+            $("msg").textContent = "";
+            colors();
+            table();
+            update();
+        };
+
+        // 초기화 실행
+        theme();
+        colors();
+        table();
+        update();
+        size();
+    </script>
+</body>
+</html>
