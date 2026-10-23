@@ -99,6 +99,7 @@
         .bottom-control-bar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; padding: 6px; border-radius: 30px; z-index: 10; }
         .control-tab-btn { padding: 10px 18px; border: none; background: transparent; color: var(--text-color); font-size: 13px; font-weight: bold; border-radius: 20px; cursor: pointer; transition: 0.2s; }
         .control-tab-btn:hover { background: rgba(0,0,0,0.05); }
+        .control-tab-btn.active { background: #007aff; color: #fff; }
     </style>
 </head>
 <body>
@@ -208,30 +209,31 @@
         addMesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1), new THREE.MeshStandardMaterial({ color: 0xff3b30 }), -2.5, 0.85, -0.4); 
         addMesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1), new THREE.MeshStandardMaterial({ color: 0x1c1c1e }), -2.5, 0.85, 0.4);  
 
-        // (2) 1.2k 저항 (부피 축소 및 갈,적,적,금 띠 텍스처 적용)
+        // (2) 1.2kΩ 저항: 갈색-빨강-빨강-금색 (1,2,x100, ±5%)
+        // 원기둥 UV는 v축이 길이 방향이므로, 캔버스에 가로줄(띠)을 그려야 고리 모양 색띠가 됨
         function createResistorTexture() {
-            const cvs = document.createElement('canvas'); cvs.width = 256; cvs.height = 128;
+            const cvs = document.createElement('canvas'); cvs.width = 128; cvs.height = 512;
             const ctx = cvs.getContext('2d');
-            ctx.fillStyle = '#d2b48c'; ctx.fillRect(0,0,256,128); // 베이지 바탕
-            ctx.fillStyle = '#8b4513'; ctx.fillRect(40,0,24,128); // 갈 (1)
-            ctx.fillStyle = '#ff0000'; ctx.fillRect(90,0,24,128); // 적 (2)
-            ctx.fillStyle = '#ff0000'; ctx.fillRect(140,0,24,128); // 적 (x100)
-            ctx.fillStyle = '#ffd700'; ctx.fillRect(200,0,16,128); // 금 (오차 5%)
+            ctx.fillStyle = '#e3c99a'; ctx.fillRect(0, 0, 128, 512);   // 베이지 바탕
+            ctx.fillStyle = '#7b3f00'; ctx.fillRect(0, 70, 128, 36);   // 갈색 (1)
+            ctx.fillStyle = '#e02020'; ctx.fillRect(0, 126, 128, 36);  // 빨강 (2)
+            ctx.fillStyle = '#e02020'; ctx.fillRect(0, 182, 128, 36);  // 빨강 (x100)
+            ctx.fillStyle = '#d4af37'; ctx.fillRect(0, 400, 128, 36);  // 금색 (±5%)
             return new THREE.CanvasTexture(cvs);
         }
         const resMat = new THREE.MeshStandardMaterial({ map: createResistorTexture(), roughness: 0.9 });
-        const resistor = addMesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 24), resMat, 0, 0.2, -1.2);
+        const resistor = addMesh(new THREE.CylinderGeometry(0.06, 0.06, 0.42, 24), resMat, 0, 0.2, -1.2);
         resistor.rotation.z = Math.PI / 2;
         addMesh(new THREE.CylinderGeometry(0.015, 0.015, 1.6, 8), new THREE.MeshStandardMaterial({ color: 0x999999, metalness:0.8 }), 0, 0.2, -1.2).rotation.z = Math.PI/2; 
 
-        // (3) LED (우측 이동)
+        // (3) LED (우측) - 리드선 하단 끝을 전선과 연결
         const ledGroup = new THREE.Group();
         ledGroup.position.set(3.5, 0.4, 0);
         circuitGroup.add(ledGroup);
 
         const ledHeadMat = new THREE.MeshPhysicalMaterial({
-            color: ledParams.red.color, transmission: 0.9, opacity: 1, transparent: true,
-            roughness: 0.1, emissive: ledParams.red.color, emissiveIntensity: 0
+            color: ledParams.red.color, opacity: 0.7, transparent: true,
+            roughness: 0.15, emissive: ledParams.red.color, emissiveIntensity: 0
         });
         const ledHead = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 32), ledHeadMat);
         const ledDome = new THREE.Mesh(new THREE.SphereGeometry(0.2, 32, 16, 0, Math.PI*2, 0, Math.PI/2), ledHeadMat);
@@ -241,12 +243,40 @@
         ledGroup.add(ledHead);
         
         const ledLight = new THREE.PointLight(ledParams.red.color, 0, 6.0);
-        ledLight.position.y = 0.4;
+        ledLight.position.y = 0.5;
         ledGroup.add(ledLight);
 
+        // 발광 후광(글로우)
+        function createGlowTexture() {
+            const c = document.createElement('canvas'); c.width = c.height = 128;
+            const g = c.getContext('2d');
+            const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(0.3, 'rgba(255,255,255,0.45)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+            return new THREE.CanvasTexture(c);
+        }
+        const glowMat = new THREE.SpriteMaterial({
+            map: createGlowTexture(), color: ledParams.red.color, transparent: true,
+            opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false
+        });
+        const ledGlow = new THREE.Sprite(glowMat);
+        ledGlow.position.y = 0.5;
+        ledGroup.add(ledGlow);
+
         const metalMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.2 });
-        ledGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5), metalMat)).position.set(-0.08, -0.1, 0); // Anode
-        ledGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4), metalMat)).position.set(0.08, -0.15, 0); // Cathode
+        // 리드선 위쪽은 LED 머리 바닥(local y=0.15)에 닿고, 아래쪽은 전선 접속점까지 연장
+        const anode = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.43), metalMat);
+        anode.position.set(-0.08, -0.065, 0); ledGroup.add(anode);   // 월드 x=3.42, 바닥 y=0.12
+        const cathode = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.37), metalMat);
+        cathode.position.set(0.08, -0.035, 0); ledGroup.add(cathode); // 월드 x=3.58, 바닥 y=0.18
+
+        // LED 리드선 접속점 (월드 좌표)
+        const ANODE_A = [3.42, 0.16, 0];   // 저항 쪽 전선
+        const ANODE_B = [3.42, 0.26, 0];   // 전압센서 + 전선
+        const CATH_A  = [3.58, 0.22, 0];   // 전원 - 전선
+        const CATH_B  = [3.58, 0.32, 0];   // 전압센서 - 전선
 
         // (4) 전압센서 (3D 멀티미터 장비)
         const meterGroup = new THREE.Group();
@@ -272,34 +302,49 @@
         }
         drawMeter3D('0.0');
 
-        // (5) 회로 도선 연결 (LED 위치에 맞춰 정확한 연결)
+        // (5) 회로 도선 연결 (끝점에 작은 접속 단자를 달아 LED 리드선과 확실히 연결)
         function createWire(pts, color) {
             const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(...p)));
-            const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.015, 8, false), new THREE.MeshStandardMaterial({ color: color, roughness:0.5 }));
+            const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.018, 8, false), new THREE.MeshStandardMaterial({ color: color, roughness:0.5 }));
             circuitGroup.add(tube);
+            return curve;
+        }
+        function addJoint(p, color) {
+            const j = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 12), new THREE.MeshStandardMaterial({ color: color, metalness: 0.3, roughness: 0.4 }));
+            j.position.set(...p);
+            circuitGroup.add(j);
         }
         
-        createWire([[-2.5, 0.9, -0.4], [-1.5, 0.2, -1.2], [-0.8, 0.2, -1.2]], 0xff3b30);
-        createWire([[0.8, 0.2, -1.2], [2.0, 0.2, -0.5], [3.42, 0.3, 0]], 0xff3b30);
-        createWire([[3.58, 0.25, 0], [1.5, 0.1, 0.8], [-2.5, 0.9, 0.4]], 0x1c1c1e);
+        const wirePsuToRes = createWire([[-2.5, 0.9, -0.4], [-1.5, 0.2, -1.2], [-0.8, 0.2, -1.2]], 0xff3b30);
+        const wireResToLed = createWire([[0.8, 0.2, -1.2], [2.0, 0.2, -0.5], ANODE_A], 0xff3b30);
+        const wireLedToPsu = createWire([CATH_A, [1.5, 0.1, 0.8], [-2.5, 0.9, 0.4]], 0x1c1c1e);
         
-        createWire([[0.2, 0.3, 1.4], [1.0, 0.1, 1.0], [3.42, 0.3, 0]], 0xff3b30); 
-        createWire([[0.8, 0.3, 1.4], [1.5, 0.1, 0.5], [3.58, 0.25, 0]], 0x1c1c1e); 
+        createWire([[0.2, 0.3, 1.4], [1.0, 0.1, 1.0], ANODE_B], 0xff3b30); 
+        createWire([[0.8, 0.3, 1.4], [1.5, 0.1, 0.5], CATH_B], 0x1c1c1e); 
+        addJoint(ANODE_A, 0xff3b30); addJoint(ANODE_B, 0xff3b30);
+        addJoint(CATH_A, 0x1c1c1e);  addJoint(CATH_B, 0x1c1c1e);
 
-        // --- 4. 자유 전자 흐름 파티클 ---
-        const electronCurve = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(-2.5, 0.9, 0.4), new THREE.Vector3(1.5, 0.1, 0.8), new THREE.Vector3(3.58, 0.25, 0),
-            new THREE.Vector3(3.42, 0.3, 0), new THREE.Vector3(2.0, 0.2, -0.5), new THREE.Vector3(0.8, 0.2, -1.2),
-            new THREE.Vector3(-0.8, 0.2, -1.2), new THREE.Vector3(-1.5, 0.2, -1.2), new THREE.Vector3(-2.5, 0.9, -0.4)
-        ]);
+        // --- 4. 자유 전자 흐름 파티클 (전원 - → LED 음극 → LED 양극 → 저항 → 전원 +) ---
+        const pathPts = [];
+        const pushCurve = (curve, reverse) => {
+            const pts = curve.getPoints(40);
+            if (reverse) pts.reverse();
+            pts.forEach(p => pathPts.push(p));
+        };
+        pushCurve(wireLedToPsu, true);                              // 전원(-) → LED 음극
+        pathPts.push(new THREE.Vector3(3.5, 0.62, 0));              // LED 내부 통과
+        pushCurve(wireResToLed, true);                              // LED 양극 → 저항
+        for (let i = 1; i <= 10; i++) pathPts.push(new THREE.Vector3(0.8 - 1.6 * i / 10, 0.2, -1.2)); // 저항 통과
+        pushCurve(wirePsuToRes, true);                              // 저항 → 전원(+)
+        const electronCurve = new THREE.CatmullRomCurve3(pathPts);
         const electrons = [];
-        const eGeo = new THREE.SphereGeometry(0.025, 8, 8);
+        const eGeo = new THREE.SphereGeometry(0.045, 10, 10);
         const eMat = new THREE.MeshBasicMaterial({ color: 0x007aff });
-        for(let i=0; i<30; i++) {
+        for(let i=0; i<36; i++) {
             const mesh = new THREE.Mesh(eGeo, eMat);
             mesh.visible = false;
             circuitGroup.add(mesh);
-            electrons.push({ mesh: mesh, progress: i / 30 });
+            electrons.push({ mesh: mesh, progress: i / 36 });
         }
 
         // --- 5. 이벤트 핸들러 ---
@@ -311,14 +356,9 @@
 
         btnToggleElectron.addEventListener('click', () => {
             showElectrons = !showElectrons;
-            if (showElectrons) {
-                btnToggleElectron.style.color = '#007aff';
-                btnToggleElectron.innerText = '⚡ 전자 흐름 끄기';
-            } else {
-                btnToggleElectron.style.color = 'var(--text-color)';
-                btnToggleElectron.innerText = '⚡ 전자 흐름 보기';
-                electrons.forEach(e => e.mesh.visible = false);
-            }
+            btnToggleElectron.classList.toggle('active', showElectrons);
+            btnToggleElectron.innerText = showElectrons ? '⚡ 전자 흐름 숨기기' : '⚡ 전자 흐름 보기';
+            if (!showElectrons) electrons.forEach(e => e.mesh.visible = false);
         });
 
         sldVoltage.addEventListener('input', (e) => {
@@ -337,6 +377,7 @@
                 ledHeadMat.color.setHex(hexColor);
                 ledHeadMat.emissive.setHex(hexColor);
                 ledLight.color.setHex(hexColor);
+                glowMat.color.setHex(hexColor);
                 uiVoltMeter.style.color = ledParams[currentLed].hex;
             });
         });
@@ -385,22 +426,24 @@
                 drawMeter3D(voltStr);
             }
 
-            const isLit = current > 0;
+            const isLit = current > 1e-9;
             uiLedStatus.innerText = isLit ? '빛 방출 중 💡' : '소등';
             
-            // 밝기 강도 보정 (확실한 발광 효과 구현)
-            const intensity = isLit ? Math.min(1.0, current * 2000) : 0;
-            ledHeadMat.emissiveIntensity = intensity * 8.0;
-            ledLight.intensity = intensity * 6.0;
+            // 밝기: 켜지는 순간부터 확실히 보이도록 기본 밝기 + 전류 비례
+            const brightness = isLit ? Math.min(1.0, 0.45 + current * 1200) : 0;
+            ledHeadMat.opacity = isLit ? 1.0 : 0.7;
+            ledHeadMat.emissiveIntensity = brightness * 2.5;
+            ledLight.intensity = brightness * 4.0;
+            glowMat.opacity = brightness * 0.95;
+            const glowScale = isLit ? 0.9 + brightness * 1.3 : 0.01;
+            ledGlow.scale.set(glowScale, glowScale, 1);
 
             electrons.forEach(e => {
                 if (isLit && showElectrons) {
                     e.mesh.visible = true;
-                    const speed = current * 400; 
-                    e.progress += delta * speed;
-                    if (e.progress > 1) e.progress -= 1;
-                    const pos = electronCurve.getPointAt(e.progress);
-                    e.mesh.position.copy(pos);
+                    const speed = 0.12 + Math.min(0.5, current * 300); 
+                    e.progress = (e.progress + delta * speed) % 1;
+                    e.mesh.position.copy(electronCurve.getPointAt(e.progress));
                 } else {
                     e.mesh.visible = false;
                 }
