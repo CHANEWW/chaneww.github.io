@@ -195,6 +195,12 @@
             box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
         }
 
+        .control-tab-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
         /* 서브 패널 */
         .sub-panel {
             position: absolute;
@@ -238,6 +244,37 @@
             margin: 4px 0;
         }
 
+        /* 카운트다운 오버레이 */
+        #countdown-overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 100;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #countdown-text {
+            font-size: 180px;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .pop-anim {
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
         body.dark-mode {
             background-color: #121212;
             color: #f2f2f7;
@@ -263,6 +300,11 @@
 <body>
 
     <div id="canvas-container"></div>
+
+    <!-- 카운트다운 오버레이 -->
+    <div id="countdown-overlay">
+        <div id="countdown-text">3</div>
+    </div>
 
     <!-- 좌측 상단 헤더 -->
     <div class="top-left-bar">
@@ -347,8 +389,6 @@
         scene.background = new THREE.Color(0xf2f2f7);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
-        // [시점 수정] 천장 중앙 상단에서 교실 전체를 직관적으로 내려다보는 카메라 좌표
         camera.position.set(0, 11, -1);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -361,7 +401,6 @@
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        // 카메라 조망의 타겟을 교실 중앙 책상 배치 영역으로 정렬
         controls.target.set(0, 0, -3.5);
 
         // --- 2. 조명 설정 ---
@@ -388,7 +427,6 @@
         gridHelper.position.y = 0.0;
         scene.add(gridHelper);
 
-        // 칠판
         const boardGroup = new THREE.Group();
         const boardFrame = new THREE.Mesh(
             new THREE.BoxGeometry(7, 2.2, 0.1),
@@ -466,26 +504,36 @@
             return group;
         }
 
+        // [변경점] 캔버스 해상도 확대 및 책상을 가득 채우는 둥근 사각형 텍스처로 변경
         function createNumberTexture(num) {
             const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 256;
+            canvas.width = 512;
+            canvas.height = 352;
             const ctx = canvas.getContext('2d');
 
             ctx.fillStyle = '#f39c12';
+            const r = 40; // 둥근 모서리 반경
             ctx.beginPath();
-            ctx.arc(128, 128, 110, 0, Math.PI * 2);
+            ctx.moveTo(10 + r, 10);
+            ctx.lineTo(502 - r, 10);
+            ctx.quadraticCurveTo(502, 10, 502, 10 + r);
+            ctx.lineTo(502, 342 - r);
+            ctx.quadraticCurveTo(502, 342, 502 - r, 342);
+            ctx.lineTo(10 + r, 342);
+            ctx.quadraticCurveTo(10, 342, 10, 342 - r);
+            ctx.lineTo(10, 10 + r);
+            ctx.quadraticCurveTo(10, 10, 10 + r, 10);
             ctx.fill();
 
-            ctx.lineWidth = 10;
+            ctx.lineWidth = 14;
             ctx.strokeStyle = '#ffffff';
             ctx.stroke();
 
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 110px sans-serif';
+            ctx.font = 'bold 180px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(num + '', 128, 130);
+            ctx.fillText(num + '', 256, 176 + 12); // 정중앙 보정
 
             return new THREE.CanvasTexture(canvas);
         }
@@ -543,7 +591,7 @@
         const mouse = new THREE.Vector2();
 
         function onPointerDown(e) {
-            if (e.target.closest('.glass-panel')) return;
+            if (e.target.closest('.glass-panel') || e.target.closest('#countdown-overlay')) return;
 
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -563,7 +611,6 @@
 
             if (intersects.length > 0) {
                 const hitObj = intersects[0].object;
-
                 const targetSlot = deskSlots.find(slot => {
                     if (slot.active) {
                         return slot.deskGroup.children.includes(hitObj) || hitObj.parent === slot.deskGroup;
@@ -588,11 +635,49 @@
                 }
             }
         }
-
         window.addEventListener('pointerdown', onPointerDown);
 
-        // --- 6. 자리 추첨 및 시작/끝/제외 번호 적용 ---
+        // --- 6. 카운트다운 및 자리 추첨 ---
+        let isDrawing = false;
+        
         function drawSeats() {
+            const activeSlots = deskSlots.filter(s => s.active);
+            if (activeSlots.length === 0 || isDrawing) return;
+
+            isDrawing = true;
+            document.getElementById('btn-draw').disabled = true;
+
+            const overlay = document.getElementById('countdown-overlay');
+            const cdText = document.getElementById('countdown-text');
+            overlay.style.display = 'flex';
+
+            let count = 3;
+            cdText.innerText = count;
+            
+            // 애니메이션 재시작
+            cdText.classList.remove('pop-anim');
+            void cdText.offsetWidth; 
+            cdText.classList.add('pop-anim');
+
+            const interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    cdText.innerText = count;
+                    cdText.classList.remove('pop-anim');
+                    void cdText.offsetWidth;
+                    cdText.classList.add('pop-anim');
+                } else {
+                    clearInterval(interval);
+                    overlay.style.display = 'none';
+                    executeDraw(); // 추첨 로직 실행
+                    document.getElementById('btn-draw').disabled = false;
+                    isDrawing = false;
+                }
+            }, 1000);
+        }
+
+        // 실제 번호 부여 및 메쉬 생성
+        function executeDraw() {
             const startNum = parseInt(document.getElementById('input-start-num').value) || 1;
             const endNum = parseInt(document.getElementById('input-end-num').value) || (rows * cols);
             
@@ -603,9 +688,7 @@
 
             let pool = [];
             for (let i = startNum; i <= endNum; i++) {
-                if (!excludeNums.includes(i)) {
-                    pool.push(i);
-                }
+                if (!excludeNums.includes(i)) pool.push(i);
             }
 
             for (let i = pool.length - 1; i > 0; i--) {
@@ -626,12 +709,18 @@
                     slot.number = num;
 
                     const tex = createNumberTexture(num);
-                    const numGeo = new THREE.PlaneGeometry(0.35, 0.35);
+                    
+                    // [변경점] 책상 크기(0.8 x 0.55)에 맞춰 꽉 차게 변경
+                    const numGeo = new THREE.PlaneGeometry(0.75, 0.50);
                     const numMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
                     const numMesh = new THREE.Mesh(numGeo, numMat);
 
                     numMesh.rotation.x = -Math.PI / 2;
                     numMesh.position.set(0, 0.73, 0);
+                    
+                    // [변경점] 애니메이션을 위해 초기 크기를 0.01로 설정
+                    numMesh.scale.set(0.01, 0.01, 0.01);
+                    
                     slot.deskGroup.add(numMesh);
                     slot.numMesh = numMesh;
                 } else {
@@ -649,6 +738,7 @@
         }
 
         function resetSeats() {
+            if (isDrawing) return;
             deskSlots.forEach(slot => {
                 if (slot.numMesh) {
                     slot.deskGroup.remove(slot.numMesh);
@@ -683,7 +773,6 @@
             resetSeats();
         });
 
-        // [시점정렬 버튼 클릭 이벤트] 천장 가운데 상단 탑다운 조망으로 다시 정렬
         document.getElementById('btn-align').addEventListener('click', () => {
             camera.position.set(0, 11, -1);
             controls.target.set(0, 0, -3.5);
@@ -706,6 +795,14 @@
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
+
+            // [추가됨] 숫자가 짠! 하고 커지는 스케일링 물리 효과
+            deskSlots.forEach(slot => {
+                if (slot.numMesh && slot.numMesh.scale.x < 0.999) {
+                    slot.numMesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.15); // 커지는 속도
+                }
+            });
+
             renderer.render(scene, camera);
         }
 
