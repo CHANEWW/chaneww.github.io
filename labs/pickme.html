@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>행운의 추첨기 3D</title>
+    <!-- Three.js 및 OrbitControls 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(255, 59, 48, 0.15);
+            color: #ff3b30;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        .center-tooltip {
+            position: absolute;
+            top: 15%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 22px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+            text-align: center;
+        }
+
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 18px;
+            min-width: 80px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 13px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active, .control-tab-btn.primary {
+            background: #ff3b30;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+        }
+        
+        .control-tab-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 서브 패널 (설정) */
+        .sub-panel {
+            position: absolute;
+            bottom: 110px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 320px;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        input[type="number"], input[type="text"] {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #c7c7cc;
+            font-size: 13px;
+            text-align: center;
+            outline: none;
+            background: rgba(255, 255, 255, 0.8);
+            font-family: inherit;
+        }
+
+        input[type="number"] { width: 70px; }
+        input[type="text"] { width: 140px; }
+
+        .divider {
+            height: 1px;
+            background: rgba(0,0,0,0.1);
+            margin: 4px 0;
+        }
+
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .center-tooltip {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode input[type="number"], body.dark-mode input[type="text"] {
+            background: rgba(50, 50, 50, 0.8);
+            color: #fff;
+            border-color: #555;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <div class="glass-panel tag-badge">
+            <span>행운의 추첨기 3D</span>
+            <span class="tag-pill">Class Tool</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 데이터 패널 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">참가 인원</span>
+                <span class="data-value" id="val-total">30명</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">뽑힌 인원</span>
+                <span class="data-value" id="val-drawn" style="color:#ff3b30;">0명</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        🎯 3D 뷰포트를 드래그해 보세요! <br><span style="font-size:12px; color:#8e8e93; font-weight:normal;">(하단의 '추첨 시작'을 누르면 구슬이 섞입니다)</span>
+    </div>
+
+    <!-- 서브 설정 패널 -->
+    <div class="glass-panel sub-panel" id="config-panel">
+        <div class="control-row">
+            <span>총 참가 인원 (1~100)</span>
+            <input type="number" id="input-total" min="2" max="100" value="30">
+        </div>
+        <div class="control-row">
+            <span>한 번에 뽑을 인원</span>
+            <input type="number" id="input-pick-count" min="1" max="10" value="1">
+        </div>
+        <div class="divider"></div>
+        <div class="control-row">
+            <span>결석/제외 번호 (쉼표 구분)</span>
+            <input type="text" id="input-exclude" placeholder="예: 4, 13, 24">
+        </div>
+        <button id="btn-apply-settings" style="margin-top:5px; padding:8px; border-radius:10px; border:none; background:#1c1c1e; color:#fff; font-weight:bold; cursor:pointer;">
+            설정 적용 및 리셋
+        </button>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn primary" id="btn-draw">
+            <span style="font-size: 16px;">🎲</span>
+            <span>추첨 시작</span>
+        </button>
+        <button class="control-tab-btn" id="btn-toggle-config">
+            <span style="font-size: 16px;">⚙️</span>
+            <span>추첨 설정</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span style="font-size: 16px;">🔄</span>
+            <span>전체 초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span style="font-size: 16px;">📷</span>
+            <span>시점 정렬</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. Three.js 씬, 카메라, 렌더러 설정 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 11);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 2.5, 0);
+        controls.maxDistance = 20;
+
+        // --- 2. 조명 설정 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0xffffff, 0.5, 20);
+        pointLight.position.set(0, 3, 0); // 유리구 내부 중앙 조명
+        scene.add(pointLight);
+
+        // --- 3. 바닥 및 스튜디오 환경 ---
+        const floorGeo = new THREE.PlaneGeometry(30, 30);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xd7ccc8, roughness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = 0;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const gridHelper = new THREE.GridHelper(30, 30, 0xbdc3c7, 0xe5e5ea);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // --- 4. 3D 뽑기 기계 (유리구 & 받침대) ---
+        const machineGroup = new THREE.Group();
+        
+        // 받침대
+        const baseGeo = new THREE.CylinderGeometry(2.2, 2.5, 0.8, 32);
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, metalness: 0.7, roughness: 0.2 });
+        const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+        baseMesh.position.y = 0.4;
+        baseMesh.castShadow = true;
+        baseMesh.receiveShadow = true;
+        machineGroup.add(baseMesh);
+
+        // 유리구 (Gacha Globe)
+        const globeRadius = 3.5;
+        const globeGeo = new THREE.SphereGeometry(globeRadius, 32, 32);
+        const glassMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            metalness: 0.1,
+            roughness: 0.1,
+            transparent: true,
+            opacity: 0.25,
+            transmission: 0.95, // 유리 질감 극대화
+            thickness: 0.5,
+            side: THREE.DoubleSide
+        });
+        const globeMesh = new THREE.Mesh(globeGeo, glassMat);
+        globeMesh.position.y = 4.3; // 받침대 위
+        machineGroup.add(globeMesh);
+
+        scene.add(machineGroup);
+
+        // --- 5. 구슬 (참가자) 생성 모듈 ---
+        let balls = [];
+        let drawnBalls = [];
+        const ballRadius = 0.35;
+        
+        // 팝하고 귀여운 구슬 색상 배열
+        const colors = [
+            0xff3b30, 0xff9500, 0xffcc00, 0x4cd964, 0x5ac8fa, 
+            0x007aff, 0x5856d6, 0xff2d55, 0x00c7be, 0xaf52de
+        ];
+
+        // 캔버스를 이용해 숫자 텍스처(Sprite) 생성 함수
+        function createNumberSprite(num) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 70px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0,0,0,0.6)';
+            ctx.shadowBlur = 6;
+            ctx.fillText(num.toString(), 64, 68);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(1.2, 1.2, 1.2);
+            return sprite;
+        }
+
+        function createBalls(total, excludeArr) {
+            // 기존 구슬 삭제
+            balls.forEach(b => scene.remove(b.mesh));
+            balls = [];
+            drawnBalls = [];
+
+            let activeCount = 0;
+
+            for (let i = 1; i <= total; i++) {
+                if (excludeArr.includes(i)) continue;
+
+                const group = new THREE.Group();
+
+                // 구슬 메쉬
+                const color = colors[activeCount % colors.length];
+                const ballMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3, metalness: 0.2 });
+                const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(ballRadius, 32, 32), ballMat);
+                ballMesh.castShadow = true;
+                group.add(ballMesh);
+
+                // 숫자 스프라이트
+                const sprite = createNumberSprite(i);
+                sprite.position.z = ballRadius + 0.05; // 구슬 표면 바로 앞
+                group.add(sprite);
+                // 양면으로 보이게 뒤쪽에도 추가
+                const spriteBack = createNumberSprite(i);
+                spriteBack.position.z = -(ballRadius + 0.05);
+                group.add(spriteBack);
+
+                // 유리구 내부 임의의 위치에 배치
+                const r = Math.random() * (globeRadius - ballRadius - 0.5);
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const px = r * Math.sin(phi) * Math.cos(theta);
+                const py = 4.3 + r * Math.cos(phi);
+                const pz = r * Math.sin(phi) * Math.sin(theta);
+                
+                group.position.set(px, py, pz);
+                scene.add(group);
+
+                balls.push({
+                    id: i,
+                    mesh: group,
+                    position: new THREE.Vector3(px, py, pz),
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 5,
+                        (Math.random() - 0.5) * 5,
+                        (Math.random() - 0.5) * 5
+                    ),
+                    isDrawn: false,
+                    targetPos: new THREE.Vector3()
+                });
+
+                activeCount++;
+            }
+
+            document.getElementById('val-total').innerText = activeCount + '명';
+            document.getElementById('val-drawn').innerText = '0명';
+            document.getElementById('guide-tooltip').innerHTML = "🎯 3D 뷰포트를 드래그해 보세요! <br><span style='font-size:12px; color:#8e8e93; font-weight:normal;'>(하단의 '추첨 시작'을 누르면 구슬이 섞입니다)</span>";
+            document.getElementById('guide-tooltip').style.opacity = '1';
+        }
+
+        // 초기 생성 (기본 30명)
+        createBalls(30, []);
+
+        // --- 6. 자체 3D 물리 엔진 & 상태 머신 ---
+        let simState = 'idle'; // 'idle', 'shuffling', 'drawing'
+        let shuffleTimer = 0;
+        
+        function updatePhysics(dt) {
+            // dt가 너무 크면 뚫고 나갈 수 있으므로 제한
+            if (dt > 0.05) dt = 0.05;
+
+            // 구슬 이동 및 구체 내부 충돌 처리
+            balls.forEach(b => {
+                if (b.isDrawn) return; // 이미 뽑힌 구슬은 물리 연산 제외
+
+                // 중력 적용
+                b.velocity.y -= 9.8 * dt;
+
+                // 섞기 모드일 때 회오리(토네이도) 강제 힘 부여
+                if (simState === 'shuffling') {
+                    // Y축 기준 회전하는 힘
+                    const swirl = new THREE.Vector3(-b.position.z, 0, b.position.x).normalize().multiplyScalar(40);
+                    // 중앙 상단으로 띄우는 힘
+                    const lift = new THREE.Vector3(0, 35, 0);
+                    // 중심으로 살짝 모으는 힘
+                    const centerPull = new THREE.Vector3(-b.position.x, 0, -b.position.z).normalize().multiplyScalar(10);
+                    
+                    b.velocity.add(swirl.add(lift).add(centerPull).multiplyScalar(dt));
+                }
+
+                // 속도 감쇠 (공기/마찰)
+                b.velocity.multiplyScalar(simState === 'shuffling' ? 0.98 : 0.95);
+
+                // 위치 업데이트
+                b.position.add(b.velocity.clone().multiplyScalar(dt));
+
+                // 유리구(경계)와 충돌 처리 (중심: 0, 4.3, 0)
+                const center = new THREE.Vector3(0, 4.3, 0);
+                const diff = b.position.clone().sub(center);
+                const dist = diff.length();
+                const maxDist = globeRadius - ballRadius;
+
+                if (dist > maxDist) {
+                    const normal = diff.normalize();
+                    // 밖으로 나간 만큼 안으로 밀어넣기
+                    b.position.copy(center).add(normal.clone().multiplyScalar(maxDist));
+                    // 속도 반사 (탄성 충돌)
+                    b.velocity.reflect(normal).multiplyScalar(0.7); 
+                }
+            });
+
+            // 구슬 간의 충돌 (간단한 AABB O(n^2) 판별 후 거리 판별)
+            for (let i = 0; i < balls.length; i++) {
+                if (balls[i].isDrawn) continue;
+                for (let j = i + 1; j < balls.length; j++) {
+                    if (balls[j].isDrawn) continue;
+                    
+                    const b1 = balls[i];
+                    const b2 = balls[j];
+                    const diff = b1.position.clone().sub(b2.position);
+                    const d2 = diff.lengthSq();
+                    const minDist = ballRadius * 2;
+
+                    if (d2 < minDist * minDist) {
+                        const d = Math.sqrt(d2);
+                        const normal = diff.clone().normalize();
+                        const overlap = minDist - d;
+                        
+                        // 위치 보정 (겹침 방지)
+                        b1.position.add(normal.clone().multiplyScalar(overlap * 0.5));
+                        b2.position.sub(normal.clone().multiplyScalar(overlap * 0.5));
+
+                        // 속도 교환 (단순화된 탄성 충돌)
+                        const v1 = b1.velocity.clone();
+                        const v2 = b2.velocity.clone();
+                        b1.velocity.copy(v2).multiplyScalar(0.85);
+                        b2.velocity.copy(v1).multiplyScalar(0.85);
+                    }
+                }
+            }
+
+            // Mesh 위치 동기화 및 렌더링
+            balls.forEach(b => {
+                if (!b.isDrawn) {
+                    b.mesh.position.copy(b.position);
+                    
+                    // 속도 방향에 맞춰 약간 구르는 느낌으로 회전
+                    if (b.velocity.lengthSq() > 0.1) {
+                        const axis = new THREE.Vector3(b.velocity.z, 0, -b.velocity.x).normalize();
+                        const angularSpeed = b.velocity.length() * dt * 2;
+                        b.mesh.rotateOnWorldAxis(axis, angularSpeed);
+                    }
+                } else {
+                    // 뽑힌 구슬: 카메라 앞 지정된 위치(targetPos)로 부드럽게 날아감 (Lerp)
+                    b.mesh.position.lerp(b.targetPos, dt * 3);
+                    // 스케일을 2배로 키워 눈에 잘 띄게
+                    b.mesh.scale.lerp(new THREE.Vector3(2.5, 2.5, 2.5), dt * 3);
+                    // 항상 정면을 바라보도록 회전 (텍스처가 잘 보이게)
+                    b.mesh.quaternion.slerp(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0)), dt * 3);
+                }
+            });
+        }
+
+        // --- 7. 추첨 (Draw) 로직 ---
+        const btnDraw = document.getElementById('btn-draw');
+        const tooltip = document.getElementById('guide-tooltip');
+
+        function startDraw() {
+            const pickCount = parseInt(document.getElementById('input-pick-count').value) || 1;
+            const availableBalls = balls.filter(b => !b.isDrawn);
+            
+            if (availableBalls.length === 0) {
+                tooltip.innerHTML = "모든 인원이 뽑혔습니다! <br>다시 하려면 '전체 초기화'를 눌러주세요.";
+                tooltip.style.opacity = '1';
+                return;
+            }
+
+            const actualPickCount = Math.min(pickCount, availableBalls.length);
+
+            // 상태 변경: 섞기(토네이도) 시작
+            simState = 'shuffling';
+            btnDraw.disabled = true;
+            tooltip.innerHTML = "🌪️ 섞는 중... 두구두구두구!";
+            tooltip.style.opacity = '1';
+
+            // 2.5초 후 당첨자 발표
+            setTimeout(() => {
+                simState = 'drawing';
+                
+                // 배열 무작위 셔플 (Fisher-Yates)
+                for (let i = availableBalls.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [availableBalls[i], availableBalls[j]] = [availableBalls[j], availableBalls[i]];
+                }
+
+                // 뽑힌 구슬 상태 변경 및 타겟 위치 설정
+                for (let i = 0; i < actualPickCount; i++) {
+                    const selected = availableBalls[i];
+                    selected.isDrawn = true;
+                    drawnBalls.push(selected);
+                    
+                    const idx = drawnBalls.length - 1;
+                    // 카메라 앞에 가로로 정렬되게 타겟 좌표 설정
+                    const cols = 5; // 한 줄에 5명씩
+                    const row = Math.floor(idx / cols);
+                    const col = idx % cols;
+                    
+                    const startX = -((Math.min(drawnBalls.length, cols) - 1) * 2.2) / 2;
+                    selected.targetPos.set(
+                        (col * 2.2) - (cols-1)*1.1, // X
+                        6.5 - (row * 2.2), // Y
+                        6.0  // Z (카메라와 유리구 사이)
+                    );
+                }
+
+                document.getElementById('val-drawn').innerText = drawnBalls.length + '명';
+                
+                // 안내 문구 변경 및 버튼 활성화
+                const drawnNumbers = drawnBalls.slice(-actualPickCount).map(b => b.id).join(', ');
+                tooltip.innerHTML = `🎉 <b>${drawnNumbers}번</b> 당첨! 🎉`;
+                
+                setTimeout(() => { btnDraw.disabled = false; }, 500);
+
+            }, 2500);
+        }
+
+        btnDraw.addEventListener('click', startDraw);
+
+        // --- 8. UI 제어 및 기타 설정 ---
+        const btnToggleConfig = document.getElementById('btn-toggle-config');
+        const configPanel = document.getElementById('config-panel');
+        btnToggleConfig.addEventListener('click', () => {
+            configPanel.classList.toggle('show');
+            btnToggleConfig.classList.toggle('active');
+        });
+
+        document.getElementById('btn-apply-settings').addEventListener('click', () => {
+            const total = parseInt(document.getElementById('input-total').value) || 30;
+            const excludeStr = document.getElementById('input-exclude').value;
+            const excludeArr = excludeStr.split(/[\s,]+/).map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            
+            createBalls(total, excludeArr);
+            simState = 'idle';
+            configPanel.classList.remove('show');
+            btnToggleConfig.classList.remove('active');
+            btnDraw.disabled = false;
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            const total = parseInt(document.getElementById('input-total').value) || 30;
+            const excludeStr = document.getElementById('input-exclude').value;
+            const excludeArr = excludeStr.split(/[\s,]+/).map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            
+            createBalls(total, excludeArr);
+            simState = 'idle';
+            btnDraw.disabled = false;
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 3, 11);
+            controls.target.set(0, 2.5, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floorMat.color.setHex(isDark ? 0x2c2c2e : 0xd7ccc8);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 9. 애니메이션 루프 ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            
+            updatePhysics(dt);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
