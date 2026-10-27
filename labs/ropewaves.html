@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>줄에서의 파동</title>
+    <title>줄에서의 파동 3D</title>
     <!-- Three.js 및 OrbitControls 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -286,7 +286,7 @@
             color: #000000;
         }
         body.dark-mode .control-tab-btn.active {
-            background: #2c2c2e;
+            background: #2c3e50;
             color: #ffffff;
         }
     </style>
@@ -297,7 +297,7 @@
 
     <!-- UI: 좌측 상단 -->
     <div class="top-left-bar">
-        <a href="#" class="glass-panel back-btn">
+        <a href="../index.html" class="glass-panel back-btn">
             <span>⬅</span> 메인
         </a>
         <div class="glass-panel tag-badge">
@@ -331,7 +331,7 @@
 
     <!-- UI: 중앙 안내 툴팁 -->
     <div class="glass-panel center-tooltip" id="guide-tooltip">
-        🖐️ 손 모양 손잡이를 마우스/터치로 위아래로 흔들어 파동을 만들어보세요!
+        🖐️ 손 모양 손잡이를 위아래로 움직이거나 [단일 펄스] 버튼을 눌러보세요!
     </div>
 
     <!-- UI: 서브 조절 패널 -->
@@ -357,7 +357,7 @@
                 <span>줄의 장력 / 파속 (v)</span>
                 <span id="txt-speed">3.0 m/s</span>
             </div>
-            <input type="range" id="sld-speed" min="1.0" max="6.0" step="0.2" value="3.0">
+            <input type="range" id="sld-speed" min="1.0" max="5.0" step="0.5" value="3.0">
         </div>
 
         <div class="slider-row">
@@ -365,15 +365,7 @@
                 <span>자동 진동수 (f)</span>
                 <span id="txt-freq">1.0 Hz</span>
             </div>
-            <input type="range" id="sld-freq" min="0.2" max="3.0" step="0.1" value="1.0">
-        </div>
-
-        <div class="slider-row">
-            <div class="slider-header">
-                <span>감쇠계수 (Damping)</span>
-                <span id="txt-damping">0.00</span>
-            </div>
-            <input type="range" id="sld-damping" min="0.00" max="0.05" step="0.005" value="0.00">
+            <input type="range" id="sld-freq" min="0.2" max="2.0" step="0.1" value="1.0">
         </div>
     </div>
 
@@ -419,7 +411,7 @@
         controls.target.set(0, 0, 0);
 
         // --- 2. 조명 설정 ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
         scene.add(ambientLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
@@ -429,7 +421,7 @@
         dirLight.shadow.mapSize.height = 2048;
         scene.add(dirLight);
 
-        // --- 3. 바닥 및 원점 그리드 ---
+        // --- 3. 바닥 및 그리드 ---
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(25, 25),
             new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 })
@@ -443,25 +435,25 @@
         gridHelper.position.y = -1.79;
         scene.add(gridHelper);
 
-        // --- 4. 파동 줄 1D 그리드 격자 물리 엔진 ---
-        const NUM_POINTS = 180;        // 줄을 구성하는 분할 점 개수
-        const STRING_LENGTH = 8.0;     // 줄의 전체 길이 (X: -4.0 ~ +4.0)
+        // --- 4. 파동 줄 수치해석 1D 물리 엔진 ---
+        const NUM_POINTS = 200;        // 줄 분할 격자점 수
+        const STRING_LENGTH = 8.0;     // 줄 전체 길이 (x: -4.0 ~ +4.0)
         const dx = STRING_LENGTH / (NUM_POINTS - 1);
         const startX = -STRING_LENGTH / 2;
 
-        let y = new Float32Array(NUM_POINTS);     // 현재 Y 변위
-        let prevY = new Float32Array(NUM_POINTS); // 이전 Y 변위
-        let nextY = new Float32Array(NUM_POINTS); // 다음 Y 변위
+        let y = new Float32Array(NUM_POINTS);     // 현재 y 변위
+        let prevY = new Float32Array(NUM_POINTS); // 이전 y 변위
+        let nextY = new Float32Array(NUM_POINTS); // 다음 y 변위
 
-        // 시뮬레이션 물리 파라미터
         let waveSpeed = 3.0;
         let isFixedEnd = true;
         let isAutoMode = false;
         let autoFrequency = 1.0;
-        let damping = 0.0;
         let autoTime = 0;
+        let isPulseTriggered = false;
+        let pulseTimer = 0;
 
-        // --- 5. 줄 (3D Tube Mesh) 생성 ---
+        // --- 5. 줄 3D Tube Mesh 생성 ---
         let stringMesh = null;
         const stringMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x007aff, 
@@ -475,7 +467,7 @@
                 points.push(new THREE.Vector3(startX + i * dx, y[i], 0));
             }
             const curve = new THREE.CatmullRomCurve3(points);
-            const tubeGeo = new THREE.TubeGeometry(curve, 160, 0.04, 10, false);
+            const tubeGeo = new THREE.TubeGeometry(curve, 180, 0.04, 10, false);
 
             if (stringMesh) {
                 stringMesh.geometry.dispose();
@@ -488,17 +480,14 @@
         }
         renderStringMesh();
 
-        // --- 6. 왼쪽 손 (Hand Driver) 3D 모델 제작 ---
+        // --- 6. 3D 손 (Hand Driver) 지지대 모델링 ---
         const handGroup = new THREE.Group();
-
-        // 손바닥 메쉬
         const palmGeo = new THREE.BoxGeometry(0.35, 0.45, 0.2);
         const handMat = new THREE.MeshStandardMaterial({ color: 0xffb74d, roughness: 0.5 });
         const palmMesh = new THREE.Mesh(palmGeo, handMat);
         palmMesh.castShadow = true;
         handGroup.add(palmMesh);
 
-        // 손가락 메쉬
         for (let i = 0; i < 4; i++) {
             const fingerGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.25, 12);
             const finger = new THREE.Mesh(fingerGeo, handMat);
@@ -508,7 +497,6 @@
             handGroup.add(finger);
         }
 
-        // 손잡이 링 (줄의 왼쪽 끝을 감싸는 고리)
         const ringGeo = new THREE.TorusGeometry(0.09, 0.025, 16, 24);
         const ringMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
@@ -518,10 +506,9 @@
         handGroup.position.set(startX, 0, 0);
         scene.add(handGroup);
 
-        // --- 7. 오른쪽 끝 지지대 (고정단 벽면 / 자유단 슬라이드 봉) ---
+        // --- 7. 오른쪽 지지대 (벽 / 슬라이드 봉) ---
         const rightX = startX + STRING_LENGTH;
 
-        // 고정단 벽면
         const wallGeo = new THREE.BoxGeometry(0.3, 2.0, 1.2);
         const wallMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.6, metalness: 0.3 });
         const wallMesh = new THREE.Mesh(wallGeo, wallMat);
@@ -529,7 +516,6 @@
         wallMesh.castShadow = true;
         scene.add(wallMesh);
 
-        // 자유단 슬라이딩 가이드 봉 & 링
         const rodGeo = new THREE.CylinderGeometry(0.03, 0.03, 3.0, 16);
         const rodMat = new THREE.MeshStandardMaterial({ color: 0xd1d1d6, metalness: 0.9, roughness: 0.1 });
         const freeRodMesh = new THREE.Mesh(rodGeo, rodMat);
@@ -544,7 +530,7 @@
         freeRingMesh.visible = false;
         scene.add(freeRingMesh);
 
-        // --- 8. 손 드래그 인터랙션 (Raycasting) ---
+        // --- 8. 손 마우스/터치 드래그 연동 ---
         let isDragging = false;
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
@@ -565,11 +551,8 @@
 
             if (intersects.length > 0) {
                 isDragging = true;
-                controls.enabled = false; // 카메라 회전 방지
-                
-                // 수동 모드로 자동 전환
+                controls.enabled = false;
                 setMode(false);
-
                 const tooltip = document.getElementById('guide-tooltip');
                 if (tooltip) tooltip.style.opacity = '0';
                 if (e.cancelable) e.preventDefault();
@@ -583,8 +566,11 @@
 
             if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                 let targetY = planeIntersect.y;
-                targetY = Math.max(-1.3, Math.min(1.3, targetY)); // 상하 진폭 제한
+                targetY = Math.max(-1.3, Math.min(1.3, targetY));
+                
+                // 손 위치와 파동 시작점(y[0]) 100% 동기화
                 y[0] = targetY;
+                prevY[0] = targetY;
                 handGroup.position.y = targetY;
             }
             if (e.cancelable) e.preventDefault();
@@ -606,59 +592,65 @@
         window.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp);
 
-        // --- 9. 물리 방정식 파동 연산 엔진 ---
+        // --- 9. 파동 연산 및 돌아온 파동 흡수 처리 ---
         function updatePhysics(dt) {
-            // 서브스텝 기반 1D 파동 방정식 솔버: ∂²y/∂t² = v² (∂²y/∂x²)
-            const subSteps = 8;
-            const subDt = Math.min(dt, 0.03) / subSteps;
+            const subSteps = 10;
+            const subDt = Math.min(dt, 0.02) / subSteps;
             const r = (waveSpeed * subDt / dx);
             const r2 = r * r;
 
             for (let step = 0; step < subSteps; step++) {
-                // 자동 진동 모드인 경우 왼쪽 끝(y[0]) 구동
-                if (isAutoMode) {
+                // 1) 좌측 입력단(y[0]) 제어
+                if (isPulseTriggered) {
+                    pulseTimer += subDt;
+                    const T = 0.6; // 펄스 지속시간
+                    if (pulseTimer <= T) {
+                        const val = Math.sin((pulseTimer / T) * Math.PI) * 0.8;
+                        y[0] = val;
+                    } else {
+                        y[0] = 0;
+                        isPulseTriggered = false;
+                    }
+                    handGroup.position.y = y[0];
+                } else if (isAutoMode) {
                     autoTime += subDt;
                     y[0] = 0.7 * Math.sin(2 * Math.PI * autoFrequency * autoTime);
                     handGroup.position.y = y[0];
                 } else if (!isDragging) {
-                    // 수동 드래그가 아닐 때는 손을 평형 위치(0)로 점진적 귀환
                     y[0] += (0 - y[0]) * 0.1;
                     handGroup.position.y = y[0];
                 }
 
-                // 내부 점 파동 전파 연산
+                // 2) 줄 내부 격자 점 전파 연산
                 for (let i = 1; i < NUM_POINTS - 1; i++) {
-                    const laplacian = y[i + 1] - 2 * y[i] + y[i - 1];
-                    nextY[i] = 2 * y[i] - prevY[i] + r2 * laplacian;
-                    
-                    // 감쇠 효과 적용
-                    if (damping > 0) {
-                        const vel = (y[i] - prevY[i]);
-                        nextY[i] -= damping * vel;
-                    }
+                    nextY[i] = 2 * y[i] - prevY[i] + r2 * (y[i + 1] - 2 * y[i] + y[i - 1]);
                 }
 
-                // 오른쪽 경계 조건 (반사) 연산
+                // 3) 오른쪽 경계 조건 (반사)
                 if (isFixedEnd) {
-                    // 고정단: 변위를 0으로 강제 (180도 위상 반전 반사파 형성)
+                    // 고정단: 변위 0 고정 (180도 위상 반전 반사파)
                     nextY[NUM_POINTS - 1] = 0;
-                    freeRingMesh.visible = false;
                 } else {
-                    // 자유단: 경계 기울기 = 0 (∂y/∂x = 0 -> y[N-1] = y[N-2]) 위상 유지 반사파 형성
+                    // 자유단: 자유 슬라이딩 (위상 유지 반사파)
                     nextY[NUM_POINTS - 1] = nextY[NUM_POINTS - 2];
-                    freeRingMesh.visible = true;
                     freeRingMesh.position.y = nextY[NUM_POINTS - 1];
                 }
 
-                // 배열 상태 교체 (Swap)
+                // 4) 반사되어 돌아온 파동의 왼쪽 끝 흡수(소멸) 처리
+                if (!isDragging && !isAutoMode && !isPulseTriggered) {
+                    nextY[0] = y[1]; // 흡수 경계 조건 (Absorbing Boundary)
+                    y[0] = nextY[0];
+                    handGroup.position.y = y[0];
+                }
+
+                // 물리 배열 스왑
                 prevY.set(y);
                 y.set(nextY);
             }
 
-            // 메쉬 업데이트
             renderStringMesh();
 
-            // HUD 데이터 수치 반영
+            // 데이터 업데이트
             document.getElementById('val-speed').innerText = waveSpeed.toFixed(2) + ' m/s';
             document.getElementById('val-disp').innerText = y[0].toFixed(2) + ' m';
         }
@@ -671,7 +663,6 @@
             btnTogglePhysics.classList.toggle('active');
         });
 
-        // 경계 조건 설정 (고정단 vs 자유단)
         const btnFixed = document.getElementById('btn-boundary-fixed');
         const btnFree = document.getElementById('btn-boundary-free');
         const txtBoundary = document.getElementById('val-boundary');
@@ -699,13 +690,13 @@
         btnFixed.addEventListener('click', () => setBoundary(true));
         btnFree.addEventListener('click', () => setBoundary(false));
 
-        // 모드 설정 (수동 vs 자동)
         const btnManual = document.getElementById('btn-mode-manual');
         const btnAuto = document.getElementById('btn-mode-auto');
         const txtMode = document.getElementById('val-mode');
 
         function setMode(auto) {
             isAutoMode = auto;
+            isPulseTriggered = false;
             if (auto) {
                 btnAuto.classList.add('active');
                 btnManual.classList.remove('active');
@@ -721,18 +712,14 @@
         btnManual.addEventListener('click', () => setMode(false));
         btnAuto.addEventListener('click', () => setMode(true));
 
-        // 단일 펄스 생성 버튼
+        // [단일 펄스] 버튼 클릭 이벤트
         document.getElementById('btn-pulse').addEventListener('click', () => {
             setMode(false);
-            // 펄스 형태 파형 생성
-            for (let i = 0; i < 25; i++) {
-                const pulse = Math.sin((i / 25) * Math.PI) * 0.8;
-                y[i] = pulse;
-                prevY[i] = pulse;
-            }
+            isPulseTriggered = true;
+            pulseTimer = 0;
         });
 
-        // 슬라이더 이벤트
+        // 슬라이더 조절
         document.getElementById('sld-speed').addEventListener('input', (e) => {
             waveSpeed = parseFloat(e.target.value);
             document.getElementById('txt-speed').innerText = waveSpeed.toFixed(1) + ' m/s';
@@ -743,17 +730,13 @@
             document.getElementById('txt-freq').innerText = autoFrequency.toFixed(1) + ' Hz';
         });
 
-        document.getElementById('sld-damping').addEventListener('input', (e) => {
-            damping = parseFloat(e.target.value);
-            document.getElementById('txt-damping').innerText = damping.toFixed(3);
-        });
-
         // 초기화 버튼
         document.getElementById('btn-reset').addEventListener('click', () => {
             y.fill(0);
             prevY.fill(0);
             nextY.fill(0);
             autoTime = 0;
+            isPulseTriggered = false;
             handGroup.position.y = 0;
             setMode(false);
             setBoundary(true);
@@ -779,7 +762,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- 11. 메인 애니메이션 루프 ---
+        // --- 11. 애니메이션 루프 ---
         const clock = new THREE.Clock();
 
         function animate() {
