@@ -599,21 +599,28 @@
         window.addEventListener('pointercancel', onPointerUp);
 
         // --- 9. 파동 연산 ---
+        // 왼쪽 완충(스폰지) 구간: 돌아온 파동을 서서히 감쇠시켜 소멸시킴
+        const SPONGE_LEN = 1.4;
+        const spongeProfile = new Float32Array(NUM_POINTS);
+        for (let i = 0; i < NUM_POINTS; i++) {
+            const xr = i * dx;
+            if (xr < SPONGE_LEN) {
+                const s = 1 - xr / SPONGE_LEN;
+                spongeProfile[i] = s * s;      // 끝으로 갈수록 부드럽게 강해짐 (반사 방지)
+            }
+        }
+        let spongeGain = 0;                    // 0: 꺼짐, 1: 켜짐 (부드럽게 전환)
+
         function updatePhysics(dt) {
             const subSteps = 10;
             const subDt = Math.min(dt, 0.02) / subSteps;
             const r = (waveSpeed * subDt / dx);
             const r2 = r * r;
-            const c = 0.1 * subDt / 2;            // 아주 약한 감쇠 (공명 폭주 방지)
-            const mur = (r - 1) / (r + 1);        // 흡수 경계 계수
+            const gammaBase = 0.3;                 // 줄 전체의 아주 약한 감쇠
+            const nu = 0.004;                      // 격자 단위 떨림 제거용 평활화
 
             for (let step = 0; step < subSteps; step++) {
-                // 1) 줄 내부 전파 (감쇠 포함)
-                for (let i = 1; i < NUM_POINTS - 1; i++) {
-                    nextY[i] = (2 * y[i] - (1 - c) * prevY[i] + r2 * (y[i + 1] - 2 * y[i] + y[i - 1])) / (1 + c);
-                }
-
-                // 2) 왼쪽 끝(손): 매 스텝 nextY[0]을 반드시 확정
+                // 1) 손(왼쪽 끝) 구동값 결정
                 let driven = null;
                 if (isPulseTriggered) {
                     pulseTimer += subDt;
@@ -629,20 +636,33 @@
                     autoTime += subDt;
                     driven = 0.7 * Math.sin(2 * Math.PI * autoFrequency * autoTime);
                 } else if (isDragging) {
-                    driven = y[0] + (dragTargetY - y[0]) * 0.05;   // 부드럽게 따라감
+                    driven = y[0] + (dragTargetY - y[0]) * 0.05;
                 } else if (returning) {
                     driven = y[0] + (0 - y[0]) * 0.03;
                     if (Math.abs(driven) < 0.003) { driven = 0; returning = false; }
                 }
 
-                if (driven !== null) {
-                    nextY[0] = driven;                              // 손이 구동하는 경계
-                } else {
-                    // 흡수 경계(Mur): 돌아온 파동이 반사 없이 소멸
-                    nextY[0] = y[1] + mur * (nextY[1] - y[0]);
+                // 2) 손이 가만히 있을 때만 완충 구간을 켬
+                const idle = (driven === null);
+                spongeGain += ((idle ? 1 : 0) - spongeGain) * 0.01;
+                const gammaSponge = 6.0 * waveSpeed * spongeGain;
+
+                // 3) 줄 내부 전파 (감쇠 + 평활화)
+                for (let i = 1; i < NUM_POINTS - 1; i++) {
+                    const lap = y[i + 1] - 2 * y[i] + y[i - 1];
+                    const ci = (gammaBase + gammaSponge * spongeProfile[i]) * subDt / 2;
+                    nextY[i] = (2 * y[i] - (1 - ci) * prevY[i] + r2 * lap) / (1 + ci) + nu * lap;
                 }
 
-                // 3) 오른쪽 끝 경계 조건
+                // 4) 왼쪽 끝
+                if (driven !== null) {
+                    nextY[0] = driven;
+                } else {
+                    // 단방향(upwind) 흡수 조건: 항상 안정
+                    nextY[0] = y[0] + r * (y[1] - y[0]);
+                }
+
+                // 5) 오른쪽 끝 경계 조건
                 if (isFixedEnd) {
                     nextY[NUM_POINTS - 1] = 0;
                 } else {
@@ -747,6 +767,7 @@
             isPulseTriggered = false;
             isDragging = false;
             returning = false;
+            spongeGain = 0;
             handGroup.position.y = 0;
             setMode(false);
             setBoundary(true);
