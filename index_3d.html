@@ -85,7 +85,7 @@
         /* Central Guide Tooltip */
         .center-tooltip {
             position: absolute;
-            top: 95px;
+            top: 105px;
             left: 50%;
             transform: translateX(-50%);
             padding: 8px 20px;
@@ -195,7 +195,7 @@
     </div>
 
     <script>
-        // --- 1. 실험실 카드 데이터 구조 ---
+        // --- 1. 실험실 카드 데이터 (2D 메인과 동일) ---
         const labCategories = [
             {
                 category: "역학",
@@ -224,7 +224,7 @@
                 color: "#34c759",
                 labs: [
                     { title: "물체를 보는 과정", icon: "🔦", url: "labs/light.html" },
-                    { title: "파동의 성질", icon: "🌊", url: "labs/waves.html" }
+                    { title: "줄에서의 파동", icon: "🌊", url: "labs/ropewaves.html" }
                 ]
             },
             {
@@ -238,21 +238,23 @@
                 category: "교실 도구",
                 color: "#8e8e93",
                 labs: [
-                    { title: "교실 자리 배치", icon: "🏫", url: "labs/classseat.html" }
+                    { title: "교실 자리 배치", icon: "🏫", url: "labs/classseat.html" },
+                    { title: "행운의 추첨기", icon: "🏫", url: "labs/pickme.html" }
                 ]
             }
         ];
 
-        // --- 2. Three.js 기본 씬 & 카메라 연출 ---
+        // --- 2. 시작 시점 설정 (여기 값만 바꾸면 시작 각도 조절 가능) ---
+        const START_CAM_POS = new THREE.Vector3(0, 3.6, 5.5);   // 카메라 위치 (높이, 뒤로 물러난 정도)
+        const START_TARGET  = new THREE.Vector3(0, 1.5, 0);     // 바라보는 지점 (링 중심)
+
+        // --- 3. Three.js 기본 씬 & 카메라 ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x05050d, 0.015);
 
-        // 상단 가림 방지를 위해 FOV 55 적용
-        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
-        // 첨부된 스크린샷과 동일한 고각 시점 설정 (높이 y=3.2)
-        camera.position.set(0, 3.2, 0);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.copy(START_CAM_POS);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -263,27 +265,22 @@
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        
-        // 휠/핀치 확대 축소 기능
         controls.enableZoom = true;
-        controls.minDistance = 0.1;
-        controls.maxDistance = 12.0;
-        
+        controls.minDistance = 0.5;
+        controls.maxDistance = 14.0;
         controls.enablePan = false;
-        controls.rotateSpeed = -0.4;
-        
-        // 시선 회전 중심점을 카드의 높이(1.8) 정면 방향으로 지정
-        controls.target.set(0, 1.8, -0.001);
+        controls.rotateSpeed = 0.5;
+        controls.target.copy(START_TARGET);
+        controls.update();
 
-        // --- 3. 조명 설정 ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
-        scene.add(ambientLight);
+        // --- 4. 조명 ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.85));
 
         const dirLight = new THREE.DirectionalLight(0x64d2ff, 1.2);
         dirLight.position.set(10, 20, 15);
         scene.add(dirLight);
 
-        // --- 4. 3D 우주 배경 & 별빛 입자 ---
+        // --- 5. 우주 배경 & 별 ---
         const starsGeo = new THREE.BufferGeometry();
         const starsCount = 2000;
         const starPositions = new Float32Array(starsCount * 3);
@@ -292,16 +289,15 @@
         }
         starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
         const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3, transparent: true, opacity: 0.8 });
-        const starField = new THREE.Points(starsGeo, starsMat);
-        scene.add(starField);
+        scene.add(new THREE.Points(starsGeo, starsMat));
 
-        // --- 5. 발 밑 정중앙 대형 3D 지구 (Earth) ---
+        // --- 6. 발 밑 대형 지구 ---
         function createEarthTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 1024;
             canvas.height = 512;
             const ctx = canvas.getContext('2d');
-            
+
             ctx.fillStyle = '#0b2545';
             ctx.fillRect(0, 0, 1024, 512);
 
@@ -315,58 +311,46 @@
         }
 
         const earthRadius = 25;
-        const earthGeo = new THREE.SphereGeometry(earthRadius, 64, 64);
-        const earthMat = new THREE.MeshStandardMaterial({
-            map: createEarthTexture(),
-            roughness: 0.6,
-            metalness: 0.1
-        });
-        const earth = new THREE.Mesh(earthGeo, earthMat);
+        const earth = new THREE.Mesh(
+            new THREE.SphereGeometry(earthRadius, 64, 64),
+            new THREE.MeshStandardMaterial({ map: createEarthTexture(), roughness: 0.6, metalness: 0.1 })
+        );
         earth.position.set(0, -earthRadius - 2.0, 0);
         scene.add(earth);
 
-        const atmosphereGeo = new THREE.SphereGeometry(earthRadius + 0.3, 64, 64);
-        const atmosphereMat = new THREE.MeshBasicMaterial({
-            color: 0x007aff,
-            transparent: true,
-            opacity: 0.12,
-            side: THREE.BackSide
-        });
-        const atmosphere = new THREE.Mesh(atmosphereGeo, atmosphereMat);
+        const atmosphere = new THREE.Mesh(
+            new THREE.SphereGeometry(earthRadius + 0.3, 64, 64),
+            new THREE.MeshBasicMaterial({ color: 0x007aff, transparent: true, opacity: 0.12, side: THREE.BackSide })
+        );
         atmosphere.position.copy(earth.position);
         scene.add(atmosphere);
 
-        // --- 6. 정밀 정렬된 3D 카드 캔버스 텍스처 생성기 ---
+        // --- 7. 카드 텍스처 생성기 ---
         function createCardTexture(category, title, icon, colorHex) {
             const canvas = document.createElement('canvas');
             canvas.width = 512;
             canvas.height = 300;
             const ctx = canvas.getContext('2d');
 
-            // 카드 배경
             ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
             ctx.roundRect(0, 0, 512, 300, 24);
             ctx.fill();
 
-            // 상단 카테고리 컬러 바
             ctx.fillStyle = colorHex;
             ctx.roundRect(0, 0, 512, 16, [24, 24, 0, 0]);
             ctx.fill();
 
-            // 카테고리 라벨 (좌측 상단)
             ctx.fillStyle = colorHex;
             ctx.font = 'bold 22px "SeoulNamsanL", -apple-system, sans-serif';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
             ctx.fillText(`• ${category}`, 30, 38);
 
-            // 1) 이모티콘 그림 정중앙 배치 (X=256, Y=140)
             ctx.font = '76px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(icon, 256, 140);
 
-            // 2) 제목 글씨 정중앙 배치 (X=256, Y=235) 및 긴 제목 자동 축소
             ctx.fillStyle = '#2c3e50';
             let fontSize = 30;
             if (title.length > 8) fontSize = 24;
@@ -379,7 +363,7 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        // --- 7. 동일 반지름 원형 3D 카드 배치 ---
+        // --- 8. 원형 카드 배치 ---
         const cardsGroup = new THREE.Group();
         const cardMeshes = [];
         const orbitRadius = 7.5;
@@ -406,24 +390,21 @@
             const z = -Math.cos(angle) * orbitRadius;
             const baseY = 1.8;
 
-            const cardGeo = new THREE.PlaneGeometry(2.0, 1.17);
-            const texture = createCardTexture(lab.category, lab.title, lab.icon, lab.color);
-            const cardMat = new THREE.MeshStandardMaterial({
-                map: texture,
-                transparent: true,
-                opacity: 0.92,
-                roughness: 0.2,
-                side: THREE.DoubleSide
-            });
-
-            const cardMesh = new THREE.Mesh(cardGeo, cardMat);
+            const cardMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.0, 1.17),
+                new THREE.MeshStandardMaterial({
+                    map: createCardTexture(lab.category, lab.title, lab.icon, lab.color),
+                    transparent: true,
+                    opacity: 0.92,
+                    roughness: 0.2,
+                    side: THREE.DoubleSide
+                })
+            );
             cardMesh.position.set(x, baseY, z);
-            
-            // 중앙 원점 (0, baseY, 0)을 향해 똑바로 바라보도록 설정
             cardMesh.lookAt(0, baseY, 0);
 
-            cardMesh.userData = { 
-                url: lab.url, 
+            cardMesh.userData = {
+                url: lab.url,
                 title: lab.title,
                 baseY: baseY,
                 targetY: baseY,
@@ -437,7 +418,7 @@
 
         scene.add(cardsGroup);
 
-        // WebFont 로드 완료 시 카드 텍스처 갱신 (글꼴 엇갈림 방지)
+        // 웹폰트 로드 후 카드 텍스처 갱신
         if (document.fonts) {
             document.fonts.ready.then(() => {
                 cardMeshes.forEach((mesh, idx) => {
@@ -448,7 +429,7 @@
             });
         }
 
-        // --- 8. 마우스/터치 인터랙션 및 클릭 이벤트 ---
+        // --- 9. 마우스/터치 인터랙션 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
@@ -474,33 +455,39 @@
             }
         }
 
-        function onPointerClick(e) {
-            if (e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.closest('.glass-panel')) return;
+        // 클릭과 드래그 구분: 거의 움직이지 않고 손을 뗐을 때만 이동
+        let downX = 0, downY = 0, downValid = false;
+
+        window.addEventListener('pointerdown', (e) => {
+            downValid = !(e.target.tagName === 'BUTTON' || e.target.tagName === 'A' || e.target.closest('.glass-panel'));
+            downX = e.clientX;
+            downY = e.clientY;
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (!downValid) return;
+            downValid = false;
+            if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;   // 드래그였다면 무시
 
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObjects(cardMeshes);
 
             if (intersects.length > 0) {
                 const clickedCard = intersects[0].object;
                 const targetUrl = clickedCard.userData.url;
-
                 clickedCard.scale.set(1.2, 1.2, 1.2);
-                setTimeout(() => {
-                    window.location.href = targetUrl;
-                }, 200);
+                setTimeout(() => { window.location.href = targetUrl; }, 200);
             }
-        }
+        });
 
         window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerdown', onPointerClick);
 
-        // --- 9. 시점 정렬 기능 ---
+        // --- 10. 시점 정렬 ---
         document.getElementById('btn-align').addEventListener('click', () => {
-            camera.position.set(0, 3.2, 0);
-            controls.target.set(0, 1.8, -0.001);
+            camera.position.copy(START_CAM_POS);
+            controls.target.copy(START_TARGET);
             controls.update();
         });
 
@@ -510,7 +497,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // --- 10. 애니메이션 루프 ---
+        // --- 11. 애니메이션 루프 ---
         const clock = new THREE.Clock();
 
         function animate() {
@@ -521,7 +508,6 @@
 
             cardMeshes.forEach(mesh => {
                 mesh.position.y += (mesh.userData.targetY - mesh.position.y) * 0.1;
-                
                 mesh.userData.currentScale += (mesh.userData.targetScale - mesh.userData.currentScale) * 0.1;
                 const s = mesh.userData.currentScale;
                 mesh.scale.set(s, s, s);
