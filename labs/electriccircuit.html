@@ -123,13 +123,14 @@ const TYPES={
   bulb:{n:'전구',ic:'💡',R:10},
   wire:{n:'도선',ic:'━',R:0},
   batt:{n:'전지',ic:'🔋',V:1.5},
-  vMeter:{n:'전압계',ic:'V',R:1e9},
+  vMeter:{n:'전압계',ic:'V',R:Infinity},
   iMeter:{n:'전류계',ic:'A',R:0}
 };
 
 const mod=(a,b)=>((a%b)+b)%b;
 function fmt(v,u){
-  const a=Math.abs(v);if(a<1e-12)return '0 '+u;
+  const a=Math.abs(v);
+  if(a<1e-12)return '0 '+u;
   for(const[s,p]of[[1e6,'M'],[1e3,'k'],[1,''],[1e-3,'m'],[1e-6,'μ']])
     if(a>=s)return(+(v/s).toPrecision(3))+' '+p+u;
   return(+(v/1e-6).toPrecision(3))+' μ'+u;
@@ -190,6 +191,41 @@ const edge=new THREE.LineSegments(
 edge.position.y=-.06;
 scene.add(edge);
 
+/* 텍스트 캔버스 생성 함수 (전압계/전류계 수치 표시용) */
+function createMeterTexture(text, colorStr){
+  const canvas=document.createElement('canvas');
+  canvas.width=256;canvas.height=256;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath();ctx.arc(128,128,120,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=8;ctx.strokeStyle='#e2e8f0';ctx.stroke();
+  
+  ctx.fillStyle=colorStr;
+  ctx.font='bold 68px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(text,128,128);
+  
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.needsUpdate=true;
+  return tex;
+}
+
+/* 극성 표시 텍스트 생성 함수 (+, -) */
+function createTerminalTexture(text, colorStr){
+  const canvas=document.createElement('canvas');
+  canvas.width=128;canvas.height=128;
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle=colorStr;
+  ctx.font='bold 90px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(text,64,64);
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.needsUpdate=true;
+  return tex;
+}
+
 /* 부품 관리 */
 const parts=[];
 const cylX=(r,l)=>new THREE.CylinderGeometry(r,r,l,28).rotateZ(Math.PI/2);
@@ -198,13 +234,24 @@ const tmp=new THREE.Object3D();
 
 function addPart(type,x0,z0,x1,z1){
   const T=TYPES[type];
-  const p={type,x:[x0,x1],z:[z0,z1],V:T.V||0,R:T.R||0,I:0,dv:0,ph:0};
+  const p={type,x:[x0,x1],z:[z0,z1],V:T.V||0,R:T.R,I:0,dv:0,ph:0};
   const g=new THREE.Group();p.g=g;
   p.mid=new THREE.Group();
   const add=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;p.mid.add(o);return o};
   p.lead=new THREE.Mesh(cylX(type==='wire'?.07:.05,1),mat(type==='wire'?0xdd8844:0xc0c5d0,{metalness:.7,roughness:.3}));
   p.lead.castShadow=true;g.add(p.lead);
-  p.j=[0,1].map(()=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.15,20,16),mat(0x333333,{roughness:.3}));m.castShadow=true;g.add(m);return m});
+  
+  // 단자 조인트 (+, - 색상 구분 적용)
+  p.j=[0,1].map((idx)=>{
+    let col = 0x333333;
+    if(type==='batt'){
+      col = idx===1 ? 0xef4444 : 0x3b82f6; // 단자 1(+ 빨강), 단자 0(- 파랑)
+    } else if(type==='vMeter' || type==='iMeter'){
+      col = idx===0 ? 0xef4444 : 0x3b82f6; // 단자 0(+ 빨강), 단자 1(- 파랑)
+    }
+    const m=new THREE.Mesh(new THREE.SphereGeometry(.15,20,16),mat(col,{roughness:.3}));
+    m.castShadow=true;g.add(m);return m;
+  });
   g.add(p.mid);
 
   if(type==='resist'){
@@ -220,10 +267,44 @@ function addPart(type,x0,z0,x1,z1){
     add(cylX(.3,1.0),mat(0x1f2937,{roughness:.3,metalness:.4}),-.2,0,0);
     add(cylX(.305,.45),mat(0xf59e0b,{metalness:.8,roughness:.2}),.48,0,0);
     add(cylX(.12,.12),mat(0xe5e7eb,{metalness:.9}),.78,0,0);
+    
+    // 배터리 극성 표시 (+ / -)
+    const pTex = createTerminalTexture('+', '#ef4444');
+    const mTex = createTerminalTexture('-', '#3b82f6');
+    const pMat = new THREE.MeshBasicMaterial({map:pTex, transparent:true, side:THREE.DoubleSide});
+    const mMat = new THREE.MeshBasicMaterial({map:mTex, transparent:true, side:THREE.DoubleSide});
+    
+    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.25,.25), pMat);
+    pLabel.rotation.x = -Math.PI/2; pLabel.position.set(.5, .32, 0); p.mid.add(pLabel);
+    
+    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.25,.25), mMat);
+    mLabel.rotation.x = -Math.PI/2; mLabel.position.set(-.4, .32, 0); p.mid.add(mLabel);
   }else if(type==='vMeter'||type==='iMeter'){
     const col=type==='vMeter'?0x3b82f6:0x10b981;
+    const colStr=type==='vMeter'?'#3b82f6':'#10b981';
+    
     add(new THREE.CylinderGeometry(.55,.55,.28,40),mat(col,{roughness:.3}),0,.14,0);
-    add(new THREE.CylinderGeometry(.42,.42,.3,40),mat(0xffffff,{roughness:.2}),0,.15,0);
+    
+    // 측정계 가운데 디스플레이
+    const defaultText = type==='vMeter' ? '0.0 V' : '0.0 A';
+    p.meterTex = createMeterTexture(defaultText, colStr);
+    p.meterMat = new THREE.MeshBasicMaterial({map: p.meterTex, transparent: true});
+    const displayPlane = new THREE.Mesh(new THREE.PlaneGeometry(.8,.8), p.meterMat);
+    displayPlane.rotation.x = -Math.PI/2;
+    displayPlane.position.set(0, .29, 0);
+    p.mid.add(displayPlane);
+    
+    // 전압계/전류계 단자 극성 표시 (+ / -)
+    const pTex = createTerminalTexture('+', '#ef4444');
+    const mTex = createTerminalTexture('-', '#3b82f6');
+    const pMat = new THREE.MeshBasicMaterial({map:pTex, transparent:true, side:THREE.DoubleSide});
+    const mMat = new THREE.MeshBasicMaterial({map:mTex, transparent:true, side:THREE.DoubleSide});
+    
+    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.22,.22), pMat);
+    pLabel.rotation.x = -Math.PI/2; pLabel.position.set(-.38, .29, 0); p.mid.add(pLabel);
+    
+    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.22,.22), mMat);
+    mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.38, .29, 0); p.mid.add(mLabel);
   }
 
   const geoCount=48;
@@ -239,67 +320,198 @@ function removePart(p){
   scene.remove(p.g);
   p.g.traverse(o=>{
     if(o.geometry)o.geometry.dispose();
-    if(o.material){if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material.dispose();}
+    if(o.material){
+      if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());
+      else o.material.dispose();
+    }
   });
+  if(p.meterTex) p.meterTex.dispose();
   const idx=parts.indexOf(p);if(idx>=0)parts.splice(idx,1);
   if(sel===p)select(null);
 }
 
-/* 회로 해석: 단자 노드 연결 + 전지 포함 폐회로 판정 */
+/* MNA(Modified Nodal Analysis) 기반 완전한 회로망 해석 */
 function simulate(){
-  const pts=[],cnt=[];
+  // 1. 단자 접합점(노드) 그룹화
+  const pts=[];
   const id=(x,z)=>{
-    for(let i=0;i<pts.length;i++)if(Math.hypot(pts[i][0]-x,pts[i][1]-z)<.16){cnt[i]++;return i;}
-    pts.push([x,z]);cnt.push(1);return pts.length-1;
+    for(let i=0;i<pts.length;i++)if(Math.hypot(pts[i][0]-x,pts[i][1]-z)<.16)return i;
+    pts.push([x,z]);return pts.length-1;
   };
-  parts.forEach(p=>{p.n0=id(p.x[0],p.z[0]);p.n1=id(p.x[1],p.z[1]);});
-  parts.forEach(p=>{p.c0=cnt[p.n0]>1;p.c1=cnt[p.n1]>1;p.closed=false;p.I=0;});
+  parts.forEach(p=>{
+    p.n0=id(p.x[0],p.z[0]);
+    p.n1=id(p.x[1],p.z[1]);
+    p.I=0; p.dv=0; p.closed=false;
+  });
 
-  // 전구 단자를 제외하고 두 단자 사이에 전지가 포함된 경로가 있는지 확인한다.
-  function hasBatteryPath(bulb){
-    const adj=new Map();
-    const add=(n,e)=>{if(!adj.has(n))adj.set(n,[]);adj.get(n).push(e);};
+  const numNodes = pts.length;
+  if(numNodes === 0) return;
+
+  const batteries = parts.filter(p=>p.type==='batt');
+  const numBatts = batteries.length;
+  
+  if(numBatts === 0) {
+    // 전지가 없으면 모든 측정계 0.0 표시 후 종료
     parts.forEach(p=>{
-      if(p===bulb)return;
-      add(p.n0,{to:p.n1,battery:p.type==='batt'});
-      add(p.n1,{to:p.n0,battery:p.type==='batt'});
+      if(p.type==='vMeter' || p.type==='iMeter'){
+        updateMeterDisplay(p, 0);
+      }
     });
-    const queue=[[bulb.n0,false]],seen=new Set([bulb.n0+'|0']);
-    while(queue.length){
-      const [node,hasBattery]=queue.shift();
-      if(node===bulb.n1&&hasBattery)return true;
-      (adj.get(node)||[]).forEach(e=>{
-        const hb=hasBattery||e.battery,key=e.to+'|'+(hb?1:0);
-        if(!seen.has(key)){seen.add(key);queue.push([e.to,hb]);}
-      });
-    }
-    return false;
+    return;
   }
 
-  const batteries=parts.filter(p=>p.type==='batt');
+  // 2. MNA 행렬 구성 [G C; B D] [V; I_b] = [I; E]
+  const N = numNodes;
+  const M = numBatts;
+  const size = N + M;
+
+  const A = Array.from({length: size}, () => new Float64Array(size));
+  const Z = new Float64Array(size);
+
+  // 컨덕턴스(G) 행렬 입력
   parts.forEach(p=>{
-    if(p.type==='bulb'&&batteries.length&&hasBatteryPath(p)){
-      p.closed=true;
-      const pathR=parts.filter(q=>q!==p).reduce((sum,q)=>{
-        if(q.type==='resist')return sum+Math.max(.01,q.R);
-        if(q.type==='wire'||q.type==='batt'||q.type==='iMeter')return sum+.05;
-        if(q.type==='vMeter')return sum+1e9;
-        if(q.type==='bulb')return sum+Math.max(.01,q.R);
-        return sum;
-      },Math.max(.01,p.R));
-      const voltage=batteries.reduce((v,q)=>v+q.V,0);
-      p.I=voltage/Math.max(pathR,.05);
-      p.dv=p.I*p.R;
+    if(p.type === 'batt') return; // 전지는 독립 전압원으로 처리
+    
+    let R = p.R;
+    if(p.type === 'wire' || p.type === 'iMeter') R = 1e-4; // 실효 도선 저항
+    
+    const G = 1 / R;
+    const u = p.n0, v = p.n1;
+
+    if(isFinite(G) && G > 0){
+      A[u][u] += G;
+      A[v][v] += G;
+      A[u][v] -= G;
+      A[v][u] -= G;
     }
   });
-  // 전구 외 부품의 전류 애니메이션은 연결된 단자에서만 약하게 표시.
+
+  // 전압원(B, C) 행렬 및 E 벡터 입력
+  batteries.forEach((b, k)=>{
+    const idx = N + k;
+    const u = b.n0; // - 단자
+    const v = b.n1; // + 단자
+    
+    A[u][idx] -= 1;
+    A[v][idx] += 1;
+    A[idx][u] -= 1;
+    A[idx][v] += 1;
+
+    Z[idx] = b.V;
+  });
+
+  // 노드 0을 기준 전위(GND = 0V)로 설정하여 특이행렬 방지
+  for(let j=0; j<size; j++){ A[0][j] = 0; A[j][0] = 0; }
+  A[0][0] = 1;
+  Z[0] = 0;
+
+  // 3. 가우스-조던 소거법으로 연립방정식 풀기
+  const X = solveLinearSystem(A, Z, size);
+
+  if(!X) {
+    // 해가 없는 경우 (개회로 또는 불완전 회로)
+    parts.forEach(p=>{
+      if(p.type==='vMeter' || p.type==='iMeter') updateMeterDisplay(p, 0);
+    });
+    return;
+  }
+
+  const nodeV = X.subarray(0, N);
+
+  // 4. 각 부품의 전류 및 전압강하 계산
   parts.forEach(p=>{
-    if(p.type!=='bulb'){
-      const connected=p.c0&&p.c1;
-      p.I=connected?0.02:0;
-      p.dv=0;
+    if(p.type==='batt'){
+      const k = batteries.indexOf(p);
+      p.I = X[N + k]; // 전지를 통해 흘러나가는 전류
+      p.dv = p.V;
+      p.closed = Math.abs(p.I) > 1e-4;
+    } else {
+      const v0 = nodeV[p.n0];
+      const v1 = nodeV[p.n1];
+      p.dv = v0 - v1;
+      
+      let R = p.R;
+      if(p.type === 'wire' || p.type === 'iMeter') R = 1e-4;
+      
+      if(p.type === 'vMeter'){
+        p.I = 0;
+      } else {
+        p.I = p.dv / R;
+      }
+      p.closed = Math.abs(p.I) > 1e-4;
+    }
+
+    // 측정계 수치 업데이트 (소수점 첫째자리 단위)
+    if(p.type === 'vMeter'){
+      updateMeterDisplay(p, Math.abs(p.dv));
+    } else if(p.type === 'iMeter'){
+      updateMeterDisplay(p, Math.abs(p.I));
     }
   });
+}
+
+/* 가우스-조던 소거법 */
+function solveLinearSystem(A, B, n) {
+  const M = Array.from({length: n}, (_, i) => {
+    const row = new Float64Array(n + 1);
+    row.set(A[i]);
+    row[n] = B[i];
+    return row;
+  });
+
+  for(let i=0; i<n; i++) {
+    let maxRow = i;
+    for(let k=i+1; k<n; k++) {
+      if(Math.abs(M[k][i]) > Math.abs(M[maxRow][i])) maxRow = k;
+    }
+    const temp = M[i]; M[i] = M[maxRow]; M[maxRow] = temp;
+
+    if(Math.abs(M[i][i]) < 1e-11) return null; // 수식적 불능/부정
+
+    for(let k=i+1; k<n; k++) {
+      const c = -M[k][i] / M[i][i];
+      for(let j=i; j<=n; j++) {
+        if(i === j) M[k][j] = 0;
+        else M[k][j] += c * M[i][j];
+      }
+    }
+  }
+
+  const x = new Float64Array(n);
+  for(let i=n-1; i>=0; i--) {
+    x[i] = M[i][n] / M[i][i];
+    for(let k=i-1; k>=0; k--) {
+      M[k][n] -= M[k][i] * x[i];
+    }
+  }
+  return x;
+}
+
+/* 계기판 텍스트 실시간 업데이트 */
+function updateMeterDisplay(p, val){
+  if(!p.meterTex) return;
+  const unit = p.type==='vMeter' ? 'V' : 'A';
+  const textStr = val.toFixed(1) + ' ' + unit;
+  
+  if(p.lastText === textStr) return;
+  p.lastText = textStr;
+  
+  const colorStr = p.type==='vMeter' ? '#3b82f6' : '#10b981';
+  const canvas = p.meterTex.image;
+  const ctx = canvas.getContext('2d');
+  
+  ctx.clearRect(0,0,256,256);
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath();ctx.arc(128,128,120,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=8;ctx.strokeStyle='#e2e8f0';ctx.stroke();
+  
+  ctx.fillStyle=colorStr;
+  ctx.font='bold 58px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(textStr, 128, 128);
+  
+  p.meterTex.needsUpdate = true;
 }
 
 function updatePart(p){
@@ -307,32 +519,46 @@ function updatePart(p){
   p.L=L;
   p.g.position.set(p.x[0],.08,p.z[0]);p.g.rotation.y=-Math.atan2(dz,dx);
   p.lead.scale.x=L;p.lead.position.x=L/2;p.j[1].position.x=L;p.mid.position.x=L/2;
-  [0,1].forEach(i=>{
-    const on=i?p.c1:p.c0;
-    p.j[i].material.color.set(on?0x111111:0x888888);
-  });
   
   const modeEl=document.querySelector('input[name=mode]:checked');
   const electron=modeEl?modeEl.value==='electron':true;
-  const I=p.I,S=.8,on=Math.abs(I)>1e-5;
-  p.ph+=on?Math.sign(I)*(.01+Math.min(Math.abs(I),1)*.08):0;
-  const mesh=electron?p.el:p.ar;(electron?p.ar:p.el).visible=false;mesh.visible=on;
-  const off=electron?mod(-p.ph,S):mod(p.ph,S);let c=0;
-  for(let k=0;k<48;k++){
-    const x=k*S+off;if(x>L)break;
-    tmp.position.set(x,0,0);tmp.rotation.set(0,electron||I>=0?0:Math.PI,0);tmp.updateMatrix();
-    mesh.setMatrixAt(c++,tmp.matrix);
+  const I=p.I;
+  const on=Math.abs(I) > 1e-4; // 완벽히 흐를 때만 속도 계산
+
+  // 전류(전압)의 크기에 비례하여 이동 속도 대폭 변화 (시각적 피드백 명확화)
+  const speedFactor = Math.min(Math.abs(I), 10);
+  p.ph += on ? Math.sign(I) * (0.015 + speedFactor * 0.08) : 0;
+  
+  const mesh=electron?p.el:p.ar;
+  (electron?p.ar:p.el).visible=false;
+  mesh.visible=on;
+  
+  const S=.8;
+  const off=electron?mod(-p.ph,S):mod(p.ph,S);
+  let c=0;
+  
+  if(on){
+    for(let k=0;k<48;k++){
+      const x=k*S+off;if(x>L)break;
+      tmp.position.set(x,0,0);
+      tmp.rotation.set(0, (electron ? I < 0 : I >= 0) ? 0 : Math.PI, 0);
+      tmp.updateMatrix();
+      mesh.setMatrixAt(c++,tmp.matrix);
+    }
   }
   mesh.count=c;mesh.instanceMatrix.needsUpdate=true;
   
   if(p.type==='bulb'){
-    const lit=!!p.closed&&$('#cLight').checked;
-    const b=lit?1:0;
-    p.fil.material.emissiveIntensity=b*5.5;
-    p.fil.material.color.set(lit?0xffffff:0xfff1b8);
-    if(p.bulbLight)p.bulbLight.intensity=lit?3.8:0;
-    if(p.glow){p.glow.material.opacity=lit?.42:0;p.glow.scale.setScalar(lit?1.18:1);}
-
+    const lit=p.closed && $('#cLight').checked;
+    const brightness = lit ? Math.min(Math.abs(I) * 1.5, 3.5) : 0;
+    
+    p.fil.material.emissiveIntensity = brightness * 2.5;
+    p.fil.material.color.set(lit ? 0xffffff : 0xfff1b8);
+    if(p.bulbLight) p.bulbLight.intensity = brightness * 2.0;
+    if(p.glow){
+      p.glow.material.opacity = lit ? Math.min(0.2 + brightness * 0.2, 0.8) : 0;
+      p.glow.scale.setScalar(lit ? 1.0 + brightness * 0.2 : 1);
+    }
   }
 }
 
@@ -342,10 +568,19 @@ const pop=$('#pop'),ps=$('#ps'),pv=$('#pv');
 function select(p){
   sel=p;
   if(!p){pop.style.display='none';return}
+  
+  if(p.type==='wire'||p.type==='vMeter'||p.type==='iMeter'){
+    pop.style.display='none';
+    return;
+  }
+  
   pop.style.display='block';
   $('#pt').textContent=TYPES[p.type].n+' 설정';
-  if(p.type==='batt'){ps.min=.5;ps.max=12;ps.step=.5;ps.value=p.V;pv.textContent=fmt(p.V,'V')}
-  else{ps.min=0;ps.max=36;ps.step=1;ps.value=RA.indexOf(p.R);pv.textContent=fmt(p.R,'Ω')}
+  if(p.type==='batt'){
+    ps.min=.5;ps.max=12;ps.step=.5;ps.value=p.V;pv.textContent=fmt(p.V,'V');
+  } else {
+    ps.min=0;ps.max=36;ps.step=1;ps.value=RA.indexOf(p.R);pv.textContent=fmt(p.R,'Ω');
+  }
 }
 ps.oninput=()=>{
   if(!sel)return;
@@ -426,7 +661,6 @@ cv.addEventListener('pointermove',e=>{
 
 function magnetSnap(){
   const SNAP_RADIUS=.72;
-  // 끝점 하나를 다른 부품의 끝점으로 끌어당겨 정확히 같은 노드로 만든다.
   parts.forEach(p=>{
     for(let i=0;i<2;i++){
       const x=p.x[i],z=p.z[i];
@@ -454,7 +688,7 @@ function finishCanvasPointer(e){
   }else{
     if(drag&&moved)magnetSnap();
     if(!moved){
-      if(drag&&drag.kind==='part'&&['resist','bulb','batt','vMeter','iMeter'].includes(drag.p.type))select(drag.p);
+      if(drag&&drag.kind==='part'&&['resist','bulb','batt'].includes(drag.p.type))select(drag.p);
       else if(!drag)select(null);
     }
   }
