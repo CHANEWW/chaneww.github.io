@@ -22,25 +22,18 @@ canvas{position:fixed;inset:0;touch-action:none;display:block;z-index:1}
 .title-text{font-size:15px;font-weight:800;color:#111}
 .badge-tag{background:#e8f0fe;color:#3b82f6;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
 
-/* 우측 상단 수치 정보 뱃지 */
-#stats{top:16px;right:20px;display:flex;gap:16px;padding:10px 20px;border-radius:16px}
-.stat-item{display:flex;flex-direction:column;align-items:center}
-.stat-label{font-size:11px;font-weight:700;color:#777;margin-bottom:2px}
-.stat-val{font-size:15px;font-weight:900}
-.stat-v{color:#3b82f6}
-.stat-r{color:#f59e0b}
-.stat-i{color:#10b981}
-.stat-p{color:#ef4444}
-
 /* 중앙 상단 힌트 */
-#hint{top:72px;left:50%;transform:translateX(-50%);padding:8px 20px;font-size:13px;color:#555;border-radius:999px;pointer-events:none;white-space:nowrap}
+#hint{top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;font-size:13px;color:#555;border-radius:999px;pointer-events:none;white-space:nowrap}
 
 /* 좌측 부품 팔레트 */
 #palette{left:20px;top:50%;transform:translateY(-50%);padding:12px 8px;display:flex;flex-direction:column;gap:8px;width:88px;border-radius:24px}
-.pbtn{border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease}
+.pbtn{border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:grab;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease;user-select:none}
 .pbtn b{font-size:22px;line-height:1}
 .pbtn:hover{background:#fff;transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.08)}
-.pbtn:active{transform:scale(0.95)}
+.pbtn:active{cursor:grabbing;transform:scale(0.95)}
+
+/* 드래그 고스트 요소 */
+#dragGhost{position:fixed;pointer-events:none;z-index:9999;display:none;padding:10px 16px;background:rgba(255,255,255,0.9);backdrop-filter:blur(10px);border:2px solid #3b82f6;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,0.15);font-size:13px;font-weight:800;color:#111;transform:translate(-50%,-50%)}
 
 /* 하단 컨트롤 바 */
 #bar{bottom:20px;left:50%;transform:translateX(-50%);padding:10px 24px;display:flex;gap:16px;align-items:center;justify-content:center;border-radius:999px}
@@ -65,7 +58,6 @@ canvas{position:fixed;inset:0;touch-action:none;display:block;z-index:1}
 @media(max-width:768px){
   #palette{width:76px;padding:8px 6px}.pbtn{font-size:11px;padding:8px 2px}
   #header{padding:6px 12px}.title-text{font-size:13px}
-  #stats{padding:8px 12px;gap:10px}.stat-val{font-size:13px}
   #hint{display:none}
 }
 </style>
@@ -79,18 +71,13 @@ canvas{position:fixed;inset:0;touch-action:none;display:block;z-index:1}
   <span class="badge-tag">visionOS</span>
 </div>
 
-<!-- 상단 수치 정보 뱃지 -->
-<div id="stats" class="ui-card">
-  <div class="stat-item"><span class="stat-label">전압 (V)</span><span id="stV" class="stat-val stat-v">0.0 V</span></div>
-  <div class="stat-item"><span class="stat-label">저항 (R)</span><span id="stR" class="stat-val stat-r">0.0 Ω</span></div>
-  <div class="stat-item"><span class="stat-label">전류 (I)</span><span id="stI" class="stat-val stat-i">0.00 A</span></div>
-  <div class="stat-item"><span class="stat-label">전력 (P)</span><span id="stP" class="stat-val stat-p">0.00 W</span></div>
-</div>
-
-<div id="hint" class="ui-card">💡 부품을 클릭해 추가하고 끝점을 드래그하여 연결하세요</div>
+<div id="hint" class="ui-card">💡 왼쪽 부품을 화면으로 끌어다 놓아 회로를 구성하세요</div>
 
 <!-- 좌측 팔레트 -->
 <div id="palette" class="ui-card"></div>
+
+<!-- 드래그 고스트 -->
+<div id="dragGhost"></div>
 
 <!-- 팝업 메뉴 -->
 <div id="pop" class="ui-card">
@@ -165,7 +152,7 @@ function resize(){
 }
 addEventListener('resize',resize);resize();
 
-/* 조명 (밝고 은은함) */
+/* 조명 */
 scene.add(new THREE.HemisphereLight(0xffffff,0xdde3ea,1.1));
 const sun=new THREE.DirectionalLight(0xffffff,0.8);
 sun.position.set(5,12,7);sun.castShadow=true;
@@ -191,7 +178,7 @@ board.position.y=-.4;board.receiveShadow=true;scene.add(board);
 const shadowPlane=new THREE.Mesh(new THREE.PlaneGeometry(16,9.5),new THREE.ShadowMaterial({opacity:.08}));
 shadowPlane.rotation.x=-Math.PI/2;shadowPlane.position.y=.01;shadowPlane.receiveShadow=true;scene.add(shadowPlane);
 
-/* 부품 객체 관리 */
+/* 부품 관리 */
 const parts=[];
 const cylX=(r,l)=>new THREE.CylinderGeometry(r,r,l,28).rotateZ(Math.PI/2);
 const mat=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.4,metalness:.15},o||{}));
@@ -264,23 +251,10 @@ function simulate(){
     for(let r=0;r<n;r++){if(r===c)continue;const f=A[r][c]/d;if(f)for(let k=c;k<=n;k++)A[r][k]-=f*A[c][k]}
   }
   const v=A.map((row,i)=>row[n]/(row[i]||1e-18));
-  let totV=0,totR=0,totI=0,totP=0;
   parts.forEach(p=>{
     p.dv=v[p.n0]-v[p.n1];
     p.I=p.g*p.dv+(p.type==='batt'?p.V*p.g:0);
-    if(p.type==='batt') totV+=p.V;
-    if(p.type==='resist'||p.type==='bulb'){
-      totR+=p.R;
-      const power=p.I*p.I*p.R;
-      totP+=power;
-    }
-    totI=Math.max(totI,Math.abs(p.I));
   });
-
-  $('#stV').textContent=totV.toFixed(1)+' V';
-  $('#stR').textContent=totR.toFixed(1)+' Ω';
-  $('#stI').textContent=totI.toFixed(2)+' A';
-  $('#stP').textContent=totP.toFixed(2)+' W';
 }
 
 function updatePart(p){
@@ -334,7 +308,9 @@ $('#pd').onclick=()=>removePart(sel);
 /* 터치 및 마우스 포인터 인터랙션 */
 const rc=new THREE.Raycaster(),pl=new THREE.Plane(new THREE.Vector3(0,1,0),-.2),v2=new THREE.Vector2();
 function wp(e){
-  v2.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);rc.setFromCamera(v2,camera);
+  const x = e.clientX !== undefined ? e.clientX : (e.touches ? e.touches[0].clientX : 0);
+  const y = e.clientY !== undefined ? e.clientY : (e.touches ? e.touches[0].clientY : 0);
+  v2.set(x/innerWidth*2-1,-y/innerHeight*2+1);rc.setFromCamera(v2,camera);
   const t=new THREE.Vector3();return rc.ray.intersectPlane(pl,t)?t:null;
 }
 function segDist(px,pz,p){
@@ -343,11 +319,10 @@ function segDist(px,pz,p){
   return Math.hypot(px-ax-t*dx,pz-az-t*dz);
 }
 
-const BX=7.2,BZ=4.0,ptrs=new Map();
 let drag=null,orbit=false,moved=false,down={x:0,y:0};
 
 cv.addEventListener('pointerdown',e=>{
-  ptrs.set(e.pointerId,e);
+  if(e.target!==cv) return;
   moved=false;down={x:e.clientX,y:e.clientY};
   if(e.button===2){orbit=true;return}
   const w=wp(e);if(!w){orbit=true;return}
@@ -369,11 +344,10 @@ cv.addEventListener('pointerdown',e=>{
 });
 
 cv.addEventListener('pointermove',e=>{
-  const prev=ptrs.get(e.pointerId);if(!prev)return;ptrs.set(e.pointerId,e);
   if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5)moved=true;
   if(orbit){
-    yaw-=(e.clientX-prev.clientX)*.005;
-    pitch=Math.max(.3,Math.min(1.4,pitch+(e.clientY-prev.clientY)*.005));
+    yaw-=(e.movementX||0)*.005;
+    pitch=Math.max(.3,Math.min(1.4,pitch+(e.movementY||0)*.005));
     updateCam();return;
   }
   if(!drag||!moved)return;
@@ -387,7 +361,6 @@ cv.addEventListener('pointermove',e=>{
 });
 
 cv.addEventListener('pointerup',e=>{
-  ptrs.delete(e.pointerId);
   if(!moved){
     if(drag&&drag.kind==='part'&&['resist','bulb','batt'].includes(drag.p.type))select(drag.p);
     else if(!drag)select(null);
@@ -395,17 +368,53 @@ cv.addEventListener('pointerup',e=>{
   drag=null;orbit=false;
 });
 
-/* 좌측 팔레트 동적 버튼 생성 */
+/* 팔레트 부품 드래그 앤 드롭 생성 기능 */
 const pal=$('#palette');
+const ghost=$('#dragGhost');
+let draggingType=null;
+
 Object.keys(TYPES).forEach(k=>{
-  const b=document.createElement('button');b.className='pbtn';
+  const b=document.createElement('div');
+  b.className='pbtn';
   b.innerHTML='<b>'+TYPES[k].ic+'</b>'+TYPES[k].n;
-  b.onclick=(e)=>{
-    e.stopPropagation();
-    const rx=(Math.random()-.5)*2,rz=(Math.random()-.5)*2;
-    addPart(k,rx-1.0,rz,rx+1.0,rz);
+  
+  const startDrag=(clientX, clientY)=>{
+    draggingType=k;
+    ghost.style.display='block';
+    ghost.innerHTML=TYPES[k].ic+' '+TYPES[k].n;
+    ghost.style.left=clientX+'px';
+    ghost.style.top=clientY+'px';
   };
+
+  b.addEventListener('pointerdown',e=>{
+    e.stopPropagation();
+    startDrag(e.clientX, e.clientY);
+  });
+
   pal.appendChild(b);
+});
+
+window.addEventListener('pointermove',e=>{
+  if(!draggingType) return;
+  ghost.style.left=e.clientX+'px';
+  ghost.style.top=e.clientY+'px';
+});
+
+window.addEventListener('pointerup',e=>{
+  if(!draggingType) return;
+  ghost.style.display='none';
+  
+  // 좌측 팔레트 바깥 영역에 드롭했을 때 3D 위치 계산 후 부품 추가
+  const palRect=pal.getBoundingClientRect();
+  if(e.clientX > palRect.right || e.clientY < palRect.top || e.clientY > palRect.bottom){
+    const w=wp(e);
+    if(w){
+      addPart(draggingType, w.x-1.0, w.z, w.x+1.0, w.z);
+    }else{
+      addPart(draggingType, -1.0, 0, 1.0, 0);
+    }
+  }
+  draggingType=null;
 });
 
 $('#bRst').onclick=()=>{while(parts.length)removePart(parts[0]);select(null)};
