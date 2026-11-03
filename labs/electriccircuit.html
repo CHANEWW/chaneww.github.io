@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>전기 회로 시뮬레이터 3D - Science Virtual LAB</title>
+<title>전기 회로 3D</title>
 <style>
 @font-face{font-family:'SeoulNamsanL';src:url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');font-weight:normal;font-style:normal}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
@@ -26,14 +26,20 @@ canvas{position:fixed;inset:0;touch-action:none;display:block;z-index:1}
 #hint{top:20px;left:50%;transform:translateX(-50%);padding:8px 20px;font-size:13px;color:#555;border-radius:999px;pointer-events:none;white-space:nowrap}
 
 /* 좌측 부품 팔레트 */
-#palette{left:20px;top:50%;transform:translateY(-50%);padding:12px 8px;display:flex;flex-direction:column;gap:8px;width:88px;border-radius:24px}
-.pbtn{border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:grab;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease;user-select:none}
+#palette{left:20px;top:50%;transform:translateY(-50%);padding:12px 8px;display:flex;flex-direction:column;gap:8px;width:88px;border-radius:24px;max-height:78vh;overflow:visible}
+.pbtn{touch-action:none;border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:grab;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease;user-select:none}
 .pbtn b{font-size:22px;line-height:1}
 .pbtn:hover{background:#fff;transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.08)}
 .pbtn:active{cursor:grabbing;transform:scale(0.95)}
 
 /* 드래그 고스트 요소 */
-#dragGhost{position:fixed;pointer-events:none;z-index:9999;display:none;padding:10px 16px;background:rgba(255,255,255,0.9);backdrop-filter:blur(10px);border:2px solid #3b82f6;border-radius:16px;box-shadow:0 12px 32px rgba(0,0,0,0.15);font-size:13px;font-weight:800;color:#111;transform:translate(-50%,-50%)}
+#dragGhost{position:fixed;pointer-events:none;z-index:9999;display:none;min-width:112px;padding:18px 20px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border:2px solid #3b82f6;border-radius:20px;box-shadow:0 16px 40px rgba(0,0,0,.2);font-size:15px;font-weight:800;color:#111;text-align:center;transform:translate(-50%,-55%);user-select:none}
+#dragGhost b{display:block;font-size:38px;line-height:1.25;margin-bottom:5px}
+#trash{margin-top:8px;padding:12px 4px;border:2px dashed #f87171;border-radius:16px;background:rgba(254,226,226,.72);color:#b91c1c;text-align:center;font-size:12px;font-weight:800;transition:.15s;user-select:none}
+#trash b{display:block;font-size:25px;margin-bottom:3px}
+#trash.over{background:#ef4444;color:#fff;border-color:#b91c1c;transform:scale(1.04)}
+@media(max-width:768px){#trash{padding:9px 2px;font-size:10px}#trash b{font-size:22px}}
+#boardHelp{position:fixed;right:20px;top:76px;z-index:5;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.78);color:#64748b;font-size:12px;pointer-events:none}
 
 /* 하단 컨트롤 바 */
 #bar{bottom:20px;left:50%;transform:translateX(-50%);padding:10px 24px;display:flex;gap:16px;align-items:center;justify-content:center;border-radius:999px}
@@ -74,10 +80,11 @@ canvas{position:fixed;inset:0;touch-action:none;display:block;z-index:1}
 <div id="hint" class="ui-card">💡 왼쪽 부품을 화면으로 끌어다 놓아 회로를 구성하세요</div>
 
 <!-- 좌측 팔레트 -->
-<div id="palette" class="ui-card"></div>
+<div id="palette" class="ui-card"><div id="trash"><b>🗑️</b>휴지통</div></div>
 
 <!-- 드래그 고스트 -->
 <div id="dragGhost"></div>
+<div id="boardHelp">빈 공간 드래그: 화면 회전 · 부품 드래그: 이동</div>
 
 <!-- 팝업 메뉴 -->
 <div id="pop" class="ui-card">
@@ -139,11 +146,11 @@ document.body.appendChild(renderer.domElement);
 const cv=renderer.domElement;
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(38,1,.1,100);
-let yaw=0,pitch=.85,dist=14;
+let yaw=0,pitch=.82,dist=15;
 
 function updateCam(){
   camera.position.set(dist*Math.sin(yaw)*Math.cos(pitch),dist*Math.sin(pitch),dist*Math.cos(yaw)*Math.cos(pitch)+.3);
-  camera.lookAt(0,0,.2);
+  camera.lookAt(0,0,0);
 }
 function resize(){
   renderer.setSize(innerWidth,innerHeight);
@@ -161,22 +168,27 @@ Object.assign(sun.shadow.camera,{left:-10,right:10,top:8,bottom:-8,near:1,far:30
 sun.shadow.radius=3;
 scene.add(sun);
 
-/* 3D 판 geometry */
-function rr(w,h,r){
-  const s=new THREE.Shape(),x=-w/2,y=-h/2;
-  s.moveTo(x+r,y);s.lineTo(x+w-r,y);s.quadraticCurveTo(x+w,y,x+w,y+r);
-  s.lineTo(x+w,y+h-r);s.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  s.lineTo(x+r,y+h);s.quadraticCurveTo(x,y+h,x,y+h-r);
-  s.lineTo(x,y+r);s.quadraticCurveTo(x,y,x+r,y);return s;
-}
+/* 흰색 회로 작업판: 부품 기준 높이(y=0)에 맞춘 단일 평면 */
+const boardMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.82,metalness:0});
+const board=new THREE.Mesh(new THREE.PlaneGeometry(16,9.5),boardMat);
+board.rotation.x=-Math.PI/2;
+board.position.set(0,0,0);
+board.receiveShadow=true;
+board.name='circuit-board';
+scene.add(board);
 
-const bgGeom=new THREE.ExtrudeGeometry(rr(16,9.5,0.8),{depth:.3,bevelEnabled:true,bevelThickness:.08,bevelSize:.08,bevelSegments:4,curveSegments:16});
-bgGeom.rotateX(-Math.PI/2);
-const board=new THREE.Mesh(bgGeom,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.2,metalness:.05}));
-board.position.y=-.4;board.receiveShadow=true;scene.add(board);
+/* 작업판 테두리와 은은한 격자 */
+const grid=new THREE.GridHelper(16,32,0xd7e0e8,0xe9eef3);
+grid.position.y=.012;
+grid.scale.z=9.5/16;
+scene.add(grid);
 
-const shadowPlane=new THREE.Mesh(new THREE.PlaneGeometry(16,9.5),new THREE.ShadowMaterial({opacity:.08}));
-shadowPlane.rotation.x=-Math.PI/2;shadowPlane.position.y=.01;shadowPlane.receiveShadow=true;scene.add(shadowPlane);
+const edge=new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(16,.12,9.5)),
+  new THREE.LineBasicMaterial({color:0xcbd5e1})
+);
+edge.position.y=-.06;
+scene.add(edge);
 
 /* 부품 관리 */
 const parts=[];
@@ -201,7 +213,9 @@ function addPart(type,x0,z0,x1,z1){
   }else if(type==='bulb'){
     add(new THREE.CylinderGeometry(.18,.22,.35,24),mat(0xd4af37,{metalness:.7,roughness:.3}),0,.18,0);
     p.glass=add(new THREE.SphereGeometry(.45,32,24),new THREE.MeshPhysicalMaterial({color:0xffffff,transparent:true,opacity:.3,roughness:.1,clearcoat:1}),0,.7,0);
-    p.fil=add(new THREE.SphereGeometry(.18,20,16),mat(0x666666,{emissive:0xffb840,emissiveIntensity:0}),0,.7,0);
+    p.fil=add(new THREE.SphereGeometry(.18,24,20),new THREE.MeshStandardMaterial({color:0xfff1b8,emissive:0xffa000,emissiveIntensity:0,roughness:.22}),0,.7,0);
+    p.bulbLight=new THREE.PointLight(0xffc247,0,5,1.6);p.bulbLight.position.set(0,.72,0);p.mid.add(p.bulbLight);
+    p.glow=add(new THREE.SphereGeometry(.62,24,20),new THREE.MeshBasicMaterial({color:0xffc247,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}),0,.7,0);
   }else if(type==='batt'){
     add(cylX(.3,1.0),mat(0x1f2937,{roughness:.3,metalness:.4}),-.2,0,0);
     add(cylX(.305,.45),mat(0xf59e0b,{metalness:.8,roughness:.2}),.48,0,0);
@@ -217,50 +231,81 @@ function addPart(type,x0,z0,x1,z1){
   p.ar=new THREE.InstancedMesh(new THREE.ConeGeometry(.1,.3,10).rotateZ(-Math.PI/2),new THREE.MeshBasicMaterial({color:0xef4444}),geoCount);
   p.el.frustumCulled=p.ar.frustumCulled=false;
   g.add(p.el);g.add(p.ar);
-  g.position.y=.2;scene.add(g);parts.push(p);return p;
+  g.position.y=.08;scene.add(g);parts.push(p);return p;
 }
 
 function removePart(p){
-  scene.remove(p.g);parts.splice(parts.indexOf(p),1);
+  if(!p)return;
+  scene.remove(p.g);
+  p.g.traverse(o=>{
+    if(o.geometry)o.geometry.dispose();
+    if(o.material){if(Array.isArray(o.material))o.material.forEach(m=>m.dispose());else o.material.dispose();}
+  });
+  const idx=parts.indexOf(p);if(idx>=0)parts.splice(idx,1);
   if(sel===p)select(null);
 }
 
-/* 회로 해석 */
+/* 회로 해석: 단자 노드 연결 + 전지 포함 폐회로 판정 */
 function simulate(){
   const pts=[],cnt=[];
   const id=(x,z)=>{
-    for(let i=0;i<pts.length;i++)if(Math.hypot(pts[i][0]-x,pts[i][1]-z)<.05){cnt[i]++;return i}
+    for(let i=0;i<pts.length;i++)if(Math.hypot(pts[i][0]-x,pts[i][1]-z)<.16){cnt[i]++;return i;}
     pts.push([x,z]);cnt.push(1);return pts.length-1;
   };
-  parts.forEach(p=>{p.n0=id(p.x[0],p.z[0]);p.n1=id(p.x[1],p.z[1])});
-  const n=pts.length;if(!n)return;
-  parts.forEach(p=>{p.c0=cnt[p.n0]>1;p.c1=cnt[p.n1]>1});
-  const A=Array.from({length:n},()=>new Float64Array(n+1));
-  for(let i=0;i<n;i++)A[i][i]+=1e-9;
-  parts.forEach(p=>{
-    let r=p.type==='resist'||p.type==='bulb'?p.R:p.type==='vMeter'?1e9:.001;
-    p.g=1/r;
-    const a=p.n0,b=p.n1;
-    A[a][a]+=p.g;A[b][b]+=p.g;A[a][b]-=p.g;A[b][a]-=p.g;
-    if(p.type==='batt'){const Is=p.V*p.g;A[b][n]+=Is;A[a][n]-=Is}
-  });
-  for(let c=0;c<n;c++){
-    let m=c;for(let r=c+1;r<n;r++)if(Math.abs(A[r][c])>Math.abs(A[m][c]))m=r;
-    [A[c],A[m]]=[A[m],A[c]];
-    const d=A[c][c]||1e-18;
-    for(let r=0;r<n;r++){if(r===c)continue;const f=A[r][c]/d;if(f)for(let k=c;k<=n;k++)A[r][k]-=f*A[c][k]}
+  parts.forEach(p=>{p.n0=id(p.x[0],p.z[0]);p.n1=id(p.x[1],p.z[1]);});
+  parts.forEach(p=>{p.c0=cnt[p.n0]>1;p.c1=cnt[p.n1]>1;p.closed=false;p.I=0;});
+
+  // 전구 단자를 제외하고 두 단자 사이에 전지가 포함된 경로가 있는지 확인한다.
+  function hasBatteryPath(bulb){
+    const adj=new Map();
+    const add=(n,e)=>{if(!adj.has(n))adj.set(n,[]);adj.get(n).push(e);};
+    parts.forEach(p=>{
+      if(p===bulb)return;
+      add(p.n0,{to:p.n1,battery:p.type==='batt'});
+      add(p.n1,{to:p.n0,battery:p.type==='batt'});
+    });
+    const queue=[[bulb.n0,false]],seen=new Set([bulb.n0+'|0']);
+    while(queue.length){
+      const [node,hasBattery]=queue.shift();
+      if(node===bulb.n1&&hasBattery)return true;
+      (adj.get(node)||[]).forEach(e=>{
+        const hb=hasBattery||e.battery,key=e.to+'|'+(hb?1:0);
+        if(!seen.has(key)){seen.add(key);queue.push([e.to,hb]);}
+      });
+    }
+    return false;
   }
-  const v=A.map((row,i)=>row[n]/(row[i]||1e-18));
+
+  const batteries=parts.filter(p=>p.type==='batt');
   parts.forEach(p=>{
-    p.dv=v[p.n0]-v[p.n1];
-    p.I=p.g*p.dv+(p.type==='batt'?p.V*p.g:0);
+    if(p.type==='bulb'&&batteries.length&&hasBatteryPath(p)){
+      p.closed=true;
+      const pathR=parts.filter(q=>q!==p).reduce((sum,q)=>{
+        if(q.type==='resist')return sum+Math.max(.01,q.R);
+        if(q.type==='wire'||q.type==='batt'||q.type==='iMeter')return sum+.05;
+        if(q.type==='vMeter')return sum+1e9;
+        if(q.type==='bulb')return sum+Math.max(.01,q.R);
+        return sum;
+      },Math.max(.01,p.R));
+      const voltage=batteries.reduce((v,q)=>v+q.V,0);
+      p.I=voltage/Math.max(pathR,.05);
+      p.dv=p.I*p.R;
+    }
+  });
+  // 전구 외 부품의 전류 애니메이션은 연결된 단자에서만 약하게 표시.
+  parts.forEach(p=>{
+    if(p.type!=='bulb'){
+      const connected=p.c0&&p.c1;
+      p.I=connected?0.02:0;
+      p.dv=0;
+    }
   });
 }
 
 function updatePart(p){
   const dx=p.x[1]-p.x[0],dz=p.z[1]-p.z[0],L=Math.hypot(dx,dz);
   p.L=L;
-  p.g.position.set(p.x[0],.2,p.z[0]);p.g.rotation.y=-Math.atan2(dz,dx);
+  p.g.position.set(p.x[0],.08,p.z[0]);p.g.rotation.y=-Math.atan2(dz,dx);
   p.lead.scale.x=L;p.lead.position.x=L/2;p.j[1].position.x=L;p.mid.position.x=L/2;
   [0,1].forEach(i=>{
     const on=i?p.c1:p.c0;
@@ -281,9 +326,13 @@ function updatePart(p){
   mesh.count=c;mesh.instanceMatrix.needsUpdate=true;
   
   if(p.type==='bulb'){
-    const P=I*I*p.R;
-    const b=$('#cLight').checked?1-Math.exp(-P*1.2):0;
-    p.fil.material.emissiveIntensity=b*3.5;
+    const lit=!!p.closed&&$('#cLight').checked;
+    const b=lit?1:0;
+    p.fil.material.emissiveIntensity=b*5.5;
+    p.fil.material.color.set(lit?0xffffff:0xfff1b8);
+    if(p.bulbLight)p.bulbLight.intensity=lit?3.8:0;
+    if(p.glow){p.glow.material.opacity=lit?.42:0;p.glow.scale.setScalar(lit?1.18:1);}
+
   }
 }
 
@@ -305,116 +354,158 @@ ps.oninput=()=>{
 };
 $('#pd').onclick=()=>removePart(sel);
 
-/* 터치 및 마우스 포인터 인터랙션 */
-const rc=new THREE.Raycaster(),pl=new THREE.Plane(new THREE.Vector3(0,1,0),-.2),v2=new THREE.Vector2();
+/* 포인터 조작: 작업판 위 배치, 부품 이동, 빈 공간 회전 */
+const rc=new THREE.Raycaster(),pl=new THREE.Plane(new THREE.Vector3(0,1,0),-.015),v2=new THREE.Vector2();
 function wp(e){
-  const x = e.clientX !== undefined ? e.clientX : (e.touches ? e.touches[0].clientX : 0);
-  const y = e.clientY !== undefined ? e.clientY : (e.touches ? e.touches[0].clientY : 0);
-  v2.set(x/innerWidth*2-1,-y/innerHeight*2+1);rc.setFromCamera(v2,camera);
-  const t=new THREE.Vector3();return rc.ray.intersectPlane(pl,t)?t:null;
+  v2.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);
+  rc.setFromCamera(v2,camera);
+  const t=new THREE.Vector3();
+  return rc.ray.intersectPlane(pl,t)?t:null;
 }
 function segDist(px,pz,p){
   const ax=p.x[0],az=p.z[0],bx=p.x[1],bz=p.z[1],dx=bx-ax,dz=bz-az;
-  const l2=dx*dx+dz*dz||1e-9;let t=((px-ax)*dx+(pz-az)*dz)/l2;t=Math.max(0,Math.min(1,t));
+  const l2=dx*dx+dz*dz||1e-9;
+  let t=((px-ax)*dx+(pz-az)*dz)/l2;t=Math.max(0,Math.min(1,t));
   return Math.hypot(px-ax-t*dx,pz-az-t*dz);
 }
 
-let drag=null,orbit=false,moved=false,down={x:0,y:0};
+let drag=null,orbit=false,moved=false,down={x:0,y:0},activePointer=null;
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 cv.addEventListener('pointerdown',e=>{
-  if(e.target!==cv) return;
+  if(e.target!==cv || draggingType) return;
+  activePointer=e.pointerId;
+  cv.setPointerCapture?.(e.pointerId);
   moved=false;down={x:e.clientX,y:e.clientY};
-  if(e.button===2){orbit=true;return}
-  const w=wp(e);if(!w){orbit=true;return}
-  
-  let best=.6,hit=null;
-  parts.forEach(p=>[0,1].forEach(i=>{const d=Math.hypot(w.x-p.x[i],w.z-p.z[i]);if(d<best){best=d;hit=[p,i]}}));
+  const w=wp(e);
+  if(!w){orbit=true;return;}
+
+  let best=.55,hit=null;
+  parts.forEach(p=>[0,1].forEach(i=>{
+    const d=Math.hypot(w.x-p.x[i],w.z-p.z[i]);
+    if(d<best){best=d;hit=[p,i];}
+  }));
   if(hit){
     const hx=hit[0].x[hit[1]],hz=hit[0].z[hit[1]];
-    const list=[];parts.forEach(p=>[0,1].forEach(i=>{if(Math.hypot(p.x[i]-hx,p.z[i]-hz)<.05)list.push([p,i])}));
-    drag={kind:'joint',list,ox:w.x-hx,oz:w.z-hz};select(null);return;
+    const list=[];
+    parts.forEach(p=>[0,1].forEach(i=>{
+      if(Math.hypot(p.x[i]-hx,p.z[i]-hz)<.05)list.push([p,i]);
+    }));
+    drag={kind:'joint',list,ox:w.x-hx,oz:w.z-hz};
+    select(null);return;
   }
   for(let k=parts.length-1;k>=0;k--){
     const p=parts[k];
-    if(segDist(w.x,w.z,p)<.55){
-      drag={kind:'part',p,sx:w.x,sz:w.z,x0:p.x.slice(),z0:p.z.slice()};return;
+    if(segDist(w.x,w.z,p)<.48){
+      drag={kind:'part',p,sx:w.x,sz:w.z,x0:p.x.slice(),z0:p.z.slice()};
+      return;
     }
   }
   orbit=true;
 });
 
 cv.addEventListener('pointermove',e=>{
+  if(activePointer!==null && e.pointerId!==activePointer)return;
   if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5)moved=true;
   if(orbit){
     yaw-=(e.movementX||0)*.005;
-    pitch=Math.max(.3,Math.min(1.4,pitch+(e.movementY||0)*.005));
+    pitch=Math.max(.25,Math.min(1.42,pitch+(e.movementY||0)*.005));
     updateCam();return;
   }
   if(!drag||!moved)return;
+  const tr=document.querySelector('#trash'),r=tr.getBoundingClientRect();
+  tr.classList.toggle('over',e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom);
   const w=wp(e);if(!w)return;
   if(drag.kind==='joint'){
-    drag.list.forEach(([p,i])=>{p.x[i]=w.x-drag.ox;p.z[i]=w.z-drag.oz});
+    drag.list.forEach(([p,i])=>{p.x[i]=w.x-drag.ox;p.z[i]=w.z-drag.oz;});
   }else{
     const p=drag.p,dx=w.x-drag.sx,dz=w.z-drag.sz;
-    for(let i=0;i<2;i++){p.x[i]=drag.x0[i]+dx;p.z[i]=drag.z0[i]+dz}
+    for(let i=0;i<2;i++){p.x[i]=drag.x0[i]+dx;p.z[i]=drag.z0[i]+dz;}
   }
 });
 
-cv.addEventListener('pointerup',e=>{
-  if(!moved){
-    if(drag&&drag.kind==='part'&&['resist','bulb','batt'].includes(drag.p.type))select(drag.p);
-    else if(!drag)select(null);
-  }
-  drag=null;orbit=false;
-});
+function magnetSnap(){
+  const SNAP_RADIUS=.72;
+  // 끝점 하나를 다른 부품의 끝점으로 끌어당겨 정확히 같은 노드로 만든다.
+  parts.forEach(p=>{
+    for(let i=0;i<2;i++){
+      const x=p.x[i],z=p.z[i];
+      let best=SNAP_RADIUS,target=null;
+      parts.forEach(q=>{
+        if(q===p)return;
+        for(let j=0;j<2;j++){
+          const d=Math.hypot(x-q.x[j],z-q.z[j]);
+          if(d<best){best=d;target=[q,j];}
+        }
+      });
+      if(target){p.x[i]=target[0].x[target[1]];p.z[i]=target[0].z[target[1]];}
+    }
+  });
+}
 
-/* 팔레트 부품 드래그 앤 드롭 생성 기능 */
+function finishCanvasPointer(e){
+  if(activePointer!==null && e.pointerId!==activePointer)return;
+  const trash=document.querySelector('#trash');
+  const overTrash=trash&&e.clientX>=trash.getBoundingClientRect().left&&e.clientX<=trash.getBoundingClientRect().right&&
+    e.clientY>=trash.getBoundingClientRect().top&&e.clientY<=trash.getBoundingClientRect().bottom;
+  if(drag&&drag.kind==='part'&&moved&&overTrash){
+    removePart(drag.p);
+    trash.classList.remove('over');
+  }else{
+    if(drag&&moved)magnetSnap();
+    if(!moved){
+      if(drag&&drag.kind==='part'&&['resist','bulb','batt','vMeter','iMeter'].includes(drag.p.type))select(drag.p);
+      else if(!drag)select(null);
+    }
+  }
+  drag=null;orbit=false;activePointer=null;
+}
+cv.addEventListener('pointerup',finishCanvasPointer);
+cv.addEventListener('pointercancel',finishCanvasPointer);
+cv.addEventListener('pointerleave',()=>{if(!drag)$('#trash').classList.remove('over');});
+
+/* 팔레트: 클릭/누르면 커서 주변에 큰 부품 미리보기, 작업판에 놓으면 설치 */
 const pal=$('#palette');
 const ghost=$('#dragGhost');
-let draggingType=null;
-
+let draggingType=null,dragPointerId=null;
+function moveGhost(x,y){
+  ghost.style.left=x+'px';ghost.style.top=y+'px';
+}
 Object.keys(TYPES).forEach(k=>{
-  const b=document.createElement('div');
-  b.className='pbtn';
+  const b=document.createElement('button');
+  b.type='button';b.className='pbtn';
   b.innerHTML='<b>'+TYPES[k].ic+'</b>'+TYPES[k].n;
-  
-  const startDrag=(clientX, clientY)=>{
-    draggingType=k;
-    ghost.style.display='block';
-    ghost.innerHTML=TYPES[k].ic+' '+TYPES[k].n;
-    ghost.style.left=clientX+'px';
-    ghost.style.top=clientY+'px';
-  };
-
   b.addEventListener('pointerdown',e=>{
-    e.stopPropagation();
-    startDrag(e.clientX, e.clientY);
+    e.preventDefault();e.stopPropagation();
+    draggingType=k;dragPointerId=e.pointerId;
+    ghost.innerHTML='<b>'+TYPES[k].ic+'</b>'+TYPES[k].n;
+    ghost.style.display='block';
+    moveGhost(e.clientX,e.clientY);
   });
-
-  pal.appendChild(b);
+  pal.insertBefore(b,$('#trash'));
 });
 
 window.addEventListener('pointermove',e=>{
-  if(!draggingType) return;
-  ghost.style.left=e.clientX+'px';
-  ghost.style.top=e.clientY+'px';
+  if(!draggingType||e.pointerId!==dragPointerId)return;
+  moveGhost(e.clientX,e.clientY);
 });
 
 window.addEventListener('pointerup',e=>{
-  if(!draggingType) return;
+  if(!draggingType||e.pointerId!==dragPointerId)return;
+  const type=draggingType;
   ghost.style.display='none';
-  
-  // 좌측 팔레트 바깥 영역에 드롭했을 때 3D 위치 계산 후 부품 추가
-  const palRect=pal.getBoundingClientRect();
-  if(e.clientX > palRect.right || e.clientY < palRect.top || e.clientY > palRect.bottom){
-    const w=wp(e);
-    if(w){
-      addPart(draggingType, w.x-1.0, w.z, w.x+1.0, w.z);
-    }else{
-      addPart(draggingType, -1.0, 0, 1.0, 0);
-    }
+  const paletteRect=pal.getBoundingClientRect();
+  const insidePalette=e.clientX>=paletteRect.left&&e.clientX<=paletteRect.right&&
+    e.clientY>=paletteRect.top&&e.clientY<=paletteRect.bottom;
+  const w=wp(e);
+  if(!insidePalette&&w&&Math.abs(w.x)<=7.8&&Math.abs(w.z)<=4.55){
+    const p=addPart(type,w.x-.85,w.z,w.x+.85,w.z);
+    select(p);
   }
-  draggingType=null;
+  draggingType=null;dragPointerId=null;
+});
+window.addEventListener('pointercancel',()=>{
+  draggingType=null;dragPointerId=null;ghost.style.display='none';
 });
 
 $('#bRst').onclick=()=>{while(parts.length)removePart(parts[0]);select(null)};
@@ -436,7 +527,7 @@ function frame(){
   parts.forEach(updatePart);
   if(sel&&parts.includes(sel)){
     const mx=(sel.x[0]+sel.x[1])/2,mz=(sel.z[0]+sel.z[1])/2;
-    const v=new THREE.Vector3(mx,.2,mz).project(camera);
+    const v=new THREE.Vector3(mx,.08,mz).project(camera);
     const sx=(v.x*.5+.5)*innerWidth,sy=(-v.y*.5+.5)*innerHeight;
     pop.style.left=Math.max(10,Math.min(innerWidth-230,sx-110))+'px';
     pop.style.top=Math.max(10,Math.min(innerHeight-200,sy+35))+'px';
@@ -444,6 +535,7 @@ function frame(){
   renderer.render(scene,camera);
 }
 
+$('#bCam').click();
 $('#bEx').click();
 frame();
 </script>
