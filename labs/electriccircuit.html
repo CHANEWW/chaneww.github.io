@@ -65,8 +65,9 @@ body.dark #battRCard span { color:#3b82f6; }
 #hint{top:25%;left:50%;transform:translate(-50%, -50%);padding:14px 28px;font-size:16px;font-weight:700;color:#fff;background:rgba(0,0,0,0.7);border-radius:999px;pointer-events:none;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.15);transition:opacity 0.3s ease;z-index:1000;position:fixed;}
 
 /* 좌측 부품 팔레트 */
-#palette{left:20px;top:50%;transform:translateY(-50%);padding:12px 8px;display:flex;flex-direction:column;gap:8px;width:88px;border-radius:24px;max-height:78vh;overflow:visible}
-.pbtn{touch-action:none;border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:grab;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease;user-select:none}
+#palette{left:20px;top:50%;transform:translateY(-50%);padding:12px 8px;display:flex;flex-direction:column;gap:8px;width:88px;border-radius:24px;max-height:86vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+#palette::-webkit-scrollbar{display:none}
+.pbtn{touch-action:none;border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:grab;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease;user-select:none;flex-shrink:0}
 .pbtn b{font-size:22px;line-height:1}
 .pbtn:hover{background:#fff;transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.08)}
 .pbtn:active{cursor:grabbing;transform:scale(0.95)}
@@ -74,7 +75,7 @@ body.dark #battRCard span { color:#3b82f6; }
 /* 드래그 고스트 요소 */
 #dragGhost{position:fixed;pointer-events:none;z-index:9999;display:none;min-width:112px;padding:18px 20px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border:2px solid #3b82f6;border-radius:20px;box-shadow:0 16px 40px rgba(0,0,0,.2);font-size:15px;font-weight:800;color:#111;text-align:center;transform:translate(-50%,-55%);user-select:none}
 #dragGhost b{display:block;font-size:38px;line-height:1.25;margin-bottom:5px}
-#trash{margin-top:8px;padding:12px 4px;border:2px dashed #f87171;border-radius:16px;background:rgba(254,226,226,.72);color:#b91c1c;text-align:center;font-size:12px;font-weight:800;transition:.15s;user-select:none}
+#trash{margin-top:8px;padding:12px 4px;border:2px dashed #f87171;border-radius:16px;background:rgba(254,226,226,.72);color:#b91c1c;text-align:center;font-size:12px;font-weight:800;transition:.15s;user-select:none;flex-shrink:0}
 #trash b{display:block;font-size:25px;margin-bottom:3px}
 #trash.over{background:#ef4444;color:#fff;border-color:#b91c1c;transform:scale(1.04)}
 @media(max-width:768px){#trash{padding:9px 2px;font-size:10px}#trash b{font-size:22px}}
@@ -139,7 +140,7 @@ body.dark #battRCard span { color:#3b82f6; }
 
 <!-- 드래그 고스트 -->
 <div id="dragGhost"></div>
-<div id="boardHelp">빈 공간 드래그: 화면 회전 · 부품 드래그: 이동</div>
+<div id="boardHelp">빈 공간 드래그: 화면 회전 · 부품 드래그: 이동 · 스위치 클릭: 열기/닫기</div>
 
 <!-- 팝업 메뉴 -->
 <div id="pop" class="ui-card">
@@ -184,10 +185,13 @@ const TYPES={
   resist:{n:'저항',ic:'〰',R:10},
   bulb:{n:'전구',ic:'💡',R:10},
   wire:{n:'도선',ic:'━',R:0},
+  sw:{n:'스위치',ic:'⏻',R:0},
   batt:{n:'전지',ic:'🔋',V:1.5},
   vMeter:{n:'전압계',ic:'V',R:1e8}, 
   iMeter:{n:'전류계',ic:'A',R:0}
 };
+
+const isMeter = t => t==='vMeter'||t==='iMeter';
 
 const mod=(a,b)=>((a%b)+b)%b;
 function fmt(v,u){
@@ -320,21 +324,32 @@ $('#bTheme').addEventListener('click', () => {
   sun.intensity = isDark ? 0.3 : 0.8;
 });
 
-/* 고해상도 텍스처 생성 함수 (계단 현상 및 희미한 현상 방지) */
+/* 계기판(전압계/전류계) 그리기: 글자가 크게 보이도록 폭에 맞춰 자동 조절 */
+function drawMeterFace(ctx, text, colorStr){
+  ctx.clearRect(0,0,512,512);
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath();ctx.arc(256,256,240,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=16;ctx.strokeStyle='#e2e8f0';ctx.stroke();
+
+  let size=130;
+  ctx.font='bold '+size+'px -apple-system,BlinkMacSystemFont,sans-serif';
+  const maxW=360;
+  const w=ctx.measureText(text).width;
+  if(w>maxW){
+    size=Math.floor(size*maxW/w);
+    ctx.font='bold '+size+'px -apple-system,BlinkMacSystemFont,sans-serif';
+  }
+  ctx.fillStyle=colorStr;
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(text,256,256);
+}
+
 function createMeterTexture(text, colorStr){
   const canvas=document.createElement('canvas');
   canvas.width=512; canvas.height=512;
   const ctx=canvas.getContext('2d');
-  ctx.fillStyle='#ffffff';
-  ctx.beginPath();ctx.arc(256,256,240,0,Math.PI*2);ctx.fill();
-  ctx.lineWidth=16;ctx.strokeStyle='#e2e8f0';ctx.stroke();
-  
-  ctx.fillStyle=colorStr;
-  ctx.font='bold 88px -apple-system,BlinkMacSystemFont,sans-serif';
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  ctx.fillText(text,256,256);
-  
+  drawMeterFace(ctx,text,colorStr);
   const tex=new THREE.CanvasTexture(canvas);
   tex.minFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
@@ -359,6 +374,58 @@ function createTerminalTexture(text, colorStr){
   return tex;
 }
 
+/* 부품 값 라벨 (부품 아래쪽에 현재 값 표시) */
+function createLabel(){
+  const canvas=document.createElement('canvas');
+  canvas.width=256; canvas.height=96;
+  const tex=new THREE.CanvasTexture(canvas);
+  tex.minFilter=THREE.LinearFilter;
+  tex.generateMipmaps=false;
+  const m=new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false,depthWrite:false});
+  const s=new THREE.Sprite(m);
+  s.scale.set(1.8,.675,1);
+  s.renderOrder=10;
+  scene.add(s);
+  return s;
+}
+function drawLabel(sprite,text,colorStr){
+  const canvas=sprite.material.map.image;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,256,96);
+  const x=6,y=8,w=244,h=80,r=26;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+  ctx.fillStyle='rgba(255,255,255,0.94)';ctx.fill();
+  ctx.lineWidth=5;ctx.strokeStyle=colorStr;ctx.stroke();
+
+  let size=46;
+  ctx.font='bold '+size+'px -apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif';
+  const wd=ctx.measureText(text).width;
+  if(wd>210){
+    size=Math.floor(size*210/wd);
+    ctx.font='bold '+size+'px -apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif';
+  }
+  ctx.fillStyle=colorStr;
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillText(text,128,50);
+  sprite.material.map.needsUpdate=true;
+}
+function labelInfo(p){
+  switch(p.type){
+    case 'resist': return {t:fmt(p.R,'Ω'),c:'#b45309'};
+    case 'bulb':   return {t:fmt(p.R,'Ω'),c:'#a16207'};
+    case 'batt':   return {t:fmt(p.V,'V'),c:'#dc2626'};
+    case 'sw':     return p.open?{t:'열림',c:'#6b7280'}:{t:'닫힘',c:'#16a34a'};
+  }
+  return null;
+}
+
 /* 부품 관리 */
 const parts=[];
 const cylX=(r,l)=>new THREE.CylinderGeometry(r,r,l,28).rotateZ(Math.PI/2);
@@ -367,7 +434,7 @@ const tmp=new THREE.Object3D();
 
 function addPart(type,x0,z0,x1,z1){
   const T=TYPES[type];
-  const p={type,x:[x0,x1],z:[z0,z1],V:T.V||0,R:T.R,I:0,dv:0,ph:0,conn0:false,conn1:false,fullyConnected:false,isShort:false};
+  const p={type,x:[x0,x1],z:[z0,z1],V:T.V||0,R:T.R,I:0,dv:0,ph:0,conn0:false,conn1:false,fullyConnected:false,isShort:false,open:true,leverAngle:.7};
   const g=new THREE.Group();p.g=g;
   p.mid=new THREE.Group();
   const add=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;p.mid.add(o);return o};
@@ -407,16 +474,34 @@ function addPart(type,x0,z0,x1,z1){
     
     const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), mMat);
     mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.4, .32, 0); p.mid.add(mLabel);
-  }else if(type==='vMeter'||type==='iMeter'){
+  }else if(type==='sw'){
+    /* 스위치: 도선 + 받침대 + 접점 + 움직이는 레버 */
+    p.lead.visible=false;
+    add(new THREE.BoxGeometry(1.1,.06,.6),mat(0x374151,{roughness:.5}),0,-.03,0);
+    [-.45,.45].forEach(x=>add(new THREE.CylinderGeometry(.09,.09,.3,16),mat(0xc0c5d0,{metalness:.8,roughness:.25}),x,.12,0));
+    p.stubs=[0,1].map(()=>{
+      const m=new THREE.Mesh(cylX(.07,1),mat(0xdd8844,{metalness:.7,roughness:.3}));
+      m.castShadow=true;p.mid.add(m);return m;
+    });
+    p.lever=new THREE.Group();
+    p.lever.position.set(-.45,.36,0);
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(.95,.07,.12),mat(0xdc2626,{roughness:.35}));
+    arm.position.set(.475,0,0);arm.castShadow=true;p.lever.add(arm);
+    const knob=new THREE.Mesh(new THREE.SphereGeometry(.11,16,12),mat(0x111827,{roughness:.4}));
+    knob.position.set(.92,.06,0);knob.castShadow=true;p.lever.add(knob);
+    p.mid.add(p.lever);
+    p.lever.rotation.z=p.leverAngle;
+  }else if(isMeter(type)){
     const col=type==='vMeter'?0x3b82f6:0x10b981;
     const colStr=type==='vMeter'?'#3b82f6':'#10b981';
     
-    add(new THREE.CylinderGeometry(.55,.55,.28,40),mat(col,{roughness:.3}),0,.14,0);
+    /* 계기 본체와 숫자판을 크게 */
+    add(new THREE.CylinderGeometry(.85,.85,.28,48),mat(col,{roughness:.3}),0,.14,0);
     
-    const defaultText = type==='vMeter' ? '0.00 V' : '0.00 A';
+    const defaultText = type==='vMeter' ? '0 V' : '0 A';
     p.meterTex = createMeterTexture(defaultText, colStr);
     p.meterMat = new THREE.MeshBasicMaterial({map: p.meterTex, transparent: true});
-    const displayPlane = new THREE.Mesh(new THREE.PlaneGeometry(.8,.8), p.meterMat);
+    const displayPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.6,1.6), p.meterMat);
     displayPlane.rotation.x = -Math.PI/2;
     displayPlane.position.set(0, .29, 0);
     displayPlane.renderOrder = 1; /* 숫자판을 먼저 그림 */
@@ -424,16 +509,21 @@ function addPart(type,x0,z0,x1,z1){
     
     const pTex = createTerminalTexture('+', '#ef4444');
     const mTex = createTerminalTexture('-', '#3b82f6');
-    /* 부호가 숫자판과 겹쳐 희미해지지 않도록 depthWrite 해제 */
     const pMat = new THREE.MeshBasicMaterial({map:pTex, transparent:true, side:THREE.DoubleSide, depthWrite:false});
     const mMat = new THREE.MeshBasicMaterial({map:mTex, transparent:true, side:THREE.DoubleSide, depthWrite:false});
     
-    /* 부호를 숫자판(0.29)보다 위(0.34)로 띄우고 마지막에 그려서 선명하게 표시 */
-    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.38,.38), pMat);
-    pLabel.rotation.x = -Math.PI/2; pLabel.position.set(-.36, .34, 0); pLabel.renderOrder = 2; p.mid.add(pLabel);
+    /* +/- 부호는 숫자 아래쪽 좌우에 배치해 숫자와 겹치지 않게 */
+    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), pMat);
+    pLabel.rotation.x = -Math.PI/2; pLabel.position.set(-.45, .34, .5); pLabel.renderOrder = 2; p.mid.add(pLabel);
     
-    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.38,.38), mMat);
-    mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.36, .34, 0); mLabel.renderOrder = 2; p.mid.add(mLabel);
+    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), mMat);
+    mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.45, .34, .5); mLabel.renderOrder = 2; p.mid.add(mLabel);
+  }
+
+  /* 값 라벨 (저항/전구/전지/스위치) */
+  if(['resist','bulb','batt','sw'].includes(type)){
+    p.lbl=createLabel();
+    p.lblText='';
   }
 
   const geoCount=48;
@@ -455,6 +545,11 @@ function removePart(p){
     }
   });
   if(p.meterTex) p.meterTex.dispose();
+  if(p.lbl){
+    scene.remove(p.lbl);
+    if(p.lbl.material.map)p.lbl.material.map.dispose();
+    p.lbl.material.dispose();
+  }
   const idx=parts.indexOf(p);if(idx>=0)parts.splice(idx,1);
   if(sel===p)select(null);
 }
@@ -488,7 +583,7 @@ function simulate(){
   
   if(numBatts === 0) {
     parts.forEach(p=>{
-      if(p.type==='vMeter' || p.type==='iMeter') updateMeterDisplay(p, 0);
+      if(isMeter(p.type)) updateMeterDisplay(p, 0);
     });
     return;
   }
@@ -506,8 +601,9 @@ function simulate(){
 
   parts.forEach(p=>{
     if(p.type === 'batt') return; 
+    if(p.type === 'sw' && p.open) return; /* 열린 스위치는 전류가 흐르지 않음 */
     let R = p.R;
-    if(p.type === 'wire' || p.type === 'iMeter') R = WIRE_R;
+    if(p.type === 'wire' || p.type === 'iMeter' || p.type === 'sw') R = WIRE_R;
     const G = 1 / R;
     const u = p.n0, v = p.n1;
 
@@ -535,7 +631,7 @@ function simulate(){
 
   if(!X) {
     parts.forEach(p=>{
-      if(p.type==='vMeter' || p.type==='iMeter') updateMeterDisplay(p, 0);
+      if(isMeter(p.type)) updateMeterDisplay(p, 0);
     });
     return;
   }
@@ -563,13 +659,17 @@ function simulate(){
         p.dv = v0 - v1;
         
         let R = p.R;
-        if(p.type === 'wire' || p.type === 'iMeter') R = WIRE_R;
+        if(p.type === 'wire' || p.type === 'iMeter' || p.type === 'sw') R = WIRE_R;
         
         if(p.type === 'vMeter') p.I = 0;
+        else if(p.type === 'sw' && p.open) p.I = 0;
         else p.I = p.dv / R;
       }
       p.closed = Math.abs(p.I) > 1e-4;
     }
+
+    /* 계산상 생기는 아주 작은 누설 전류(수치 오차)는 0으로 처리 */
+    if(Math.abs(p.I) < 1e-7) p.I = 0;
 
     if(p.type === 'vMeter'){
       updateMeterDisplay(p, p.dv);
@@ -626,18 +726,7 @@ function updateMeterDisplay(p, val){
   const colorStr = p.type==='vMeter' ? '#3b82f6' : '#10b981';
   const canvas = p.meterTex.image;
   const ctx = canvas.getContext('2d');
-  
-  ctx.clearRect(0,0,512,512);
-  ctx.fillStyle='#ffffff';
-  ctx.beginPath();ctx.arc(256,256,240,0,Math.PI*2);ctx.fill();
-  ctx.lineWidth=16;ctx.strokeStyle='#e2e8f0';ctx.stroke();
-  
-  ctx.fillStyle=colorStr;
-  ctx.font='bold 88px -apple-system,BlinkMacSystemFont,sans-serif';
-  ctx.textAlign='center';
-  ctx.textBaseline='middle';
-  ctx.fillText(textStr, 256, 256);
-  
+  drawMeterFace(ctx, textStr, colorStr);
   p.meterTex.needsUpdate = true;
 }
 
@@ -695,6 +784,27 @@ function updatePart(p){
   if(p.j[0].material) p.j[0].material.color.setHex(p.conn0 ? 0x9ca3af : 0xef4444);
   if(p.j[1].material) p.j[1].material.color.setHex(p.conn1 ? 0x9ca3af : 0xef4444);
 
+  /* 스위치: 도선 길이 맞추기 + 레버 애니메이션 */
+  if(p.type==='sw'){
+    const h=L/2;
+    const sl=Math.max(h-.45,.001);
+    p.stubs[0].scale.x=sl; p.stubs[0].position.x=-(h+.45)/2;
+    p.stubs[1].scale.x=sl; p.stubs[1].position.x=(h+.45)/2;
+    const target=p.open?.7:0;
+    p.leverAngle+=(target-p.leverAngle)*.25;
+    p.lever.rotation.z=p.leverAngle;
+  }
+
+  /* 값 라벨 갱신 및 위치 (부품 앞/아래쪽) */
+  if(p.lbl){
+    const info=labelInfo(p);
+    if(info){
+      const key=info.t+'|'+info.c;
+      if(p.lblText!==key){ p.lblText=key; drawLabel(p.lbl,info.t,info.c); }
+    }
+    p.lbl.position.set((p.x[0]+p.x[1])/2,.25,(p.z[0]+p.z[1])/2+.95);
+  }
+
   const modeEl=document.querySelector('input[name=mode]:checked');
   const electron=modeEl?modeEl.value==='electron':true;
   const I=p.I;
@@ -745,7 +855,7 @@ const pop=$('#pop'),ps=$('#ps'),pv=$('#pv');
 function select(p){
   sel=p;
   if(!p){pop.style.display='none';return}
-  if(p.type==='wire'||p.type==='vMeter'||p.type==='iMeter'){ pop.style.display='none'; return; }
+  if(p.type==='wire'||p.type==='sw'||isMeter(p.type)){ pop.style.display='none'; return; }
   
   pop.style.display='block';
   $('#pt').textContent=TYPES[p.type].n+' 설정';
@@ -902,7 +1012,10 @@ function finishCanvasPointer(e){
   }else{
     if(drag&&moved)magnetSnap();
     if(!moved){
-      if(drag&&drag.kind==='part'&&['resist','bulb','batt'].includes(drag.p.type))select(drag.p);
+      if(drag&&drag.kind==='part'){
+        if(drag.p.type==='sw'){ drag.p.open=!drag.p.open; select(null); }  /* 스위치 클릭: 열기/닫기 */
+        else if(['resist','bulb','batt'].includes(drag.p.type)) select(drag.p);
+      }
       else if(!drag)select(null);
     }
   }
@@ -951,7 +1064,8 @@ window.addEventListener('pointerup',e=>{
     e.clientY>=paletteRect.top&&e.clientY<=paletteRect.bottom;
   const w=wp(e);
   if(!insidePalette&&w&&Math.abs(w.x)<=7.8&&Math.abs(w.z)<=4.55){
-    const p=addPart(type,w.x-.85,w.z,w.x+.85,w.z);
+    const half=isMeter(type)?1.0:.85;
+    const p=addPart(type,w.x-half,w.z,w.x+half,w.z);
     select(p);
   }
   draggingType=null;dragPointerId=null;
