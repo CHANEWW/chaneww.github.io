@@ -125,10 +125,10 @@ body.dark #battRCard span { color:#3b82f6; }
 <!-- 우측 상단 야간/주간 모드 버튼 -->
 <button id="bTheme" class="ui-card">🌙 야간 모드</button>
 
-<!-- 우측 상단 전지 내부 저항 설정 카드 -->
+<!-- 우측 상단 전지 내부 저항 설정 카드 (시작 0.00 Ω 설정) -->
 <div id="battRCard" class="ui-card">
-  <label>⚡ 전지 내부저항 <span id="battRVal">0.05 Ω</span></label>
-  <input type="range" id="battRInput" min="0" max="5" step="0.01" value="0.05">
+  <label>⚡ 전지 내부저항 <span id="battRVal">0.00 Ω</span></label>
+  <input type="range" id="battRInput" min="0" max="5" step="0.01" value="0">
 </div>
 
 <!-- 중앙 힌트 -->
@@ -173,8 +173,8 @@ for(let i=2;i<=10;i++)RA.push(i*10);
 for(let i=2;i<=10;i++)RA.push(i*100);
 for(let i=2;i<=10;i++)RA.push(i*1000);
 
-// 전지 내부저항 상태 변수
-let batteryInternalR = 0.05;
+// 전지 내부저항 초기값 0.00 Ω 설정
+let batteryInternalR = 0.0;
 
 $('#battRInput').addEventListener('input', e => {
   batteryInternalR = parseFloat(e.target.value);
@@ -241,6 +241,11 @@ board.position.set(0,0,0);
 board.receiveShadow=true;
 board.name='circuit-board';
 scene.add(board);
+
+const grid=new THREE.GridHelper(16,32,0xd7e0e8,0xe9eef3);
+grid.position.y=.012;
+grid.scale.z=9.5/16;
+scene.add(grid);
 
 const edge=new THREE.LineSegments(
   new THREE.EdgesGeometry(new THREE.BoxGeometry(16,.12,9.5)),
@@ -496,7 +501,7 @@ function simulate(){
 
   for(let j=0; j<N; j++){ A[j][j] += 1e-9; }
 
-  const WIRE_R = 1e-4; // 이상적 도선 저항 (극소값)
+  const WIRE_R = 1e-4; // 도선 내의 최소 한계 저항
 
   parts.forEach(p=>{
     if(p.type === 'batt') return; 
@@ -517,7 +522,6 @@ function simulate(){
     A[u][idx] -= 1; A[v][idx] += 1;
     A[idx][u] -= 1; A[idx][v] += 1;
     
-    // 전지 내부저항(batteryInternalR) 반영
     A[idx][idx] -= batteryInternalR;
     Z[idx] = b.V;
   });
@@ -543,7 +547,6 @@ function simulate(){
       p.dv = p.V - Math.abs(p.I) * batteryInternalR;
       p.closed = Math.abs(p.I) > 1e-4;
       
-      // 3A 이상 대전류 흐를 시 쇼트로 판단
       if(p.closed && Math.abs(p.I) >= 3.0) {
         p.isShort = true;
       }
@@ -657,7 +660,7 @@ function updateFireAnimation(shortBatteries){
 
   for(let i=0; i<FIRE_PARTICLES; i++){
     const v = fireVelocities[i];
-    v.life -= 0.04; // 연출 가속
+    v.life -= 0.04;
 
     if(v.life <= 0){
       v.life = 1.0;
@@ -694,7 +697,6 @@ function updatePart(p){
   const I=p.I;
   const on=Math.abs(I) > 1e-4;
 
-  // 쇼트 시 전자의 미친 듯이 활발한 움직임 연출 (속도 배율 최대화)
   const speedFactor = Math.min(Math.abs(I), 100);
   p.ph += on ? Math.sign(I) * (0.02 + speedFactor * 0.15) : 0;
   
