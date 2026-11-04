@@ -173,7 +173,6 @@ for(let i=2;i<=10;i++)RA.push(i*10);
 for(let i=2;i<=10;i++)RA.push(i*100);
 for(let i=2;i<=10;i++)RA.push(i*1000);
 
-// 전지 내부저항 초기값 0.00 Ω 설정
 let batteryInternalR = 0.0;
 
 $('#battRInput').addEventListener('input', e => {
@@ -233,7 +232,7 @@ Object.assign(sun.shadow.camera,{left:-10,right:10,top:8,bottom:-8,near:1,far:30
 sun.shadow.radius=3;
 scene.add(sun);
 
-/* 작업판 및 격자 (격자 제거됨) */
+/* 작업판 및 테두리 */
 const boardMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:.82,metalness:0});
 const board=new THREE.Mesh(new THREE.PlaneGeometry(16,9.5),boardMat);
 board.rotation.x=-Math.PI/2;
@@ -274,9 +273,7 @@ fireGeo.setAttribute('size', new THREE.BufferAttribute(fireSizes, 1));
 fireGeo.setAttribute('alpha', new THREE.BufferAttribute(fireAlphas, 1));
 
 const fireMat = new THREE.ShaderMaterial({
-  uniforms: {
-    color: { value: new THREE.Color(0xff3300) }
-  },
+  uniforms: { color: { value: new THREE.Color(0xff3300) } },
   vertexShader: `
     attribute float size;
     attribute float alpha;
@@ -323,27 +320,28 @@ $('#bTheme').addEventListener('click', () => {
   sun.intensity = isDark ? 0.3 : 0.8;
 });
 
-/* 텍스트 캔버스 생성 함수 */
+/* 고해상도 텍스처 생성 함수 (계단 현상 및 희미한 현상 방지) */
 function createMeterTexture(text, colorStr){
   const canvas=document.createElement('canvas');
-  canvas.width=256;canvas.height=256;
+  canvas.width=512; canvas.height=512;
   const ctx=canvas.getContext('2d');
   ctx.fillStyle='#ffffff';
-  ctx.beginPath();ctx.arc(128,128,120,0,Math.PI*2);ctx.fill();
-  ctx.lineWidth=8;ctx.strokeStyle='#e2e8f0';ctx.stroke();
+  ctx.beginPath();ctx.arc(256,256,240,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=16;ctx.strokeStyle='#e2e8f0';ctx.stroke();
   
   ctx.fillStyle=colorStr;
-  ctx.font='bold 44px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.font='bold 88px -apple-system,BlinkMacSystemFont,sans-serif';
   ctx.textAlign='center';
   ctx.textBaseline='middle';
-  ctx.fillText(text,128,128);
+  ctx.fillText(text,256,256);
   
   const tex=new THREE.CanvasTexture(canvas);
+  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
   tex.needsUpdate=true;
   return tex;
 }
 
-/* +, - 기호 선명도 개선을 위한 고해상도 텍스처 및 필터 설정 */
 function createTerminalTexture(text, colorStr){
   const canvas=document.createElement('canvas');
   canvas.width=512; canvas.height=512;
@@ -393,20 +391,22 @@ function addPart(type,x0,z0,x1,z1){
     p.bulbLight=new THREE.PointLight(0xffea00,0,5,1.6);p.bulbLight.position.set(0,.72,0);p.mid.add(p.bulbLight);
     p.glow=add(new THREE.SphereGeometry(.62,24,20),new THREE.MeshBasicMaterial({color:0xffea00,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}),0,.7,0);
   }else if(type==='batt'){
-    add(cylX(.3,1.0),mat(0x1f2937,{roughness:.3,metalness:.4}),-.2,0,0);
-    add(cylX(.305,.45),mat(0xf59e0b,{metalness:.8,roughness:.2}),.48,0,0);
-    add(cylX(.12,.12),mat(0xe5e7eb,{metalness:.9}),.78,0,0);
+    /* 전지 방향 반전 (오른쪽이 플러스, 왼쪽이 마이너스) */
+    add(cylX(.3,1.0),mat(0x1f2937,{roughness:.3,metalness:.4}),.2,0,0);
+    add(cylX(.305,.45),mat(0xf59e0b,{metalness:.8,roughness:.2}),-.48,0,0);
+    add(cylX(.12,.12),mat(0xe5e7eb,{metalness:.9}),-.78,0,0);
     
     const pTex = createTerminalTexture('+', '#ef4444');
     const mTex = createTerminalTexture('-', '#3b82f6');
     const pMat = new THREE.MeshBasicMaterial({map:pTex, transparent:true, side:THREE.DoubleSide});
     const mMat = new THREE.MeshBasicMaterial({map:mTex, transparent:true, side:THREE.DoubleSide});
     
-    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.25,.25), pMat);
-    pLabel.rotation.x = -Math.PI/2; pLabel.position.set(.5, .32, 0); p.mid.add(pLabel);
+    // 크기와 가독성을 대폭 키운 라벨 배치
+    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), pMat);
+    pLabel.rotation.x = -Math.PI/2; pLabel.position.set(-.5, .32, 0); p.mid.add(pLabel);
     
-    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.25,.25), mMat);
-    mLabel.rotation.x = -Math.PI/2; mLabel.position.set(-.4, .32, 0); p.mid.add(mLabel);
+    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), mMat);
+    mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.4, .32, 0); p.mid.add(mLabel);
   }else if(type==='vMeter'||type==='iMeter'){
     const col=type==='vMeter'?0x3b82f6:0x10b981;
     const colStr=type==='vMeter'?'#3b82f6':'#10b981';
@@ -426,10 +426,10 @@ function addPart(type,x0,z0,x1,z1){
     const pMat = new THREE.MeshBasicMaterial({map:pTex, transparent:true, side:THREE.DoubleSide});
     const mMat = new THREE.MeshBasicMaterial({map:mTex, transparent:true, side:THREE.DoubleSide});
     
-    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.36,.36), pMat);
+    const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.38,.38), pMat);
     pLabel.rotation.x = -Math.PI/2; pLabel.position.set(-.36, .29, 0); p.mid.add(pLabel);
     
-    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.36,.36), mMat);
+    const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.38,.38), mMat);
     mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.36, .29, 0); p.mid.add(mLabel);
   }
 
@@ -622,21 +622,21 @@ function updateMeterDisplay(p, val){
   const canvas = p.meterTex.image;
   const ctx = canvas.getContext('2d');
   
-  ctx.clearRect(0,0,256,256);
+  ctx.clearRect(0,0,512,512);
   ctx.fillStyle='#ffffff';
-  ctx.beginPath();ctx.arc(128,128,120,0,Math.PI*2);ctx.fill();
-  ctx.lineWidth=8;ctx.strokeStyle='#e2e8f0';ctx.stroke();
+  ctx.beginPath();ctx.arc(256,256,240,0,Math.PI*2);ctx.fill();
+  ctx.lineWidth=16;ctx.strokeStyle='#e2e8f0';ctx.stroke();
   
   ctx.fillStyle=colorStr;
-  ctx.font='bold 44px -apple-system,BlinkMacSystemFont,sans-serif';
+  ctx.font='bold 88px -apple-system,BlinkMacSystemFont,sans-serif';
   ctx.textAlign='center';
   ctx.textBaseline='middle';
-  ctx.fillText(textStr, 128, 128);
+  ctx.fillText(textStr, 256, 256);
   
   p.meterTex.needsUpdate = true;
 }
 
-/* 불꽃 파티클 애니메이션 업데이트 */
+/* 불꽃 파티클 애니메이션 */
 function updateFireAnimation(shortBatteries){
   if(shortBatteries.length === 0){
     fireLight.intensity = 0;
