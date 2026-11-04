@@ -470,7 +470,7 @@
         dirLight.castShadow = true;
         scene.add(dirLight);
 
-        // --- 3. 바닥 및 원점 격자 스페이스 ---
+        // --- 3. 바닥 (격자 무늬 제거) ---
         const floor = new THREE.Mesh(
             new THREE.PlaneGeometry(20, 20),
             new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 })
@@ -479,10 +479,6 @@
         floor.position.y = -0.5;
         floor.receiveShadow = true;
         scene.add(floor);
-
-        const gridHelper = new THREE.GridHelper(20, 20, 0xd1d1d6, 0xe5e5ea);
-        gridHelper.position.y = -0.49;
-        scene.add(gridHelper);
 
         // --- 4. 회로 변수 및 상태 ---
         let voltage = 6.0;
@@ -542,9 +538,8 @@
             return tex;
         }
 
-        // 전기회로 실험실 표준형 전지(Battery) 모델링
+        // 전기회로 실험실 표준형 전지(Battery) 모델링 - 전구와 비슷한 크기로 축소
         const batteryGroup = new THREE.Group();
-        batteryGroup.position.set(0, 0, 1.0);
 
         const batMid = new THREE.Group();
         // 본체통 (어두운 회색)
@@ -586,22 +581,9 @@
         mLabel.position.set(0.4, 0.32, 0); 
         batMid.add(mLabel);
 
-        // 전지 리드선 구슬 단자
-        const batLead = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.05, 0.05, 1, 28).rotateZ(Math.PI/2),
-            new THREE.MeshStandardMaterial({ color: 0xc0c5d0, metalness: 0.7, roughness: 0.3 })
-        );
-        batteryGroup.add(batLead);
-        
-        const batSpheres = [0, 1].map(() => {
-            const m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 16), new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3 }));
-            batteryGroup.add(m);
-            return m;
-        });
-        batSpheres[0].position.x = -0.5;
-        batSpheres[1].position.x = 0.5;
-
-        batMid.position.x = 0.5;
+        // 크기 50%로 축소 후 중앙 정렬 (빨간 구슬 및 리드선 삭제됨)
+        batMid.scale.set(0.5, 0.5, 0.5);
+        batMid.position.x = 0.085;
         batteryGroup.add(batMid);
         batteryGroup.position.set(0, 0.08, 1.0);
         scene.add(batteryGroup);
@@ -780,7 +762,7 @@
             }
         }
 
-        function onPointerDown(e) {
+        function handleSceneClick(e) {
             getMousePos(e);
             raycaster.setFromCamera(mouse, camera);
 
@@ -823,12 +805,30 @@
                 return;
             }
 
-            // 빈 공간 클릭 시 팝업 닫기
+            // 빈 공간을 (드래그 없이) 클릭했을 때만 팝업 닫기
             popover.style.display = 'none';
             selectedPart = null;
         }
 
-        window.addEventListener('pointerdown', onPointerDown);
+        // 3D 캔버스에서만 클릭 판정, 드래그(회전)는 클릭으로 취급하지 않음
+        // → 팝업 슬라이더를 조작해도 팝업이 닫히지 않음
+        let downX = 0, downY = 0, downValid = false;
+        renderer.domElement.addEventListener('pointerdown', (e) => {
+            downX = e.clientX;
+            downY = e.clientY;
+            downValid = true;
+        });
+        renderer.domElement.addEventListener('pointerup', (e) => {
+            if (!downValid) return;
+            downValid = false;
+            const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+            if (moved < 6) handleSceneClick(e);
+        });
+
+        // 팝업 내부 조작이 아래로 전달되지 않도록 차단
+        ['pointerdown', 'pointerup', 'click'].forEach(evt => {
+            popover.addEventListener(evt, (e) => e.stopPropagation());
+        });
 
         // 팝업 슬라이더 조작 이벤트
         popSlider.addEventListener('input', (e) => {
@@ -966,8 +966,10 @@
 
             const flowSpeed = current * 0.12;
 
-            const electronDirection = isBatteryReversed ? -1 : 1;
-            const currentDirection = -electronDirection;
+            // 경로(progress 증가) 방향 = 전지 (+)극에서 나가는 전류(conventional current) 방향
+            // 전자는 그 반대 방향으로 이동
+            const currentDirection = isBatteryReversed ? -1 : 1;
+            const electronDirection = -currentDirection;
 
             // (1) 전자 애니메이션
             electrons.forEach((e) => {
