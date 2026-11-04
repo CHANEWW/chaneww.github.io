@@ -227,6 +227,68 @@ const edge=new THREE.LineSegments(
 edge.position.y=-.06;
 scene.add(edge);
 
+/* 화염 / 불꽃 파티클 시스템 생성 */
+const FIRE_PARTICLES = 35;
+const fireGeo = new THREE.BufferGeometry();
+const firePos = new Float32Array(FIRE_PARTICLES * 3);
+const fireSizes = new Float32Array(FIRE_PARTICLES);
+const fireAlphas = new Float32Array(FIRE_PARTICLES);
+const fireVelocities = [];
+
+for(let i=0; i<FIRE_PARTICLES; i++){
+  firePos[i*3] = 0; firePos[i*3+1] = -100; firePos[i*3+2] = 0;
+  fireSizes[i] = Math.random() * 0.25 + 0.15;
+  fireAlphas[i] = 0;
+  fireVelocities.push({
+    x: (Math.random() - 0.5) * 0.03,
+    y: Math.random() * 0.04 + 0.03,
+    z: (Math.random() - 0.5) * 0.03,
+    life: Math.random()
+  });
+}
+
+fireGeo.setAttribute('position', new THREE.BufferAttribute(firePos, 3));
+fireGeo.setAttribute('size', new THREE.BufferAttribute(fireSizes, 1));
+fireGeo.setAttribute('alpha', new THREE.BufferAttribute(fireAlphas, 1));
+
+// 파티클 셰이더 매터리얼
+const fireMat = new THREE.ShaderMaterial({
+  uniforms: {
+    color: { value: new THREE.Color(0xff4500) }
+  },
+  vertexShader: `
+    attribute float size;
+    attribute float alpha;
+    varying float vAlpha;
+    void main() {
+      vAlpha = alpha;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * (300.0 / -mvPosition.z);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 color;
+    varying float vAlpha;
+    void main() {
+      float r = length(gl_PointCoord - vec2(0.5));
+      if (r > 0.5) discard;
+      float intensity = smoothstep(0.5, 0.0, r);
+      vec3 finalColor = mix(vec3(1.0, 0.9, 0.2), color, r * 2.0);
+      gl_FragColor = vec4(finalColor, intensity * vAlpha);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+});
+
+const fireParticleSystem = new THREE.Points(fireGeo, fireMat);
+scene.add(fireParticleSystem);
+
+const fireLight = new THREE.PointLight(0xff5500, 0, 4);
+scene.add(fireLight);
+
 /* 다크 모드 제어 로직 */
 let isDark = false;
 $('#bTheme').addEventListener('click', () => {
@@ -284,7 +346,7 @@ const tmp=new THREE.Object3D();
 
 function addPart(type,x0,z0,x1,z1){
   const T=TYPES[type];
-  const p={type,x:[x0,x1],z:[z0,z1],V:T.V||0,R:T.R,I:0,dv:0,ph:0,conn0:false,conn1:false,fullyConnected:false};
+  const p={type,x:[x0,x1],z:[z0,z1],V:T.V||0,R:T.R,I:0,dv:0,ph:0,conn0:false,conn1:false,fullyConnected:false,isShort:false};
   const g=new THREE.Group();p.g=g;
   p.mid=new THREE.Group();
   const add=(geo,m,x,y,z)=>{const o=new THREE.Mesh(geo,m);o.position.set(x||0,y||0,z||0);o.castShadow=true;p.mid.add(o);return o};
@@ -381,7 +443,7 @@ function simulate(){
   parts.forEach(p=>{
     p.n0=id(p.x[0],p.z[0]);
     p.n1=id(p.x[1],p.z[1]);
-    p.I=0; p.dv=0; p.closed=false;
+    p.I=0; p.dv=0; p.closed=false; p.isShort=false;
   });
 
   const numNodes = pts.length;
@@ -415,10 +477,13 @@ function simulate(){
 
   for(let j=0; j<N; j++){ A[j][j] += 1e-9; }
 
+  // 쇼트 판별을 위해 회로의 내부 저항 부여
+  const WIRE_R = 0.05;
+
   parts.forEach(p=>{
     if(p.type === 'batt') return; 
     let R = p.R;
-    if(p.type === 'wire' || p.type === 'iMeter') R = 1e-4;
+    if(p.type === 'wire' || p.type === 'iMeter') R = WIRE_R;
     const G = 1 / R;
     const u = p.n0, v = p.n1;
 
@@ -456,6 +521,11 @@ function simulate(){
       p.I = -X[N + k]; 
       p.dv = p.V;
       p.closed = Math.abs(p.I) > 1e-4;
+      
+      // 전지에서 방출되는 전류가 과도할 경우 (쇼트 발생)
+      if(p.closed && Math.abs(p.I) > 5.0) {
+        p.isShort = true;
+      }
     } else {
       // 완전히 연결되지 않은 부품은 MNA 계산상 미세 가상 접지로 인해 발생하는 가짜 전압 무시
       if (!p.fullyConnected) {
@@ -467,7 +537,7 @@ function simulate(){
         p.dv = v0 - v1;
         
         let R = p.R;
-        if(p.type === 'wire' || p.type === 'iMeter') R = 1e-4;
+        if(p.type === 'wire' || p.type === 'iMeter') R = WIRE_R;
         
         if(p.type === 'vMeter') p.I = 0;
         else p.I = p.dv / R;
@@ -543,6 +613,52 @@ function updateMeterDisplay(p, val){
   ctx.fillText(textStr, 128, 128);
   
   p.meterTex.needsUpdate = true;
+}
+
+/* 불꽃 파티클 애니메이션 업데이트 */
+function updateFireAnimation(shortBatteries){
+  if(shortBatteries.length === 0){
+    fireLight.intensity = 0;
+    const alphas = fireGeo.attributes.alpha.array;
+    for(let i=0; i<FIRE_PARTICLES; i++) alphas[i] = 0;
+    fireGeo.attributes.alpha.needsUpdate = true;
+    return;
+  }
+
+  // 첫 번째 쇼트 발생 전지 중앙 위치 구하기
+  const batt = shortBatteries[0];
+  const cx = (batt.x[0] + batt.x[1]) / 2;
+  const cz = (batt.z[0] + batt.z[1]) / 2;
+  
+  fireLight.position.set(cx, 0.4, cz);
+  fireLight.intensity = 2.5 + Math.random() * 2.0;
+
+  const positions = fireGeo.attributes.position.array;
+  const alphas = fireGeo.attributes.alpha.array;
+
+  for(let i=0; i<FIRE_PARTICLES; i++){
+    const v = fireVelocities[i];
+    v.life -= 0.03;
+
+    if(v.life <= 0){
+      v.life = 1.0;
+      positions[i*3] = cx + (Math.random() - 0.5) * 0.4;
+      positions[i*3+1] = 0.15;
+      positions[i*3+2] = cz + (Math.random() - 0.5) * 0.4;
+      v.x = (Math.random() - 0.5) * 0.025;
+      v.y = Math.random() * 0.04 + 0.025;
+      v.z = (Math.random() - 0.5) * 0.025;
+    } else {
+      positions[i*3] += v.x;
+      positions[i*3+1] += v.y;
+      positions[i*3+2] += v.z;
+    }
+
+    alphas[i] = Math.sin(v.life * Math.PI);
+  }
+
+  fireGeo.attributes.position.needsUpdate = true;
+  fireGeo.attributes.alpha.needsUpdate = true;
 }
 
 function updatePart(p){
@@ -842,6 +958,11 @@ function frame(){
   requestAnimationFrame(frame);
   simulate();
   parts.forEach(updatePart);
+
+  // 쇼트 상태인 전지 감지 및 불꽃 애니메이션 갱신
+  const shortBatteries = parts.filter(p => p.type === 'batt' && p.isShort);
+  updateFireAnimation(shortBatteries);
+
   if(sel&&parts.includes(sel)){
     const mx=(sel.x[0]+sel.x[1])/2,mz=(sel.z[0]+sel.z[1])/2;
     const v=new THREE.Vector3(mx,.08,mz).project(camera);
