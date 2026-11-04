@@ -162,6 +162,34 @@
             transition: opacity 0.5s ease;
         }
 
+        /* 부품별 직접 설정 팝업 카드 */
+        .config-popover {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            padding: 14px 18px;
+            width: 200px;
+            z-index: 100;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.15);
+        }
+        .config-popover h4 {
+            margin: 0;
+            font-size: 13px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+        .config-popover .pop-val {
+            font-size: 18px;
+            font-weight: 900;
+            color: #007aff;
+            margin: 2px 0;
+        }
+        .config-popover input[type=range] {
+            width: 100%;
+            margin: 4px 0;
+        }
+
         /* 서브 물리 설정 패널 (우측 하단 배치) */
         .sub-panel {
             position: absolute;
@@ -304,6 +332,9 @@
             background: rgba(40, 40, 40, 0.75);
             color: #fff;
         }
+        body.dark-mode .config-popover h4 {
+            color: #f2f2f7;
+        }
     </style>
 </head>
 <body>
@@ -346,7 +377,14 @@
 
     <!-- 중앙 안내 툴팁 -->
     <div class="glass-panel center-tooltip" id="guide-tooltip">
-        💡 스위치를 클릭하여 회로를 연결하거나 열 수 있습니다.
+        💡 스위치를 클릭하여 회로를 켜거나, 전지·전구를 클릭해 값을 설정하세요.
+    </div>
+
+    <!-- 부품 클릭 설정 팝업 카드 -->
+    <div class="glass-panel config-popover" id="config-popover">
+        <h4 id="pop-title">전지 설정</h4>
+        <div class="pop-val" id="pop-value-text">6.0 V</div>
+        <input type="range" id="pop-slider" min="1" max="12" step="0.5" value="6">
     </div>
 
     <!-- 서브 조절 패널 (우측 하단 배치) -->
@@ -442,6 +480,10 @@
         floor.receiveShadow = true;
         scene.add(floor);
 
+        const gridHelper = new THREE.GridHelper(20, 20, 0xd1d1d6, 0xe5e5ea);
+        gridHelper.position.y = -0.49;
+        scene.add(gridHelper);
+
         // --- 4. 회로 변수 및 상태 ---
         let voltage = 6.0;
         let resistance = 10.0;
@@ -476,24 +518,93 @@
         circuitGroup.add(createWireSegment(pathPoints[2], pathPoints[3]));
         circuitGroup.add(createWireSegment(pathPoints[3], pathPoints[0]));
 
-        // 전지 배치
+        // --- 양각 형태의 선명한 + / - 극성 텍스처 생성 함수 ---
+        function createTerminalTexture(text, colorStr) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; 
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.lineWidth = 45;
+            ctx.strokeStyle = colorStr === '#ef4444' ? '#b91c1c' : '#1d4ed8';
+            ctx.fillStyle = colorStr;
+            ctx.font = '900 380px -apple-system,BlinkMacSystemFont,sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.strokeText(text, 256, 256);
+            ctx.fillText(text, 256, 256);
+            
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.minFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        // 전기회로 실험실 표준형 전지(Battery) 모델링
         const batteryGroup = new THREE.Group();
         batteryGroup.position.set(0, 0, 1.0);
 
-        const batBodyGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.7, 24);
-        const batBodyMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.5 });
-        const batBody = new THREE.Mesh(batBodyGeo, batBodyMat);
-        batBody.rotation.z = Math.PI / 2;
-        batteryGroup.add(batBody);
+        const batMid = new THREE.Group();
+        // 본체통 (어두운 회색)
+        const batBodyMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.3, 0.3, 1.0, 28).rotateZ(Math.PI/2),
+            new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.3, metalness: 0.4 })
+        );
+        batBodyMesh.castShadow = true;
+        batMid.add(batBodyMesh);
 
-        const batPosCapGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.1, 16);
-        const batPosCapMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, metalness: 0.8 });
-        const batPosCap = new THREE.Mesh(batPosCapGeo, batPosCapMat);
-        batPosCap.rotation.z = Math.PI / 2;
-        batPosCap.position.x = 0.38;
-        batteryGroup.add(batPosCap);
+        // 양극 돌출부 (노란색/금속성)
+        const batCapMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.305, 0.305, 0.45, 28).rotateZ(Math.PI/2),
+            new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8, roughness: 0.2 })
+        );
+        batCapMesh.position.x = -0.48;
+        batMid.add(batCapMesh);
 
-        circuitGroup.add(batteryGroup);
+        const batTipMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.12, 0.12, 0.12, 28).rotateZ(Math.PI/2),
+            new THREE.MeshStandardMaterial({ color: 0xe5e7eb, metalness: 0.9 })
+        );
+        batTipMesh.position.x = -0.78;
+        batMid.add(batTipMesh);
+
+        // 양각 + / - 기호 부착 (왼쪽이 +, 오른쪽이 -)
+        const pTex = createTerminalTexture('+', '#ef4444');
+        const mTex = createTerminalTexture('-', '#3b82f6');
+        const pMat = new THREE.MeshBasicMaterial({ map: pTex, transparent: true, side: THREE.DoubleSide });
+        const mMat = new THREE.MeshBasicMaterial({ map: mTex, transparent: true, side: THREE.DoubleSide });
+
+        const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.38), pMat);
+        pLabel.rotation.x = -Math.PI / 2; 
+        pLabel.position.set(-0.5, 0.32, 0); 
+        batMid.add(pLabel);
+
+        const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.38), mMat);
+        mLabel.rotation.x = -Math.PI / 2; 
+        mLabel.position.set(0.4, 0.32, 0); 
+        batMid.add(mLabel);
+
+        // 전지 리드선 구슬 단자
+        const batLead = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.05, 0.05, 1, 28).rotateZ(Math.PI/2),
+            new THREE.MeshStandardMaterial({ color: 0xc0c5d0, metalness: 0.7, roughness: 0.3 })
+        );
+        batteryGroup.add(batLead);
+        
+        const batSpheres = [0, 1].map(() => {
+            const m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 16), new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3 }));
+            batteryGroup.add(m);
+            return m;
+        });
+        batSpheres[0].position.x = -0.5;
+        batSpheres[1].position.x = 0.5;
+
+        batMid.position.x = 0.5;
+        batteryGroup.add(batMid);
+        batteryGroup.position.set(0, 0.08, 1.0);
+        scene.add(batteryGroup);
 
         // 스위치 배치
         const switchGroup = new THREE.Group();
@@ -571,20 +682,17 @@
         // --- 6. 전자/전류 시각화 입자 생성 ---
         const numParticles = 28;
 
-        // 구슬 단일면에만 마크 1개가 정면 표출되도록 선명한 2D 텍스처 생성
         function createSingleMinusTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 128;
             canvas.height = 128;
             const ctx = canvas.getContext('2d');
 
-            // 바탕 파란색 구
             ctx.fillStyle = '#007aff';
             ctx.beginPath();
             ctx.arc(64, 64, 60, 0, Math.PI * 2);
             ctx.fill();
 
-            // 정중앙 검정색 단일 - 마크 (1개만 표출)
             ctx.fillStyle = '#1c1c1e';
             ctx.beginPath();
             ctx.roundRect ? ctx.roundRect(32, 54, 64, 20, 6) : ctx.fillRect(32, 54, 64, 20);
@@ -595,13 +703,11 @@
 
         const electronTex = createSingleMinusTexture();
         const electronGeo = new THREE.SphereGeometry(0.045, 16, 16);
-        // 마크 중복 방지 및 상단 정면 단일 표시 세팅
         const electronMat = new THREE.MeshBasicMaterial({ map: electronTex });
 
         const electrons = [];
         for (let i = 0; i < numParticles; i++) {
             const mesh = new THREE.Mesh(electronGeo, electronMat);
-            // Z축 기준 마크 1개만 위로 선명하게 정렬
             mesh.rotation.x = -Math.PI / 2;
             scene.add(mesh);
             electrons.push({ mesh, progress: i / numParticles });
@@ -645,9 +751,15 @@
             return { pos, dir };
         }
 
-        // --- 7. 인터랙션 및 상태 제어 ---
+        // --- 7. 인터랙션 및 팝업 제어 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
+        let selectedPart = null; // 'battery' 또는 'bulb'
+
+        const popover = document.getElementById('config-popover');
+        const popTitle = document.getElementById('pop-title');
+        const popValText = document.getElementById('pop-value-text');
+        const popSlider = document.getElementById('pop-slider');
 
         function getMousePos(e) {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -672,15 +784,69 @@
             getMousePos(e);
             raycaster.setFromCamera(mouse, camera);
 
-            const intersects = raycaster.intersectObjects([swArm, handle, swBase, term1, term2], true);
-            if (intersects.length > 0) {
+            // 1. 스위치 클릭 검사
+            const swIntersects = raycaster.intersectObjects([swArm, handle, swBase, term1, term2], true);
+            if (swIntersects.length > 0) {
                 toggleSwitchState();
+                popover.style.display = 'none';
+                selectedPart = null;
                 const tooltip = document.getElementById('guide-tooltip');
                 if (tooltip) tooltip.style.opacity = '0';
+                return;
             }
+
+            // 2. 전지(Battery) 클릭 검사
+            const batIntersects = raycaster.intersectObjects(batteryGroup.children, true);
+            if (batIntersects.length > 0) {
+                selectedPart = 'battery';
+                popTitle.innerText = '전지 전압 설정';
+                popSlider.min = '1';
+                popSlider.max = '12';
+                popSlider.step = '0.5';
+                popSlider.value = voltage;
+                popValText.innerText = voltage.toFixed(1) + ' V';
+                popover.style.display = 'flex';
+                return;
+            }
+
+            // 3. 전구(Bulb) 클릭 검사
+            const bulbIntersects = raycaster.intersectObjects(bulbGroup.children, true);
+            if (bulbIntersects.length > 0) {
+                selectedPart = 'bulb';
+                popTitle.innerText = '저항값 설정';
+                popSlider.min = '2';
+                popSlider.max = '30';
+                popSlider.step = '1';
+                popSlider.value = resistance;
+                popValText.innerText = resistance.toFixed(1) + ' Ω';
+                popover.style.display = 'flex';
+                return;
+            }
+
+            // 빈 공간 클릭 시 팝업 닫기
+            popover.style.display = 'none';
+            selectedPart = null;
         }
 
         window.addEventListener('pointerdown', onPointerDown);
+
+        // 팝업 슬라이더 조작 이벤트
+        popSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            if (selectedPart === 'battery') {
+                voltage = val;
+                popValText.innerText = voltage.toFixed(1) + ' V';
+                document.getElementById('txt-voltage').innerText = voltage.toFixed(1) + ' V';
+                document.getElementById('val-voltage').innerText = voltage.toFixed(1) + ' V';
+                sldVoltage.value = voltage;
+            } else if (selectedPart === 'bulb') {
+                resistance = val;
+                popValText.innerText = resistance.toFixed(1) + ' Ω';
+                document.getElementById('txt-resistance').innerText = resistance.toFixed(1) + ' Ω';
+                document.getElementById('val-resistance').innerText = resistance.toFixed(1) + ' Ω';
+                sldResistance.value = resistance;
+            }
+        });
 
         // --- 8. UI 컨트롤 이벤트 ---
         const btnTogglePhysics = document.getElementById('btn-toggle-physics');
@@ -697,12 +863,20 @@
             voltage = parseFloat(e.target.value);
             document.getElementById('txt-voltage').innerText = voltage.toFixed(1) + ' V';
             document.getElementById('val-voltage').innerText = voltage.toFixed(1) + ' V';
+            if (selectedPart === 'battery') {
+                popValText.innerText = voltage.toFixed(1) + ' V';
+                popSlider.value = voltage;
+            }
         });
 
         sldResistance.addEventListener('input', (e) => {
             resistance = parseFloat(e.target.value);
             document.getElementById('txt-resistance').innerText = resistance.toFixed(1) + ' Ω';
             document.getElementById('val-resistance').innerText = resistance.toFixed(1) + ' Ω';
+            if (selectedPart === 'bulb') {
+                popValText.innerText = resistance.toFixed(1) + ' Ω';
+                popSlider.value = resistance;
+            }
         });
 
         document.getElementById('btn-switch-toggle').addEventListener('click', () => toggleSwitchState());
@@ -748,6 +922,8 @@
             btnCurrent.classList.remove('selected');
 
             toggleSwitchState(false);
+            popover.style.display = 'none';
+            selectedPart = null;
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
@@ -772,6 +948,7 @@
 
         // --- 9. 시뮬레이션 애니메이션 루프 ---
         const clock = new THREE.Clock();
+        const tempV3 = new THREE.Vector3();
 
         function animate() {
             requestAnimationFrame(animate);
@@ -792,7 +969,7 @@
             const electronDirection = isBatteryReversed ? -1 : 1;
             const currentDirection = -electronDirection;
 
-            // (1) 단일 마크 전자 애니메이션
+            // (1) 전자 애니메이션
             electrons.forEach((e) => {
                 if (isClosed && viewMode === 'electron') {
                     e.progress += delta * flowSpeed * electronDirection;
@@ -822,6 +999,18 @@
                     c.mesh.visible = false;
                 }
             });
+
+            // 선택된 부품이 있을 때 팝업창 위치를 3D 좌표에 실시간 고정
+            if (selectedPart) {
+                let targetPos = selectedPart === 'battery' ? batteryGroup.position : bulbGroup.position;
+                tempV3.copy(targetPos);
+                tempV3.y += 0.5;
+                tempV3.project(camera);
+                const sx = (tempV3.x * 0.5 + 0.5) * window.innerWidth;
+                const sy = (-tempV3.y * 0.5 + 0.5) * window.innerHeight;
+                popover.style.left = Math.max(20, Math.min(window.innerWidth - 220, sx - 100)) + 'px';
+                popover.style.top = Math.max(20, Math.min(window.innerHeight - 150, sy - 110)) + 'px';
+            }
 
             controls.update();
             renderer.render(scene, camera);
