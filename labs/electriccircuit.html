@@ -194,12 +194,14 @@ const TYPES={
 const isMeter = t => t==='vMeter'||t==='iMeter';
 
 const mod=(a,b)=>((a%b)+b)%b;
+
+/* 포맷팅 함수: 0.1mA / 0.1mV 미만 미세 누설 오치는 0으로 깔끔하게 정리 */
 function fmt(v,u){
   const a=Math.abs(v);
-  if(a<1e-12)return '0 '+u;
-  for(const[s,p]of[[1e6,'M'],[1e3,'k'],[1,''],[1e-3,'m'],[1e-6,'μ']])
+  if(a<1e-4)return '0 '+u;
+  for(const[s,p]of[[1e6,'M'],[1e3,'k'],[1,''],[1e-3,'m']])
     if(a>=s)return(+(v/s).toPrecision(3))+' '+p+u;
-  return(+(v/1e-6).toPrecision(3))+' μ'+u;
+  return '0 '+u;
 }
 
 /* 3D 렌더러 & 씬 기본 설정 */
@@ -324,7 +326,7 @@ $('#bTheme').addEventListener('click', () => {
   sun.intensity = isDark ? 0.3 : 0.8;
 });
 
-/* 계기판(전압계/전류계) 그리기: 글자가 크게 보이도록 폭에 맞춰 자동 조절 */
+/* 계기판(전압계/전류계) 그리기 */
 function drawMeterFace(ctx, text, colorStr){
   ctx.clearRect(0,0,512,512);
   ctx.fillStyle='#ffffff';
@@ -374,7 +376,7 @@ function createTerminalTexture(text, colorStr){
   return tex;
 }
 
-/* 부품 값 라벨 (부품 아래쪽에 현재 값 표시) */
+/* 부품 값 라벨 */
 function createLabel(){
   const canvas=document.createElement('canvas');
   canvas.width=256; canvas.height=96;
@@ -458,7 +460,6 @@ function addPart(type,x0,z0,x1,z1){
     p.bulbLight=new THREE.PointLight(0xffea00,0,5,1.6);p.bulbLight.position.set(0,.72,0);p.mid.add(p.bulbLight);
     p.glow=add(new THREE.SphereGeometry(.62,24,20),new THREE.MeshBasicMaterial({color:0xffea00,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending}),0,.7,0);
   }else if(type==='batt'){
-    /* 전지 방향 반전 (왼쪽이 플러스, 오른쪽이 마이너스) */
     add(cylX(.3,1.0),mat(0x1f2937,{roughness:.3,metalness:.4}),.2,0,0);
     add(cylX(.305,.45),mat(0xf59e0b,{metalness:.8,roughness:.2}),-.48,0,0);
     add(cylX(.12,.12),mat(0xe5e7eb,{metalness:.9}),-.78,0,0);
@@ -468,14 +469,12 @@ function addPart(type,x0,z0,x1,z1){
     const pMat = new THREE.MeshBasicMaterial({map:pTex, transparent:true, side:THREE.DoubleSide});
     const mMat = new THREE.MeshBasicMaterial({map:mTex, transparent:true, side:THREE.DoubleSide});
     
-    // 크기와 가독성을 대폭 키운 라벨 배치
     const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), pMat);
     pLabel.rotation.x = -Math.PI/2; pLabel.position.set(-.5, .32, 0); p.mid.add(pLabel);
     
     const mLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), mMat);
     mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.4, .32, 0); p.mid.add(mLabel);
   }else if(type==='sw'){
-    /* 스위치: 도선 + 받침대 + 접점 + 움직이는 레버 */
     p.lead.visible=false;
     add(new THREE.BoxGeometry(1.1,.06,.6),mat(0x374151,{roughness:.5}),0,-.03,0);
     [-.45,.45].forEach(x=>add(new THREE.CylinderGeometry(.09,.09,.3,16),mat(0xc0c5d0,{metalness:.8,roughness:.25}),x,.12,0));
@@ -495,7 +494,6 @@ function addPart(type,x0,z0,x1,z1){
     const col=type==='vMeter'?0x3b82f6:0x10b981;
     const colStr=type==='vMeter'?'#3b82f6':'#10b981';
     
-    /* 계기 본체와 숫자판을 크게 */
     add(new THREE.CylinderGeometry(.85,.85,.28,48),mat(col,{roughness:.3}),0,.14,0);
     
     const defaultText = type==='vMeter' ? '0 V' : '0 A';
@@ -504,7 +502,7 @@ function addPart(type,x0,z0,x1,z1){
     const displayPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.6,1.6), p.meterMat);
     displayPlane.rotation.x = -Math.PI/2;
     displayPlane.position.set(0, .29, 0);
-    displayPlane.renderOrder = 1; /* 숫자판을 먼저 그림 */
+    displayPlane.renderOrder = 1;
     p.mid.add(displayPlane);
     
     const pTex = createTerminalTexture('+', '#ef4444');
@@ -512,7 +510,6 @@ function addPart(type,x0,z0,x1,z1){
     const pMat = new THREE.MeshBasicMaterial({map:pTex, transparent:true, side:THREE.DoubleSide, depthWrite:false});
     const mMat = new THREE.MeshBasicMaterial({map:mTex, transparent:true, side:THREE.DoubleSide, depthWrite:false});
     
-    /* +/- 부호는 숫자 아래쪽 좌우에 배치해 숫자와 겹치지 않게 */
     const pLabel = new THREE.Mesh(new THREE.PlaneGeometry(.34,.34), pMat);
     pLabel.rotation.x = -Math.PI/2; pLabel.position.set(-.45, .34, .5); pLabel.renderOrder = 2; p.mid.add(pLabel);
     
@@ -520,7 +517,6 @@ function addPart(type,x0,z0,x1,z1){
     mLabel.rotation.x = -Math.PI/2; mLabel.position.set(.45, .34, .5); mLabel.renderOrder = 2; p.mid.add(mLabel);
   }
 
-  /* 값 라벨 (저항/전구/전지/스위치) */
   if(['resist','bulb','batt','sw'].includes(type)){
     p.lbl=createLabel();
     p.lblText='';
@@ -601,7 +597,7 @@ function simulate(){
 
   parts.forEach(p=>{
     if(p.type === 'batt') return; 
-    if(p.type === 'sw' && p.open) return; /* 열린 스위치는 전류가 흐르지 않음 */
+    if(p.type === 'sw' && p.open) return;
     let R = p.R;
     if(p.type === 'wire' || p.type === 'iMeter' || p.type === 'sw') R = WIRE_R;
     const G = 1 / R;
@@ -616,7 +612,6 @@ function simulate(){
   batteries.forEach((b, k)=>{
     const idx = N + k;
     const u = b.n0; const v = b.n1; 
-    /* 화면 표시와 일치: 왼쪽 끝(n0)이 + 극(높은 전위), 오른쪽 끝(n1)이 - 극 */
     A[u][idx] += 1; A[v][idx] -= 1;
     A[idx][u] += 1; A[idx][v] -= 1;
     
@@ -641,7 +636,6 @@ function simulate(){
   parts.forEach(p=>{
     if(p.type==='batt'){
       const k = batteries.indexOf(p);
-      /* 전지 내부 전류: n0→n1 방향을 양(+)으로 사용 (전지 안에서는 - 극에서 + 극으로 흐름) */
       p.I = X[N + k]; 
       p.dv = p.V - Math.abs(p.I) * batteryInternalR;
       p.closed = Math.abs(p.I) > 1e-4;
@@ -668,8 +662,9 @@ function simulate(){
       p.closed = Math.abs(p.I) > 1e-4;
     }
 
-    /* 계산상 생기는 아주 작은 누설 전류(수치 오차)는 0으로 처리 */
-    if(Math.abs(p.I) < 1e-7) p.I = 0;
+    /* 계산상 생기는 극미세 누설 오차 수치(1e-5 미만) 강제 클램핑 처리 */
+    if(Math.abs(p.I) < 1e-5) p.I = 0;
+    if(Math.abs(p.dv) < 1e-5) p.dv = 0;
 
     if(p.type === 'vMeter'){
       updateMeterDisplay(p, p.dv);
@@ -784,7 +779,6 @@ function updatePart(p){
   if(p.j[0].material) p.j[0].material.color.setHex(p.conn0 ? 0x9ca3af : 0xef4444);
   if(p.j[1].material) p.j[1].material.color.setHex(p.conn1 ? 0x9ca3af : 0xef4444);
 
-  /* 스위치: 도선 길이 맞추기 + 레버 애니메이션 */
   if(p.type==='sw'){
     const h=L/2;
     const sl=Math.max(h-.45,.001);
@@ -795,7 +789,6 @@ function updatePart(p){
     p.lever.rotation.z=p.leverAngle;
   }
 
-  /* 값 라벨 갱신 및 위치 (부품 앞/아래쪽) */
   if(p.lbl){
     const info=labelInfo(p);
     if(info){
@@ -889,7 +882,7 @@ function segDist(px,pz,p){
 
 let drag=null,orbit=false,moved=false,down={x:0,y:0},activePointer=null;
 
-/* 화면 줌(확대/축소) 제어 */
+/* 화면 줌 제어 */
 let isPinching = false;
 
 cv.addEventListener('wheel', e => {
@@ -1013,7 +1006,7 @@ function finishCanvasPointer(e){
     if(drag&&moved)magnetSnap();
     if(!moved){
       if(drag&&drag.kind==='part'){
-        if(drag.p.type==='sw'){ drag.p.open=!drag.p.open; select(null); }  /* 스위치 클릭: 열기/닫기 */
+        if(drag.p.type==='sw'){ drag.p.open=!drag.p.open; select(null); }
         else if(['resist','bulb','batt'].includes(drag.p.type)) select(drag.p);
       }
       else if(!drag)select(null);
