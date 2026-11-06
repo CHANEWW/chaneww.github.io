@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>거리에 따른 빛의 세기 3D</title>
+    <style>
+        /* 서울남산체L 웹폰트 불러오기 */
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #0b0e14;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            color: #ffffff;
+        }
+
+        /* 3D 캔버스 영역 */
+        #webgl-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* 좌측 상단 네비게이션 버튼 */
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 12px;
+            color: #ffffff;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+        }
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+        }
+
+        /* 상단 중앙 타이틀 패널 */
+        .title-panel {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(20, 25, 35, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            padding: 12px 28px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .title-panel h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: -0.5px;
+            color: #ffffff;
+        }
+        .title-panel p {
+            margin: 4px 0 0 0;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* 우측 데이터 및 제어 패널 (visionOS Glassmorphism) */
+        .control-panel {
+            position: absolute;
+            top: 85px;
+            right: 20px;
+            z-index: 10;
+            width: 310px;
+            background: rgba(25, 30, 45, 0.75);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+
+        .panel-section {
+            margin-bottom: 18px;
+        }
+        .panel-section:last-child { margin-bottom: 0; }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #007aff;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .data-card {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .data-label { font-size: 13px; color: #a0a5b5; }
+        .data-value { font-size: 18px; font-weight: bold; color: #ffffff; }
+        .unit { font-size: 13px; margin-left: 3px; color: #ffcc00; }
+
+        .slider-group {
+            margin-top: 10px;
+        }
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+        input[type=range] {
+            width: 100%;
+            accent-color: #007aff;
+            cursor: pointer;
+        }
+
+        .btn-toggle {
+            width: 100%;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 122, 255, 0.8);
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-toggle:hover { background: rgba(0, 122, 255, 1); }
+        .btn-toggle.off { background: rgba(231, 76, 60, 0.8); }
+
+        /* 우측 하단 컨트롤러 */
+        .floating-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+        .action-btn {
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-weight: bold;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .action-btn:hover { background: rgba(255, 255, 255, 0.25); }
+
+        /* 드래그 힌트 안내문구 */
+        .drag-hint {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+    <!-- Three.js 3D 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <!-- 좌상단 메인 이동 버튼 -->
+    <a href="../index.html" class="back-btn">⬅ 메인 화면으로 돌아가기</a>
+
+    <!-- 상단 타이틀 -->
+    <div class="title-panel">
+        <h1>거리에 따른 빛의 세기 3D</h1>
+        <p>💡 스탠드를 좌우로 드래그하여 거리(m)와 조도(lx)의 관계를 관찰해보세요.</p>
+    </div>
+
+    <!-- 탐구 데이터 및 물리 제어 패널 -->
+    <div class="control-panel">
+        <div class="panel-section">
+            <div class="section-title">📊 실시간 측정 데이터</div>
+            <div class="data-card">
+                <span class="data-label">측정 거리 (r)</span>
+                <div><span id="distVal" class="data-value">1.00</span><span class="unit">m</span></div>
+            </div>
+            <div class="data-card">
+                <span class="data-label">측정 조도 (E)</span>
+                <div><span id="luxVal" class="data-value" style="color:#ffcc00;">1000.0</span><span class="unit">lx</span></div>
+            </div>
+        </div>
+
+        <div class="panel-section">
+            <div class="section-title">⚙️ 스탠드 광원 설정</div>
+            <button id="powerBtn" class="btn-toggle">💡 전원 꺼기 (ON)</button>
+            
+            <div class="slider-group" style="margin-top: 14px;">
+                <div class="slider-header">
+                    <span>전구 광도 설정 (I)</span>
+                    <span id="powerVal" style="color:#007aff; font-weight:bold;">100 %</span>
+                </div>
+                <input type="range" id="powerSlider" min="20" max="200" value="100" step="10">
+            </div>
+        </div>
+
+        <div class="panel-section" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px;">
+            <div style="font-size: 11px; color: #a0a5b5; line-height: 1.4;">
+                📌 <b>역제곱 법칙 ($E \propto 1/r^2$):</b><br/>
+                거리가 2배가 되면 조도는 $\mathbf{1/4}$로 감소합니다.
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 드래그 힌트 -->
+    <div class="drag-hint">🖐️ 마우스 또는 손가락으로 스탠드를 잡고 좌우로 끌어 이동하세요.</div>
+
+    <!-- 우하단 제어 버튼 -->
+    <div class="floating-controls">
+        <button id="resetBtn" class="action-btn">🔄 초기화</button>
+        <button id="fullscreenBtn" class="action-btn">⛶ 전체화면</button>
+    </div>
+
+    <!-- 3D 뷰포트 컨테이너 -->
+    <div id="webgl-container"></div>
+
+    <script>
+        // -------------------------------------------------------------
+        // Three.js 기반 3D 그래픽 & 물리 엔진 연산
+        // -------------------------------------------------------------
+        let scene, camera, renderer;
+        let luxMeterGroup, standGroup, lightCone, bulbMesh, pointLight;
+        let rulerGroup;
+
+        // 물리 변수
+        let isPowerOn = true;
+        let baseIntensity = 1000; // 1m에서 기본 1000 lx
+        let powerPercent = 100;
+        let standX = 1.0; // 조도계로부터의 초기 거리 (m)
+        const meterX = 0.0; // 조도계 X 위치 (0m 지점)
+
+        // 인터랙션 (드래그) 변수
+        let isDragging = false;
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        const container = document.getElementById('webgl-container');
+
+        function init() {
+            // 1. Scene & Camera Setup
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0b0e14, 0.03);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(2.5, 3.2, 5.5);
+            camera.lookAt(2.0, 0.6, 0);
+
+            // 2. Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // 3. 조명 (환경광 + 은은한 스튜디오 조명)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
+            dirLight.position.set(5, 10, 5);
+            scene.add(dirLight);
+
+            // 4. 바닥 grid & 긴 눈금자 (0m ~ 5m)
+            createFloorAndRuler();
+
+            // 5. 왼쪽에 배치된 조도계 (Lux Meter) 3D 모델링
+            createLuxMeter();
+
+            // 6. 오른쪽에 이동 가능한 스탠드 조명 (Stand Light) 3D 모델링
+            createStandLight();
+
+            // 7. 이벤트 리스너 등록
+            setupEvents();
+
+            // 8. 루프 실행
+            updatePhysics();
+            animate();
+        }
+
+        // 바닥 및 m 단위 눈금자 생성
+        function createFloorAndRuler() {
+            // 테이블 바닥
+            const tableGeo = new THREE.BoxGeometry(7, 0.2, 3);
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x1e2533, roughness: 0.5 });
+            const table = new THREE.Mesh(tableGeo, tableMat);
+            table.position.set(2.2, -0.1, 0);
+            table.receiveShadow = true;
+            scene.add(table);
+
+            // 긴 눈금자 (0m ~ 5m)
+            rulerGroup = new THREE.Group();
+            const rulerLength = 5.2; // meters
+            const rulerGeo = new THREE.BoxGeometry(rulerLength, 0.02, 0.4);
+            const rulerMat = new THREE.MeshStandardMaterial({ color: 0xdfdfdf, roughness: 0.3 });
+            const rulerMesh = new THREE.Mesh(rulerGeo, rulerMat);
+            rulerMesh.position.set(rulerLength / 2 - 0.1, 0.01, 0.6);
+            rulerGroup.add(rulerMesh);
+
+            // 눈금 텍스트 대신 3D 눈금 표시선 생성 (0.1m, 0.5m, 1m 단위)
+            for (let m = 0; m <= 50; m++) {
+                let posM = m * 0.1;
+                let isMajor = (m % 10 === 0);
+                let isMedium = (m % 5 === 0);
+
+                let lineLen = isMajor ? 0.25 : (isMedium ? 0.18 : 0.1);
+                let lineThickness = isMajor ? 0.015 : 0.008;
+
+                const lineGeo = new THREE.BoxGeometry(lineThickness, 0.022, lineLen);
+                const lineMat = new THREE.MeshBasicMaterial({ color: isMajor ? 0xff0000 : 0x222222 });
+                const line = new THREE.Mesh(lineGeo, lineMat);
+                line.position.set(posM, 0.015, 0.6);
+                rulerGroup.add(line);
+            }
+
+            scene.add(rulerGroup);
+        }
+
+        // 왼쪽에 위치할 조도계 모델링 (Sensor)
+        function createLuxMeter() {
+            luxMeterGroup = new THREE.Group();
+            luxMeterGroup.position.set(meterX, 0.02, 0);
+
+            // 본체
+            const bodyGeo = new THREE.BoxGeometry(0.35, 0.12, 0.5);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.4 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.set(0, 0.06, 0);
+            luxMeterGroup.add(body);
+
+            // 수광 센서 (둥근 돔 형태)
+            const sensorGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.04, 32);
+            const sensorMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1, emissive: 0x222222 });
+            const sensor = new THREE.Mesh(sensorGeo, sensorMat);
+            sensor.position.set(0, 0.13, -0.1);
+            luxMeterGroup.add(sensor);
+
+            // 조도계 수치 디스플레이창
+            const dispGeo = new THREE.PlaneGeometry(0.25, 0.15);
+            const dispMat = new THREE.MeshBasicMaterial({ color: 0x001100 });
+            const disp = new THREE.Mesh(dispGeo, dispMat);
+            disp.rotation.x = -Math.PI / 2;
+            disp.position.set(0, 0.121, 0.1);
+            luxMeterGroup.add(disp);
+
+            scene.add(luxMeterGroup);
+        }
+
+        // 이동 가능한 스탠드 조명 (Stand Light)
+        function createStandLight() {
+            standGroup = new THREE.Group();
+            standGroup.position.set(standX, 0, 0);
+
+            // 밑받침
+            const baseGeo = new THREE.CylinderGeometry(0.22, 0.25, 0.05, 32);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x34495e, roughness: 0.3 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.025;
+            standGroup.add(base);
+
+            // 지지대 봉
+            const poleGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 16);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0xbdc3c7, metalness: 0.8, roughness: 0.2 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.set(0, 0.45, 0);
+            standGroup.add(pole);
+
+            // 갓 (Shade)
+            const shadeGeo = new THREE.ConeGeometry(0.2, 0.25, 32, 1, true);
+            const shadeMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, side: THREE.DoubleSide });
+            const shade = new THREE.Mesh(shadeGeo, shadeMat);
+            shade.rotation.z = Math.PI / 2; // 조도계를 향하도록 좌측으로 기울임
+            shade.position.set(-0.1, 0.8, 0);
+            standGroup.add(shade);
+
+            // 전구 (Bulb)
+            const bulbGeo = new THREE.SphereGeometry(0.07, 16, 16);
+            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+            bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+            bulbMesh.position.set(-0.12, 0.8, 0);
+            standGroup.add(bulbMesh);
+
+            // 점광원 (Point Light)
+            pointLight = new THREE.PointLight(0xffea9f, 2, 8);
+            pointLight.position.set(-0.15, 0.8, 0);
+            pointLight.castShadow = true;
+            standGroup.add(pointLight);
+
+            // 원뿔형 빛 투사 시각화 (Cone Visualization)
+            const coneGeo = new THREE.ConeGeometry(0.8, 2.5, 32, 1, true);
+            coneGeo.translate(0, -1.25, 0); // 기준점 상단 이동
+            const coneMat = new THREE.MeshBasicMaterial({
+                color: 0xfffae6,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            lightCone = new THREE.Mesh(coneGeo, coneMat);
+            lightCone.rotation.z = Math.PI / 2;
+            lightCone.position.set(-0.15, 0.8, 0);
+            standGroup.add(lightCone);
+
+            scene.add(standGroup);
+        }
+
+        // 역제곱 법칙 물리 연산 ($E = \frac{I}{r^2}$)
+        function updatePhysics() {
+            // 거리는 센서(0m)에서 스탠드 X축 위치까지의 거리
+            let dist = Math.max(0.2, standGroup.position.x - meterX); 
+            
+            let currentLux = 0;
+            if (isPowerOn) {
+                // E = (Base * PowerRatio) / r^2
+                currentLux = (baseIntensity * (powerPercent / 100)) / (dist * dist);
+                pointLight.intensity = (powerPercent / 100) * 3;
+                bulbMesh.material.color.setHex(0xffffaa);
+                lightCone.visible = true;
+                lightCone.scale.set(1, dist / 2.5, 1);
+                lightCone.material.opacity = Math.min(0.25, (powerPercent / 100) * 0.2);
+            } else {
+                currentLux = 0;
+                pointLight.intensity = 0;
+                bulbMesh.material.color.setHex(0x333333);
+                lightCone.visible = false;
+            }
+
+            // UI 수치 업데이트
+            document.getElementById('distVal').innerText = dist.toFixed(2);
+            document.getElementById('luxVal').innerText = currentLux.toFixed(1);
+        }
+
+        // 터치 및 마우스 드래그 연동 (PC / 스마트폰 호환)
+        function setupEvents() {
+            window.addEventListener('resize', onWindowResize);
+
+            const powerBtn = document.getElementById('powerBtn');
+            const powerSlider = document.getElementById('powerSlider');
+            const powerVal = document.getElementById('powerVal');
+            const resetBtn = document.getElementById('resetBtn');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+            // 전원 토글
+            powerBtn.addEventListener('click', () => {
+                isPowerOn = !isPowerOn;
+                if (isPowerOn) {
+                    powerBtn.innerText = '💡 전원 켜짐 (ON)';
+                    powerBtn.classList.remove('off');
+                } else {
+                    powerBtn.innerText = '🔌 전원 꺼짐 (OFF)';
+                    powerBtn.classList.add('off');
+                }
+                updatePhysics();
+            });
+
+            // 광량 슬라이더
+            powerSlider.addEventListener('input', (e) => {
+                powerPercent = parseFloat(e.target.value);
+                powerVal.innerText = powerPercent + ' %';
+                updatePhysics();
+            });
+
+            // 초기화
+            resetBtn.addEventListener('click', () => {
+                standGroup.position.x = 1.0;
+                isPowerOn = true;
+                powerPercent = 100;
+                powerSlider.value = 100;
+                powerVal.innerText = '100 %';
+                powerBtn.innerText = '💡 전원 켜짐 (ON)';
+                powerBtn.classList.remove('off');
+                updatePhysics();
+            });
+
+            // 전체화면
+            fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                }
+            });
+
+            // 마우스 & 터치 드래그 연산
+            function onPointerDown(e) {
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(standGroup.children, true);
+
+                if (intersects.length > 0) {
+                    isDragging = true;
+                    container.style.cursor = 'grabbing';
+                }
+            }
+
+            function onPointerMove(e) {
+                if (!isDragging) return;
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const targetPos = new THREE.Vector3();
+                raycaster.ray.intersectPlane(dragPlane, targetPos);
+
+                // 스탠드 이동 범위 제한 (0.3m ~ 5.0m)
+                if (targetPos) {
+                    standGroup.position.x = Math.max(0.3, Math.min(5.0, targetPos.x));
+                    updatePhysics();
+                }
+            }
+
+            function onPointerUp() {
+                isDragging = false;
+                container.style.cursor = 'default';
+            }
+
+            window.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
