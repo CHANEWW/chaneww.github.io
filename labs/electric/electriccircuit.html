@@ -65,7 +65,7 @@ body.dark #battRCard span { color:#3b82f6; }
 #hint{top:25%;left:50%;transform:translate(-50%, -50%);padding:14px 28px;font-size:16px;font-weight:700;color:#fff;background:rgba(0,0,0,0.7);border-radius:999px;pointer-events:none;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.15);transition:opacity 0.3s ease;z-index:1000;position:fixed;}
 
 /* 좌측 부품 팔레트 */
-#palette{left:20px;top:50%;transform:translateY(-50%);padding:12px 8px;display:flex;flex-direction:column;gap:8px;width:88px;border-radius:24px;max-height:86vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+#palette{left:20px;top:50%;transform:translateY(-50%);padding:12px 8px;display:flex;flex-direction:column;gap:8px;width:88px;border-radius:24px;max-height:86vh;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 #palette::-webkit-scrollbar{display:none}
 .pbtn{touch-action:none;border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:grab;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease;user-select:none;flex-shrink:0}
 .pbtn b{font-size:22px;line-height:1}
@@ -254,8 +254,9 @@ const edge=new THREE.LineSegments(
 edge.position.y=-.06;
 scene.add(edge);
 
-/* 화염 / 불꽃 파티클 시스템 생성 */
-const FIRE_PARTICLES = 45;
+/* 화염 / 불꽃 파티클 시스템 생성 (쇼트된 전지 여러 개 지원) */
+const FIRE_PARTICLES = 120;
+const MAX_FIRE_LIGHTS = 6;
 const fireGeo = new THREE.BufferGeometry();
 const firePos = new Float32Array(FIRE_PARTICLES * 3);
 const fireSizes = new Float32Array(FIRE_PARTICLES);
@@ -308,10 +309,15 @@ const fireMat = new THREE.ShaderMaterial({
 });
 
 const fireParticleSystem = new THREE.Points(fireGeo, fireMat);
+fireParticleSystem.frustumCulled = false;
 scene.add(fireParticleSystem);
 
-const fireLight = new THREE.PointLight(0xff4400, 0, 5);
-scene.add(fireLight);
+const fireLights = [];
+for(let i=0; i<MAX_FIRE_LIGHTS; i++){
+  const l = new THREE.PointLight(0xff4400, 0, 5);
+  scene.add(l);
+  fireLights.push(l);
+}
 
 /* 다크 모드 제어 로직 */
 let isDark = false;
@@ -726,28 +732,36 @@ function updateMeterDisplay(p, val){
   p.meterTex.needsUpdate = true;
 }
 
-/* 불꽃 파티클 애니메이션 */
+/* 불꽃 파티클 애니메이션: 쇼트된 전지 모두에서 불꽃 발생 */
 function updateFireAnimation(shortBatteries){
-  if(shortBatteries.length === 0){
-    fireLight.intensity = 0;
-    const alphas = fireGeo.attributes.alpha.array;
+  const positions = fireGeo.attributes.position.array;
+  const alphas = fireGeo.attributes.alpha.array;
+  const n = shortBatteries.length;
+
+  if(n === 0){
+    fireLights.forEach(l => l.intensity = 0);
     for(let i=0; i<FIRE_PARTICLES; i++) alphas[i] = 0;
     fireGeo.attributes.alpha.needsUpdate = true;
     return;
   }
 
-  const batt = shortBatteries[0];
-  const cx = (batt.x[0] + batt.x[1]) / 2;
-  const cz = (batt.z[0] + batt.z[1]) / 2;
-  
-  fireLight.position.set(cx, 0.4, cz);
-  fireLight.intensity = 3.0 + Math.random() * 3.0;
+  /* 전지별 불빛 */
+  fireLights.forEach((l, i)=>{
+    if(i < n){
+      const b = shortBatteries[i];
+      l.position.set((b.x[0]+b.x[1])/2, 0.4, (b.z[0]+b.z[1])/2);
+      l.intensity = 3.0 + Math.random() * 3.0;
+    } else {
+      l.intensity = 0;
+    }
+  });
 
-  const positions = fireGeo.attributes.position.array;
-  const alphas = fireGeo.attributes.alpha.array;
-
+  /* 파티클을 전지들에 나눠서 배정 */
   for(let i=0; i<FIRE_PARTICLES; i++){
     const v = fireVelocities[i];
+    const batt = shortBatteries[i % n];
+    const cx = (batt.x[0] + batt.x[1]) / 2;
+    const cz = (batt.z[0] + batt.z[1]) / 2;
     v.life -= 0.04;
 
     if(v.life <= 0){
@@ -764,7 +778,7 @@ function updateFireAnimation(shortBatteries){
       positions[i*3+2] += v.z;
     }
 
-    alphas[i] = Math.sin(v.life * Math.PI);
+    alphas[i] = Math.sin(Math.max(v.life,0) * Math.PI);
   }
 
   fireGeo.attributes.position.needsUpdate = true;
@@ -1028,8 +1042,17 @@ cv.addEventListener('pointerleave',()=>{if(!drag)$('#trash').classList.remove('o
 const pal=$('#palette');
 const ghost=$('#dragGhost');
 let draggingType=null,dragPointerId=null;
+let palPending=null; // 터치 시작 후 아직 '스크롤'/'드래그'가 결정되지 않은 상태
 function moveGhost(x,y){
   ghost.style.left=x+'px';ghost.style.top=y+'px';
+}
+function startPaletteDrag(k,e){
+  const hintEl = document.getElementById('hint');
+  if(hintEl) hintEl.style.opacity = '0';
+  draggingType=k;dragPointerId=e.pointerId;
+  ghost.innerHTML='<b>'+TYPES[k].ic+'</b>'+TYPES[k].n;
+  ghost.style.display='block';
+  moveGhost(e.clientX,e.clientY);
 }
 Object.keys(TYPES).forEach(k=>{
   const b=document.createElement('button');
@@ -1037,24 +1060,53 @@ Object.keys(TYPES).forEach(k=>{
   b.innerHTML='<b>'+TYPES[k].ic+'</b>'+TYPES[k].n;
   b.addEventListener('pointerdown',e=>{
     e.preventDefault();e.stopPropagation();
-    
-    const hintEl = document.getElementById('hint');
-    if(hintEl) hintEl.style.opacity = '0';
-    
-    draggingType=k;dragPointerId=e.pointerId;
-    ghost.innerHTML='<b>'+TYPES[k].ic+'</b>'+TYPES[k].n;
-    ghost.style.display='block';
-    moveGhost(e.clientX,e.clientY);
+    if(e.pointerType==='mouse'){
+      startPaletteDrag(k,e);
+    }else{
+      /* 터치/펜: 위아래로 움직이면 목록 스크롤, 오른쪽(화면 쪽)으로 끌면 부품 드래그 */
+      palPending={k,id:e.pointerId,sx:e.clientX,sy:e.clientY,sc:pal.scrollTop,mode:null};
+    }
   });
   pal.insertBefore(b,$('#trash'));
 });
 
 window.addEventListener('pointermove',e=>{
+  /* 터치: 스크롤/드래그 판별 */
+  if(palPending && e.pointerId===palPending.id){
+    const P=palPending;
+    const dx=e.clientX-P.sx, dy=e.clientY-P.sy;
+    const r=pal.getBoundingClientRect();
+    const outside=e.clientX>r.right+6||e.clientX<r.left-6||e.clientY<r.top-30||e.clientY>r.bottom+30;
+    const canScroll=pal.scrollHeight>pal.clientHeight+2;
+
+    if(!P.mode){
+      if(Math.hypot(dx,dy)<8 && !outside) return;
+      if(outside || !canScroll || Math.abs(dx)>Math.abs(dy)) P.mode='drag';
+      else P.mode='scroll';
+    }
+    if(P.mode==='drag'){
+      const k=P.k;
+      palPending=null;
+      startPaletteDrag(k,e);
+      return;
+    }
+    if(P.mode==='scroll'){
+      pal.scrollTop=P.sc-dy;
+      /* 스크롤 중 팔레트 밖으로 벗어나면 부품 드래그로 전환 */
+      if(e.clientX>r.right+6){
+        const k=P.k;
+        palPending=null;
+        startPaletteDrag(k,e);
+      }
+    }
+    return;
+  }
   if(!draggingType||e.pointerId!==dragPointerId)return;
   moveGhost(e.clientX,e.clientY);
 });
 
 window.addEventListener('pointerup',e=>{
+  if(palPending && e.pointerId===palPending.id){ palPending=null; return; }
   if(!draggingType||e.pointerId!==dragPointerId)return;
   const type=draggingType;
   ghost.style.display='none';
@@ -1070,6 +1122,7 @@ window.addEventListener('pointerup',e=>{
   draggingType=null;dragPointerId=null;
 });
 window.addEventListener('pointercancel',()=>{
+  palPending=null;
   draggingType=null;dragPointerId=null;ghost.style.display='none';
 });
 
