@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>가상실험실 템플릿</title>
+<style>
+@font-face{font-family:'SeoulNamsanL';src:url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');font-weight:normal;font-style:normal}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;color:#1c1c1e;background:#f4f7f6;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR","SeoulNamsanL",sans-serif; transition: background 0.3s, color 0.3s;}
+
+/* 3D 캔버스 */
+canvas{position:fixed;inset:0;touch-action:none;display:block;z-index:1}
+
+/* visionOS 스타일 비주얼 유리 (Glassmorphism) Card */
+.ui-card{background:rgba(255,255,255,0.75);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.8);border-radius:18px;box-shadow:0 8px 32px rgba(0,0,0,0.06);z-index:100;position:fixed; transition: all 0.3s;}
+
+/* 좌측 상단 헤더 영역 */
+#top-left-wrap { position:fixed; top:16px; left:20px; display:flex; align-items:stretch; gap:10px; z-index:100; height:42px; }
+.back-btn { display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.75); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.8); font-family:inherit; font-size:15px; font-weight:600; color:#111; cursor:pointer; padding:0 18px; border-radius:999px; box-shadow:0 8px 32px rgba(0,0,0,0.06); transition:all .2s; text-decoration:none; }
+.back-btn:hover { background:rgba(255,255,255,0.9); transform:translateY(-1px); }
+#header { position:relative; top:0; left:0; display:flex; align-items:center; gap:10px; padding:0 18px; border-radius:999px; }
+.title-text{font-size:15px;font-weight:600;color:#111}
+.badge-tag{background:#e8f0fe;color:#3b82f6;font-size:11px;font-weight:700;padding:3px 8px;border-radius:999px}
+
+/* 우측 상단 야간모드 토글 버튼 */
+#bTheme{top:16px;right:20px;padding:8px 16px;border:none;font-weight:700;color:#333;cursor:pointer;font-size:13px;transition:background .2s; border-radius:999px;}
+#bTheme:hover{background:rgba(0,0,0,0.05)}
+
+/* 우측 상단 파라미터 컨트롤 카드 예시 */
+#paramCard {
+  position:fixed; right:20px; top:70px; z-index:100;
+  padding:12px 16px; display:flex; flex-direction:column; gap:6px;
+  width:200px; border-radius:18px;
+}
+#paramCard label { font-size:12px; font-weight:700; color:#444; display:flex; justify-content:space-between; align-items:center; }
+#paramCard span { color:#2c3e50; font-weight:800; font-size:13px; }
+#paramCard input[type=range] { width:100%; accent-color:#2c3e50; cursor:pointer; }
+
+/* 야간(다크) 모드 스타일 */
+body.dark { background: #1c1c1e; color: #fff; }
+body.dark .ui-card { background: rgba(40,40,40,0.75); border: 1px solid rgba(255,255,255,0.1); box-shadow:0 8px 32px rgba(0,0,0,0.4); }
+body.dark .title-text { color: #fff; }
+body.dark .back-btn { background: rgba(40,40,40,0.75); color: #fff; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); }
+body.dark .back-btn:hover { background: rgba(60,60,60,0.85); }
+body.dark #bTheme { color: #eee; }
+body.dark #bTheme:hover { background: rgba(255,255,255,0.1); }
+body.dark .pbtn { background: rgba(60,60,60,0.6); color: #eee; }
+body.dark .pbtn:hover { background: #555; }
+body.dark .seg { background: rgba(255,255,255,0.1); }
+body.dark .seg label { color: #bbb; }
+body.dark .seg label:has(input:checked) { background: #444; color: #fff; }
+body.dark .cbtn { background: rgba(60,60,60,0.8); color: #eee; }
+body.dark .cbtn:hover { background: #555; }
+body.dark #pop h4, body.dark #pv { color: #fff; }
+body.dark .ctl-group { color: #ddd; }
+body.dark #boardHelp { background: rgba(40,40,40,0.78); color:#aaa; }
+body.dark #paramCard label { color:#bbb; }
+body.dark #paramCard span { color:#3b82f6; }
+body.dark #palette-container { background: rgba(40,40,40,0.75); border: 1px solid rgba(255,255,255,0.1); }
+body.dark .lever-track { background: rgba(255,255,255,0.15); }
+
+/* 중앙 상단 힌트 안내창 */
+#hint{top:22%;left:50%;transform:translate(-50%, -50%);padding:14px 28px;font-size:15px;font-weight:700;color:#fff;background:rgba(0,0,0,0.72);border-radius:999px;pointer-events:none;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.15);transition:opacity 0.3s ease;z-index:1000;position:fixed;}
+
+/* 좌측 부품 팔레트 컨테이너 & 수직 조절 레버 바 */
+#palette-container {
+  left:20px; top:50%; transform:translateY(-50%);
+  display:flex; align-items:stretch; gap:6px;
+  padding:8px 6px; border-radius:24px; z-index:100;
+  max-height:86vh;
+}
+#palette{
+  display:flex; flex-direction:column; gap:8px; width:88px;
+  max-height:calc(86vh - 16px); overflow-y:auto; overflow-x:hidden;
+  scrollbar-width:none; touch-action:pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+}
+#palette::-webkit-scrollbar{display:none}
+
+/* 수직 조절 레버 슬라이더 */
+.lever-wrapper {
+  display:flex; flex-direction:column; align-items:center; justify-space-between;
+  width:16px; padding:6px 0; background:rgba(0,0,0,0.03); border-radius:12px; user-select:none;
+}
+.lever-btn { font-size:10px; color:#666; cursor:pointer; font-weight:bold; line-height:1; }
+.lever-track {
+  position:relative; flex:1; width:6px; margin:4px 0;
+  background:rgba(0,0,0,0.1); border-radius:3px; cursor:pointer;
+}
+.lever-thumb {
+  position:absolute; left:50%; top:0; transform:translateX(-50%);
+  width:14px; height:18px; background:#3b82f6; border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.2); cursor:grab; transition:background 0.2s;
+}
+.lever-thumb:active { cursor:grabbing; background:#1d4ed8; }
+
+.pbtn{touch-action:none;border:none;background:rgba(255,255,255,0.6);border-radius:16px;padding:10px 4px;color:#333;font:inherit;font-size:12px;font-weight:700;cursor:grab;display:flex;flex-direction:column;align-items:center;gap:4px;box-shadow:0 2px 8px rgba(0,0,0,0.04);transition:all .15s ease;user-select:none;flex-shrink:0}
+.pbtn b{font-size:22px;line-height:1}
+.pbtn:hover{background:#fff;transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.08)}
+.pbtn:active{cursor:grabbing;transform:scale(0.95)}
+
+/* 드래그 고스트 및 휴지통 */
+#dragGhost{position:fixed;pointer-events:none;z-index:9999;display:none;min-width:112px;padding:18px 20px;background:rgba(255,255,255,.96);backdrop-filter:blur(14px);border:2px solid #3b82f6;border-radius:20px;box-shadow:0 16px 40px rgba(0,0,0,.2);font-size:15px;font-weight:800;color:#111;text-align:center;transform:translate(-50%,-55%);user-select:none}
+#dragGhost b{display:block;font-size:38px;line-height:1.25;margin-bottom:5px}
+#trash{margin-top:8px;padding:12px 4px;border:2px dashed #f87171;border-radius:16px;background:rgba(254,226,226,.72);color:#b91c1c;text-align:center;font-size:12px;font-weight:800;transition:.15s;user-select:none;flex-shrink:0}
+#trash b{display:block;font-size:25px;margin-bottom:3px}
+#trash.over{background:#ef4444;color:#fff;border-color:#b91c1c;transform:scale(1.04)}
+
+#boardHelp{position:fixed;right:20px;top:72px;z-index:5;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.78);color:#64748b;font-size:12px;pointer-events:none}
+
+/* 하단 컨트롤 바 */
+#bar{bottom:20px;left:50%;transform:translateX(-50%);padding:10px 24px;display:flex;gap:16px;align-items:center;justify-content:center;border-radius:999px}
+.ctl-group{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#444}
+.seg{display:flex;background:rgba(0,0,0,0.06);border-radius:999px;padding:3px}
+.seg label{padding:6px 14px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;color:#666;transition:all .2s}
+.seg input{display:none}
+.seg label:has(input:checked){background:#fff;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+
+.cbtn{border:none;background:rgba(255,255,255,0.8);color:#333;border-radius:999px;padding:8px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.05);transition:all .2s}
+.cbtn:hover{background:#fff;transform:translateY(-1px)}
+.cbtn:active{transform:scale(0.96)}
+
+/* 속성 설정 팝업 창 */
+#pop{display:none;width:220px;padding:16px;border-radius:24px;z-index:200}
+#pop h4{margin:0 0 6px;font-size:14px;color:#111}
+#pop input[type=range]{width:100%;margin:8px 0 12px;accent-color:#2c3e50}
+#pv{font-size:20px;font-weight:900;color:#2c3e50;margin-bottom:4px}
+.btn-del{width:100%;border:none;background:#fee2e2;color:#ef4444;border-radius:12px;padding:8px;font-weight:700;cursor:pointer}
+.btn-del:hover{background:#fca5a5;color:#fff}
+
+@media(max-width:768px){
+  #top-left-wrap { left:12px; gap:8px; height:38px; }
+  .back-btn { padding:0 14px; font-size:13px; }
+  #header { padding:0 14px; }
+  #palette-container { padding:6px 4px; }
+  #palette{width:76px;}
+  .pbtn{font-size:11px;padding:8px 2px}
+  .title-text{font-size:13px}
+  #hint{display:none}
+  #paramCard{width:160px; right:12px; top:110px; padding:8px 12px;}
+}
+</style>
+</head>
+<body>
+
+<!-- 상단 헤더 영역 -->
+<div id="top-left-wrap">
+  <a href="/index.html" class="back-btn">⬅ 메인</a>
+  <div id="header" class="ui-card">
+    <span class="title-text">가상실험실 템플릿</span>
+    <span class="badge-tag">3D Lab</span>
+  </div>
+</div>
+
+<!-- 우측 상단 야간/주간 모드 토글 버튼 -->
+<button id="bTheme" class="ui-card">🌙 야간 모드</button>
+
+<!-- 우측 상단 파라미터 컨트롤 예시 카드 -->
+<div id="paramCard" class="ui-card">
+  <label>⚙️ 시스템 변수 <span id="paramVal">1.00</span></label>
+  <input type="range" id="paramInput" min="0.1" max="5.0" step="0.1" value="1.0">
+</div>
+
+<!-- 중앙 안내 힌트 -->
+<div id="hint">💡 왼쪽 요소/부품을 화면으로 끌어다 놓아 실험을 구성하세요</div>
+
+<!-- 좌측 부품 팔레트 및 상하 위치 조절 레버 카드 -->
+<div id="palette-container" class="ui-card">
+  <div id="palette">
+    <div id="trash"><b>🗑️</b>휴지통</div>
+  </div>
+  <!-- 수직 조절 레버 -->
+  <div class="lever-wrapper">
+    <span class="lever-btn" id="leverUp">▲</span>
+    <div class="lever-track" id="leverTrack">
+      <div class="lever-thumb" id="leverThumb"></div>
+    </div>
+    <span class="lever-btn" id="leverDown">▼</span>
+  </div>
+</div>
+
+<!-- 드래그 고스트 요소 -->
+<div id="dragGhost"></div>
+<div id="boardHelp">빈 공간 드래그: 화면 회전 · 물체 드래그: 이동 · 클릭: 속성 설정</div>
+
+<!-- 부품 속성 설정 팝업 메뉴 -->
+<div id="pop" class="ui-card">
+  <h4 id="pt">요소 설정</h4>
+  <div id="pv">1.0</div>
+  <input type="range" id="ps" min="1" max="100" value="10">
+  <button class="btn-del" id="pd">삭제</button>
+</div>
+
+<!-- 하단 컨트롤 바 -->
+<div id="bar" class="ui-card">
+  <div class="seg">
+    <label><input type="radio" name="mode" value="modeA" checked>기본 모드</label>
+    <label><input type="radio" name="mode" value="modeB">관찰 모드</label>
+  </div>
+
+  <div class="ctl-group">
+    <label style="cursor:pointer;"><input type="checkbox" id="cOption" checked style="accent-color:#2c3e50;"> 이펙트 표시</label>
+  </div>
+
+  <button class="cbtn" id="bEx">⚡ 예제 구성</button>
+  <button class="cbtn" id="bRst">🔄 초기화</button>
+  <button class="cbtn" id="bCam">🎥 시점정렬</button>
+</div>
+
+<!-- Three.js 엔진 로드 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+
+/* ----------------------------------------------------
+   1. 실험 요소 (Types) 정의 및 등록 템플릿
+   ---------------------------------------------------- */
+const TYPES = {
+  cube:   { n: '정육면체', ic: '🧊', param: 10 },
+  sphere: { n: '구형 물체', ic: '🔮', param: 15 },
+  sensor: { n: '측정 센서', ic: '📊', param: 0 }
+};
+
+let globalParam = 1.0;
+$('#paramInput').addEventListener('input', e => {
+  globalParam = parseFloat(e.target.value);
+  $('#paramVal').textContent = globalParam.toFixed(2);
+});
+
+/* ----------------------------------------------------
+   2. Three.js 씬, 카메라, 렌더러, 조명 기본 설정
+   ---------------------------------------------------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const cv = renderer.domElement;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+let yaw = 0, pitch = 0.82, dist = 15;
+
+function updateCam() {
+  camera.position.set(dist * Math.sin(yaw) * Math.cos(pitch), dist * Math.sin(pitch), dist * Math.cos(yaw) * Math.cos(pitch) + 0.3);
+  camera.lookAt(0, 0, 0);
+}
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize);
+resize();
+
+/* 조명 설정 */
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0xdde3ea, 1.1);
+scene.add(hemiLight);
+
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(5, 12, 7);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 8, bottom: -8, near: 1, far: 30 });
+sun.shadow.radius = 3;
+scene.add(sun);
+
+/* 실험 바닥판 (Board) */
+const boardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0 });
+const board = new THREE.Mesh(new THREE.PlaneGeometry(16, 9.5), boardMat);
+board.rotation.x = -Math.PI / 2;
+board.position.set(0, 0, 0);
+board.receiveShadow = true;
+board.name = 'experiment-board';
+scene.add(board);
+
+const edge = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(16, 0.12, 9.5)),
+  new THREE.LineBasicMaterial({ color: 0xcbd5e1 })
+);
+edge.position.y = -0.06;
+scene.add(edge);
+
+/* ----------------------------------------------------
+   3. 테마 (주간/야간 모드) 동적 제어
+   ---------------------------------------------------- */
+let isDark = false;
+$('#bTheme').addEventListener('click', () => {
+  isDark = !isDark;
+  document.body.classList.toggle('dark', isDark);
+  $('#bTheme').innerHTML = isDark ? '☀️ 주간 모드' : '🌙 야간 모드';
+  
+  boardMat.color.setHex(isDark ? 0x222222 : 0xffffff);
+  edge.material.color.setHex(isDark ? 0x555555 : 0xcbd5e1);
+  hemiLight.intensity = isDark ? 0.25 : 1.1;
+  sun.intensity = isDark ? 0.3 : 0.8;
+});
+
+/* ----------------------------------------------------
+   4. 실험 데이터 / 오브젝트 관리 시스템
+   ---------------------------------------------------- */
+const objects = [];
+const mat = (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.4, metalness: 0.15 }, o || {}));
+
+function addObject(type, x, z) {
+  const T = TYPES[type];
+  const item = { type, x, z, val: T.param || 10 };
+  const g = new THREE.Group();
+  item.g = g;
+
+  if (type === 'cube') {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), mat(0x3b82f6));
+    mesh.position.y = 0.4;
+    mesh.castShadow = true;
+    g.add(mesh);
+  } else if (type === 'sphere') {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 24), mat(0xef4444, { roughness: 0.2 }));
+    mesh.position.y = 0.5;
+    mesh.castShadow = true;
+    g.add(mesh);
+  } else if (type === 'sensor') {
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.2, 32), mat(0x10b981));
+    base.position.y = 0.1;
+    base.castShadow = true;
+    g.add(base);
+  }
+
+  g.position.set(x, 0, z);
+  scene.add(g);
+  objects.push(item);
+  return item;
+}
+
+function removeObject(item) {
+  if (!item) return;
+  scene.remove(item.g);
+  item.g.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+      else o.material.dispose();
+    }
+  });
+  const idx = objects.indexOf(item);
+  if (idx >= 0) objects.splice(idx, 1);
+  if (sel === item) select(null);
+}
+
+/* ----------------------------------------------------
+   5. 물리 연산 / 시뮬레이션 인터벌 함수
+   ---------------------------------------------------- */
+function simulate() {
+  // 가상 실험 물리 시뮬레이션 알고리즘 구현 위치
+  objects.forEach(obj => {
+    // 예시: 프레임별 자율 회전 또는 위치 갱신
+    if (obj.type === 'cube' && $('#cOption').checked) {
+      obj.g.rotation.y += 0.01 * globalParam;
+    }
+  });
+}
+
+function updateObjectVisuals(obj) {
+  // 물체의 속성 변동에 따른 3D 비주얼 업데이트
+}
+
+/* ----------------------------------------------------
+   6. 팝업 / 선택 시스템
+   ---------------------------------------------------- */
+let sel = null;
+const pop = $('#pop'), ps = $('#ps'), pv = $('#pv');
+
+function select(item) {
+  sel = item;
+  if (!item) { pop.style.display = 'none'; return; }
+
+  pop.style.display = 'block';
+  $('#pt').textContent = TYPES[item.type].n + ' 설정';
+  ps.value = item.val;
+  pv.textContent = item.val;
+}
+
+ps.oninput = () => {
+  if (!sel) return;
+  sel.val = parseFloat(ps.value);
+  pv.textContent = sel.val;
+};
+
+$('#pd').onclick = () => removeObject(sel);
+
+/* ----------------------------------------------------
+   7. 3D 포인터 조작, Raycasting & 카메라이동
+   ---------------------------------------------------- */
+const rc = new THREE.Raycaster(), pl = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), v2 = new THREE.Vector2();
+
+function wp(e) {
+  v2.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  rc.setFromCamera(v2, camera);
+  const t = new THREE.Vector3();
+  return rc.ray.intersectPlane(pl, t) ? t : null;
+}
+
+let drag = null, orbit = false, moved = false, down = { x: 0, y: 0 }, activePointer = null;
+
+/* 터치 핀치 줌 및 휠 줌 제어 */
+let isPinching = false, pinchDist = 0, pinchStartCamDist = 15;
+
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  dist = Math.max(5, Math.min(40, dist + e.deltaY * 0.02));
+  updateCam();
+}, { passive: false });
+
+cv.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    isPinching = true;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchDist = Math.hypot(dx, dy);
+    pinchStartCamDist = dist;
+  }
+}, { passive: false });
+
+cv.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && pinchDist > 0) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const currentDist = Math.hypot(dx, dy);
+    dist = Math.max(5, Math.min(40, pinchStartCamDist * (pinchDist / currentDist)));
+    updateCam();
+  }
+}, { passive: false });
+
+cv.addEventListener('touchend', e => {
+  if (e.touches.length < 2) {
+    isPinching = false;
+    pinchDist = 0;
+  }
+});
+
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+cv.addEventListener('pointerdown', e => {
+  if (e.target !== cv || draggingType) return;
+  activePointer = e.pointerId;
+  cv.setPointerCapture?.(e.pointerId);
+  moved = false; down = { x: e.clientX, y: e.clientY };
+  const w = wp(e);
+  if (!w) { orbit = true; return; }
+
+  // 클릭 레이캐스팅으로 물체 선택
+  for (let k = objects.length - 1; k >= 0; k--) {
+    const item = objects[k];
+    if (Math.hypot(w.x - item.x, w.z - item.z) < 0.6) {
+      drag = { item, sx: w.x, sz: w.z, ox: item.x, oz: item.z };
+      return;
+    }
+  }
+  orbit = true;
+});
+
+cv.addEventListener('pointermove', e => {
+  if (isPinching) return;
+  if (activePointer !== null && e.pointerId !== activePointer) return;
+  if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) moved = true;
+
+  if (orbit) {
+    yaw -= (e.movementX || 0) * 0.005;
+    pitch = Math.max(0.25, Math.min(1.42, pitch + (e.movementY || 0) * 0.005));
+    updateCam(); return;
+  }
+
+  if (!drag || !moved) return;
+
+  const tr = $('#trash'), r = tr.getBoundingClientRect();
+  tr.classList.toggle('over', e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+
+  const w = wp(e); if (!w) return;
+  drag.item.x = drag.ox + (w.x - drag.sx);
+  drag.item.z = drag.oz + (w.z - drag.sz);
+  drag.item.g.position.set(drag.item.x, 0, drag.item.z);
+});
+
+function finishCanvasPointer(e) {
+  if (activePointer !== null && e.pointerId !== activePointer) return;
+  const trash = $('#trash');
+  const overTrash = trash && e.clientX >= trash.getBoundingClientRect().left && e.clientX <= trash.getBoundingClientRect().right &&
+    e.clientY >= trash.getBoundingClientRect().top && e.clientY <= trash.getBoundingClientRect().bottom;
+
+  if (drag && moved && overTrash) {
+    removeObject(drag.item);
+    trash.classList.remove('over');
+  } else {
+    if (!moved && drag) select(drag.item);
+    else if (!drag && !moved) select(null);
+  }
+  drag = null; orbit = false; activePointer = null;
+}
+cv.addEventListener('pointerup', finishCanvasPointer);
+cv.addEventListener('pointercancel', finishCanvasPointer);
+
+/* ----------------------------------------------------
+   8. 부품 팔레트 & 수직 스크롤 레버
+   ---------------------------------------------------- */
+const pal = $('#palette');
+const leverTrack = $('#leverTrack');
+const leverThumb = $('#leverThumb');
+const ghost = $('#dragGhost');
+let draggingType = null, dragPointerId = null, palPending = null;
+
+function updateLeverFromScroll() {
+  const maxScroll = pal.scrollHeight - pal.clientHeight;
+  if (maxScroll <= 0) { leverThumb.style.top = '0px'; return; }
+  const trackHeight = leverTrack.clientHeight - leverThumb.clientHeight;
+  const ratio = pal.scrollTop / maxScroll;
+  leverThumb.style.top = (ratio * trackHeight) + 'px';
+}
+pal.addEventListener('scroll', updateLeverFromScroll);
+
+$('#leverUp').addEventListener('click', () => { pal.scrollTop -= 60; });
+$('#leverDown').addEventListener('click', () => { pal.scrollTop += 60; });
+
+let leverDragging = false, leverPointerId = null;
+leverTrack.addEventListener('pointerdown', e => {
+  leverDragging = true; leverPointerId = e.pointerId;
+  leverTrack.setPointerCapture(e.pointerId);
+  moveLeverByPointer(e);
+});
+leverTrack.addEventListener('pointermove', e => {
+  if (leverDragging && e.pointerId === leverPointerId) moveLeverByPointer(e);
+});
+function stopLeverDrag(e) {
+  if (leverDragging && e.pointerId === leverPointerId) { leverDragging = false; leverPointerId = null; }
+}
+leverTrack.addEventListener('pointerup', stopLeverDrag);
+leverTrack.addEventListener('pointercancel', stopLeverDrag);
+
+function moveLeverByPointer(e) {
+  const rect = leverTrack.getBoundingClientRect();
+  const thumbH = leverThumb.clientHeight;
+  const trackH = rect.height - thumbH;
+  let offsetY = Math.max(0, Math.min(trackH, e.clientY - rect.top - thumbH / 2));
+  const ratio = offsetY / (trackH || 1);
+  pal.scrollTop = ratio * (pal.scrollHeight - pal.clientHeight);
+  leverThumb.style.top = offsetY + 'px';
+}
+
+function moveGhost(x, y) { ghost.style.left = x + 'px'; ghost.style.top = y + 'px'; }
+
+function startPaletteDrag(k, e) {
+  const hintEl = $('#hint');
+  if (hintEl) hintEl.style.opacity = '0';
+  draggingType = k; dragPointerId = e.pointerId;
+  ghost.innerHTML = '<b>' + TYPES[k].ic + '</b>' + TYPES[k].n;
+  ghost.style.display = 'block';
+  moveGhost(e.clientX, e.clientY);
+}
+
+Object.keys(TYPES).forEach(k => {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'pbtn';
+  b.innerHTML = '<b>' + TYPES[k].ic + '</b>' + TYPES[k].n;
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    if (e.pointerType === 'mouse') startPaletteDrag(k, e);
+    else palPending = { k, id: e.pointerId, sx: e.clientX, sy: e.clientY, sc: pal.scrollTop, mode: null };
+  });
+  pal.insertBefore(b, $('#trash'));
+});
+
+window.addEventListener('pointermove', e => {
+  if (palPending && e.pointerId === palPending.id) {
+    const P = palPending, dx = e.clientX - P.sx, dy = e.clientY - P.sy;
+    const r = pal.getBoundingClientRect();
+    const outside = e.clientX > r.right + 6 || e.clientX < r.left - 6 || e.clientY < r.top - 30 || e.clientY > r.bottom + 30;
+    const canScroll = pal.scrollHeight > pal.clientHeight + 2;
+
+    if (!P.mode) {
+      if (Math.hypot(dx, dy) < 8 && !outside) return;
+      if (outside || !canScroll || Math.abs(dx) > Math.abs(dy)) P.mode = 'drag';
+      else P.mode = 'scroll';
+    }
+    if (P.mode === 'drag') { const k = P.k; palPending = null; startPaletteDrag(k, e); return; }
+    if (P.mode === 'scroll') {
+      pal.scrollTop = P.sc - dy;
+      if (e.clientX > r.right + 6) { const k = P.k; palPending = null; startPaletteDrag(k, e); }
+    }
+    return;
+  }
+  if (!draggingType || e.pointerId !== dragPointerId) return;
+  moveGhost(e.clientX, e.clientY);
+});
+
+window.addEventListener('pointerup', e => {
+  if (palPending && e.pointerId === palPending.id) { palPending = null; return; }
+  if (!draggingType || e.pointerId !== dragPointerId) return;
+  const type = draggingType;
+  ghost.style.display = 'none';
+  const paletteRect = $('#palette-container').getBoundingClientRect();
+  const insidePalette = e.clientX >= paletteRect.left && e.clientX <= paletteRect.right && e.clientY >= paletteRect.top && e.clientY <= paletteRect.bottom;
+  const w = wp(e);
+  if (!insidePalette && w && Math.abs(w.x) <= 7.8 && Math.abs(w.z) <= 4.55) {
+    const item = addObject(type, w.x, w.z);
+    select(item);
+  }
+  draggingType = null; dragPointerId = null;
+});
+
+/* ----------------------------------------------------
+   9. 하단 버튼 이벤트 연결 및 메인 루프
+   ---------------------------------------------------- */
+$('#bRst').onclick = () => { while (objects.length) removeObject(objects[0]); select(null); };
+$('#bCam').onclick = () => { yaw = 0; pitch = 0.85; dist = 14; updateCam(); };
+
+$('#bEx').onclick = () => {
+  $('#bRst').click();
+  addObject('cube', -2, 0);
+  addObject('sphere', 0, 0);
+  addObject('sensor', 2, 0);
+};
+
+function frame() {
+  requestAnimationFrame(frame);
+  simulate();
+
+  // 팝업 위치를 선택된 3D 개체 위치로 스크린 트랜스폼
+  if (sel && objects.includes(sel)) {
+    const v = new THREE.Vector3(sel.x, 0.4, sel.z).project(camera);
+    const sx = (v.x * 0.5 + 0.5) * innerWidth;
+    const sy = (-v.y * 0.5 + 0.5) * innerHeight;
+    pop.style.left = Math.max(10, Math.min(innerWidth - 230, sx - 110)) + 'px';
+    pop.style.top = Math.max(10, Math.min(innerHeight - 200, sy + 35)) + 'px';
+  }
+  renderer.render(scene, camera);
+}
+
+$('#bCam').click();
+updateLeverFromScroll();
+frame();
+</script>
+</body>
+</html>
