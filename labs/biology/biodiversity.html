@@ -37,10 +37,10 @@ body,html{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:
 .bottom-control-bar{position:absolute;bottom:25px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:8px 14px;z-index:10}
 .control-tab-btn{display:flex;align-items:center;gap:6px;padding:10px 16px;border-radius:14px;border:none;background:transparent;color:#fff;font-size:13px;font-weight:bold;font-family:inherit;cursor:pointer;transition:all .2s}
 .control-tab-btn:hover,.control-tab-btn.active{background:rgba(255,255,255,.2)}
-.floating-controls{position:absolute;bottom:20px;right:20px;z-index:10;display:flex;gap:10px}
-.action-btn{padding:10px 16px;background:rgba(255,255,255,.15);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);border:1px solid rgba(255,255,255,.2);border-radius:12px;color:white;font-weight:bold;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s}
-.action-btn:hover{background:rgba(255,255,255,.25)}
-@media (max-width:700px){.center-tooltip{display:none}.tag-badge span:first-child{font-size:12px}.data-card{padding:8px 12px;gap:10px}}
+.bottom-right-bar{position:absolute;bottom:24px;right:20px;z-index:10}
+.action-btn{display:flex;align-items:center;gap:6px;padding:9px 18px;color:#fff;font-size:13px;font-weight:bold;font-family:inherit;cursor:pointer;border:none;transition:background .2s ease,transform .15s ease}
+.action-btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.25)}
+@media (max-width:700px){.center-tooltip{display:none}.tag-badge span:first-child{font-size:12px}.data-card{padding:8px 12px;gap:10px}.bottom-right-bar{bottom:16px;right:12px}}
 </style>
 </head>
 <body>
@@ -77,8 +77,11 @@ body,html{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:
   <button class="control-tab-btn" id="btn-cam-all"><span>🏔️</span><span>전체보기</span></button>
 </div>
 
-<div class="floating-controls">
-  <button id="fullscreenBtn" class="action-btn">⛶ 전체화면</button>
+<div class="bottom-right-bar">
+  <button id="fullscreenBtn" class="glass-panel action-btn">
+    <span id="fullscreenIcon">⛶</span>
+    <span id="fullscreenText">전체화면</span>
+  </button>
 </div>
 
 <script>
@@ -479,13 +482,45 @@ document.getElementById('btn-cam-all').addEventListener('click', () => view(0, 1
 document.getElementById('btn-focus-reset').addEventListener('click', () => view(0, 1, 0, 0, 10, 18));
 
 const fullscreenBtn = document.getElementById('fullscreenBtn');
+const fullscreenIcon = document.getElementById('fullscreenIcon');
+const fullscreenText = document.getElementById('fullscreenText');
+
+function updateFullscreenUI() {
+  const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+  fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+}
+
 fullscreenBtn.addEventListener('click', () => {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen();
-  } else {
-    if (document.exitFullscreen) document.exitFullscreen();
+  try {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+      if (req) {
+        const res = req.call(document.documentElement);
+        if (res && typeof res.catch === 'function') {
+          res.catch(err => {
+            console.warn('전체화면 권한이 제한되어 있습니다:', err);
+          });
+        }
+      }
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) {
+        const res = exit.call(document);
+        if (res && typeof res.catch === 'function') {
+          res.catch(err => {
+            console.warn('창모드 전환 권한이 제한되어 있습니다:', err);
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('전체화면 모드를 실행할 수 없습니다:', err);
   }
 });
+
+document.addEventListener('fullscreenchange', updateFullscreenUI);
+document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
 
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
