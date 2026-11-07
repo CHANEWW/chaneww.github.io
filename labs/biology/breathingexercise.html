@@ -637,52 +637,99 @@
         spine.position.set(0, 1.55, -0.52);
         humanGroup.add(spine);
 
-        // 갈비뼈 그룹
+        // 갈비뼈 그룹 (척추에서 시작해 옆구리를 돌아 흉골로 이어지는 곡면 늑골)
         const ribCage = new THREE.Group();
         humanGroup.add(ribCage);
 
-        const RIB_COUNT = 7;
-        for (let i = 0; i < RIB_COUNT; i++) {
-            const r = 0.33 + i * 0.033;
-            const y = 1.95 - i * 0.115;
-            const rib = new THREE.Mesh(
-                new THREE.TorusGeometry(r, 0.031, 8, 40, Math.PI * 1.25),
-                boneMat
-            );
-            rib.rotation.x = Math.PI / 2 + 0.1;
-            rib.position.set(0, y, 0.02);
-            ribCage.add(rib);
+        function buildRibCage() {
+            const RIB_PAIRS = 7;
+            const ribs = [];
 
-            const cartMat = new THREE.MeshStandardMaterial({ color: 0xe8dcc4, roughness: 0.5 });
-            [-1, 1].forEach(side => {
-                const cart = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.16, 10), cartMat);
-                cart.position.set(side * (r * 0.62), y, r * 0.72);
-                cart.rotation.z = side * 0.35;
-                ribCage.add(cart);
-            });
+            for (let i = 0; i < RIB_PAIRS; i++) {
+                const frac = i / (RIB_PAIRS - 1);              // 0 = 위쪽 갈비, 1 = 아래쪽 갈비
+                const yBack = 1.98 - frac * 0.58;               // 척추 쪽 높이
+                const rMax = 0.33 + Math.sin(Math.PI * (0.18 + 0.62 * frac)) * 0.15;
+                const drop = 0.06 + frac * 0.11;                // 앞쪽이 뒤쪽보다 낮게 처짐
+                const zBack = 0.4;
+                const zFront = 0.45 + frac * 0.03;
+
+                [-1, 1].forEach(side => {
+                    const pts = [];
+                    const N = 16;
+                    for (let k = 0; k <= N; k++) {
+                        const u = -Math.PI / 2 + (k / N) * Math.PI;   // 뒤(-90°) -> 옆(0°) -> 앞(+90°)
+                        const tt = k / N;
+                        const x = side * rMax * Math.cos(u) * (0.95 + 0.05 * Math.sin(Math.PI * tt));
+                        const z = (zFront - zBack) / 2 + (zFront + zBack) / 2 * Math.sin(u);
+                        const smooth = tt * tt * (3 - 2 * tt);
+                        const y = yBack - drop * smooth - 0.02 * Math.sin(Math.PI * tt);
+                        pts.push(new THREE.Vector3(x, y, z));
+                    }
+                    const curve = new THREE.CatmullRomCurve3(pts);
+                    const geo = new THREE.TubeGeometry(curve, 44, 0.025, 6, false);
+                    const rib = new THREE.Mesh(geo, boneMat);
+                    rib.castShadow = true;
+                    ribCage.add(rib);
+                    ribs.push(rib);
+                });
+            }
+
+            // 갈비사이(늑간) 느낌의 얇은 결합 조직
+            for (let i = 0; i < RIB_PAIRS - 1; i++) {
+                const frac = i / (RIB_PAIRS - 1);
+                const y = 1.95 - frac * 0.58 - 0.05;
+                const r = 0.33 + Math.sin(Math.PI * (0.18 + 0.62 * frac)) * 0.15;
+                [-1, 1].forEach(side => {
+                    const arc = new THREE.Mesh(
+                        new THREE.TorusGeometry(r * 0.96, 0.008, 6, 28, Math.PI * 0.9),
+                        new THREE.MeshStandardMaterial({ color: 0xe6d4c4, roughness: 0.8, transparent: true, opacity: 0.55 })
+                    );
+                    arc.rotation.x = Math.PI / 2 + 0.08;
+                    arc.rotation.z = side > 0 ? -Math.PI * 0.05 : Math.PI * 1.05;
+                    arc.position.set(0, y, 0.02);
+                    ribCage.add(arc);
+                });
+            }
+
+            return ribs;
         }
 
+        const ribMeshes = buildRibCage();
+
         // 복장뼈
-        const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.05), boneMat);
-        sternum.position.set(0, 1.62, 0.5);
+        const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.6, 0.045), boneMat);
+        sternum.position.set(0, 1.66, 0.47);
         humanGroup.add(sternum);
 
-        // 폐
+        // 폐 (위는 좁고 아래로 넓어지는 모양)
         const lungMat = new THREE.MeshStandardMaterial({
-            color: 0xff9fb0, roughness: 0.45, metalness: 0.0, transparent: true, opacity: 0.82
+            color: 0xff9aa9, roughness: 0.42, metalness: 0.0, transparent: true, opacity: 0.88
         });
-        const lungGroup = new THREE.Group();
-        humanGroup.add(lungGroup);
 
-        const lungL = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 24), lungMat);
-        const lungR = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 24), lungMat);
-        lungL.position.set(-0.26, 1.5, 0.02);
-        lungR.position.set(0.26, 1.5, 0.02);
-        [lungL, lungR].forEach(l => {
-            l.scale.set(0.88, 1.25, 0.82);
-            l.castShadow = true;
-            lungGroup.add(l);
-        });
+        const lungProfile = [
+            [0.02, 0.0], [0.08, 0.05], [0.135, 0.14], [0.18, 0.26],
+            [0.215, 0.4], [0.24, 0.55], [0.245, 0.68], [0.225, 0.79],
+            [0.17, 0.87], [0.09, 0.91], [0.0, 0.92]
+        ].map(p => new THREE.Vector2(p[0], p[1]));
+
+        const lungGeo = new THREE.LatheGeometry(lungProfile, 40);
+        lungGeo.translate(0, -0.46, 0);   // 중심을 원점에
+
+        function makeLung(side) {
+            const g = new THREE.Group();
+            const mesh = new THREE.Mesh(lungGeo, lungMat);
+            mesh.scale.set(1, 1, 0.76);       // 앞뒤로 납작하게
+            mesh.castShadow = true;
+            g.add(mesh);
+            g.position.set(side * 0.25, 1.72, 0.01);
+            g.rotation.z = side * -0.05;
+            g.rotation.y = side * 0.12;
+            humanGroup.add(g);
+            return g;
+        }
+
+        const lungL = makeLung(-1);
+        const lungR = makeLung(1);
 
         // 기관과 기관지
         const airwayMat = new THREE.MeshStandardMaterial({ color: 0xd8ecff, roughness: 0.3, transparent: true, opacity: 0.9 });
@@ -790,18 +837,45 @@
             modelGroup.add(branch);
         });
 
-        // 풍선(폐)
+        // 풍선(폐) - Y자관 끝에 묶인 고무풍선 모양
         const balloonMat = new THREE.MeshStandardMaterial({
-            color: 0xffa8b8, roughness: 0.35, metalness: 0.0, transparent: true, opacity: 0.92
+            color: 0xff8fa3, roughness: 0.22, metalness: 0.0,
+            transparent: true, opacity: 0.94
         });
-        const balloonL = new THREE.Mesh(new THREE.SphereGeometry(0.3, 28, 20), balloonMat);
-        const balloonR = new THREE.Mesh(new THREE.SphereGeometry(0.3, 28, 20), balloonMat);
-        balloonL.position.set(-0.27, JAR_BOTTOM + 0.78, 0);
-        balloonR.position.set(0.27, JAR_BOTTOM + 0.78, 0);
-        [balloonL, balloonR].forEach(b => {
-            b.castShadow = true;
-            modelGroup.add(b);
-        });
+        const balloonTieMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.6 });
+
+        const balloonProfile = [
+            [0.0, 0.0], [0.038, -0.015], [0.052, -0.06], [0.085, -0.13],
+            [0.135, -0.23], [0.19, -0.36], [0.225, -0.5], [0.235, -0.63],
+            [0.215, -0.75], [0.165, -0.85], [0.09, -0.92], [0.0, -0.96]
+        ].map(p => new THREE.Vector2(p[0], p[1]));
+
+        const balloonGeo = new THREE.LatheGeometry(balloonProfile, 36);
+
+        function makeBalloon(side) {
+            const g = new THREE.Group();
+            const body = new THREE.Mesh(balloonGeo, balloonMat);
+            body.castShadow = true;
+            g.add(body);
+
+            // 묶은 목 부분
+            const tie = new THREE.Mesh(new THREE.TorusGeometry(0.045, 0.016, 8, 20), balloonTieMat);
+            tie.rotation.x = Math.PI / 2;
+            tie.position.y = -0.035;
+            g.add(tie);
+
+            g.position.set(side * 0.26, JAR_BOTTOM + 1.18, 0);
+            g.rotation.z = side * 0.05;
+            g.rotation.y = side * 0.15;
+            modelGroup.add(g);
+            return g;
+        }
+
+        const balloonL = makeBalloon(-1);
+        const balloonR = makeBalloon(1);
+        // 살짝 비대칭으로 자연스럽게
+        balloonL.scale.set(1.04, 1, 1.04);
+        balloonR.scale.set(0.97, 1, 0.97);
 
         // 고무막 (가로막 역할) + 손잡이
         const membraneMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c, roughness: 0.45, metalness: 0.05 });
@@ -862,17 +936,19 @@
 
         // --- 호흡 자세 적용 ---
         function applyBreath(t) {
-            // 사람: 갈비뼈 확장 + 가로막 하강
-            ribCage.scale.set(1 + 0.055 * t, 1, 1 + 0.075 * t);
-            ribCage.position.y = 0.045 * t;
+            // 사람: 갈비뼈가 바깥/위로 들리고 가로막이 내려감
+            ribCage.scale.set(1 + 0.05 * t, 1, 1 + 0.075 * t);
+            ribCage.rotation.x = -0.09 * t;      // 앞쪽 갈비가 위로 들림(펌프 손잡이 운동)
+            ribCage.position.y = 0.03 * t;
+
             diaphragm.position.y = 0.95 - 0.17 * t;
             diaphragm.scale.set(1 + 0.04 * t, 0.8 - 0.42 * t, 1 + 0.04 * t);
 
-            const lungScale = 1 + 0.3 * t;
-            lungL.scale.set(0.88 * lungScale, 1.25 * lungScale, 0.82 * lungScale);
-            lungR.scale.set(0.88 * lungScale, 1.25 * lungScale, 0.82 * lungScale);
-            lungL.position.y = 1.5 - 0.03 * t;
-            lungR.position.y = 1.5 - 0.03 * t;
+            const lungScale = 1 + 0.26 * t;
+            lungL.scale.set(lungScale, lungScale * 1.04, lungScale);
+            lungR.scale.set(lungScale, lungScale * 1.04, lungScale);
+            lungL.position.y = 1.72 - 0.04 * t;
+            lungR.position.y = 1.72 - 0.04 * t;
 
             torso.scale.set(1 + 0.012 * t, 1, 1 + 0.02 * t);
 
@@ -882,9 +958,9 @@
             membraneHandle.position.y = memY - 0.12;
             handleRod.position.y = memY - 0.05;
 
-            const bs = 0.5 + 0.55 * t;
-            balloonL.scale.setScalar(bs);
-            balloonR.scale.setScalar(bs);
+            const inflate = 0.62 + 0.45 * t;
+            balloonL.scale.set(1.04 * inflate, inflate, 1.04 * inflate);
+            balloonR.scale.set(0.97 * inflate, inflate, 0.97 * inflate);
 
             // 흉강 동기화: 통 자체가 흉강과 같은 부피 비율로 매끄럽게 팽창/수축
             if (syncMode) {
