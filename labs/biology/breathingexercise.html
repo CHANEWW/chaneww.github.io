@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>호흡 운동의 원리 3D</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+            white-space: nowrap;
+        }
+
+        /* 좌측 하단 계기 패널 */
+        .meter-panel {
+            position: absolute;
+            left: 20px;
+            bottom: 24px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+            z-index: 10;
+            width: 268px;
+        }
+
+        .meter-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #8e8e93;
+        }
+
+        .bar-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .bar-head {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .bar-track {
+            width: 100%;
+            height: 11px;
+            background: rgba(0, 0, 0, 0.07);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .bar-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 6px;
+            transition: width 0.08s linear;
+        }
+
+        .bar-fill.thorax { background: linear-gradient(90deg, #8ab6ff, #007aff); }
+        .bar-fill.lung { background: linear-gradient(90deg, #ffb3c1, #ff5c8a); }
+        .bar-fill.press { background: linear-gradient(90deg, #ffd27f, #ff9500); }
+
+        /* 비교 모드 설명 패널 */
+        .compare-panel {
+            position: absolute;
+            right: 20px;
+            bottom: 96px;
+            width: 300px;
+            padding: 14px 16px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .compare-panel.show { display: flex; }
+
+        .compare-panel h4 {
+            font-size: 13px;
+            font-weight: bold;
+            color: #007aff;
+        }
+
+        .compare-line {
+            display: flex;
+            gap: 8px;
+            font-size: 11.5px;
+            line-height: 1.55;
+            font-weight: bold;
+            color: #3c3c43;
+        }
+
+        .dot-o { color: #007aff; }
+        .dot-x { color: #ff3b30; }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            min-width: 62px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 340px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #007aff;
+        }
+
+        .panel-note {
+            font-size: 11px;
+            color: #8e8e93;
+            line-height: 1.6;
+            font-weight: bold;
+        }
+
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.78);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn,
+        body.dark-mode .control-tab-btn, body.dark-mode .compare-line {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+
+        body.dark-mode .bar-track { background: rgba(255, 255, 255, 0.12); }
+
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        button.back-btn, button.tag-badge {
+            font-family: inherit;
+            border: none;
+        }
+
+        @media (max-width: 768px) {
+            .bottom-right-bar { bottom: 15px; right: 15px; }
+            .center-tooltip { display: none; }
+            .meter-panel { left: 12px; bottom: 78px; width: 176px; padding: 10px 12px; gap: 6px; }
+            .compare-panel { right: 12px; bottom: 78px; width: 210px; padding: 10px 12px; }
+            .compare-line { font-size: 10.5px; }
+            .bottom-control-bar { bottom: 14px; gap: 2px; }
+            .control-tab-btn { min-width: 50px; padding: 6px 6px; font-size: 10.5px; }
+            .sub-panel { width: 300px; bottom: 76px; }
+            .data-card { gap: 8px; padding: 8px 10px; }
+            .data-value { font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>호흡 운동의 원리 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">흉강 부피</span>
+                <span class="data-value" id="val-thorax" style="color:#007aff;">100%</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">흉강 내압</span>
+                <span class="data-value" id="val-press" style="color:#ff9500;">1013 hPa</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">공기 흐름</span>
+                <span class="data-value" id="val-flow" style="color:#34c759;">정지</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 오른쪽 모형의 빨간 고무막을 아래로 당기면 풍으로 된 폐가 부풀어 오릅니다
+    </div>
+
+    <!-- 계기 패널 -->
+    <div class="glass-panel meter-panel">
+        <div class="meter-title">실시간 변화 (들숨 ◀▶ 날숨)</div>
+        <div class="bar-row">
+            <div class="bar-head"><span>흉강 부피</span><span id="bar-thorax-val">100%</span></div>
+            <div class="bar-track"><div class="bar-fill thorax" id="bar-thorax"></div></div>
+        </div>
+        <div class="bar-row">
+            <div class="bar-head"><span>폐 부피</span><span id="bar-lung-val">2.2 L</span></div>
+            <div class="bar-track"><div class="bar-fill lung" id="bar-lung"></div></div>
+        </div>
+        <div class="bar-row">
+            <div class="bar-head"><span>흉강 내압(대기압 기준)</span><span id="bar-press-val">0.0 hPa</span></div>
+            <div class="bar-track"><div class="bar-fill press" id="bar-press"></div></div>
+        </div>
+    </div>
+
+    <!-- 흉강 동기화 모드 설명 -->
+    <div class="glass-panel compare-panel" id="compare-panel">
+        <h4>🔍 흉강 동기화 모드</h4>
+        <div class="compare-line"><span class="dot-o">●</span><span>사람의 흉강: 갈비뼈가 들리고 가로막이 내려가 <b>흉강 부피가 약 12% 커집니다.</b></span></div>
+        <div class="compare-line" id="compare-jar-line"><span class="dot-x">●</span><span>플라스틱 통: <b>부피 변화 0%</b> — 단단한 벽 때문에 통 자체는 늘어나지 않습니다.</span></div>
+        <div class="compare-line"><span>👉 이제 통도 흉강과 똑같은 비율로 팽창·수축합니다. 버튼을 다시 누르면 고정된 일반 페트병 모형으로 돌아갑니다.</span></div>
+    </div>
+
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="slider-row">
+            <div class="slider-header">
+                <span>가로막 조작 (왼쪽: 날숨 · 오른쪽: 들숨)</span>
+                <span id="txt-dia">날숨</span>
+            </div>
+            <input type="range" id="sld-dia" min="0" max="100" step="1" value="0">
+        </div>
+        <div class="panel-note">
+            고무막(가로막)을 아래로 당기면 통 속 부피가 커져 압력이 낮아지고, 바깥 공기가 Y자관을 통해 풍선(폐)으로 들어옵니다. 사람의 몸에서도 같은 원리로 공기가 들어옵니다.
+        </div>
+    </div>
+
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>설정 조절</span>
+        </button>
+        <button class="control-tab-btn active" id="btn-auto">
+            <span id="auto-icon">⏸</span>
+            <span id="auto-text">자동 호흡</span>
+        </button>
+        <button class="control-tab-btn" id="btn-compare">
+            <span>🫁</span>
+            <span>흉강 동기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-view">
+            <span>📷</span>
+            <span id="view-text">정면 시점</span>
+        </button>
+    </div>
+
+    <!-- Fullscreen / Windowed Mode Button -->
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. 씬 설정 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 120);
+        camera.position.set(0, 2.9, 10.6);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.target.set(0, 1.7, 0);
+        controls.maxPolarAngle = Math.PI / 2 + 0.03;
+        controls.minDistance = 4;
+        controls.maxDistance = 22;
+
+        // --- 2. 조명 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(4, 9, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.left = -8;
+        dirLight.shadow.camera.right = 8;
+        dirLight.shadow.camera.top = 8;
+        dirLight.shadow.camera.bottom = -8;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0xd6e6ff, 0.35);
+        fillLight.position.set(-6, 4, -5);
+        scene.add(fillLight);
+
+        // --- 3. 바닥 ---
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(40, 40),
+            new THREE.MeshStandardMaterial({ color: 0xe8ecf2, roughness: 0.95 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = 0;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- 4. 텍스트 라벨 ---
+        function makeLabel(text, color, scale) {
+            const c = document.createElement('canvas');
+            c.width = 320; c.height = 96;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = 'rgba(255,255,255,0.88)';
+            const r = 24;
+            ctx.beginPath();
+            ctx.moveTo(r, 6);
+            ctx.lineTo(320 - r, 6);
+            ctx.quadraticCurveTo(314, 6, 314, 6 + r * 0.6);
+            ctx.lineTo(314, 90 - r * 0.6);
+            ctx.quadraticCurveTo(314, 90, 320 - r, 90);
+            ctx.lineTo(r, 90);
+            ctx.quadraticCurveTo(6, 90, 6, 90 - r * 0.6);
+            ctx.lineTo(6, 6 + r * 0.6);
+            ctx.quadraticCurveTo(6, 6, r, 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = color || '#1c1c1e';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 160, 50);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: new THREE.CanvasTexture(c), transparent: true, depthTest: false
+            }));
+            const s = scale || 1;
+            sprite.scale.set(1.75 * s, 0.525 * s, 1);
+            return sprite;
+        }
+
+        // =====================================================
+        //  왼쪽: 사람의 흉강 모형
+        // =====================================================
+        const HUMAN_X = -2.55;
+        const humanGroup = new THREE.Group();
+        humanGroup.position.set(HUMAN_X, 0, 0);
+        scene.add(humanGroup);
+
+        // 몸통 실루엣 (라테스 곡면)
+        const torsoProfile = [
+            [0.5, 0.0], [0.62, 0.2], [0.68, 0.5], [0.72, 0.85],
+            [0.78, 1.2], [0.8, 1.5], [0.76, 1.8], [0.62, 2.05],
+            [0.42, 2.2], [0.24, 2.3], [0.22, 2.45]
+        ].map(p => new THREE.Vector2(p[0], p[1]));
+
+        const torsoMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffd3b6,
+            transparent: true,
+            opacity: 0.16,
+            roughness: 0.4,
+            metalness: 0.0,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoProfile, 48), torsoMat);
+        torso.position.y = 0.18;
+        humanGroup.add(torso);
+
+        // 척추
+        const boneMat = new THREE.MeshStandardMaterial({ color: 0xf1ead8, roughness: 0.6 });
+        const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.1, 16), boneMat);
+        spine.position.set(0, 1.55, -0.52);
+        humanGroup.add(spine);
+
+        // 갈비뼈 그룹
+        const ribCage = new THREE.Group();
+        ribCage.position.set(0, 0, 0);
+        humanGroup.add(ribCage);
+
+        const RIB_COUNT = 7;
+        for (let i = 0; i < RIB_COUNT; i++) {
+            const r = 0.33 + i * 0.033;
+            const y = 1.95 - i * 0.115;
+            const rib = new THREE.Mesh(
+                new THREE.TorusGeometry(r, 0.026, 8, 40, Math.PI * 1.25),
+                boneMat
+            );
+            rib.rotation.x = Math.PI / 2 + 0.1;
+            rib.position.set(0, y, 0.02);
+            ribCage.add(rib);
+
+            // 좌우 갈비 연골(앞쪽)
+            const cartMat = new THREE.MeshStandardMaterial({ color: 0xe8dcc4, roughness: 0.5 });
+            [-1, 1].forEach(side => {
+                const cart = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.16, 10), cartMat);
+                cart.position.set(side * (r * 0.62), y, r * 0.72);
+                cart.rotation.z = side * 0.35;
+                ribCage.add(cart);
+            });
+        }
+
+        // 복장뼈
+        const sternum = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.05), boneMat);
+        sternum.position.set(0, 1.62, 0.5);
+        humanGroup.add(sternum);
+
+        // 폐
+        const lungMat = new THREE.MeshStandardMaterial({
+            color: 0xff9fb0, roughness: 0.45, metalness: 0.0, transparent: true, opacity: 0.92
+        });
+        const lungGroup = new THREE.Group();
+        humanGroup.add(lungGroup);
+
+        const lungL = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 24), lungMat);
+        const lungR = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 24), lungMat);
+        lungL.position.set(-0.26, 1.5, 0.02);
+        lungR.position.set(0.26, 1.5, 0.02);
+        [lungL, lungR].forEach(l => {
+            l.scale.set(1, 1.35, 0.9);
+            l.castShadow = true;
+            lungGroup.add(l);
+        });
+
+        // 기관과 기관지
+        const airwayMat = new THREE.MeshStandardMaterial({ color: 0xd8ecff, roughness: 0.3, transparent: true, opacity: 0.9 });
+        const trachea = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.55, 16), airwayMat);
+        trachea.position.set(0, 2.12, 0.03);
+        humanGroup.add(trachea);
+
+        const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), airwayMat);
+        mouth.position.set(0, 2.42, 0.03);
+        humanGroup.add(mouth);
+
+        [-1, 1].forEach(side => {
+            const bronchi = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.42, 12), airwayMat);
+            bronchi.position.set(side * 0.16, 1.79, 0.03);
+            bronchi.rotation.z = side * 0.55;
+            humanGroup.add(bronchi);
+        });
+
+        // 가로막 (돔 모양)
+        const diaMat = new THREE.MeshStandardMaterial({
+            color: 0xe06a6a, roughness: 0.55, metalness: 0.0,
+            transparent: true, opacity: 0.9, side: THREE.DoubleSide
+        });
+        const diaphragm = new THREE.Mesh(
+            new THREE.SphereGeometry(0.46, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2),
+            diaMat
+        );
+        diaphragm.position.set(0, 0.95, 0.02);
+        diaphragm.scale.set(1, 0.8, 1);
+        humanGroup.add(diaphragm);
+
+        // 흉강 부피 표시 (비교 모드)
+        const thoraxVolMat = new THREE.MeshBasicMaterial({
+            color: 0x4a90e2, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.BackSide
+        });
+        const thoraxVol = new THREE.Mesh(new THREE.SphereGeometry(0.62, 32, 24), thoraxVolMat);
+        thoraxVol.position.set(0, 1.42, 0.02);
+        thoraxVol.scale.set(1, 1.05, 0.95);
+        thoraxVol.visible = false;
+        humanGroup.add(thoraxVol);
+
+        const thoraxRef = new THREE.Mesh(
+            new THREE.SphereGeometry(0.62, 24, 16),
+            new THREE.MeshBasicMaterial({ color: 0x007aff, wireframe: true, transparent: true, opacity: 0.35 })
+        );
+        thoraxRef.position.set(0, 1.42, 0.02);
+        thoraxRef.scale.set(1, 1.05, 0.95);
+        thoraxRef.visible = false;
+        humanGroup.add(thoraxRef);
+
+        // 사람 라벨
+        const humanLabel = makeLabel('사람의 흉강', '#0057c2', 1.15);
+        humanLabel.position.set(HUMAN_X, 2.95, 0);
+        scene.add(humanLabel);
+
+        const diaLabel = makeLabel('가로막', '#b03b3b', 0.8);
+        diaLabel.position.set(HUMAN_X + 1.05, 0.85, 0.1);
+        scene.add(diaLabel);
+
+        // =====================================================
+        //  오른쪽: 페트병 호흡 운동 모형
+        // =====================================================
+        const MODEL_X = 2.55;
+        const modelGroup = new THREE.Group();
+        modelGroup.position.set(MODEL_X, 0, 0);
+        scene.add(modelGroup);
+
+        const JAR_BOTTOM = 1.0;      // 병 바닥 높이
+        const JAR_TOP = 2.62;
+
+        // 받침 링 + 다리
+        const standMat = new THREE.MeshStandardMaterial({ color: 0x8d99ab, metalness: 0.6, roughness: 0.35 });
+        const standRing = new THREE.Mesh(new THREE.TorusGeometry(0.64, 0.035, 12, 48), standMat);
+        standRing.rotation.x = Math.PI / 2;
+        standRing.position.y = JAR_BOTTOM;
+        modelGroup.add(standRing);
+
+        for (let i = 0; i < 3; i++) {
+            const a = (i / 3) * Math.PI * 2 + 0.4;
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, JAR_BOTTOM, 12), standMat);
+            leg.position.set(Math.cos(a) * 0.58, JAR_BOTTOM / 2, Math.sin(a) * 0.58);
+            modelGroup.add(leg);
+        }
+
+        // 유리관(종 모양 통)
+        const jarProfile = [
+            [0.6, 0.0], [0.64, 0.06], [0.64, 1.34], [0.58, 1.44], [0.34, 1.54], [0.2, 1.6]
+        ].map(p => new THREE.Vector2(p[0], p[1]));
+
+        const jarMat = new THREE.MeshPhysicalMaterial({
+            color: 0xbfe0ff,
+            transparent: true,
+            opacity: 0.17,
+            roughness: 0.05,
+            metalness: 0.0,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const jarGroup = new THREE.Group();
+        modelGroup.add(jarGroup);
+
+        const jar = new THREE.Mesh(new THREE.LatheGeometry(jarProfile, 48), jarMat);
+        jar.position.y = JAR_BOTTOM;
+        jarGroup.add(jar);
+
+        // 마개
+        const stopper = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.19, 0.2, 0.16, 32),
+            new THREE.MeshStandardMaterial({ color: 0x5b6779, roughness: 0.5 })
+        );
+        stopper.position.y = JAR_BOTTOM + 1.62;
+        jarGroup.add(stopper);
+
+        // Y자 유리관
+        const tubeMat = new THREE.MeshStandardMaterial({ color: 0xdfe9f5, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.95 });
+        const tubeMain = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.52, 16), tubeMat);
+        tubeMain.position.y = JAR_BOTTOM + 1.35;
+        modelGroup.add(tubeMain);
+
+        [-1, 1].forEach(side => {
+            const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.36, 14), tubeMat);
+            branch.position.set(side * 0.16, JAR_BOTTOM + 1.05, 0);
+            branch.rotation.z = side * 0.6;
+            modelGroup.add(branch);
+        });
+
+        // 풍선(폐)
+        const balloonMat = new THREE.MeshStandardMaterial({
+            color: 0xffa8b8, roughness: 0.35, metalness: 0.0, transparent: true, opacity: 0.92
+        });
+        const balloonL = new THREE.Mesh(new THREE.SphereGeometry(0.3, 28, 20), balloonMat);
+        const balloonR = new THREE.Mesh(new THREE.SphereGeometry(0.3, 28, 20), balloonMat);
+        balloonL.position.set(-0.27, JAR_BOTTOM + 0.78, 0);
+        balloonR.position.set(0.27, JAR_BOTTOM + 0.78, 0);
+        [balloonL, balloonR].forEach(b => {
+            b.castShadow = true;
+            modelGroup.add(b);
+        });
+
+        // 고무막 (가로막 역할) + 손잡이
+        const membraneMat = new THREE.MeshStandardMaterial({ color: 0xe74c3c, roughness: 0.45, metalness: 0.05 });
+        const membrane = new THREE.Mesh(new THREE.CylinderGeometry(0.63, 0.63, 0.035, 48), membraneMat);
+        membrane.position.y = JAR_BOTTOM;
+        membrane.castShadow = true;
+        modelGroup.add(membrane);
+
+        const membraneHandle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 16), membraneMat);
+        membraneHandle.position.y = JAR_BOTTOM - 0.12;
+        modelGroup.add(membraneHandle);
+
+        const handleRod = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.1, 10), membraneMat);
+        handleRod.position.y = JAR_BOTTOM - 0.05;
+        modelGroup.add(handleRod);
+
+        // 동기화 모드: 지금 크기(날숨) 기준선과 들숨 때 목표 크기
+        const jarRef = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.66, 0.66, 1.5, 24, 1, true),
+            new THREE.MeshBasicMaterial({ color: 0xff3b30, wireframe: true, transparent: true, opacity: 0.35 })
+        );
+        jarRef.position.y = JAR_BOTTOM + 0.75;
+        jarRef.visible = false;
+        modelGroup.add(jarRef);
+
+        const SYNC_MAX_R = Math.sqrt(1.12);   // 들숨 때 반지름 배율 (부피 +12%)
+        const jarGhost = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.66 * SYNC_MAX_R, 0.66 * SYNC_MAX_R, 1.5, 24, 1, true),
+            new THREE.MeshBasicMaterial({ color: 0x007aff, wireframe: true, transparent: true, opacity: 0.45 })
+        );
+        jarGhost.position.y = JAR_BOTTOM + 0.75;
+        jarGhost.visible = false;
+        modelGroup.add(jarGhost);
+
+        // 모형 라벨
+        const modelLabel = makeLabel('페트병 호흡 모형', '#7a3bbb', 1.15);
+        modelLabel.position.set(MODEL_X, 3.15, 0);
+        scene.add(modelLabel);
+
+        const memLabel = makeLabel('빨간 고무막(가로막)', '#b03b3b', 0.78);
+        memLabel.position.set(MODEL_X - 1.15, 0.78, 0.1);
+        scene.add(memLabel);
+
+        // =====================================================
+        //  공기 흐름 입자
+        // =====================================================
+        const airPoints = [];
+        const airGeo = new THREE.SphereGeometry(0.035, 8, 6);
+        const airMat = new THREE.MeshBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.0 });
+        for (let i = 0; i < 10; i++) {
+            const p = new THREE.Mesh(airGeo, airMat);
+            p.position.set(0, 2.3 - i * 0.05, 0.03);
+            humanGroup.add(p);
+            airPoints.push({ mesh: p, phase: i / 10 });
+        }
+
+        // =====================================================
+        //  상태
+        // =====================================================
+        let breath = 0;             // 0 = 날숨, 1 = 들숨
+        let targetBreath = 0;
+        let autoBreath = true;
+        let autoPhase = 0;
+        let syncMode = false;
+        let isDark = false;
+        let dragging = false;
+        let dragStartY = 0;
+        let dragStartBreath = 0;
+        let prevBreath = 0;
+        let flowDir = 0;
+
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        const hitPoint = new THREE.Vector3();
+
+        // --- 장면 갱신 ---
+        function applyBreath(t) {
+            // 사람: 갈비뼈 확장 + 가로막 하강
+            ribCage.scale.set(1 + 0.055 * t, 1, 1 + 0.075 * t);
+            ribCage.position.y = 0.045 * t;
+            diaphragm.position.y = 0.95 - 0.17 * t;
+            diaphragm.scale.set(1 + 0.04 * t, 0.8 - 0.42 * t, 1 + 0.04 * t);
+
+            const lungScale = 1 + 0.3 * t;
+            lungL.scale.set(0.92 * lungScale, 1.28 * lungScale, 0.86 * lungScale);
+            lungR.scale.set(0.92 * lungScale, 1.28 * lungScale, 0.86 * lungScale);
+            lungL.position.y = 1.5 - 0.03 * t;
+            lungR.position.y = 1.5 - 0.03 * t;
+
+            torso.scale.set(1 + 0.012 * t, 1, 1 + 0.02 * t);
+
+            // 모형: 고무막 하강 + 풍선 팽창
+            const memY = JAR_BOTTOM - 0.42 * t;
+            membrane.position.y = memY;
+            membraneHandle.position.y = memY - 0.12;
+            handleRod.position.y = memY - 0.05;
+
+            const bs = 0.5 + 0.55 * t;
+            balloonL.scale.setScalar(bs);
+            balloonR.scale.setScalar(bs);
+
+            // 흉강 동기화 모드: 플라스틱 통도 흉강과 같은 비율로 팽창/수축
+            if (syncMode) {
+                const jarScale = Math.sqrt(1 + 0.12 * t);      // 부피 +12% (흉강과 동일)
+                jarGroup.scale.set(jarScale, 1, jarScale);
+                membrane.scale.set(jarScale, 1, jarScale);
+
+                // 사람 흉강 표시도 같은 부피 비율로
+                const thoraxScale = Math.cbrt(1 + 0.12 * t);
+                thoraxVol.scale.set(thoraxScale * 1.0, thoraxScale * 1.05, thoraxScale * 0.95);
+            } else {
+                jarGroup.scale.set(1, 1, 1);
+                membrane.scale.set(1, 1, 1);
+            }
+        }
+
+        function updateReadouts() {
+            const t = breath;
+            const thoraxPct = 100 + 12 * t;
+            const lungL_ = 2.2 + 0.5 * t;
+            const pressDelta = -3.4 * t;          // 대기압 대비 hPa
+            const pressure = 1013 + pressDelta;
+
+            document.getElementById('val-thorax').innerText = thoraxPct.toFixed(1).replace('.0', '') + '%';
+            document.getElementById('val-press').innerText = pressure.toFixed(1) + ' hPa';
+            document.getElementById('val-flow').innerText =
+                flowDir > 0.02 ? '들숨 (공기 유입)' : (flowDir < -0.02 ? '날숨 (공기 배출)' : '정지');
+            document.getElementById('val-flow').style.color =
+                flowDir > 0.02 ? '#34c759' : (flowDir < -0.02 ? '#ff9500' : '#8e8e93');
+
+            document.getElementById('bar-thorax').style.width = Math.min(100, (t * 100)) + '%';
+            document.getElementById('bar-lung').style.width = Math.min(100, (t * 100)) + '%';
+            document.getElementById('bar-press').style.width = Math.min(100, Math.abs(pressDelta) / 3.4 * 100) + '%';
+
+            document.getElementById('bar-thorax-val').innerText = thoraxPct.toFixed(0) + '%';
+            document.getElementById('bar-lung-val').innerText = lungL_.toFixed(2) + ' L';
+            document.getElementById('bar-press-val').innerText = pressDelta.toFixed(1) + ' hPa';
+
+            document.getElementById('txt-dia').innerText =
+                t < 0.15 ? '날숨' : (t > 0.85 ? '들숨' : (flowDir >= 0 ? '들숨 중' : '날숨 중'));
+
+            // 공기 입자
+            const flowAbs = Math.min(1, Math.abs(flowDir) * 2.2);
+            airMat.opacity = 0.15 + 0.75 * flowAbs;
+            airPoints.forEach(p => {
+                let phase = (p.phase + performance.now() * 0.0004 * flowDir * 4) % 1;
+                if (phase < 0) phase += 1;
+                p.mesh.position.y = 2.28 - phase * 0.55;
+                p.mesh.position.x = Math.sin(phase * 6) * 0.02;
+            });
+        }
+
+        // --- UI ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        const sldDia = document.getElementById('sld-dia');
+        sldDia.addEventListener('input', (e) => {
+            autoBreath = false;
+            updateAutoUI();
+            targetBreath = parseFloat(e.target.value) / 100;
+        });
+
+        function updateAutoUI() {
+            document.getElementById('auto-text').innerText = autoBreath ? '자동 호흡' : '수동 조작';
+            document.getElementById('auto-icon').innerText = autoBreath ? '⏸' : '▶️';
+            document.getElementById('btn-auto').classList.toggle('active', autoBreath);
+        }
+
+        document.getElementById('btn-auto').addEventListener('click', () => {
+            autoBreath = !autoBreath;
+            if (autoBreath) {
+                autoPhase = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * breath)));
+            } else {
+                targetBreath = breath;
+                sldDia.value = Math.round(breath * 100);
+            }
+            updateAutoUI();
+        });
+
+        function updateSyncUI() {
+            document.getElementById('btn-compare').classList.toggle('active', syncMode);
+            document.getElementById('compare-panel').classList.toggle('show', syncMode);
+            thoraxVol.visible = syncMode;
+            thoraxRef.visible = syncMode;
+            jarRef.visible = syncMode;
+            jarGhost.visible = syncMode;
+
+            const line = document.getElementById('compare-jar-line');
+            if (syncMode) {
+                line.innerHTML = '<span class="dot-o">●</span><span>플라스틱 통: 흉강과 <b>동기화되어 부피가 +12%</b> 늘어납니다. (실제 흉강처럼 통 자체가 팽창)</span>';
+                document.getElementById('guide-tooltip').innerText =
+                    '🫁 동기화 모드: 들숨이면 통도 사람의 흉강과 똑같이 부풀어 오릅니다';
+            } else {
+                line.innerHTML = '<span class="dot-x">●</span><span>플라스틱 통: <b>부피 변화 0%</b> — 단단한 벽 때문에 통 자체는 늘어나지 않습니다.</span>';
+                document.getElementById('guide-tooltip').innerText =
+                    '💡 오른쪽 모형의 빨간 고무막을 아래로 당기면 풍선(폐)이 부풀어 오릅니다';
+            }
+        }
+
+        document.getElementById('btn-compare').addEventListener('click', () => {
+            syncMode = !syncMode;
+            updateSyncUI();
+            applyBreath(breath);
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            breath = 0;
+            targetBreath = 0;
+            autoBreath = true;
+            autoPhase = 0;
+            sldDia.value = 0;
+            updateAutoUI();
+            if (syncMode) { syncMode = false; updateSyncUI(); }
+            camera.position.set(0, 2.9, 10.6);
+            controls.target.set(0, 1.7, 0);
+        });
+
+        let wideView = false;
+        document.getElementById('btn-view').addEventListener('click', () => {
+            wideView = !wideView;
+            if (wideView) {
+                camera.position.set(0, 4.6, 8.2);
+                controls.target.set(0, 1.6, 0);
+                document.getElementById('view-text').innerText = '비스듬 시점';
+            } else {
+                camera.position.set(0, 2.9, 10.6);
+                controls.target.set(0, 1.7, 0);
+                document.getElementById('view-text').innerText = '정면 시점';
+            }
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', (e) => {
+            isDark = !isDark;
+            document.body.classList.toggle('dark-mode', isDark);
+            e.currentTarget.innerText = isDark ? '☀️' : '🌙';
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe8ecf2);
+        });
+
+        // --- 고무막 드래그 ---
+        function setPointer(e) {
+            pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        renderer.domElement.addEventListener('pointerdown', (e) => {
+            setPointer(e);
+            raycaster.setFromCamera(pointer, camera);
+            const hits = raycaster.intersectObjects([membrane, membraneHandle, handleRod], false);
+            if (hits.length > 0) {
+                dragging = true;
+                autoBreath = false;
+                updateAutoUI();
+                controls.enabled = false;
+                dragStartBreath = breath;
+                raycaster.ray.intersectPlane(dragPlane, hitPoint);
+                dragStartY = hitPoint.y;
+            }
+        });
+
+        renderer.domElement.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            setPointer(e);
+            raycaster.setFromCamera(pointer, camera);
+            if (raycaster.ray.intersectPlane(dragPlane, hitPoint)) {
+                const delta = (dragStartY - hitPoint.y) / 0.42;
+                targetBreath = Math.max(0, Math.min(1, dragStartBreath + delta));
+                sldDia.value = Math.round(targetBreath * 100);
+            }
+        });
+
+        window.addEventListener('pointerup', () => {
+            if (dragging) {
+                dragging = false;
+                controls.enabled = true;
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 루프 ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.05);
+
+            if (autoBreath) {
+                // 4초 주기로 들숨-날숨 반복
+                autoPhase += dt * (Math.PI * 2 / 4);
+                breath = 0.5 - 0.5 * Math.cos(autoPhase);
+                sldDia.value = Math.round(breath * 100);
+            } else {
+                breath += (targetBreath - breath) * Math.min(1, dt * 7);
+            }
+
+            flowDir = (breath - prevBreath) / Math.max(dt, 0.0001) * 0.25;
+            prevBreath = breath;
+            flowDir = Math.max(-1, Math.min(1, flowDir));
+
+            applyBreath(breath);
+            updateReadouts();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        applyBreath(0);
+        updateReadouts();
+        animate();
+
+        /* ---------- Fullscreen / Windowed Mode Logic ---------- */
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        const fullscreenText = document.getElementById('fullscreenText');
+
+        function updateFullscreenUI() {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (fullscreenIcon) fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+            if (fullscreenText) fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+        }
+
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                try {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) req.call(document.documentElement);
+                    } else {
+                        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    }
+                } catch (err) {
+                    console.error('전체화면 모드를 전환할 수 없습니다:', err);
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+    </script>
+</body>
+</html>
