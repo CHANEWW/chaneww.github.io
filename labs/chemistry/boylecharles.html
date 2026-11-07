@@ -623,9 +623,11 @@ img, canvas { max-width: 100%; }
     .control-tab-btn {
         flex: 0 0 auto !important;
         min-width: 46px !important;
-        padding: 3px 7px !important;
+        padding: 3px 9px !important;
         font-size: 10px !important;
-        gap: 0 !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     .control-tab-btn span:first-child { font-size: 13px !important; }
 
@@ -673,6 +675,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 /* @@/MOBILE-BASE@@ */
 </style>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
 </head>
 <body>
 
@@ -889,6 +892,14 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
         scene.add(pistonGroup);
 
+        /* 손가락으로 잡기 편하도록 피스톤 막대 둘레에 보이지 않는 집기 영역을 둔다 */
+        const pistonGrab = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.42, 0.42, 1.8, 20),
+            new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+        );
+        pistonGrab.position.y = 0.74;
+        pistonGroup.add(pistonGrab);
+
         // --- 6. 기체 입자 ---
         const PARTICLE_COUNT = 220;
         const particleGeom = new THREE.BufferGeometry();
@@ -1044,7 +1055,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             gctx.lineTo(x1, y0);
             gctx.stroke();
 
-            gctx.font = 'bold 15px sans-serif';
+            gctx.font = 'bold 15px "SeoulNamsan", sans-serif';
             gctx.fillStyle = '#8e8e93';
             gctx.textAlign = 'center';
             gctx.textBaseline = 'top';
@@ -1108,7 +1119,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                 gctx.stroke();
 
                 gctx.fillStyle = '#8e8e93';
-                gctx.font = 'bold 15px sans-serif';
+                gctx.font = 'bold 15px "SeoulNamsan", sans-serif';
                 gctx.textAlign = 'left';
                 gctx.fillText('부피 (L)', x1 - 74, y0 + 6);
                 gctx.save();
@@ -1167,7 +1178,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                 gctx.stroke();
 
                 gctx.fillStyle = '#8e8e93';
-                gctx.font = 'bold 15px sans-serif';
+                gctx.font = 'bold 15px "SeoulNamsan", sans-serif';
                 gctx.textAlign = 'left';
                 gctx.fillText('온도 (K)', x1 - 74, y0 + 6);
                 gctx.fillText('부피 (L)', 12, y1 + 2);
@@ -1219,8 +1230,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                 ? '보일 법칙: 온도가 일정할 때 기체의 부피를 줄이면 압력이 커집니다. 부피를 절반으로 줄이면 압력은 2배가 됩니다.'
                 : '샤를 법칙: 압력이 일정할 때 기체의 온도를 높이면 부피가 비례해서 커집니다. 온도를 2배로 하면 부피도 2배가 됩니다.';
             document.getElementById('guide-tooltip').innerText = m === 'boyle'
-                ? '💡 피스톤을 내려 부피를 줄이면 기체 입자가 벽에 더 자주 부딪혀 압력이 커집니다'
-                : '💡 온도를 높이면 기체 입자의 운동이 빨라져 부피가 늘어납니다';
+                ? '💡 피스톤을 직접 위아래로 드래그하거나 슬라이더로 부피를 바꿔 보세요'
+                : '💡 피스톤을 위로 끌어올리면 온도가 올라가 부피가 늘어납니다';
             records = [];
             updateUI();
         }
@@ -1284,6 +1295,75 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
             innerFloor.material.color.setHex(isDark ? 0x2a2f3a : 0xdfe6ef);
         });
+
+        /* --- 피스톤 직접 드래그 (마우스·터치) : 위아래로 끌어 압력 변화 --- */
+        const dragRaycaster = new THREE.Raycaster();
+        const dragPointer = new THREE.Vector2();
+        let pistonDragging = false, dragStartClientY = 0, dragStartV = 2;
+        const VOL_MIN = 1, VOL_MAX = 4, T_MIN = 150, T_MAX = 600;
+
+        function setDragPointer(e) {
+            const r = renderer.domElement.getBoundingClientRect();
+            dragPointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+            dragPointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+            dragRaycaster.setFromCamera(dragPointer, camera);
+        }
+        function pistonHit(e) {
+            setDragPointer(e);
+            return dragRaycaster.intersectObjects([pistonGrab, pistonHead, pistonRod, pistonHandle], false).length > 0;
+        }
+        const _pp1 = new THREE.Vector3(), _pp2 = new THREE.Vector3();
+        function pxPerWorld() {
+            _pp1.set(0, pistonYNow, 0).project(camera);
+            _pp2.set(0, pistonYNow + 1, 0).project(camera);
+            const px = Math.abs(_pp2.y - _pp1.y) * window.innerHeight / 2;
+            return px > 4 ? px : 60;
+        }
+        function applyPistonVolume(v) {
+            v = Math.max(VOL_MIN, Math.min(VOL_MAX, v));
+            if (mode === 'boyle') {
+                V_L = v;
+            } else {
+                // 샤를 법칙: 압력이 일정하므로 부피 변화는 곧 온도 변화
+                T_K = Math.max(T_MIN, Math.min(T_MAX, v * (101.3 / (N_MOL * R_GAS))));
+            }
+            computeState();
+            syncSliders();
+            updateUI();
+        }
+        const dragEl = renderer.domElement;
+        dragEl.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            if (!pistonHit(e)) return;
+            pistonDragging = true;
+            dragStartClientY = e.clientY;
+            dragStartV = (mode === 'boyle') ? V_L : (T_K * N_MOL * R_GAS / 101.3);
+            controls.enabled = false;
+            try { dragEl.setPointerCapture(e.pointerId); } catch (err) {}
+            dragEl.style.cursor = 'grabbing';
+            pistonHead.material.emissive.setHex(0x1e4e8c);
+            e.preventDefault();
+        }, { passive: false });
+        dragEl.addEventListener('pointermove', (e) => {
+            if (!pistonDragging) {
+                dragEl.style.cursor = pistonHit(e) ? 'grab' : 'default';
+                return;
+            }
+            const dv = -((e.clientY - dragStartClientY) / pxPerWorld()) / VOL_PER_UNIT;
+            applyPistonVolume(dragStartV + dv);
+            e.preventDefault();
+        }, { passive: false });
+        function endPistonDrag(e) {
+            if (!pistonDragging) return;
+            pistonDragging = false;
+            controls.enabled = true;
+            dragEl.style.cursor = 'default';
+            pistonHead.material.emissive.setHex(0x000000);
+            try { dragEl.releasePointerCapture(e.pointerId); } catch (err) {}
+        }
+        dragEl.addEventListener('pointerup', endPistonDrag);
+        dragEl.addEventListener('pointercancel', endPistonDrag);
+        dragEl.addEventListener('pointerleave', () => { if (!pistonDragging) dragEl.style.cursor = 'default'; });
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
