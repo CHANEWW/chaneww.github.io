@@ -157,6 +157,10 @@
             white-space: nowrap;
         }
 
+        .center-tooltip.hidden {
+            opacity: 0;
+        }
+
         /* 우측 상단 표시 바로 아래: 가로막 조작 패널 */
         .side-panel {
             position: absolute;
@@ -198,43 +202,41 @@
             accent-color: #007aff;
         }
 
-        /* 우측 세로 기능 버튼 */
+        /* 우측 컴팩트 정사각 기능 버튼 */
         .action-panel {
             position: absolute;
             right: 20px;
-            top: 202px;
-            width: 248px;
-            display: flex;
-            flex-direction: column;
+            top: 198px;
+            display: grid;
+            grid-template-columns: repeat(2, 62px);
             gap: 8px;
             z-index: 11;
         }
 
         .side-btn {
             display: flex;
-            flex-direction: row;
+            flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
-            gap: 10px;
-            width: 100%;
-            padding: 11px 16px;
-            border-radius: 16px;
+            justify-content: center;
+            gap: 3px;
+            width: 62px;
+            height: 62px;
+            padding: 6px 4px;
+            border-radius: 17px;
             border: 1px solid rgba(0, 0, 0, 0.05);
-            background: rgba(255, 255, 255, 0.72);
+            background: rgba(255, 255, 255, 0.75);
             color: #1c1c1e;
             font-family: inherit;
-            font-size: 12.5px;
+            font-size: 9.5px;
             font-weight: bold;
             cursor: pointer;
             transition: all 0.2s;
-            line-height: 1.2;
-            text-align: left;
+            line-height: 1.15;
+            text-align: center;
         }
 
         .side-btn span:first-child {
-            width: 18px;
-            text-align: center;
-            font-size: 14px;
+            font-size: 15px;
         }
 
         .side-btn:hover { background: #ffffff; }
@@ -372,18 +374,17 @@
                 top: auto;
                 bottom: 54px;
                 width: auto;
+                display: flex;
                 flex-direction: row;
                 gap: 6px;
             }
             .action-panel .side-btn {
                 flex: 1;
-                flex-direction: column;
-                gap: 2px;
-                padding: 7px 2px;
-                font-size: 10px;
-                text-align: center;
+                width: auto;
+                height: 54px;
+                font-size: 9.5px;
             }
-            .action-panel .side-btn span:first-child { width: auto; font-size: 13px; }
+            .action-panel .side-btn span:first-child { font-size: 14px; }
         }
     </style>
 </head>
@@ -802,7 +803,7 @@
             new THREE.MeshStandardMaterial({ color: 0x5b6779, roughness: 0.5 })
         );
         stopper.position.y = JAR_BOTTOM + 1.62;
-        jarGroup.add(stopper);
+        modelGroup.add(stopper);
 
         // Y자 유리관
         const tubeMat = new THREE.MeshStandardMaterial({ color: 0xdfe9f5, roughness: 0.25, metalness: 0.1, transparent: true, opacity: 0.95 });
@@ -1013,13 +1014,15 @@
             balloonL.scale.set(1.04 * inflate, inflate, 1.04 * inflate);
             balloonR.scale.set(0.97 * inflate, inflate, 0.97 * inflate);
 
-            // 흉강 동기화: 통 자체가 흉강과 같은 부피 비율로 매끄럽게 팽창/수축
+            // 흉강 동기화: 통 자체가 흉강과 같은 비율로 매끄럽게 팽창/수축 (반경 +26%)
             if (syncMode) {
-                const jarScale = Math.sqrt(1 + 0.12 * t);
+                const jarScale = 1 + 0.26 * t;
                 jarGroup.scale.set(jarScale, 1, jarScale);
+                stopper.scale.set(jarScale, jarScale, jarScale);
                 membraneGroup.scale.set(jarScale, 1, jarScale);
             } else {
                 jarGroup.scale.set(1, 1, 1);
+                stopper.scale.set(1, 1, 1);
                 membraneGroup.scale.set(1, 1, 1);
             }
         }
@@ -1136,6 +1139,17 @@
             scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
             floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe8ecf2);
         });
+
+        // --- 안내 팁: 첫 조작이 시작되면 자동으로 사라짐 ---
+        const guideTooltip = document.getElementById('guide-tooltip');
+        function hideGuideTip() {
+            if (guideTooltip) guideTooltip.classList.add('hidden');
+        }
+        sldDia.addEventListener('input', hideGuideTip);
+        document.querySelectorAll('.action-panel .side-btn').forEach(btn => {
+            btn.addEventListener('click', hideGuideTip);
+        });
+        renderer.domElement.addEventListener('pointerdown', hideGuideTip);
 
         // --- 고무막 드래그 ---
         function setPointer(e) {
