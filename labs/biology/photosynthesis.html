@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>광합성과 호흡 3D</title>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+    @font-face {
+        font-family: 'SeoulNamsan';
+        src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+             url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+        font-weight: 400; font-style: normal; font-display: swap;
+    }
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+    body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(120% 100% at 50% 0%, #ffffff 0%, #eaf3ea 45%, #dfeae6 100%);
+        color: #1c1c1e;
+        touch-action: none;
+        transition: background .5s ease, color .35s ease;
+    }
+    body.dark-mode, body.night {
+        background: radial-gradient(120% 100% at 50% 0%, #1b2434 0%, #0d131d 55%, #070a11 100%);
+        color: #f2f5fa;
+    }
+
+    #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
+    #canvas-container canvas { display: block; }
+
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.76);
+        backdrop-filter: blur(22px) saturate(180%);
+        -webkit-backdrop-filter: blur(22px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(16, 32, 64, 0.10);
+        z-index: 10;
+    }
+    body.dark-mode .glass-panel, body.night .glass-panel {
+        background: rgba(20, 26, 38, 0.78);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        color: #eef3fa;
+    }
+
+    .top-left-bar { position: absolute; top: 18px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+    .back-btn {
+        display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+        font-size: 14px; font-weight: bold; color: #1c1c1e; text-decoration: none;
+        cursor: pointer; transition: all .2s ease;
+    }
+    body.dark-mode .back-btn, body.night .back-btn { color: #eaf1ff; }
+    button.back-btn { font-family: inherit; border: none; }
+
+    .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+    .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; white-space: nowrap; }
+    .vision-badge {
+        background: rgba(10, 132, 255, 0.16); color: #0a7cff;
+        padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold;
+    }
+    body.dark-mode .vision-badge, body.night .vision-badge { background: rgba(10, 132, 255, 0.28); color: #7cc0ff; }
+
+    .top-right-bar { position: absolute; top: 18px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+    .data-card { display: flex; align-items: center; gap: 15px; padding: 9px 18px; }
+    .data-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .data-label { font-size: 11px; color: #77808f; font-weight: bold; }
+    body.dark-mode .data-label, body.night .data-label { color: #9aa8bd; }
+    .data-value { font-size: 15px; font-weight: bold; white-space: nowrap; }
+    .icon-btn {
+        width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; cursor: pointer; border: none; font-family: inherit;
+        background: rgba(255, 255, 255, 0.8); color: #1c1c1e; font-size: 16px;
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); transition: all .2s;
+    }
+    body.dark-mode .icon-btn, body.night .icon-btn { background: rgba(30, 40, 60, 0.8); color: #eaf1ff; }
+
+    .center-tooltip {
+        position: absolute; top: 9%; left: 50%; transform: translateX(-50%);
+        padding: 8px 18px; font-size: 13px; font-weight: bold; color: #4b5563;
+        border-radius: 30px; pointer-events: none; z-index: 5;
+        transition: opacity .45s ease; white-space: nowrap; max-width: 92vw;
+    }
+    body.dark-mode .center-tooltip, body.night .center-tooltip { color: #cfdcf0; }
+
+    .sub-panel {
+        position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%);
+        padding: 15px 16px; width: 320px;
+        display: none; flex-direction: column; gap: 11px; z-index: 11;
+    }
+    .sub-panel.show { display: flex; }
+    .panel-title {
+        font-size: 11.5px; font-weight: bold; color: #0a7cff; letter-spacing: .4px;
+        display: flex; align-items: center; justify-content: space-between;
+    }
+    body.dark-mode .panel-title, body.night .panel-title { color: #7cc0ff; }
+    .panel-note { font-size: 11px; line-height: 1.55; color: #6b7280; font-weight: bold; word-break: keep-all; }
+    body.dark-mode .panel-note, body.night .panel-note { color: #8fa0ba; }
+    .control-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; color: #77808f; }
+    body.dark-mode .slider-header, body.night .slider-header { color: #9aa8bd; }
+    input[type="range"] { width: 100%; height: 22px; accent-color: #0a84ff; cursor: pointer; margin: 0; }
+    .val-strong { color: #0a84ff; }
+    body.dark-mode .val-strong, body.night .val-strong { color: #7cc0ff; }
+
+    .preset-btn {
+        display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+        padding: 8px 12px; border-radius: 11px; border: 1px solid rgba(0, 0, 0, 0.07);
+        background: rgba(255, 255, 255, 0.9); color: #1c1c1e;
+        font-family: inherit; font-size: 12px; font-weight: bold; cursor: pointer; transition: all .2s;
+    }
+    .preset-btn:hover { border-color: #0a84ff; }
+    body.dark-mode .preset-btn, body.night .preset-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); color: #e6edf9; }
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+    #panel-env {
+        left: 20px; right: auto; top: 50%; bottom: auto;
+        transform: translateY(-50%); width: 250px; gap: 10px;
+    }
+
+    #panel-graph {
+        right: 20px; left: auto; top: 50%; bottom: auto;
+        transform: translateY(-50%); width: 330px; gap: 8px;
+    }
+    #graphCanvas { width: 100%; height: 200px; display: block; border-radius: 12px; }
+    .graph-head { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; font-weight: bold; }
+    .state-pill { padding: 3px 9px; border-radius: 9px; font-size: 10.5px; font-weight: bold; background: rgba(48, 209, 88, 0.16); color: #1f9d47; }
+    body.dark-mode .state-pill, body.night .state-pill { background: rgba(48, 209, 88, 0.22); color: #6ee39a; }
+    .state-pill.nightp { background: rgba(90, 130, 255, 0.18); color: #3f63d6; }
+    body.dark-mode .state-pill.nightp, body.night .state-pill.nightp { background: rgba(90, 130, 255, 0.24); color: #9db4ff; }
+    .graph-legend { display: flex; align-items: center; gap: 9px; font-size: 10px; color: #7b8494; font-weight: bold; flex-wrap: wrap; }
+    body.dark-mode .graph-legend, body.night .graph-legend { color: #93a1b5; }
+    .graph-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+    .bottom-control-bar {
+        position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 4px; padding: 6px; z-index: 10;
+    }
+    .control-tab-btn {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 2px; padding: 7px 14px; min-width: 72px; border-radius: 14px; border: none;
+        background: transparent; color: #1c1c1e; font-size: 12px; font-weight: bold;
+        font-family: inherit; cursor: pointer; transition: all .2s; line-height: 1.2;
+    }
+    body.dark-mode .control-tab-btn, body.night .control-tab-btn { color: #e6edf9; }
+    .control-tab-btn span:first-child { font-size: 16px; line-height: 1.1; }
+    .control-tab-btn.active { background: #0a84ff; color: #fff; box-shadow: 0 4px 12px rgba(10, 132, 255, 0.32); }
+
+    .bottom-right-bar { position: absolute; bottom: 24px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(10, 16, 28, 0.42); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        display: none; align-items: center; justify-content: center; z-index: 60; padding: 20px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-card {
+        width: min(560px, 92vw); max-height: 84vh; overflow-y: auto;
+        padding: 20px 22px; display: flex; flex-direction: column; gap: 13px;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .modal-title { font-size: 16px; font-weight: bold; display: flex; flex-direction: column; gap: 4px; }
+    .modal-badge { font-size: 11px; color: #0a7cff; font-weight: bold; }
+    body.dark-mode .modal-badge, body.night .modal-badge { color: #7cc0ff; }
+    .modal-close-btn {
+        border: none; background: rgba(0, 0, 0, 0.06); width: 30px; height: 30px; border-radius: 50%;
+        font-size: 14px; cursor: pointer; font-family: inherit; color: inherit; flex: 0 0 auto;
+    }
+    body.dark-mode .modal-close-btn, body.night .modal-close-btn { background: rgba(255, 255, 255, 0.12); }
+    .modal-body { display: flex; flex-direction: column; gap: 9px; }
+    .example-item { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.82); border: 1px solid rgba(0, 0, 0, 0.06); }
+    body.dark-mode .example-item, body.night .example-item { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); }
+    .example-title { font-size: 12.5px; font-weight: bold; margin-bottom: 4px; }
+    .example-desc { font-size: 12.5px; line-height: 1.65; color: #404754; font-weight: bold; word-break: keep-all; }
+    body.dark-mode .example-desc, body.night .example-desc { color: #c9d4e4; }
+
+    /* @@MOBILE-BASE v1@@ *//* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+/* @@/MOBILE-BASE@@ */
+</style>
+<style>
+    @media (max-width: 900px) {
+        #panel-env, #panel-graph { top: auto !important; transform: none !important; left: 8px !important; right: 8px !important; }
+        #graphCanvas { height: 180px; }
+    }
+    @media (max-width: 430px) {
+        .vision-badge { display: none !important; }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+        .data-item { flex: 0 0 auto !important; }
+        .data-card { gap: 11px !important; padding: 4px 12px !important; }
+        .center-tooltip { bottom: 64px !important; }
+        #graphCanvas { height: 120px; }
+        #panel-graph { width: min(320px, 46vw) !important; }
+    }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="/index.html" class="glass-panel back-btn"><span>⬅</span> 메인</a>
+    <div class="glass-panel tag-badge title-capsule">
+        <span class="title-text">광합성과 호흡 3D</span>
+        <span class="vision-badge">visionOS</span>
+    </div>
+</div>
+
+<div class="top-right-bar">
+    <div class="glass-panel data-card">
+        <div class="data-item">
+            <span class="data-label">총 광합성량</span>
+            <span class="data-value" id="val-gross" style="color:#30d158;">75</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">호흡량</span>
+            <span class="data-value" id="val-resp" style="color:#ff9f0a;">18</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">순 광합성량</span>
+            <span class="data-value" id="val-net" style="color:#0a84ff;">+57</span>
+        </div>
+    </div>
+    <button class="icon-btn glass-panel" id="theme-toggle" title="테마 전환">🌙</button>
+</div>
+
+<div class="glass-panel center-tooltip" id="guide-tooltip">
+    ☀️ 빛이 강할수록 기공으로 CO₂가 들어오고 O₂가 나가요
+</div>
+
+<!-- 환경 패널 -->
+<div class="glass-panel sub-panel show" id="panel-env">
+    <div class="panel-title">☀️ 빛 · 공기 · 온도</div>
+    <div>
+        <div class="slider-header"><span>☀️ 빛의 세기</span><span class="val-strong" id="lbl-light">70%</span></div>
+        <input type="range" id="rng-light" min="0" max="100" step="1" value="70">
+    </div>
+    <div>
+        <div class="slider-header"><span>☁️ 이산화 탄소 농도</span><span class="val-strong" id="lbl-co2">60%</span></div>
+        <input type="range" id="rng-co2" min="0" max="100" step="1" value="60">
+    </div>
+    <div>
+        <div class="slider-header"><span>🌡️ 온도</span><span class="val-strong" id="lbl-temp">25°C</span></div>
+        <input type="range" id="rng-temp" min="0" max="50" step="1" value="25">
+    </div>
+    <div class="btn-row">
+        <button class="preset-btn" id="btn-day">☀️ 밝은 낮</button>
+        <button class="preset-btn" id="btn-night">🌙 밤 (빛 0)</button>
+    </div>
+    <div class="panel-note" id="env-note">광합성은 빛·CO₂·온도가 알맞을 때 가장 활발해요.</div>
+</div>
+
+<!-- 그래프 패널 -->
+<div class="glass-panel sub-panel show" id="panel-graph">
+    <div class="graph-head">
+        <span class="panel-title">📈 빛의 세기에 따른 광합성량</span>
+        <span class="state-pill" id="state-pill">O₂ 배출</span>
+    </div>
+    <canvas id="graphCanvas"></canvas>
+    <div class="graph-legend">
+        <span><i style="background:#30d158;"></i>총 광합성량</span>
+        <span><i style="background:#0aa2c0;"></i>순 광합성량</span>
+        <span><i style="background:#ff9f0a;"></i>호흡량</span>
+    </div>
+    <div class="panel-note" style="font-size:10.5px;">순 광합성량 = 총 광합성량 − 호흡량</div>
+</div>
+
+<!-- 원리 모달 -->
+<div class="modal-overlay" id="modal-overlay">
+    <div class="glass-panel modal-card">
+        <div class="modal-header">
+            <div class="modal-title">
+                <span>🌿 광합성과 호흡</span>
+                <span class="modal-badge">중학교 2학년 · 생명과학</span>
+            </div>
+            <button class="modal-close-btn" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="example-item">
+                <div class="example-title">1. 광합성 (엽록체)</div>
+                <div class="example-desc">빛 에너지를 이용해 <b>CO₂ + H₂O → 포도당 + O₂</b> 반응을 일으켜요. 기공으로 들어온 CO₂는 엽록체에서 포도당으로 바뀌고, 남은 산소는 기공으로 나가요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">2. 호흡 (미토콘드리아)</div>
+                <div class="example-desc">광합성과 반대로 <b>포도당 + O₂ → CO₂ + H₂O</b> 반응으로 에너지를 얻어요. 호흡은 낮에도 밤에도 쉬지 않고 계속 일어나요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">3. 보상점과 광포화점</div>
+                <div class="example-desc">빛이 약하면 광합성량보다 호흡량이 많아 O₂를 들이마시고 CO₂를 내보내요. 빛을 점점 세게 하면 두 양이 같아지는 <b>보상점</b>을 지나, 광합성이 더 많아져 O₂를 내보내요. 빛을 더 세게 해도 광합성량이 늘지 않는 한계가 <b>광포화점</b>이에요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">4. 온도와 CO₂ 농도</div>
+                <div class="example-desc">광합성은 30~35°C 근처에서 가장 활발하고, 45°C 이상에서는 효소가 변성되어 급격히 줄어요. CO₂ 농도가 높을수록 광합성량도 늘지만, 일정 농도 이상에서는 더 늘지 않아요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">5. 밤에는?</div>
+                <div class="example-desc">빛이 없으면 광합성은 멈추고 호흡만 일어나요. 그래서 밤에는 O₂를 들이마시고 CO₂를 내보내요(순 광합성량이 음수).</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="glass-panel bottom-control-bar">
+    <button class="control-tab-btn active" id="tab-env"><span>☀️</span><span>환경</span></button>
+    <button class="control-tab-btn" id="tab-graph"><span>📈</span><span>그래프</span></button>
+    <button class="control-tab-btn" id="tab-help"><span>📖</span><span>원리</span></button>
+</div>
+
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" class="glass-panel back-btn">
+        <span id="fullscreenIcon">⛶</span>
+        <span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<script>
+/* ============================================================
+   광합성과 호흡 3D
+   - 잎의 단면: 표피 · 울타리 조직(엽록체) · 해면 조직 · 기공
+   - 빛의 세기 / CO2 농도 / 온도에 따라 광합성량 계산
+   - 기공을 드나드는 CO2·O2 입자와 포도당 생성 애니메이션
+   ============================================================ */
+
+const state = {
+    light: 70,
+    co2: 60,
+    temp: 25,
+    dark: false,
+    particles: [],
+    glucose: [],
+    co2Timer: 0,
+    o2Timer: 0
+};
+
+/* ---------- 광합성량 계산 ---------- */
+function fTemp(T) {
+    if (T <= 35) return Math.max(0, 1 - Math.pow((35 - T) / 35, 2) * 0.55);
+    return Math.max(0, 1 - Math.pow((T - 35) / 15, 2));
+}
+function fCO2(C) {
+    return (C / (C + 25)) / 0.8;
+}
+function grossAt(I, C, T) {
+    return 100 * (1 - Math.exp(-I / 22)) * fTemp(T) * fCO2(C);
+}
+function respAt(T) {
+    return 14 + 0.22 * T;
+}
+function rates() {
+    const g = grossAt(state.light, state.co2, state.temp);
+    const r = respAt(state.temp);
+    return { g: g, r: r, net: g - r };
+}
+
+/* ---------- 3D ---------- */
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 200);
+const CAM_OFFSET = new THREE.Vector3(0.11, 0.44, 7.6);
+const CAM_TARGET = new THREE.Vector3(-0.16, 0.56, 0);
+camera.position.copy(CAM_TARGET).add(CAM_OFFSET);
+window.camera = camera;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.copy(CAM_TARGET);
+controls.minDistance = 4.2;
+controls.maxDistance = 14;
+controls.minPolarAngle = 0.5;
+controls.maxPolarAngle = 1.95;
+controls.minAzimuthAngle = -0.75;
+controls.maxAzimuthAngle = 0.75;
+controls.enablePan = false;
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0xd7efd0, 0.9);
+scene.add(hemi);
+const sunLight = new THREE.DirectionalLight(0xfff3c4, 1.1);
+sunLight.position.set(3.5, 7, 5);
+scene.add(sunLight);
+const fill = new THREE.DirectionalLight(0xbcd8ff, 0.4);
+fill.position.set(-4, 1, 4);
+scene.add(fill);
+
+/* ---------- 잎 단면 ---------- */
+const leaf = new THREE.Group();
+scene.add(leaf);
+
+const LEAF_W = 4.2, LEAF_D = 0.84;
+const stomaX = [-0.92, 1.02];
+
+function mat(color, opts) {
+    return new THREE.MeshStandardMaterial(Object.assign({ color: color, roughness: 0.55, metalness: 0.02 }, opts || {}));
+}
+
+/* 표피 */
+const epiMat = mat(0xc6e9b2, { transparent: true, opacity: 0.6, roughness: 0.4 });
+const upperEpi = new THREE.Mesh(new THREE.BoxGeometry(LEAF_W, 0.3, LEAF_D), epiMat);
+upperEpi.position.set(0, 1.33, 0);
+leaf.add(upperEpi);
+
+/* 큐티클(반짝이는 표면) */
+const cuticle = new THREE.Mesh(new THREE.BoxGeometry(LEAF_W, 0.035, LEAF_D), mat(0xffffff, { transparent: true, opacity: 0.45, roughness: 0.1 }));
+cuticle.position.set(0, 1.49, 0);
+leaf.add(cuticle);
+
+/* 울타리 조직 세포 */
+const cellMat = mat(0x86d273, { roughness: 0.5 });
+const cellMat2 = mat(0x79c968, { roughness: 0.5 });
+const chloroplastMat = mat(0x2f9b52, { roughness: 0.3, emissive: 0x1c7a38, emissiveIntensity: 0.7 });
+const chloroGeo = new THREE.SphereGeometry(1, 10, 8);
+
+const chloroPts = [];
+const PAL_N = 7;
+for (let i = 0; i < PAL_N; i++) {
+    const x = -1.76 + i * (3.52 / (PAL_N - 1));
+    const h = 0.84 + (Math.random() - 0.5) * 0.08;
+    const c = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), i % 2 ? cellMat2 : cellMat);
+    c.scale.set(0.205, h / 2, 0.34);
+    c.position.set(x, 0.9, 0);
+    leaf.add(c);
+    for (let k = 0; k < 4; k++) {
+        const cl = new THREE.Mesh(chloroGeo, chloroplastMat);
+        cl.scale.set(0.105, 0.085, 0.085);
+        cl.position.set(x + (Math.random() - 0.5) * 0.28, 0.9 + (Math.random() - 0.5) * h * 0.62, (Math.random() - 0.5) * 0.5);
+        cl.rotation.z = Math.random();
+        leaf.add(cl);
+        chloroPts.push(new THREE.Vector3(cl.position.x, cl.position.y, 0.46));
+    }
+}
+
+/* 해면 조직 세포 */
+const SPO_N = 6;
+for (let i = 0; i < SPO_N; i++) {
+    const x = -1.7 + i * (3.4 / (SPO_N - 1));
+    const c = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), i % 2 ? cellMat : cellMat2);
+    c.scale.set(0.27, 0.22, 0.34);
+    c.position.set(x + (Math.random() - 0.5) * 0.12, 0.18, (Math.random() - 0.5) * 0.1);
+    leaf.add(c);
+    for (let k = 0; k < 2; k++) {
+        const cl = new THREE.Mesh(chloroGeo, chloroplastMat);
+        cl.scale.set(0.095, 0.075, 0.075);
+        cl.position.set(c.position.x + (Math.random() - 0.5) * 0.28, 0.18 + (Math.random() - 0.5) * 0.16, 0.44);
+        leaf.add(cl);
+        chloroPts.push(new THREE.Vector3(cl.position.x, cl.position.y, 0.46));
+    }
+    // 미토콘드리아
+    const mi = new THREE.Mesh(chloroGeo, mat(0xe07a3f, { roughness: 0.4, emissive: 0x7a2d0a, emissiveIntensity: 0.5 }));
+    mi.scale.set(0.07, 0.045, 0.045);
+    mi.position.set(c.position.x + 0.1, c.position.y - 0.08, 0.44);
+    mi.rotation.z = 0.6;
+    leaf.add(mi);
+}
+
+/* 아래 표피 (기공 자리만 비운다) */
+const lowerEpiMat = mat(0xc6e9b2, { transparent: true, opacity: 0.72, roughness: 0.4 });
+const gaps = [[-2.12, stomaX[0] - 0.17], [stomaX[0] + 0.17, stomaX[1] - 0.17], [stomaX[1] + 0.17, 2.12]];
+gaps.forEach(function (g) {
+    const w = g[1] - g[0];
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(w, 0.26, LEAF_D), lowerEpiMat);
+    seg.position.set((g[0] + g[1]) / 2, -0.16, 0);
+    leaf.add(seg);
+});
+
+/* 공변세포 */
+const guardMat = mat(0x5fbb52, { roughness: 0.45 });
+stomaX.forEach(function (sx) {
+    [-1, 1].forEach(function (s) {
+        const gcv = new THREE.Mesh(chloroGeo, guardMat);
+        gcv.scale.set(0.085, 0.13, 0.36);
+        gcv.position.set(sx + s * 0.18, -0.16, 0);
+        leaf.add(gcv);
+    });
+});
+
+/* 잎 뒤 배경 (다이어그램 판) */
+const bgTex = (function () {
+    const cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 320;
+    const c = cv.getContext('2d');
+    const g = c.createRadialGradient(256, 160, 20, 256, 160, 168);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.6, 'rgba(255,255,255,0.6)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 512, 320);
+    return new THREE.CanvasTexture(cv);
+})();
+const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 4.4), new THREE.MeshBasicMaterial({ map: bgTex, transparent: true, depthWrite: false }));
+backdrop.position.set(-0.1, 0.6, -1.1);
+backdrop.renderOrder = -1;
+scene.add(backdrop);
+
+/* ---------- 반짝이는 빛(태양) ---------- */
+function radialTexture(inner, outer) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 256;
+    const c = cv.getContext('2d');
+    const g = c.createRadialGradient(128, 128, 4, 128, 128, 126);
+    g.addColorStop(0, inner);
+    g.addColorStop(0.45, outer);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.fillRect(0, 0, 256, 256);
+    return new THREE.CanvasTexture(cv);
+}
+const glowTex = radialTexture('rgba(255,246,190,0.98)', 'rgba(255,214,90,0.55)');
+const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+glow.position.set(2.05, 2.35, -0.6);
+glow.scale.set(1.6, 1.6, 1);
+scene.add(glow);
+
+const coreTex = radialTexture('rgba(255,255,255,1)', 'rgba(255,232,150,0.95)');
+const sunCore = new THREE.Sprite(new THREE.SpriteMaterial({ map: coreTex, transparent: true, depthWrite: false }));
+sunCore.scale.set(0.55, 0.55, 1);
+sunCore.position.copy(glow.position);
+scene.add(sunCore);
+
+/* 빛줄기 */
+const rayGroup = new THREE.Group();
+scene.add(rayGroup);
+const rayMat = new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+for (let i = 0; i < 5; i++) {
+    const geo = new THREE.PlaneGeometry(0.045, 2.2);
+    const r = new THREE.Mesh(geo, rayMat);
+    const x = -1.9 + i * 0.95;
+    r.position.set(x + 0.9, 1.3, 0.5);
+    r.rotation.z = -0.55;
+    rayGroup.add(r);
+}
+
+/* ---------- 이름표 ---------- */
+function labelCanvas(text, bg, fg) {
+    const fs = 54, pad = 26;
+    const cv = document.createElement('canvas');
+    let ctx = cv.getContext('2d');
+    const font = "bold " + fs + "px 'SeoulNamsan', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif";
+    ctx.font = font;
+    const tw = Math.ceil(ctx.measureText(text).width);
+    cv.width = tw + pad * 2 + 10;
+    cv.height = 92;
+    ctx = cv.getContext('2d');
+    const rr = 20;
+    ctx.beginPath();
+    ctx.moveTo(rr, 6);
+    ctx.lineTo(cv.width - rr, 6);
+    ctx.quadraticCurveTo(cv.width - 4, 6, cv.width - 4, 6 + rr);
+    ctx.lineTo(cv.width - 4, cv.height - rr);
+    ctx.quadraticCurveTo(cv.width - 4, cv.height - 6, cv.width - rr, cv.height - 6);
+    ctx.lineTo(rr, cv.height - 6);
+    ctx.quadraticCurveTo(4, cv.height - 6, 4, cv.height - rr);
+    ctx.lineTo(4, 6 + rr);
+    ctx.quadraticCurveTo(4, 6, rr, 6);
+    ctx.closePath();
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = fg;
+    ctx.fillText(text, cv.width / 2, cv.height / 2);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    return { tex: tex, aspect: cv.width / cv.height };
+}
+
+const LABELS = [];
+function makeLabel(text, x, y, z, h, bg, fg) {
+    const t = labelCanvas(text, bg || 'rgba(255,255,255,0.9)', fg || '#2f6b3a');
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t.tex, transparent: true, depthWrite: false }));
+    s.scale.set(h * t.aspect, h, 1);
+    s.position.set(x, y, z);
+    s.renderOrder = 8;
+    scene.add(s);
+    LABELS.push({ sprite: s, text: text, x: x, y: y, z: z, h: h, bg: bg, fg: fg });
+}
+
+/* ---------- 기체 입자 ---------- */
+function gasCanvas(text, bg) {
+    const fs = 92, pad = 30;
+    const cv = document.createElement('canvas');
+    let ctx = cv.getContext('2d');
+    const font = "bold " + fs + "px 'SeoulNamsan', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif";
+    ctx.font = font;
+    const tw = Math.ceil(ctx.measureText(text).width);
+    cv.width = tw + pad * 2;
+    cv.height = fs + 46;
+    ctx = cv.getContext('2d');
+    const w = cv.width, h = cv.height, r = (h - 20) / 2;
+    ctx.beginPath();
+    ctx.moveTo(10 + r, 8);
+    ctx.lineTo(w - 10 - r, 8);
+    ctx.quadraticCurveTo(w - 10, 8, w - 10, 8 + r);
+    ctx.lineTo(w - 10, h - 10 - r);
+    ctx.quadraticCurveTo(w - 10, h - 10, w - 10 - r, h - 10);
+    ctx.lineTo(10 + r, h - 10);
+    ctx.quadraticCurveTo(10, h - 10, 10, h - 10 - r);
+    ctx.lineTo(10, 8 + r);
+    ctx.quadraticCurveTo(10, 8, 10 + r, 8);
+    ctx.closePath();
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.stroke();
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, w / 2, h / 2 - 2);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    return { tex: tex, aspect: cv.width / cv.height };
+}
+
+const TEX = {
+    co2: gasCanvas('CO₂', '#5b6472'),
+    o2: gasCanvas('O₂', '#2f9fd8')
+};
+
+const GLUCOSE_TEX = (function () {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    const c = cv.getContext('2d');
+    c.translate(64, 64);
+    c.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + i * Math.PI / 3;
+        const x = Math.cos(a) * 52, y = Math.sin(a) * 52;
+        if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.closePath();
+    c.fillStyle = '#ffd84a';
+    c.fill();
+    c.lineWidth = 7;
+    c.strokeStyle = '#b8860b';
+    c.stroke();
+    c.fillStyle = '#7a5a00';
+    c.font = "bold 34px 'SeoulNamsan', sans-serif";
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('C₆', 0, 2);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    return tex;
+})();
+
+function gasParticle(kind, path, speed) {
+    const t = TEX[kind];
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t.tex, transparent: true, depthWrite: false }));
+    const h = 0.165;
+    s.scale.set(h * t.aspect, h, 1);
+    s.position.copy(path[0]);
+    s.renderOrder = 9;
+    scene.add(s);
+    const p = { sprite: s, path: path, seg: 0, t: 0, speed: speed || 1.1, kind: kind };
+    state.particles.push(p);
+    return p;
+}
+
+function removeParticle(i) {
+    const p = state.particles[i];
+    scene.remove(p.sprite);
+    p.sprite.material.dispose();
+    state.particles.splice(i, 1);
+}
+
+/* 포도당 */
+function popGlucose(pos) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLUCOSE_TEX, transparent: true, depthWrite: false }));
+    s.position.copy(pos);
+    s.position.z = 0.56;
+    s.scale.set(0.001, 0.001, 1);
+    s.renderOrder = 10;
+    scene.add(s);
+    state.glucose.push({ sprite: s, life: 0, max: 2.8, base: pos.clone() });
+    if (state.glucose.length > 10) {
+        const old = state.glucose.shift();
+        scene.remove(old.sprite);
+        old.sprite.material.dispose();
+    }
+}
+
+/* ---------- 기체 흐름 ---------- */
+function stomaFor() {
+    return stomaX[Math.floor(Math.random() * stomaX.length)];
+}
+
+function spawnCO2In() {
+    const sx = stomaFor();
+    const target = chloroPts[Math.floor(Math.random() * chloroPts.length)];
+    const path = [
+        new THREE.Vector3(sx + (Math.random() - 0.5) * 1.0, -1.3, 0.6),
+        new THREE.Vector3(sx, -0.55, 0.6),
+        new THREE.Vector3(sx, -0.2, 0.6),
+        new THREE.Vector3(target.x, target.y, 0.62)
+    ];
+    gasParticle('co2', path, 0.9 + Math.random() * 0.4);
+}
+
+function spawnO2Out() {
+    const sx = stomaFor();
+    const start = chloroPts[Math.floor(Math.random() * chloroPts.length)];
+    const path = [
+        new THREE.Vector3(start.x, start.y, 0.62),
+        new THREE.Vector3(sx, -0.2, 0.6),
+        new THREE.Vector3(sx, -0.6, 0.6),
+        new THREE.Vector3(sx + (Math.random() - 0.5) * 1.1, -1.35, 0.6)
+    ];
+    gasParticle('o2', path, 1.0 + Math.random() * 0.4);
+}
+
+/* 밤(호흡) 흐름: O2 들어오고 CO2 나간다 */
+function spawnO2In() {
+    const sx = stomaFor();
+    const target = chloroPts[Math.floor(Math.random() * chloroPts.length)];
+    const path = [
+        new THREE.Vector3(sx + (Math.random() - 0.5) * 1.0, -1.3, 0.6),
+        new THREE.Vector3(sx, -0.55, 0.6),
+        new THREE.Vector3(sx, -0.2, 0.6),
+        new THREE.Vector3(target.x, target.y, 0.62)
+    ];
+    gasParticle('o2', path, 0.9 + Math.random() * 0.4);
+}
+function spawnCO2Out() {
+    const sx = stomaFor();
+    const start = chloroPts[Math.floor(Math.random() * chloroPts.length)];
+    const path = [
+        new THREE.Vector3(start.x, start.y, 0.62),
+        new THREE.Vector3(sx, -0.2, 0.6),
+        new THREE.Vector3(sx, -0.6, 0.6),
+        new THREE.Vector3(sx + (Math.random() - 0.5) * 1.1, -1.35, 0.6)
+    ];
+    gasParticle('co2', path, 1.0 + Math.random() * 0.4);
+}
+
+function updateParticles(dt) {
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        const a = p.path[p.seg], b = p.path[p.seg + 1];
+        if (!b) { removeParticle(i); continue; }
+        const d = a.distanceTo(b);
+        p.t += (p.speed * dt) / Math.max(0.05, d);
+        if (p.t >= 1) {
+            p.t = 0;
+            p.seg++;
+            if (p.seg >= p.path.length - 1) {
+                // 도착: CO2가 엽록체에 닿으면 포도당이 생긴다
+                if (p.kind === 'co2' && p.path[0].y < -1) {
+                    const last = p.path[p.path.length - 1];
+                    popGlucose(new THREE.Vector3(last.x, last.y, 0.62));
+                }
+                removeParticle(i);
+                continue;
+            }
+        }
+        const seg_a = p.path[p.seg], seg_b = p.path[p.seg + 1];
+        if (seg_b) p.sprite.position.lerpVectors(seg_a, seg_b, p.t);
+    }
+    for (let i = state.glucose.length - 1; i >= 0; i--) {
+        const g = state.glucose[i];
+        g.life += dt;
+        const pop = Math.min(1, g.life * 4);
+        const out = g.life > g.max - 0.7 ? Math.max(0, (g.max - g.life) / 0.7) : 1;
+        const sc = 0.001 + 0.135 * pop * out;
+        g.sprite.scale.set(sc, sc, 1);
+        g.sprite.position.y = g.base.y - 0.04 + 0.07 * pop + Math.sin(g.life * 3) * 0.015;
+        if (g.life >= g.max) {
+            scene.remove(g.sprite);
+            g.sprite.material.dispose();
+            state.glucose.splice(i, 1);
+        }
+    }
+}
+
+/* ---------- 그래프 ---------- */
+const gcv = document.getElementById('graphCanvas');
+const gctx = gcv.getContext('2d');
+const G = { pad: { l: 34, r: 12, t: 16, b: 26 } };
+
+function drawGraph() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cw = gcv.clientWidth || 300, ch = gcv.clientHeight || 200;
+    if (gcv.width !== Math.round(cw * dpr) || gcv.height !== Math.round(ch * dpr)) {
+        gcv.width = Math.round(cw * dpr);
+        gcv.height = Math.round(ch * dpr);
+    }
+    const ctx = gctx;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+    const pad = G.pad;
+    const w = cw - pad.l - pad.r, h = ch - pad.t - pad.b;
+    const yMin = -25, yMax = 110;
+    const dark = isDarkScene();
+    const gridCol = dark ? 'rgba(255,255,255,0.12)' : 'rgba(16,32,64,0.10)';
+    const textCol = dark ? '#93a1b5' : '#8791a1';
+
+    const X = function (i) { return pad.l + (i / 100) * w; };
+    const Y = function (v) { return pad.t + h - ((v - yMin) / (yMax - yMin)) * h; };
+
+    ctx.font = "bold 9px 'SeoulNamsan', sans-serif";
+    ctx.strokeStyle = gridCol;
+    ctx.lineWidth = 1;
+    ctx.fillStyle = textCol;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i <= 4; i++) {
+        const v = yMin + (yMax - yMin) * i / 4;
+        const y = Y(v);
+        ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + w, y); ctx.stroke();
+        ctx.fillText(Math.round(v), pad.l - 5, y);
+    }
+    // 0선
+    ctx.strokeStyle = dark ? 'rgba(255,255,255,0.3)' : 'rgba(16,32,64,0.28)';
+    ctx.beginPath(); ctx.moveTo(pad.l, Y(0)); ctx.lineTo(pad.l + w, Y(0)); ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = textCol;
+    for (let i = 0; i <= 4; i++) {
+        const x = X(i * 25);
+        ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, pad.t + h); ctx.stroke();
+        ctx.fillText((i * 25) + '', x, pad.t + h + 6);
+    }
+
+    // 곡선
+    const gross = function (i) { return grossAt(i, state.co2, state.temp); };
+    const net = function (i) { return gross(i) - respAt(state.temp); };
+
+    function curve(fn, color, width, dash) {
+        ctx.beginPath();
+        for (let i = 0; i <= 100; i++) {
+            const y = Y(fn(i));
+            if (i === 0) ctx.moveTo(X(i), y); else ctx.lineTo(X(i), y);
+        }
+        ctx.setLineDash(dash || []);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // 순 광합성량 영역
+    ctx.beginPath();
+    ctx.moveTo(X(0), Y(0));
+    for (let i = 0; i <= 100; i++) ctx.lineTo(X(i), Y(net(i)));
+    ctx.lineTo(X(100), Y(0));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(10,162,192,0.12)';
+    ctx.fill();
+
+    // 호흡량
+    const R = respAt(state.temp);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, Y(R)); ctx.lineTo(pad.l + w, Y(R));
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = '#ff9f0a';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    curve(gross, '#30d158', 2.6);
+    curve(net, '#0aa2c0', 2.2);
+
+    // 보상점
+    let comp = -1;
+    for (let i = 0; i <= 100; i += 0.5) {
+        if (gross(i) >= R) { comp = i; break; }
+    }
+    if (comp >= 0) {
+        ctx.beginPath();
+        ctx.arc(X(comp), Y(R), 4.2, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff9f0a';
+        ctx.fill();
+        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = dark ? '#0d131d' : '#fff';
+        ctx.stroke();
+        ctx.fillStyle = textCol;
+        ctx.font = "bold 8.5px 'SeoulNamsan', sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('보상점', X(comp), Y(R) - 6);
+    }
+
+    // 광포화점
+    const g100 = gross(100);
+    let sat = -1;
+    for (let i = 0; i <= 100; i += 0.5) {
+        if (gross(i) >= g100 * 0.95) { sat = i; break; }
+    }
+    if (sat >= 0 && sat < 98) {
+        ctx.beginPath();
+        ctx.moveTo(X(sat), Y(g100) - 5);
+        ctx.lineTo(X(sat) - 4.5, Y(g100) + 3);
+        ctx.lineTo(X(sat) + 4.5, Y(g100) + 3);
+        ctx.closePath();
+        ctx.fillStyle = '#1f9d47';
+        ctx.fill();
+        ctx.fillStyle = textCol;
+        ctx.font = "bold 8.5px 'SeoulNamsan', sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('광포화점', X(sat), Y(g100) - 8);
+    }
+
+    // 현재 점
+    const gi = state.light;
+    const gy = gross(gi), ny = net(gi);
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = dark ? 'rgba(255,255,255,0.35)' : 'rgba(16,32,64,0.25)';
+    ctx.beginPath(); ctx.moveTo(X(gi), pad.t); ctx.lineTo(X(gi), pad.t + h); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.beginPath();
+    ctx.arc(X(gi), Y(gy), 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#30d158';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = dark ? '#0d131d' : '#fff';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(X(gi), Y(ny), 4.4, 0, Math.PI * 2);
+    ctx.fillStyle = '#0aa2c0';
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = textCol;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = "bold 9px 'SeoulNamsan', sans-serif";
+    ctx.fillText('광합성량', 2, 1);
+    ctx.textAlign = 'right';
+    ctx.fillText('빛의 세기(%) →', pad.l + w, pad.t + h + 16);
+}
+
+/* ---------- HUD ---------- */
+function updateHud() {
+    const r = rates();
+    document.getElementById('val-gross').textContent = Math.round(r.g);
+    document.getElementById('val-resp').textContent = Math.round(r.r);
+    const net = Math.round(r.net);
+    const elNet = document.getElementById('val-net');
+    elNet.textContent = (net > 0 ? '+' : '') + net;
+    elNet.style.color = net > 2 ? '#30d158' : (net < -2 ? '#5b8cff' : '#8e8e93');
+
+    const pill = document.getElementById('state-pill');
+    if (r.net > 2) { pill.className = 'state-pill'; pill.textContent = 'O₂ 배출 · CO₂ 흡수'; }
+    else if (r.net < -2) { pill.className = 'state-pill nightp'; pill.textContent = 'O₂ 흡수 · CO₂ 배출'; }
+    else { pill.className = 'state-pill nightp'; pill.textContent = '보상점 (출입 균형)'; }
+
+    document.getElementById('lbl-light').textContent = Math.round(state.light) + '%';
+    document.getElementById('lbl-co2').textContent = Math.round(state.co2) + '%';
+    document.getElementById('lbl-temp').textContent = Math.round(state.temp) + '°C';
+
+    const note = document.getElementById('env-note');
+    if (state.temp >= 45) note.textContent = '🔥 45°C 이상에서는 효소가 변성되어 광합성량이 급격히 줄어요.';
+    else if (state.co2 <= 5) note.textContent = '🌫️ CO₂가 거의 없으면 광합성이 거의 일어나지 않아요.';
+    else if (state.light <= 2) note.textContent = '🌙 빛이 없어 광합성이 멈추고 호흡만 일어나요.';
+    else note.textContent = '광합성은 빛·CO₂·온도가 알맞을 때 가장 활발해요.';
+}
+
+/* ---------- 장면 밝기 ---------- */
+function isDarkScene() { return state.dark || state.light < 10; }
+
+function applyLighting() {
+    const k = state.light / 100;
+    const nightMode = state.light < 10;
+    document.body.classList.toggle('night', nightMode && !state.dark);
+    hemi.intensity = 0.35 + k * 0.75;
+    sunLight.intensity = 0.25 + k * 1.15;
+    sunLight.color.setHSL(0.13, 0.75, 0.75 + k * 0.2);
+    rayMat.opacity = 0.06 + k * 0.5;
+    rayGroup.visible = k > 0.06;
+    glow.material.opacity = 0.12 + k * 0.55;
+    sunCore.material.opacity = 0.18 + k * 0.8;
+    backdrop.material.color.set(isDarkScene() ? 0x2a3a55 : 0xffffff);
+    backdrop.material.opacity = isDarkScene() ? 0.45 : 1;
+    glow.scale.setScalar(1.0 + k * 0.85);
+    sunCore.scale.setScalar(0.3 + k * 0.26);
+    sunCore.material.color.set(k > 0.35 ? 0xffe9a3 : 0xdfe9ff);
+}
+
+/* ---------- 테마 ---------- */
+const themes = { light: '🌙', dark: '☀️' };
+document.getElementById('theme-toggle').addEventListener('click', function () {
+    state.dark = !state.dark;
+    document.body.classList.toggle('dark-mode', state.dark);
+    this.textContent = state.dark ? themes.dark : themes.light;
+    if (state.dark) document.body.classList.remove('night');
+    applyLighting();
+    drawGraph();
+});
+
+/* ---------- 컨트롤 ---------- */
+const rngLight = document.getElementById('rng-light');
+const rngCo2 = document.getElementById('rng-co2');
+const rngTemp = document.getElementById('rng-temp');
+
+rngLight.addEventListener('input', function () { state.light = +this.value; refresh(); });
+rngCo2.addEventListener('input', function () { state.co2 = +this.value; refresh(); });
+rngTemp.addEventListener('input', function () { state.temp = +this.value; refresh(); });
+
+function refresh() {
+    applyLighting();
+    updateHud();
+    drawGraph();
+}
+
+document.getElementById('btn-day').addEventListener('click', function () {
+    state.light = 85; state.co2 = 70; state.temp = 25;
+    rngLight.value = 85; rngCo2.value = 70; rngTemp.value = 25;
+    refresh();
+    setTip('☀️ 밝은 낮에는 광합성이 호흡보다 활발해 O₂가 나가요');
+});
+document.getElementById('btn-night').addEventListener('click', function () {
+    state.light = 0;
+    rngLight.value = 0;
+    refresh();
+    setTip('🌙 밤에는 광합성이 멈추고 호흡만 일어나 O₂를 들이마셔요');
+});
+
+const tipEl = document.getElementById('guide-tooltip');
+let tipTimer = null;
+function setTip(text) {
+    tipEl.textContent = text;
+    tipEl.style.opacity = '1';
+    if (tipTimer) clearTimeout(tipTimer);
+    tipTimer = setTimeout(function () { tipEl.style.opacity = '0'; }, 6500);
+}
+
+/* ---------- 패널 ---------- */
+const panels = { env: document.getElementById('panel-env'), graph: document.getElementById('panel-graph') };
+const tabs = { env: document.getElementById('tab-env'), graph: document.getElementById('tab-graph'), help: document.getElementById('tab-help') };
+let openPanel = 'env';
+
+function setPanel(name) {
+    Object.keys(panels).forEach(function (k) {
+        panels[k].classList.toggle('show', k === name);
+        tabs[k].classList.toggle('active', k === name);
+    });
+    document.body.classList.toggle('panel-open', !!name);
+}
+function togglePanel(name) {
+    if (openPanel === name) { setPanel(null); openPanel = null; }
+    else { openPanel = name; setPanel(name); }
+}
+tabs.env.addEventListener('click', function () { togglePanel('env'); });
+tabs.graph.addEventListener('click', function () { togglePanel('graph'); });
+tabs.help.addEventListener('click', function () {
+    document.getElementById('modal-overlay').classList.add('show');
+    tabs.help.classList.add('active');
+});
+document.getElementById('modal-close').addEventListener('click', function () {
+    document.getElementById('modal-overlay').classList.remove('show');
+    tabs.help.classList.remove('active');
+});
+document.getElementById('modal-overlay').addEventListener('click', function (e) {
+    if (e.target === this) { this.classList.remove('show'); tabs.help.classList.remove('active'); }
+});
+
+/* ---------- 화면 맞춤 ---------- */
+function fitView() {
+    const narrow = window.innerWidth <= 900;
+    const tgt = narrow ? new THREE.Vector3(0, 0.56, 0) : new THREE.Vector3(-0.42, 0.56, 0);
+    let k = 1;
+    if (window.innerHeight <= 500) k = 0.82;
+    else if (window.innerWidth < 560) k = 1.3;
+    camera.position.copy(tgt).add(CAM_OFFSET.clone().multiplyScalar(k));
+    controls.target.copy(tgt);
+    controls.update();
+}
+
+window.addEventListener('resize', function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    drawGraph();
+});
+window.addEventListener('orientationchange', function () { setTimeout(fitView, 260); });
+
+/* ---------- 애니메이션 ---------- */
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const r = rates();
+
+    // 기체 출입 속도
+    state.co2Timer += dt;
+    state.o2Timer += dt;
+    if (r.net >= 0) {
+        const rate = 0.45 + 2.6 * Math.min(1, r.net / 80);
+        if (state.co2Timer > 1 / rate && state.particles.length < 26) { spawnCO2In(); state.co2Timer = 0; }
+        if (state.o2Timer > 1 / rate && state.particles.length < 26) { spawnO2Out(); state.o2Timer = 0; }
+    } else {
+        const rate = 0.6 + 2.4 * Math.min(1, (-r.net) / 30);
+        if (state.co2Timer > 1 / rate && state.particles.length < 26) { spawnO2In(); state.co2Timer = 0; }
+        if (state.o2Timer > 1 / rate && state.particles.length < 26) { spawnCO2Out(); state.o2Timer = 0; }
+    }
+
+    updateParticles(dt);
+
+    // 엽록체 반짝임 (광합성 세기)
+    const glowK = Math.min(1, r.g / 90);
+    chloroplastMat.emissiveIntensity = 0.25 + glowK * 0.9;
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+/* ---------- 시작 ---------- */
+function start() {
+    makeLabel('표피', -1.3, 1.33, 0.55, 0.15);
+    makeLabel('울타리 조직', 0.86, 1.04, 0.55, 0.15);
+    makeLabel('해면 조직', 1.3, 0.3, 0.55, 0.15);
+    makeLabel('기공', stomaX[0] - 0.05, -0.6, 0.55, 0.155, 'rgba(255,255,255,0.95)', '#1f6b3a');
+    applyLighting();
+    updateHud();
+    drawGraph();
+    fitView();
+    if (window.innerWidth <= 900) {
+        panels.env.classList.remove('show');
+        panels.graph.classList.remove('show');
+        tabs.env.classList.remove('active');
+        tabs.graph.classList.remove('active');
+        openPanel = null;
+        document.body.classList.remove('panel-open');
+        tipEl.textContent = '☀️ 아래 환경 버튼을 눌러 빛과 CO₂, 온도를 바꿔 보세요';
+    }
+    animate();
+}
+
+if (document.fonts && document.fonts.load) {
+    Promise.race([
+        document.fonts.load("bold 54px 'SeoulNamsan'"),
+        new Promise(function (r) { setTimeout(r, 1200); })
+    ]).then(start).catch(start);
+} else {
+    start();
+}
+</script>
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+</body>
+</html>
