@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>볼록 렌즈에 의한 상 3D</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+            white-space: nowrap;
+        }
+
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 340px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #007aff;
+        }
+
+        .panel-note {
+            font-size: 11px;
+            color: #8e8e93;
+            line-height: 1.6;
+            font-weight: bold;
+        }
+
+        .formula {
+            text-align: center;
+            font-size: 15px;
+            font-weight: bold;
+            color: #007aff;
+            letter-spacing: 0.5px;
+            padding: 6px 0;
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        /* 우측 하단 상 정보 패널 */
+        .info-panel {
+            position: absolute;
+            right: 20px;
+            bottom: 96px;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 10;
+            min-width: 168px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .info-row span:first-child { color: #8e8e93; }
+
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.78);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn,
+        body.dark-mode .control-tab-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+
+        body.dark-mode .info-row span:first-child { color: #9aa0a6; }
+
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        button.back-btn, button.tag-badge {
+            font-family: inherit;
+            border: none;
+        }
+
+        @media (max-width: 768px) {
+            .bottom-right-bar { bottom: 15px; right: 15px; }
+            .center-tooltip { display: none; }
+            .bottom-control-bar { bottom: 14px; }
+            .control-tab-btn { min-width: 52px; padding: 6px 8px; font-size: 11px; }
+            .sub-panel { width: 300px; bottom: 76px; }
+            .data-card { gap: 9px; padding: 8px 12px; }
+            .data-value { font-size: 13px; }
+            .info-panel { right: 12px; bottom: 72px; padding: 8px 10px; min-width: 140px; }
+            .info-row { font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>볼록 렌즈에 의한 상 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">상의 거리</span>
+                <span class="data-value" id="val-b" style="color:#007aff;">30.0 cm</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">배율</span>
+                <span class="data-value" id="val-m" style="color:#ff9500;">1.0배</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 물체를 초점 안쪽으로 옮기면 유리 너머로 확대된 허상이 보입니다
+    </div>
+
+    <div class="glass-panel info-panel">
+        <div class="info-row"><span>물체 거리</span><span id="info-a">30 cm</span></div>
+        <div class="info-row"><span>초점 거리</span><span id="info-f">10 cm</span></div>
+        <div class="info-row"><span>상의 종류</span><span id="info-type" style="color:#007aff;">실상</span></div>
+        <div class="info-row"><span>상의 방향</span><span id="info-dir">도립</span></div>
+    </div>
+
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="slider-row">
+            <div class="slider-header">
+                <span>물체와 렌즈 사이 거리</span>
+                <span id="txt-a">30 cm</span>
+            </div>
+            <input type="range" id="sld-a" min="5" max="60" step="1" value="30">
+        </div>
+        <div class="slider-row">
+            <div class="slider-header">
+                <span>렌즈의 초점 거리 (f)</span>
+                <span id="txt-f">10 cm</span>
+            </div>
+            <input type="range" id="sld-f" min="5" max="20" step="1" value="10">
+        </div>
+        <div class="formula" id="formula-text">1/f = 1/a + 1/b</div>
+        <div class="panel-note">
+            렌즈 공식과 배율 m = b/a 로 상의 위치와 크기를 계산합니다. 물체가 초점거리보다 가까우면(a &lt; f) 빛이 모이지 않아 허상이 생깁니다.
+        </div>
+    </div>
+
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>설정 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-view">
+            <span>📷</span>
+            <span id="view-text">시점정렬</span>
+        </button>
+    </div>
+
+    <!-- Fullscreen / Windowed Mode Button -->
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. 씬 설정 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0.6, 2.4, 10.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.target.set(0.4, 1.6, 0);
+        controls.maxPolarAngle = Math.PI / 2 + 0.02;
+        controls.minDistance = 3;
+        controls.maxDistance = 26;
+
+        // --- 2. 조명 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(4, 8, 6);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.left = -10;
+        dirLight.shadow.camera.right = 10;
+        dirLight.shadow.camera.top = 10;
+        dirLight.shadow.camera.bottom = -10;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0xbfd8ff, 0.35);
+        fillLight.position.set(-6, 4, -5);
+        scene.add(fillLight);
+
+        // --- 3. 바닥과 광학대 ---
+        const AXIS_Y = 1.4;   // 광축 높이
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(40, 40),
+            new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.95 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.02;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        const rail = new THREE.Mesh(
+            new THREE.BoxGeometry(16, 0.12, 0.55),
+            new THREE.MeshStandardMaterial({ color: 0x2c3e50, metalness: 0.5, roughness: 0.4 })
+        );
+        rail.position.set(0, 0.06, 0);
+        rail.receiveShadow = true;
+        scene.add(rail);
+
+        // 광축 (점선)
+        const axisPts = [new THREE.Vector3(-9, AXIS_Y, 0), new THREE.Vector3(9, AXIS_Y, 0)];
+        const axisGeo = new THREE.BufferGeometry().setFromPoints(axisPts);
+        const axisLine = new THREE.Line(axisGeo, new THREE.LineDashedMaterial({
+            color: 0x9aa4b2, dashSize: 0.24, gapSize: 0.18, transparent: true, opacity: 0.9
+        }));
+        axisLine.computeLineDistances();
+        scene.add(axisLine);
+
+        // --- 4. 볼록 렌즈 ---
+        const LENS_R = 1.15;
+        const lensGroup = new THREE.Group();
+
+        const lensMat = new THREE.MeshPhysicalMaterial({
+            color: 0xbfe3ff,
+            transparent: true,
+            opacity: 0.35,
+            roughness: 0.03,
+            metalness: 0.0,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.05,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const lensMesh = new THREE.Mesh(new THREE.SphereGeometry(LENS_R, 64, 48), lensMat);
+        lensMesh.scale.set(0.17, 1, 1);
+        lensGroup.add(lensMesh);
+
+        const lensRim = new THREE.Mesh(
+            new THREE.TorusGeometry(LENS_R, 0.035, 16, 64),
+            new THREE.MeshStandardMaterial({ color: 0x8d99ab, metalness: 0.85, roughness: 0.2 })
+        );
+        lensGroup.add(lensRim);
+
+        // 렌즈 지지대
+        const lensPole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.045, 0.045, 1.4, 20),
+            new THREE.MeshStandardMaterial({ color: 0x8d99ab, metalness: 0.8, roughness: 0.25 })
+        );
+        lensPole.position.y = -0.7;
+        lensGroup.add(lensPole);
+
+        const lensBase = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.26, 0.3, 0.1, 32),
+            new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.5 })
+        );
+        lensBase.position.y = -1.42;
+        lensGroup.add(lensBase);
+
+        lensGroup.position.set(0, AXIS_Y, 0);
+        scene.add(lensGroup);
+
+        // --- 5. 화살표(물체 / 상) ---
+        const OBJ_H = 1.2;
+
+        function makeArrow(color, opacity, dashed) {
+            const g = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.45,
+                metalness: 0.1,
+                transparent: opacity < 1,
+                opacity: opacity,
+                emissive: dashed ? new THREE.Color(color) : new THREE.Color(0x000000),
+                emissiveIntensity: dashed ? 0.25 : 0
+            });
+            const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, OBJ_H * 0.78, 20), mat);
+            shaft.position.y = OBJ_H * 0.39;
+            shaft.castShadow = true;
+            g.add(shaft);
+
+            const head = new THREE.Mesh(new THREE.ConeGeometry(0.13, OBJ_H * 0.22, 24), mat);
+            head.position.y = OBJ_H * 0.89;
+            head.castShadow = true;
+            g.add(head);
+
+            return g;
+        }
+
+        const objectArrow = makeArrow(0xff8c1a, 1, false);
+        scene.add(objectArrow);
+
+        // 광학대 지지대
+        function makeSupport() {
+            const g = new THREE.Group();
+            const pole = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.035, 0.035, AXIS_Y - 0.12, 16),
+                new THREE.MeshStandardMaterial({ color: 0x8d99ab, metalness: 0.8, roughness: 0.25 })
+            );
+            pole.position.y = 0.12 + (AXIS_Y - 0.12) / 2;
+            g.add(pole);
+            const foot = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.22, 0.26, 0.1, 28),
+                new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.5 })
+            );
+            foot.position.y = 0.12;
+            g.add(foot);
+            return g;
+        }
+
+        const objectSupport = makeSupport();
+        scene.add(objectSupport);
+        const imageSupport = makeSupport();
+        imageSupport.visible = false;
+        scene.add(imageSupport);
+
+        const imageArrow = makeArrow(0x007aff, 0.72, true);
+        imageArrow.visible = false;
+        scene.add(imageArrow);
+
+        // 물체 빛 번짐
+        function makeGlowTexture(color) {
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 128;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
+            g.addColorStop(0, color);
+            g.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 128, 128);
+            return new THREE.CanvasTexture(c);
+        }
+        const objGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: makeGlowTexture('rgba(255,180,80,0.85)'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        objGlow.scale.set(0.9, 0.9, 1);
+        objGlow.position.set(0, OBJ_H + 0.05, 0);
+        objectArrow.add(objGlow);
+
+        // --- 6. 텍스트 라벨 ---
+        function makeLabel(text, color, scale) {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 96;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = 'rgba(255,255,255,0.85)';
+            const r = 24;
+            ctx.beginPath();
+            ctx.moveTo(r, 6);
+            ctx.lineTo(256 - r, 6);
+            ctx.quadraticCurveTo(250, 6, 250, 6 + r * 0.6);
+            ctx.lineTo(250, 90 - r * 0.6);
+            ctx.quadraticCurveTo(250, 90, 256 - r, 90);
+            ctx.lineTo(r, 90);
+            ctx.quadraticCurveTo(6, 90, 6, 90 - r * 0.6);
+            ctx.lineTo(6, 6 + r * 0.6);
+            ctx.quadraticCurveTo(6, 6, r, 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = color || '#1c1c1e';
+            ctx.font = 'bold 46px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 128, 50);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+                map: new THREE.CanvasTexture(c), transparent: true, depthTest: false
+            }));
+            const s = scale || 1;
+            sprite.scale.set(1.15 * s, 0.43 * s, 1);
+            return sprite;
+        }
+
+        const objectLabel = makeLabel('물체', '#c25e00');
+        scene.add(objectLabel);
+
+        const imageLabel = makeLabel('상', '#0057c2');
+        imageLabel.visible = false;
+        scene.add(imageLabel);
+
+        // 초점 표시
+        const focalMarkers = new THREE.Group();
+        scene.add(focalMarkers);
+
+        function buildFocalMarkers(f) {
+            while (focalMarkers.children.length) {
+                const m = focalMarkers.children.pop();
+                if (m.geometry) m.geometry.dispose();
+                if (m.material && m.material.map) m.material.map.dispose();
+                focalMarkers.remove(m);
+            }
+            const dotMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.4 });
+            const dotGeo = new THREE.SphereGeometry(0.055, 16, 16);
+
+            [
+                { x: -f, t: 'F' }, { x: -2 * f, t: '2F' },
+                { x: f, t: 'F′' }, { x: 2 * f, t: '2F′' }
+            ].forEach(item => {
+                if (Math.abs(item.x) > 8.6) return;
+                const dot = new THREE.Mesh(dotGeo, dotMat);
+                dot.position.set(item.x, AXIS_Y, 0);
+                focalMarkers.add(dot);
+
+                const lb = makeLabel(item.t, '#a02020', 0.72);
+                lb.position.set(item.x, AXIS_Y - 0.42, 0);
+                focalMarkers.add(lb);
+            });
+        }
+
+        // --- 7. 광선 (얇은 원기둥으로 표현) ---
+        const rayGroup = new THREE.Group();
+        scene.add(rayGroup);
+
+        const RAY_MAT = new THREE.MeshBasicMaterial({ color: 0xffb300, transparent: true, opacity: 0.85 });
+        const RAY_DASH_MAT = new THREE.MeshBasicMaterial({ color: 0x7fa8ff, transparent: true, opacity: 0.6 });
+        const RAY_RADIUS = 0.016;
+
+        function clearRays() {
+            while (rayGroup.children.length) {
+                const m = rayGroup.children.pop();
+                if (m.geometry) m.geometry.dispose();
+                rayGroup.remove(m);
+            }
+        }
+
+        function addRaySegment(p1, p2, dashed) {
+            const dir = new THREE.Vector3().subVectors(p2, p1);
+            const len = dir.length();
+            if (len < 0.001) return;
+
+            if (dashed) {
+                // 점선 느낌을 위해 짧은 조각 여러 개
+                const pieces = Math.max(2, Math.floor(len / 0.22));
+                for (let i = 0; i < pieces; i++) {
+                    const t0 = i / pieces;
+                    const t1 = Math.min(1, (i + 0.55) / pieces);
+                    const a = p1.clone().lerp(p2, t0);
+                    const b = p1.clone().lerp(p2, t1);
+                    const segDir = new THREE.Vector3().subVectors(b, a);
+                    const segLen = segDir.length();
+                    const geo = new THREE.CylinderGeometry(RAY_RADIUS * 0.85, RAY_RADIUS * 0.85, segLen, 6);
+                    const mesh = new THREE.Mesh(geo, RAY_DASH_MAT);
+                    mesh.position.copy(a).addScaledVector(segDir, 0.5);
+                    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), segDir.clone().normalize());
+                    rayGroup.add(mesh);
+                }
+            } else {
+                const geo = new THREE.CylinderGeometry(RAY_RADIUS, RAY_RADIUS, len, 8);
+                const mesh = new THREE.Mesh(geo, RAY_MAT);
+                mesh.position.copy(p1).addScaledVector(dir, 0.5);
+                mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+                rayGroup.add(mesh);
+            }
+        }
+
+        // --- 8. 상태 ---
+        const SCALE = 0.1;              // 1 cm = 0.1 월드 단위
+        let a_cm = 30;                  // 물체 거리
+        let f_cm = 10;                  // 초점 거리
+        let b_cm = 15;                  // 상 거리 (계산값)
+        let mag = -0.5;                 // 배율 (부호 포함)
+        let isVirtual = false;
+        let noImage = false;
+        let dirty = true;
+
+        function compute() {
+            if (Math.abs(a_cm - f_cm) < 0.35) {
+                noImage = true;
+                b_cm = Infinity;
+                mag = Infinity;
+                isVirtual = false;
+                return;
+            }
+            noImage = false;
+            b_cm = (a_cm * f_cm) / (a_cm - f_cm);
+            mag = -b_cm / a_cm;
+            isVirtual = b_cm < 0;
+        }
+
+        // --- 9. 장면 갱신 ---
+        function updateScene() {
+            compute();
+
+            const a = a_cm * SCALE;
+            const f = f_cm * SCALE;
+            const b = isFinite(b_cm) ? b_cm * SCALE : 0;
+
+            // 물체
+            objectArrow.position.set(-a, AXIS_Y, 0);
+            objectLabel.position.set(-a, AXIS_Y + OBJ_H + 0.42, 0);
+            objectSupport.position.set(-a, 0, 0);
+
+            // 상
+            clearRays();
+            buildFocalMarkers(f);
+
+            const imgVisible = !noImage && Math.abs(b) < 8.4 && Math.abs(mag) > 0.001;
+            imageArrow.visible = imgVisible;
+            imageLabel.visible = imgVisible;
+            imageSupport.visible = imgVisible && !isVirtual;
+            imageSupport.position.set(isFinite(b) ? b : 0, 0, 0);
+
+            if (imgVisible) {
+                const s = Math.min(Math.abs(mag), 7);
+                imageArrow.position.set(b, AXIS_Y, 0);
+                imageArrow.scale.set(1, s, 1);
+                imageArrow.rotation.z = mag < 0 ? Math.PI : 0;
+                imageArrow.traverse(o => {
+                    if (o.isMesh && o.material) {
+                        o.material.opacity = isVirtual ? 0.45 : 0.72;
+                        o.material.transparent = true;
+                    }
+                });
+                imageLabel.position.set(b, AXIS_Y + OBJ_H * s + 0.42, 0);
+
+                // 광선 그리기
+                const O = new THREE.Vector3(-a, AXIS_Y + OBJ_H, 0);
+                const L1 = new THREE.Vector3(0, AXIS_Y + OBJ_H, 0);   // 평행 광선이 렌즈에 닿는 점
+                const L2 = new THREE.Vector3(0, AXIS_Y, 0);           // 렌즈 중심
+                const IMG = new THREE.Vector3(b, AXIS_Y + OBJ_H * mag, 0);
+
+                // 1) 평행 광선: 물체 -> 렌즈 -> 초점을 지나 상
+                addRaySegment(O, L1, false);
+                const refr1 = new THREE.Vector3(f, AXIS_Y - (AXIS_Y + OBJ_H), 0).normalize();
+                if (b > 0) {
+                    addRaySegment(L1, IMG, false);
+                    addRaySegment(IMG, IMG.clone().addScaledVector(refr1, 3.5), false);
+                } else {
+                    // 허상: 렌즈를 지난 빛은 퍼져 나가고, 거꾸로 연장하면 상이 생긴다
+                    addRaySegment(L1, L1.clone().addScaledVector(refr1, 9), false);
+                    addRaySegment(L1, IMG, true);
+                }
+
+                // 2) 렌즈 중심을 지나는 광선 (중심에서는 진행 방향이 바뀌지 않음)
+                addRaySegment(O, L2, false);
+                const refr2 = new THREE.Vector3().subVectors(L2, O).normalize();
+                if (b > 0) {
+                    addRaySegment(L2, IMG, false);
+                    addRaySegment(IMG, IMG.clone().addScaledVector(refr2, 3.5), false);
+                } else {
+                    addRaySegment(L2, L2.clone().addScaledVector(refr2, 9), false);
+                    addRaySegment(L2, IMG, true);
+                }
+
+                // 3) 앞쪽 초점을 지나는 광선 (물체가 초점 밖일 때)
+                if (b > 0 && a > f) {
+                    const yAtLens = AXIS_Y - OBJ_H * f / (a - f);
+                    const L3 = new THREE.Vector3(0, yAtLens, 0);
+                    addRaySegment(O, L3, false);
+                    const outEnd = new THREE.Vector3(9, yAtLens, 0);
+                    addRaySegment(L3, outEnd, false);
+                }
+            }
+
+            // 데이터 표시
+            const bText = isFinite(b_cm) ? Math.abs(b_cm).toFixed(1) + ' cm' : '∞';
+            document.getElementById('val-b').innerText = bText;
+            document.getElementById('val-m').innerText = isFinite(mag) ? Math.abs(mag).toFixed(2) + '배' : '—';
+            document.getElementById('val-b').style.color = isVirtual ? '#34c759' : '#007aff';
+
+            document.getElementById('info-a').innerText = a_cm + ' cm';
+            document.getElementById('info-f').innerText = f_cm + ' cm';
+
+            const typeEl = document.getElementById('info-type');
+            if (noImage) {
+                typeEl.innerText = '상 없음 (평행)';
+                typeEl.style.color = '#8e8e93';
+            } else if (isVirtual) {
+                typeEl.innerText = '허상';
+                typeEl.style.color = '#34c759';
+            } else {
+                typeEl.innerText = '실상';
+                typeEl.style.color = '#007aff';
+            }
+
+            const dirEl = document.getElementById('info-dir');
+            if (noImage) { dirEl.innerText = '—'; dirEl.style.color = '#8e8e93'; }
+            else if (mag > 0) { dirEl.innerText = '정립'; dirEl.style.color = '#34c759'; }
+            else { dirEl.innerText = '도립'; dirEl.style.color = '#ff9500'; }
+        }
+
+        // --- 10. UI ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        document.getElementById('sld-a').addEventListener('input', (e) => {
+            a_cm = parseFloat(e.target.value);
+            document.getElementById('txt-a').innerText = a_cm + ' cm';
+            dirty = true;
+        });
+
+        document.getElementById('sld-f').addEventListener('input', (e) => {
+            f_cm = parseFloat(e.target.value);
+            document.getElementById('txt-f').innerText = f_cm + ' cm';
+            dirty = true;
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            a_cm = 30;
+            f_cm = 10;
+            document.getElementById('sld-a').value = 30;
+            document.getElementById('sld-f').value = 10;
+            document.getElementById('txt-a').innerText = '30 cm';
+            document.getElementById('txt-f').innerText = '10 cm';
+            camera.position.set(0.6, 2.4, 10.5);
+            controls.target.set(0.4, 1.6, 0);
+            dirty = true;
+        });
+
+        document.getElementById('btn-view').addEventListener('click', () => {
+            camera.position.set(0.6, 2.4, 10.5);
+            controls.target.set(0.4, 1.6, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', (e) => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            e.currentTarget.innerText = isDark ? '☀️' : '🌙';
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 11. 루프 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            if (dirty) {
+                dirty = false;
+                updateScene();
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        updateScene();
+        animate();
+
+        /* ---------- Fullscreen / Windowed Mode Logic ---------- */
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        const fullscreenText = document.getElementById('fullscreenText');
+
+        function updateFullscreenUI() {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (fullscreenIcon) fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+            if (fullscreenText) fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+        }
+
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                try {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) req.call(document.documentElement);
+                    } else {
+                        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    }
+                } catch (err) {
+                    console.error('전체화면 모드를 전환할 수 없습니다:', err);
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+    </script>
+</body>
+</html>

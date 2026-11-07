@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>일식과 월식 3D</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsanL';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanL.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsanL', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+            white-space: nowrap;
+        }
+
+        /* 좌측 하단 관측자 시야 패널 */
+        .view-panel {
+            position: absolute;
+            left: 20px;
+            bottom: 24px;
+            padding: 12px 14px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            z-index: 10;
+        }
+
+        #sky-canvas {
+            width: 190px;
+            height: 120px;
+            display: block;
+            border-radius: 12px;
+        }
+
+        .view-caption {
+            font-size: 11px;
+            font-weight: bold;
+            color: #8e8e93;
+        }
+
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 340px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #007aff;
+        }
+
+        .mode-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 9px 6px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.6);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            color: #1c1c1e;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.on {
+            background: #007aff;
+            color: #ffffff;
+            border-color: #007aff;
+        }
+
+        .panel-note {
+            font-size: 11px;
+            color: #8e8e93;
+            line-height: 1.5;
+            font-weight: bold;
+        }
+
+        body.dark-mode {
+            background-color: #0d1018;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(28, 32, 44, 0.8);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn,
+        body.dark-mode .control-tab-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+
+        body.dark-mode .mode-btn {
+            background: rgba(60, 64, 78, 0.8);
+            color: #eee;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-mode .mode-btn.on {
+            background: #007aff;
+            color: #fff;
+        }
+
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        button.back-btn, button.tag-badge {
+            font-family: inherit;
+            border: none;
+        }
+
+        @media (max-width: 768px) {
+            .bottom-right-bar { bottom: 15px; right: 15px; }
+            .center-tooltip { display: none; }
+            .view-panel { left: 12px; bottom: 80px; padding: 8px 10px 6px; }
+            #sky-canvas { width: 132px; height: 84px; }
+            .bottom-control-bar { bottom: 14px; }
+            .control-tab-btn { min-width: 52px; padding: 6px 8px; font-size: 11px; }
+            .sub-panel { width: 300px; bottom: 76px; }
+            .data-card { gap: 10px; padding: 8px 12px; }
+            .data-value { font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>일식과 월식 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">현재 현상</span>
+                <span class="data-value" id="val-name" style="color:#ff9500;">개기일식</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">달의 거리</span>
+                <span class="data-value" id="val-dist" style="color:#007aff;">7.0</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">정렬 오차</span>
+                <span class="data-value" id="val-off" style="color:#34c759;">0.00 R</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 달의 궤도가 기울어져 있어 대부분의 달은 그림자를 비껴갑니다. 정렬 오차를 조절해 보세요
+    </div>
+
+    <!-- 관측자 시야 -->
+    <div class="glass-panel view-panel">
+        <canvas id="sky-canvas" width="380" height="240"></canvas>
+        <span class="view-caption" id="sky-caption">지구에서 본 태양과 달</span>
+    </div>
+
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="mode-row">
+            <button class="mode-btn on" id="mode-solar">☀️ 일식</button>
+            <button class="mode-btn" id="mode-lunar">🌕 월식</button>
+        </div>
+        <div class="slider-row">
+            <div class="slider-header">
+                <span>정렬 오차 (교점에서 벗어난 정도)</span>
+                <span id="txt-off">0.00 지구 반지름</span>
+            </div>
+            <input type="range" id="sld-off" min="0" max="2" step="0.01" value="0">
+        </div>
+        <div class="slider-row">
+            <div class="slider-header">
+                <span>달까지의 거리</span>
+                <span id="txt-dist">7.00</span>
+            </div>
+            <input type="range" id="sld-dist" min="0" max="100" step="1" value="43">
+        </div>
+        <div class="panel-note">
+            천체의 크기와 거리는 실제 비율이 아닌 축소 모형입니다. 다만 태양·지구·달의 상대적인 위치와 그림자의 모양, 개기·부분·금환의 판정은 실제 관계를 따릅니다.
+        </div>
+    </div>
+
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>설정 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>🎯</span>
+            <span>정렬 맞추기</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-view">
+            <span>🔭</span>
+            <span id="view-text">근접 시점</span>
+        </button>
+    </div>
+
+    <!-- Fullscreen / Windowed Mode Button -->
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. 기본 씬 설정 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+        camera.position.set(0.5, 6.2, 14.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.target.set(0, 0, 0);
+        controls.minDistance = 2.5;
+        controls.maxDistance = 120;
+
+        // --- 2. 조명 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.28);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfff3dc, 2.1);
+        sunLight.position.set(-55, 4, 0);
+        scene.add(sunLight);
+        scene.add(sunLight.target);
+
+        // --- 3. 별 (야간 모드) ---
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = [];
+        for (let i = 0; i < 1100; i++) {
+            const r = 150 + Math.random() * 60;
+            const th = Math.random() * Math.PI * 2;
+            const ph = Math.acos(2 * Math.random() - 1);
+            starPos.push(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th));
+        }
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+        const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, opacity: 0.9 }));
+        stars.visible = false;
+        scene.add(stars);
+
+        // --- 4. 텍스처 ---
+        function makeEarthTexture() {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 256;
+            const ctx = c.getContext('2d');
+            const g = ctx.createLinearGradient(0, 0, 0, 256);
+            g.addColorStop(0, '#1b5fa8');
+            g.addColorStop(0.5, '#2d7fd0');
+            g.addColorStop(1, '#1b5fa8');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 512, 256);
+            ctx.fillStyle = '#2f8f57';
+            [
+                [70, 70, 46, 26], [110, 120, 38, 34], [150, 150, 30, 22],
+                [250, 60, 60, 26], [255, 110, 34, 40], [300, 150, 26, 30],
+                [380, 80, 52, 30], [400, 150, 30, 26], [430, 62, 24, 18],
+                [200, 200, 40, 18], [330, 205, 36, 16]
+            ].forEach(b => {
+                ctx.beginPath();
+                ctx.ellipse(b[0], b[1], b[2], b[3], 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.fillStyle = '#eef6ff';
+            ctx.fillRect(0, 0, 512, 14);
+            ctx.fillRect(0, 242, 512, 14);
+            return new THREE.CanvasTexture(c);
+        }
+
+        function makeMoonTexture() {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#cfd2d8';
+            ctx.fillRect(0, 0, 512, 256);
+            for (let i = 0; i < 80; i++) {
+                const x = Math.random() * 512, y = 20 + Math.random() * 216, r = 2 + Math.random() * 11;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(150,154,164,' + (0.25 + Math.random() * 0.35) + ')';
+                ctx.fill();
+            }
+            return new THREE.CanvasTexture(c);
+        }
+
+        function makeGlowTexture() {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(128, 128, 6, 128, 128, 128);
+            g.addColorStop(0, 'rgba(255,250,225,1)');
+            g.addColorStop(0.18, 'rgba(255,226,140,0.75)');
+            g.addColorStop(0.5, 'rgba(255,196,90,0.22)');
+            g.addColorStop(1, 'rgba(255,180,60,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 256, 256);
+            return new THREE.CanvasTexture(c);
+        }
+
+        function makeLabel(text, color) {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 96;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = 'rgba(255,255,255,0.82)';
+            ctx.beginPath();
+            const r = 26;
+            ctx.moveTo(r, 6);
+            ctx.lineTo(256 - r, 6);
+            ctx.quadraticCurveTo(250, 6, 250, 6 + r * 0.6);
+            ctx.lineTo(250, 90 - r * 0.6);
+            ctx.quadraticCurveTo(250, 90, 256 - r, 90);
+            ctx.lineTo(r, 90);
+            ctx.quadraticCurveTo(6, 90, 6, 90 - r * 0.6);
+            ctx.lineTo(6, 6 + r * 0.6);
+            ctx.quadraticCurveTo(6, 6, r, 6);
+            ctx.closePath();
+            ctx.fill();
+            ctx.fillStyle = color || '#1c1c1e';
+            ctx.font = 'bold 44px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 128, 50);
+            const tex = new THREE.CanvasTexture(c);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+            sprite.scale.set(1.5, 0.56, 1);
+            return sprite;
+        }
+
+        // --- 5. 천체 ---
+        const R_EARTH = 1.0;        // 지구 반지름 = 1 (모형 단위)
+        const R_MOON = 0.3;
+        const SUN_X = -55;
+        const R_SUN = 2.66;
+        const D_SUN = 55;           // 태양-지구 거리(모형)
+        let D_MOON = 7.0;           // 달까지의 거리(모형, 6.4 ~ 7.8)
+
+        const earth = new THREE.Mesh(
+            new THREE.SphereGeometry(R_EARTH, 64, 48),
+            new THREE.MeshStandardMaterial({ map: makeEarthTexture(), roughness: 0.85 })
+        );
+        earth.rotation.z = 0.41;
+        scene.add(earth);
+
+        const earthLabel = makeLabel('지구', '#1c1c1e');
+        earthLabel.position.set(0, 1.55, 0);
+        scene.add(earthLabel);
+
+        const moonMat = new THREE.MeshStandardMaterial({ map: makeMoonTexture(), roughness: 0.95 });
+        const moon = new THREE.Mesh(new THREE.SphereGeometry(R_MOON, 48, 36), moonMat);
+        scene.add(moon);
+
+        const moonLabel = makeLabel('달', '#1c1c1e');
+        moonLabel.scale.set(1.2, 0.45, 1);
+        scene.add(moonLabel);
+
+        const sunMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(R_SUN, 48, 32),
+            new THREE.MeshBasicMaterial({ color: 0xffd966 })
+        );
+        sunMesh.position.set(SUN_X, 0, 0);
+        scene.add(sunMesh);
+
+        const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: makeGlowTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        sunGlow.scale.set(14, 14, 1);
+        sunGlow.position.set(SUN_X, 0, 0);
+        scene.add(sunGlow);
+
+        const sunLabel = makeLabel('태양', '#b06a00');
+        sunLabel.scale.set(1.8, 0.68, 1);
+        sunLabel.position.set(SUN_X, R_SUN + 1.6, 0);
+        scene.add(sunLabel);
+
+        // 태양 빛 방향 표시
+        const lightDirMat = new THREE.LineDashedMaterial({ color: 0xffb340, dashSize: 0.5, gapSize: 0.35, transparent: true, opacity: 0.65 });
+        for (let k = 0; k < 3; k++) {
+            const zz = (k - 1) * 2.2;
+            const geo = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(SUN_X + 4, 0.4, zz),
+                new THREE.Vector3(SUN_X + 11, 0.4, zz)
+            ]);
+            const l = new THREE.Line(geo, lightDirMat);
+            l.computeLineDistances();
+            scene.add(l);
+        }
+
+        // --- 6. 그림자 원뿔 ---
+        const shadowGroup = new THREE.Group();
+        scene.add(shadowGroup);
+
+        const UMBRA_MAT = new THREE.MeshBasicMaterial({
+            color: 0x0b1020, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false
+        });
+        const PENUMBRA_MAT = new THREE.MeshBasicMaterial({
+            color: 0x39415c, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false
+        });
+
+        // bottomRadius(시작면) -> topRadius(끝면), dir 방향으로 length 만큼
+        function makeCone(bottomRadius, topRadius, length, mat) {
+            const geo = new THREE.CylinderGeometry(topRadius, bottomRadius, length, 48, 1, true);
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.userData.length = length;
+            return mesh;
+        }
+
+        function placeCone(mesh, origin, dir) {
+            const len = mesh.userData.length;
+            mesh.position.copy(origin).addScaledVector(dir, len / 2);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        }
+
+        function clearShadows() {
+            while (shadowGroup.children.length) {
+                const m = shadowGroup.children.pop();
+                if (m.geometry) m.geometry.dispose();
+                shadowGroup.remove(m);
+            }
+        }
+
+        // --- 7. 상태 ---
+        let mode = 'solar';      // 'solar' | 'lunar'
+        let offset = 0;          // 정렬 오차 (지구 반지름 단위)
+        let viewMode = 'close';  // 'close' | 'wide'
+        let isDark = false;
+        let dirty = true;
+
+        const SUN_DIR = new THREE.Vector3(1, 0, 0);
+        const moonPos = new THREE.Vector3(-D_MOON, 0, 0);
+        const axisDir = new THREE.Vector3(1, 0, 0);
+
+        // --- 8. 관측자 시야 캔버스 ---
+        const skyCanvas = document.getElementById('sky-canvas');
+        const sctx = skyCanvas.getContext('2d');
+
+        function drawSkySolar(sep, sunAng, moonAng) {
+            const W = skyCanvas.width, H = skyCanvas.height;
+            sctx.clearRect(0, 0, W, H);
+            // 밤하늘
+            const bg = sctx.createLinearGradient(0, 0, 0, H);
+            bg.addColorStop(0, '#0b1224');
+            bg.addColorStop(1, '#1b2540');
+            sctx.fillStyle = bg;
+            sctx.fillRect(0, 0, W, H);
+
+            const cx = W / 2, cy = H / 2;
+            const pxRad = 72 / sunAng;                 // 태양 각반지름 = 72px
+            const rSun = sunAng * pxRad;
+            const rMoon = moonAng * pxRad;
+            const dx = sep * pxRad;
+
+            // 태양
+            const g = sctx.createRadialGradient(cx, cy, rSun * 0.15, cx, cy, rSun);
+            g.addColorStop(0, '#fffdf0');
+            g.addColorStop(0.55, '#ffe9a3');
+            g.addColorStop(1, '#ffc247');
+            sctx.beginPath();
+            sctx.arc(cx, cy, rSun, 0, Math.PI * 2);
+            sctx.fillStyle = g;
+            sctx.fill();
+
+            // 달
+            sctx.beginPath();
+            sctx.arc(cx + dx, cy, rMoon, 0, Math.PI * 2);
+            sctx.fillStyle = '#171c28';
+            sctx.fill();
+            sctx.lineWidth = 1.5;
+            sctx.strokeStyle = 'rgba(255,255,255,0.18)';
+            sctx.stroke();
+        }
+
+        function drawSkyLunar(b, u, p, rMoon) {
+            const W = skyCanvas.width, H = skyCanvas.height;
+            sctx.clearRect(0, 0, W, H);
+            const bg = sctx.createLinearGradient(0, 0, 0, H);
+            bg.addColorStop(0, '#0b1224');
+            bg.addColorStop(1, '#1b2540');
+            sctx.fillStyle = bg;
+            sctx.fillRect(0, 0, W, H);
+
+            const cx = W / 2, cy = H / 2;
+            const pxPerUnit = 58 / u;                  // 본영 반지름 = 58px
+            const rU = u * pxPerUnit;
+            const rP = p * pxPerUnit;
+            const rM = rMoon * pxPerUnit;
+            const dy = b * pxPerUnit;
+
+            // 반영
+            sctx.beginPath();
+            sctx.arc(cx, cy, rP, 0, Math.PI * 2);
+            sctx.fillStyle = 'rgba(120,130,150,0.20)';
+            sctx.fill();
+
+            // 본영
+            sctx.beginPath();
+            sctx.arc(cx, cy, rU, 0, Math.PI * 2);
+            sctx.fillStyle = 'rgba(10,14,26,0.85)';
+            sctx.fill();
+
+            // 달
+            sctx.beginPath();
+            sctx.arc(cx, cy + dy, rM, 0, Math.PI * 2);
+            const mg = sctx.createRadialGradient(cx - rM * 0.3, cy + dy - rM * 0.3, rM * 0.1, cx, cy + dy, rM);
+            mg.addColorStop(0, '#f4f1e6');
+            mg.addColorStop(1, '#c9c6ba');
+            sctx.fillStyle = mg;
+            sctx.fill();
+        }
+
+        // --- 9. 장면 갱신 ---
+        function updateScene() {
+            const sunPos = new THREE.Vector3(SUN_X, 0, 0);
+
+            if (mode === 'solar') {
+                moon.position.set(-D_MOON, 0, offset);
+                moonMat.color.setHex(0xffffff);
+                moonMat.emissive.setHex(0x000000);
+            } else {
+                moon.position.set(D_MOON, 0, offset);
+                moonMat.color.setHex(0xffffff);
+                moonMat.emissive.setHex(0x000000);
+            }
+            moonLabel.position.set(moon.position.x, moon.position.y + R_MOON + 0.55, moon.position.z);
+
+            // 그림자 콘 재작성
+            clearShadows();
+
+            const distMoonSun = sunPos.distanceTo(moon.position);
+
+            if (mode === 'solar') {
+                // 달의 본영: 달에서 태양 반대 방향으로 수렴
+                axisDir.set(moon.position.x - SUN_X, 0, moon.position.z).normalize();
+                const tanU = Math.max(0.0001, (R_SUN - R_MOON) / distMoonSun);
+                const lenUmbra = R_MOON / tanU;
+                const umbra = makeCone(R_MOON, 0.001, lenUmbra, UMBRA_MAT);
+                placeCone(umbra, moon.position, axisDir);
+                shadowGroup.add(umbra);
+
+                const tanP = (R_SUN + R_MOON) / Math.max(0.001, distMoonSun);
+                const lenPen = D_MOON + 4;
+                const pen = makeCone(R_MOON, R_MOON + lenPen * tanP, lenPen, PENUMBRA_MAT);
+                placeCone(pen, moon.position, axisDir);
+                shadowGroup.add(pen);
+
+                // 태양과 달의 시직경 비교 (지구 표면에서 본 각도)
+                const sunAng = Math.asin(Math.min(1, R_SUN / (D_SUN - R_EARTH)));
+                const moonAng = Math.asin(Math.min(1, R_MOON / (D_MOON - R_EARTH)));
+
+                // 달의 그림자가 지구에 닿는 범위 (본영/반영)
+                const tanUmbra = (R_SUN - R_MOON) / (D_SUN - D_MOON);
+                const tanPen = (R_SUN + R_MOON) / (D_SUN - D_MOON);
+                const uSurf = R_MOON - (D_MOON - R_EARTH) * tanUmbra;   // 지구 표면에서의 본영 반지름
+                const pSurf = R_MOON + (D_MOON - R_EARTH) * tanPen;     // 지구 표면에서의 반영 반지름
+                const uPos = Math.max(0, uSurf);
+
+                let name, color, sepEff;
+                if (offset < R_EARTH + uPos) {
+                    name = (moonAng >= sunAng) ? '개기일식' : '금환일식';
+                    color = '#ff9500';
+                    sepEff = 0;
+                } else if (offset < R_EARTH + pSurf) {
+                    name = '부분일식';
+                    color = '#ffcc00';
+                    const t = (offset - (R_EARTH + uPos)) / Math.max(0.001, pSurf - uPos);
+                    const lo = Math.abs(sunAng - moonAng);
+                    const hi = sunAng + moonAng;
+                    sepEff = lo + t * (hi - lo);
+                } else {
+                    name = '일식 없음';
+                    color = '#8e8e93';
+                    sepEff = sunAng + moonAng + 0.45 * (offset - (R_EARTH + pSurf));
+                }
+
+                drawSkySolar(sepEff, sunAng, moonAng);
+                document.getElementById('sky-caption').innerText = '지구에서 본 태양과 달';
+                document.getElementById('val-name').innerText = name;
+                document.getElementById('val-name').style.color = color;
+                document.getElementById('val-dist').innerText = D_MOON.toFixed(2);
+                document.getElementById('val-off').innerText = offset.toFixed(2) + ' R';
+            } else {
+                // 지구의 본영 / 반영
+                const tanU = (R_SUN - R_EARTH) / D_SUN;
+                const tanP = (R_SUN + R_EARTH) / D_SUN;
+                const len = D_MOON + 4;
+                const uAtMoon = Math.max(0, R_EARTH - D_MOON * tanU);
+                const pAtMoon = R_EARTH + D_MOON * tanP;
+
+                axisDir.set(1, 0, 0);
+                const umbra = makeCone(R_EARTH, Math.max(0.001, R_EARTH - len * tanU), len, UMBRA_MAT);
+                placeCone(umbra, new THREE.Vector3(0, 0, 0), axisDir);
+                shadowGroup.add(umbra);
+
+                const pen = makeCone(R_EARTH, R_EARTH + len * tanP, len, PENUMBRA_MAT);
+                placeCone(pen, new THREE.Vector3(0, 0, 0), axisDir);
+                shadowGroup.add(pen);
+
+                let name, color;
+                if (offset + R_MOON <= uAtMoon) { name = '개기월식'; color = '#c0392b'; }
+                else if (offset < uAtMoon + R_MOON) { name = '부분월식'; color = '#e67e22'; }
+                else if (offset < pAtMoon + R_MOON) { name = '반영식(반그림자)'; color = '#8e8e93'; }
+                else { name = '월식 없음'; color = '#8e8e93'; }
+
+                // 본영에 들어간 달은 붉게 보임
+                if (offset + R_MOON <= uAtMoon) {
+                    moonMat.color.setHex(0xb4553f);
+                    moonMat.emissive.setHex(0x3d0f07);
+                } else if (offset < uAtMoon + R_MOON) {
+                    moonMat.color.setHex(0xf0d9cf);
+                }
+
+                drawSkyLunar(offset, uAtMoon, pAtMoon, R_MOON);
+                document.getElementById('sky-caption').innerText = '지구에서 본 달과 지구 그림자';
+                document.getElementById('val-name').innerText = name;
+                document.getElementById('val-name').style.color = color;
+                document.getElementById('val-dist').innerText = D_MOON.toFixed(2);
+                document.getElementById('val-off').innerText = offset.toFixed(2) + ' R';
+            }
+        }
+
+        // --- 10. UI ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        const sldOff = document.getElementById('sld-off');
+        sldOff.addEventListener('input', (e) => {
+            offset = parseFloat(e.target.value);
+            document.getElementById('txt-off').innerText = offset.toFixed(2) + ' 지구 반지름';
+            dirty = true;
+        });
+
+        const sldDist = document.getElementById('sld-dist');
+        function distFromSlider(v) {
+            // 0~100 -> 6.4 ~ 7.8 (근지점 ~ 원지점)
+            return 6.4 + (v / 100) * 1.4;
+        }
+        sldDist.addEventListener('input', (e) => {
+            D_MOON = distFromSlider(parseFloat(e.target.value));
+            document.getElementById('txt-dist').innerText = D_MOON.toFixed(2);
+            dirty = true;
+        });
+
+        function setMode(m) {
+            mode = m;
+            document.getElementById('mode-solar').classList.toggle('on', m === 'solar');
+            document.getElementById('mode-lunar').classList.toggle('on', m === 'lunar');
+            document.getElementById('guide-tooltip').innerText = m === 'solar'
+                ? '💡 일식: 달이 태양과 지구 사이에 들어와 달의 그림자가 지구에 드리웁니다'
+                : '💡 월식: 지구가 태양과 달 사이에 들어와 달이 지구 그림자 속으로 들어갑니다';
+            dirty = true;
+        }
+        document.getElementById('mode-solar').addEventListener('click', () => setMode('solar'));
+        document.getElementById('mode-lunar').addEventListener('click', () => setMode('lunar'));
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            offset = 0;
+            sldOff.value = 0;
+            document.getElementById('txt-off').innerText = '0.00 지구 반지름';
+            dirty = true;
+        });
+
+        function setView(v) {
+            viewMode = v;
+            if (v === 'close') {
+                camera.position.set(0.5, 6.2, 14.5);
+                controls.target.set(0, 0, 0);
+                document.getElementById('view-text').innerText = '근접 시점';
+            } else {
+                camera.position.set(-24, 34, 52);
+                controls.target.set(-18, 0, 0);
+                document.getElementById('view-text').innerText = '전체 시점';
+            }
+            controls.update();
+        }
+        document.getElementById('btn-view').addEventListener('click', () => {
+            setView(viewMode === 'close' ? 'wide' : 'close');
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            offset = 0;
+            D_MOON = 7.0;
+            sldOff.value = 0;
+            sldDist.value = 43;
+            document.getElementById('txt-off').innerText = '0.00 지구 반지름';
+            document.getElementById('txt-dist').innerText = '7.00';
+            setMode('solar');
+            setView('close');
+            dirty = true;
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', (e) => {
+            isDark = !isDark;
+            document.body.classList.toggle('dark-mode', isDark);
+            e.currentTarget.innerText = isDark ? '☀️' : '🌙';
+            scene.background.setHex(isDark ? 0x0d1018 : 0xf2f2f7);
+            stars.visible = isDark;
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 11. 루프 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            if (dirty) {
+                dirty = false;
+                updateScene();
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        updateScene();
+        animate();
+
+        /* ---------- Fullscreen / Windowed Mode Logic ---------- */
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        const fullscreenText = document.getElementById('fullscreenText');
+
+        function updateFullscreenUI() {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (fullscreenIcon) fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+            if (fullscreenText) fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+        }
+
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                try {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) req.call(document.documentElement);
+                    } else {
+                        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    }
+                } catch (err) {
+                    console.error('전체화면 모드를 전환할 수 없습니다:', err);
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+    </script>
+</body>
+</html>
