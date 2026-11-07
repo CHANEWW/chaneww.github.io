@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>전류에 의한 자기장 3D</title>
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #eaf1f7;
+            color: #1c1c1e;
+            touch-action: none;
+            transition: background-color .3s ease, color .3s ease;
+        }
+
+        #canvas-container {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0;
+            z-index: 1; touch-action: none;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        .top-left-bar {
+            position: absolute; top: 18px; left: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; font-size: 14px; font-weight: bold;
+            color: #1c1c1e; text-decoration: none; cursor: pointer;
+            transition: all .2s ease;
+        }
+        button.back-btn { font-family: inherit; border: none; }
+
+        .tag-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 16px; font-size: 14px; font-weight: bold;
+        }
+        .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; }
+        .vision-badge {
+            background: rgba(0, 122, 255, 0.14); color: #007aff;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; letter-spacing: .2px;
+        }
+
+        .top-right-bar {
+            position: absolute; top: 18px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+        .data-card { display: flex; align-items: center; gap: 16px; padding: 10px 20px; }
+        .data-item { display: flex; flex-direction: column; align-items: center; }
+        .data-label { font-size: 11px; color: #8e8e93; font-weight: bold; }
+        .data-value { font-size: 15px; font-weight: bold; color: #1c1c1e; }
+
+        .icon-btn {
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            transition: all .2s; font-size: 16px; font-family: inherit;
+        }
+
+        .center-tooltip {
+            position: absolute; top: 9%; left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px; font-size: 13px; font-weight: bold;
+            color: #4a5568; border-radius: 30px;
+            pointer-events: none; z-index: 5;
+            transition: opacity .5s ease; white-space: nowrap;
+        }
+
+        .legend {
+            position: absolute; left: 20px; bottom: 24px;
+            padding: 10px 14px; display: flex; flex-direction: column; gap: 6px;
+            font-size: 11.5px; font-weight: bold; color: #5b6472;
+            z-index: 9; border-radius: 16px;
+        }
+        .legend-row { display: flex; align-items: center; gap: 8px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+
+        .bottom-control-bar {
+            position: absolute; bottom: 24px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; align-items: center; gap: 4px;
+            padding: 6px; z-index: 10;
+        }
+        .control-tab-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 2px; padding: 7px 12px; min-width: 66px;
+            border-radius: 14px; border: none; background: transparent;
+            color: #1c1c1e; font-size: 12px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; line-height: 1.2;
+        }
+        .control-tab-btn span:first-child { font-size: 16px; line-height: 1.1; }
+        .control-tab-btn.active {
+            background: #007aff; color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        .sub-panel {
+            position: absolute; bottom: 96px; left: 50%;
+            transform: translateX(-50%);
+            padding: 16px 18px; width: 330px;
+            display: none; flex-direction: column; gap: 12px; z-index: 11;
+        }
+        .sub-panel.show { display: flex; }
+
+        .panel-title { font-size: 11.5px; font-weight: bold; color: #007aff; letter-spacing: .4px; }
+        .control-row {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 13px; font-weight: bold; gap: 10px;
+        }
+        .btn-group { display: flex; gap: 6px; }
+        .toggle-btn {
+            padding: 6px 12px; border-radius: 10px;
+            border: 1px solid #d6d9de; background: #ffffff; color: #1c1c1e;
+            font-size: 12px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        .toggle-btn.on { background: #007aff; color: #ffffff; border-color: #007aff; }
+        .slider-header {
+            display: flex; justify-content: space-between;
+            font-size: 12px; font-weight: bold; color: #5b6472;
+        }
+        input[type="range"] {
+            width: 100%; height: 22px; accent-color: #007aff; cursor: pointer; margin: 0;
+        }
+        .panel-note { font-size: 11.5px; line-height: 1.5; color: #6b7280; font-weight: bold; }
+        .hand-rule {
+            background: rgba(0, 122, 255, 0.08); border-radius: 12px;
+            padding: 10px 12px; font-size: 12px; line-height: 1.6;
+            color: #1c1c1e; font-weight: bold;
+        }
+        .hand-rule b { color: #007aff; }
+        .hand-rule .thumb-t { color: #ff3b30; }
+        .hand-rule .fing-t { color: #0a84ff; }
+
+        .bottom-right-bar {
+            position: absolute; bottom: 24px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+
+        body.dark-mode { background-color: #10151d; color: #f2f2f7; }
+        body.dark-mode .glass-panel {
+            background: rgba(28, 34, 44, 0.82);
+            border-color: rgba(255, 255, 255, 0.14);
+            color: #f2f2f7;
+        }
+        body.dark-mode .back-btn, body.dark-mode .data-value { color: #f2f2f7; }
+        body.dark-mode .control-tab-btn { color: #e8eaed; }
+        body.dark-mode .control-tab-btn.active { color: #ffffff; }
+        body.dark-mode .center-tooltip { color: #c7ccd6; }
+        body.dark-mode .legend { color: #aeb6c2; }
+        body.dark-mode .toggle-btn { background: #2a3240; color: #e8eaed; border-color: #3b4453; }
+        body.dark-mode .toggle-btn.on { background: #007aff; color: #fff; border-color: #007aff; }
+        body.dark-mode .slider-header { color: #a9b2c0; }
+        body.dark-mode .panel-note { color: #99a3b1; }
+        body.dark-mode .hand-rule { background: rgba(0, 122, 255, 0.16); color: #eef2f8; }
+        body.dark-mode .icon-btn { background: rgba(40, 48, 60, 0.85); color: #f2f2f7; }
+        body.dark-mode .data-label { color: #9aa3b0; }
+
+        @media (max-width: 768px) { .center-tooltip { display: none; } }
+        @media (max-width: 900px) { .legend { display: none !important; } }
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+/* @@/MOBILE-BASE@@ */
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge title-capsule">
+            <span class="title-text">전류에 의한 자기장 3D</span>
+            <span class="vision-badge">visionOS</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 실시간 데이터 카드 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">전류</span>
+                <span class="data-value" id="val-current" style="color:#ff9500;">2.0 A</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">자기장 세기</span>
+                <span class="data-value" id="val-field" style="color:#0a84ff;">1.0</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">오른손</span>
+                <span class="data-value" id="val-hand" style="color:#34c759;">높이 3.0</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        직선 도선 — 엄지가 전류, 네 손가락이 자기장 방향이에요
+    </div>
+
+    <!-- 좌측 하단 범례 -->
+    <div class="glass-panel legend" id="legend">
+        <div class="legend-row"><span class="legend-dot" style="background:#2b8cff;"></span>자기장선 (B)</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ffa600;"></span>전류 (I) 흐르는 방향</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff3b30;"></span>나침반 N극</div>
+    </div>
+
+    <!-- 설정 패널 -->
+    <div class="glass-panel sub-panel" id="panel-settings">
+        <div class="panel-title">전원 · 전류</div>
+        <div class="control-row">
+            <span>전원</span>
+            <button class="toggle-btn on" id="btn-power">켜짐</button>
+        </div>
+        <div class="control-row">
+            <span>전류 방향</span>
+            <button class="toggle-btn" id="btn-dir">↔ 방향 반전</button>
+        </div>
+        <div>
+            <div class="slider-header"><span>전류 세기</span><span id="lbl-current">2.0 A</span></div>
+            <input type="range" id="rng-current" min="0.5" max="5" step="0.1" value="2">
+        </div>
+        <div class="control-row">
+            <span>자기장선 표시</span>
+            <button class="toggle-btn on" id="btn-field">표시</button>
+        </div>
+        <div class="control-row">
+            <span>나침반 표시</span>
+            <button class="toggle-btn on" id="btn-compass">표시</button>
+        </div>
+        <div class="control-row">
+            <button class="toggle-btn" id="btn-reset">🔄 초기화</button>
+            <button class="toggle-btn" id="btn-align">🎥 시점 정렬</button>
+        </div>
+    </div>
+
+    <!-- 오른손 법칙 패널 -->
+    <div class="glass-panel sub-panel" id="panel-hand">
+        <div class="panel-title">오른손 법칙</div>
+        <div class="hand-rule" id="hand-rule"></div>
+        <div>
+            <div class="slider-header"><span>오른손 위치</span><span id="lbl-hand">3.0</span></div>
+            <input type="range" id="rng-hand" min="0" max="1" step="0.005" value="0.5">
+        </div>
+        <div class="panel-note">화면 속 손을 직접 잡고 축을 따라 밀어도 움직여요.</div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn active" data-mode="straight"><span>➖</span><span>직선 도선</span></button>
+        <button class="control-tab-btn" data-mode="loop"><span>⭕</span><span>원형 도선</span></button>
+        <button class="control-tab-btn" data-mode="coil"><span>🌀</span><span>코일</span></button>
+        <button class="control-tab-btn" id="btn-open-settings"><span>⚙️</span><span>설정</span></button>
+        <button class="control-tab-btn" id="btn-open-hand"><span>✋</span><span>오른손</span></button>
+    </div>
+
+    <!-- 전체화면 / 창모드 -->
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+    /* ============================================================
+       전류에 의한 자기장 3D — 직선 / 원형 / 코일 + 오른손 법칙
+       자기장은 비오-사바르 법칙으로 직접 계산해 그립니다.
+       ============================================================ */
+
+    const container = document.getElementById('canvas-container');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xeaf1f7);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+    camera.position.set(8, 7, 11);
+    window.camera = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 4.5;
+    controls.maxDistance = 34;
+    controls.maxPolarAngle = Math.PI * 0.495;
+    controls.target.set(0, 2.7, 0);
+
+    /* ---------------- 조명 ---------------- */
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xd8e2ea, 1.0);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+    sun.position.set(7, 14, 9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -12;
+    sun.shadow.camera.right = 12;
+    sun.shadow.camera.top = 12;
+    sun.shadow.camera.bottom = -12;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 45;
+    sun.shadow.radius = 3;
+    scene.add(sun);
+
+    const fill = new THREE.DirectionalLight(0xdce8ff, 0.35);
+    fill.position.set(-8, 6, -6);
+    scene.add(fill);
+
+    /* ---------------- 실험대 ---------------- */
+    const boardMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0.02 });
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(22, 16), boardMat);
+    board.rotation.x = -Math.PI / 2;
+    board.receiveShadow = true;
+    scene.add(board);
+
+    /* ---------------- 공용 재질 ---------------- */
+    const wireMat = new THREE.MeshStandardMaterial({ color: 0xc07b3e, roughness: 0.32, metalness: 0.85 });
+    const wireDarkMat = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.5, metalness: 0.7 });
+    const fieldMat = new THREE.MeshBasicMaterial({ color: 0x2b8cff, transparent: true, opacity: 0.55, depthWrite: false });
+    const arrowMat = new THREE.MeshBasicMaterial({ color: 0x1477d4 });
+    const flowMat = new THREE.MeshStandardMaterial({ color: 0xffb020, emissive: 0xff8a00, emissiveIntensity: 0.65, roughness: 0.4 });
+    const nMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.4 });
+    const sMat = new THREE.MeshStandardMaterial({ color: 0x2f7dff, roughness: 0.4 });
+    const pivotMat = new THREE.MeshStandardMaterial({ color: 0xf7f9fc, roughness: 0.6 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xffcda8, roughness: 0.55, metalness: 0.03, transparent: true, opacity: 0.52, side: THREE.DoubleSide, depthWrite: false });
+    const fingerMat = new THREE.MeshStandardMaterial({ color: 0xff9b58, roughness: 0.5, metalness: 0.03, transparent: true, opacity: 0.86, side: THREE.DoubleSide, depthWrite: false });
+
+    /* ---------------- 상태 ---------------- */
+    const state = {
+        mode: 'straight',
+        current: 2.0,
+        dir: 1,
+        on: true,
+        showField: true,
+        showCompass: true,
+        handOn: false,
+        handT: 0.5,
+        dark: false
+    };
+
+    /* ---------------- 그룹 ---------------- */
+    const root = new THREE.Group();
+    scene.add(root);
+    const conductorGroup = new THREE.Group();
+    const flowGroup = new THREE.Group();
+    const fieldGroup = new THREE.Group();
+    const compassGroup = new THREE.Group();
+    const labelGroup = new THREE.Group();
+    const handHolder = new THREE.Group();
+    root.add(conductorGroup, flowGroup, fieldGroup, compassGroup, labelGroup, handHolder);
+
+    let cfg = null;
+    let handPivot = null;
+    let handMeshes = [];
+    let handLabelSprites = [];
+    let compasses = [];
+    let arrows = [];
+    let flowDots = [];
+    let flowCurve = null;
+    let poleLabels = [];
+    let fieldSegs = null;      // Float32Array [mx,my,mz,dx,dy,dz] * n
+
+    /* ============================================================
+       비오-사바르 법칙
+       ============================================================ */
+    function fieldAtN(x, y, z, out) {
+        let bx = 0, by = 0, bz = 0;
+        const S = fieldSegs;
+        for (let i = 0; i < S.length; i += 6) {
+            const rx = x - S[i], ry = y - S[i + 1], rz = z - S[i + 2];
+            const r2 = rx * rx + ry * ry + rz * rz + 0.002;
+            const inv = 1 / (r2 * Math.sqrt(r2));
+            const dx = S[i + 3], dy = S[i + 4], dz = S[i + 5];
+            bx += (dy * rz - dz * ry) * inv;
+            by += (dz * rx - dx * rz) * inv;
+            bz += (dx * ry - dy * rx) * inv;
+        }
+        out[0] = bx; out[1] = by; out[2] = bz;
+        return out;
+    }
+
+    const _b = [0, 0, 0];
+    function fieldVec(x, y, z, sign) {
+        fieldAtN(x, y, z, _b);
+        const k = (sign === undefined ? 1 : sign);
+        return new THREE.Vector3(_b[0] * k, _b[1] * k, _b[2] * k);
+    }
+
+    function currentSign() { return state.on ? state.dir : 0; }
+
+    function segsFromPoints(pts) {
+        const n = pts.length - 1;
+        const arr = new Float32Array(n * 6);
+        for (let i = 0; i < n; i++) {
+            const a = pts[i], b = pts[i + 1];
+            arr[i * 6] = (a.x + b.x) / 2;
+            arr[i * 6 + 1] = (a.y + b.y) / 2;
+            arr[i * 6 + 2] = (a.z + b.z) / 2;
+            arr[i * 6 + 3] = b.x - a.x;
+            arr[i * 6 + 4] = b.y - a.y;
+            arr[i * 6 + 5] = b.z - a.z;
+        }
+        return arr;
+    }
+
+    /* ============================================================
+       자기장선 추적
+       ============================================================ */
+    function traceLine(sx, sy, sz, maxSteps, h, bound) {
+        const pts = [];
+        let x = sx, y = sy, z = sz;
+        const B = [0, 0, 0];
+        const br = bound ? bound.r : 6;
+        const bcx = bound ? bound.cx : 0, bcy = bound ? bound.cy : 2.5, bcz = bound ? bound.cz : 0;
+        for (let i = 0; i < maxSteps; i++) {
+            pts.push(new THREE.Vector3(x, y, z));
+            fieldAtN(x, y, z, B);
+            let m = Math.sqrt(B[0] * B[0] + B[1] * B[1] + B[2] * B[2]);
+            if (!isFinite(m) || m < 1e-9) break;
+            const kx = B[0] / m, ky = B[1] / m, kz = B[2] / m;
+            const mx = x + kx * h * 0.5, my = y + ky * h * 0.5, mz = z + kz * h * 0.5;
+            fieldAtN(mx, my, mz, B);
+            m = Math.sqrt(B[0] * B[0] + B[1] * B[1] + B[2] * B[2]);
+            if (!isFinite(m) || m < 1e-9) break;
+            x += (B[0] / m) * h;
+            y += (B[1] / m) * h;
+            z += (B[2] / m) * h;
+            if (y < 0.04) break;
+            if ((x - bcx) * (x - bcx) + (y - bcy) * (y - bcy) + (z - bcz) * (z - bcz) > br * br) break;
+            if (i > 24 && (x - sx) * (x - sx) + (y - sy) * (y - sy) + (z - sz) * (z - sz) < h * h * 2.2) {
+                pts.push(new THREE.Vector3(sx, sy, sz));
+                break;
+            }
+        }
+        return pts;
+    }
+
+    /* 전류 고리의 자기장선: 도선 단면을 감싸는 닫힌 타원(메리디안 평면) */
+    function addLoopOval(theta, r, R, cy, cz) {
+        const rOut = (R * R) / Math.max(r, 0.12);
+        const a = (rOut - r) / 2, c0 = (r + rOut) / 2;
+        const pts = [];
+        const N = 96;
+        for (let i = 0; i < N; i++) {
+            const ang = i / N * Math.PI * 2;
+            const u = c0 + a * Math.cos(ang);
+            const z = cz + 0.92 * a * Math.sin(ang);
+            pts.push(new THREE.Vector3(Math.cos(theta) * u, cy + Math.sin(theta) * u, z));
+        }
+        orientClosedLine(pts);
+        addClosedCurve(pts, 0.011);
+    }
+
+    /* 솔레노이드 자기장선: 내부는 축과 나란히, 바깥은 크게 돌아 나오는 닫힌 고리 */
+    function addSolenoidLoop(theta, r, R, halfL, cy, cz) {
+        const bulge = R * 1.5 + (R - r) * 0.9;
+        const pts = [];
+        const N1 = 26, N2 = 46;
+        for (let i = 0; i <= N1; i++) {
+            const z = -halfL + (2 * halfL) * i / N1;
+            pts.push(new THREE.Vector3(Math.cos(theta) * r, cy + Math.sin(theta) * r, cz + z));
+        }
+        for (let i = 1; i <= N2; i++) {
+            const tt = Math.PI * i / N2;
+            const u = r + (bulge - r) * Math.sin(tt);
+            const z = halfL * Math.cos(tt);
+            pts.push(new THREE.Vector3(Math.cos(theta) * u, cy + Math.sin(theta) * u, cz + z));
+        }
+        orientClosedLine(pts);
+        addClosedCurve(pts, 0.011);
+    }
+
+    /* 화살표 방향을 실제 자기장 방향과 맞춘다 */
+    function orientClosedLine(pts) {
+        const i0 = Math.floor(pts.length * 0.02);
+        const a = pts[i0], b = pts[(i0 + 1) % pts.length];
+        const tan = new THREE.Vector3().subVectors(b, a);
+        const bv = fieldVec(a.x, a.y, a.z, 1);
+        if (tan.dot(bv) < 0) pts.reverse();
+    }
+
+    /* 중심축 방향 자기장 화살표 */
+    let axisArrow = null;
+    function buildAxisArrow(center, zSign, len) {
+        const g = new THREE.Group();
+        const mat = new THREE.MeshBasicMaterial({ color: 0x0a6fd6 });
+        const shaftLen = len;
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, shaftLen, 12), mat);
+        shaft.rotation.x = Math.PI / 2;
+        shaft.position.set(0, center.y, center.z + zSign * shaftLen / 2);
+        g.add(shaft);
+        const head = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.34, 14), mat);
+        head.rotation.x = zSign > 0 ? Math.PI / 2 : -Math.PI / 2;
+        head.position.set(0, center.y, center.z + zSign * (shaftLen + 0.16));
+        g.add(head);
+        // 반대쪽 꼬리 표시
+        const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 12), mat);
+        tail.rotation.x = Math.PI / 2;
+        tail.position.set(0, center.y, center.z - zSign * 0.02);
+        g.add(tail);
+        axisArrow = g;
+        fieldGroup.add(g);
+    }
+
+    function addClosedCurve(pts, radius) {
+        const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
+        const geo = new THREE.TubeGeometry(curve, Math.min(200, pts.length), radius, 5, true);
+        fieldGroup.add(new THREE.Mesh(geo, fieldMat));
+        for (let k = 1; k <= 3; k++) {
+            const t = k / 4;
+            const pos = curve.getPointAt(t);
+            const tan = curve.getTangentAt(t).normalize();
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.17, 9), arrowMat);
+            cone.userData.tan = tan;
+            cone.position.copy(pos);
+            fieldGroup.add(cone);
+            arrows.push(cone);
+        }
+    }
+
+    function addFieldLine(seed, opts) {
+        const pts = traceLine(seed.x, seed.y, seed.z, opts.steps, opts.h, opts.bound);
+        if (pts.length < 6) return;
+        const closed = pts[pts.length - 1].distanceTo(pts[0]) < 0.0015;
+        const curve = new THREE.CatmullRomCurve3(pts, closed, 'catmullrom', 0.4);
+        const tSegs = Math.max(16, Math.min(180, Math.round(pts.length * 0.8)));
+        const geo = new THREE.TubeGeometry(curve, tSegs, opts.radius || 0.013, 5, closed);
+        fieldGroup.add(new THREE.Mesh(geo, fieldMat));
+
+        const nArr = opts.arrows === undefined ? 4 : opts.arrows;
+        for (let k = 1; k <= nArr; k++) {
+            const t = k / (nArr + 1);
+            const pos = curve.getPointAt(t);
+            const tan = curve.getTangentAt(t).normalize();
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.17, 9), arrowMat);
+            cone.userData.tan = tan;
+            cone.position.copy(pos);
+            fieldGroup.add(cone);
+            arrows.push(cone);
+        }
+    }
+
+    function orientArrows() {
+        const sgn = state.dir;
+        const up = new THREE.Vector3(0, 1, 0);
+        const sc = 0.75 + state.current * 0.1;
+        arrows.forEach(c => {
+            const t = c.userData.tan.clone().multiplyScalar(sgn);
+            c.quaternion.setFromUnitVectors(up, t);
+            c.scale.setScalar(sc);
+        });
+    }
+
+    /* ============================================================
+       나침반
+       ============================================================ */
+    function makeCompass(pos) {
+        const g = new THREE.Group();
+        g.position.copy(pos);
+
+        const needle = new THREE.Group();
+        const nCone = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.34, 4), nMat);
+        nCone.rotation.z = -Math.PI / 2;
+        nCone.position.x = 0.17;
+        needle.add(nCone);
+        const sCone = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.34, 4), sMat);
+        sCone.rotation.z = Math.PI / 2;
+        sCone.position.x = -0.17;
+        needle.add(sCone);
+        needle.add(new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), pivotMat));
+        g.add(needle);
+
+        const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.3, 0.3, 0.02, 28),
+            new THREE.MeshStandardMaterial({ color: 0xf4f7fb, roughness: 0.7 })
+        );
+        base.position.y = -0.05;
+        g.add(base);
+        const rim = new THREE.Mesh(
+            new THREE.TorusGeometry(0.3, 0.018, 8, 32),
+            new THREE.MeshStandardMaterial({ color: 0xb9c4d2, roughness: 0.5, metalness: 0.3 })
+        );
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = -0.04;
+        g.add(rim);
+
+        compassGroup.add(g);
+        compasses.push({ group: g, needle: needle, pos: pos.clone() });
+    }
+
+    function updateCompasses(dt) {
+        const sgn = currentSign();
+        const up = new THREE.Vector3(1, 0, 0);
+        const q = new THREE.Quaternion();
+        compasses.forEach(c => {
+            let dirV;
+            if (sgn === 0) {
+                dirV = new THREE.Vector3(0, 0, -1);
+            } else {
+                const v = fieldVec(c.pos.x, c.pos.y, c.pos.z, sgn);
+                if (v.length() < 1e-9) return;
+                dirV = v.normalize();
+            }
+            q.setFromUnitVectors(up, dirV);
+            c.needle.quaternion.slerp(q, Math.min(1, dt * 7));
+        });
+    }
+
+    /* ============================================================
+       글자 라벨
+       ============================================================ */
+    function makeLabel(text, color, scale, bg) {
+        const fs = 76;
+        const canvas = document.createElement('canvas');
+        let ctx = canvas.getContext('2d');
+        const font = "bold " + fs + "px 'SeoulNamsan', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif";
+        ctx.font = font;
+        const tw = ctx.measureText(text).width;
+        canvas.width = Math.ceil(tw + 56);
+        canvas.height = fs + 40;
+        ctx = canvas.getContext('2d');
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (bg) {
+            ctx.fillStyle = bg;
+            const r = 22, w = canvas.width, hh = canvas.height;
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(w - r, 0); ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, hh - r); ctx.quadraticCurveTo(w, hh, w - r, hh);
+            ctx.lineTo(r, hh); ctx.quadraticCurveTo(0, hh, 0, hh - r);
+            ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath(); ctx.fill();
+        }
+        ctx.fillStyle = color || '#1c1c1e';
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 3);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        tex.needsUpdate = true;
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+        const sp = new THREE.Sprite(mat);
+        const wpp = 0.004 * (scale || 1);
+        sp.scale.set(canvas.width * wpp, canvas.height * wpp, 1);
+        sp.userData.baseScale = sp.scale.clone();
+        sp.renderOrder = 30;
+        return sp;
+    }
+
+    /* ============================================================
+       모드 정의
+       ============================================================ */
+    const MODE = {
+        straight: {
+            handMin: 0.75, handMax: 5.25, handScale: 1.7,
+            camPos: [6.4, 5.4, 8.6], target: [0, 2.9, 0],
+            tip: '직선 도선 — 엄지가 전류, 네 손가락이 자기장(동심원) 방향이에요',
+            rule: '<span class="thumb-t">엄지손가락</span> = <b>전류가 흐르는 방향</b><br>네 손가락을 감아쥐는 방향 = <span class="fing-t">자기장(동심원)</span> 방향'
+        },
+        loop: {
+            handMin: -1.9, handMax: 1.9, handScale: 1.55,
+            camPos: [8.0, 6.0, 9.4], target: [0, 2.7, 0],
+            tip: '원형 도선 — 네 손가락이 전류, 엄지가 중심 자기장(N극) 방향이에요',
+            rule: '네 손가락을 <b>전류가 흐르는 방향</b>으로 감으면<br><span class="thumb-t">엄지손가락</span> = <b>도선 중심 자기장(N극)</b> 방향'
+        },
+        coil: {
+            handMin: -2.8, handMax: 2.8, handScale: 1.75,
+            camPos: [8.8, 6.2, 9.8], target: [0, 2.9, 0],
+            tip: '코일 — 네 손가락이 전류가 감기는 방향, 엄지가 N극 방향이에요',
+            rule: '네 손가락을 <b>코일에 흐르는 전류 방향</b>으로 감으면<br><span class="thumb-t">엄지손가락</span> = <b>N극</b> 방향'
+        }
+    };
+
+    const CENTER = {
+        straight: new THREE.Vector3(0, 2.9, 0),
+        loop: new THREE.Vector3(0, 2.8, 0),
+        coil: new THREE.Vector3(0, 3.2, 0)
+    };
+
+    function clearGroup(g) {
+        while (g.children.length) {
+            const c = g.children.pop();
+            g.remove(c);
+            c.traverse(o => {
+                if (o.geometry) o.geometry.dispose();
+                if (o.material && o.material.map) o.material.map.dispose();
+                if (o.material && o.material !== fieldMat && o.material !== arrowMat && o.material !== wireMat &&
+                    o.material !== wireDarkMat && o.material !== flowMat && o.material !== nMat &&
+                    o.material !== sMat && o.material !== pivotMat && o.material !== boardMat &&
+                    o.material !== skinMat && o.material !== fingerMat) {
+                    o.material.dispose();
+                }
+            });
+        }
+    }
+
+    function helixPoints(radius, turns, z0, z1, center, per) {
+        const pts = [];
+        const n = per || 40;
+        const total = Math.round(turns * n);
+        for (let i = 0; i <= total; i++) {
+            const t = i / total;
+            const a = t * turns * Math.PI * 2;
+            pts.push(new THREE.Vector3(
+                center.x + Math.cos(a) * radius,
+                center.y + Math.sin(a) * radius,
+                z0 + (z1 - z0) * t
+            ));
+        }
+        return pts;
+    }
+
+    /* ============================================================
+       모드 구성
+       ============================================================ */
+    function buildMode() {
+        [conductorGroup, flowGroup, fieldGroup, compassGroup, labelGroup, handHolder].forEach(clearGroup);
+        handPivot = null; handMeshes = []; compasses = []; arrows = [];
+        flowDots = []; poleLabels = [];
+
+        const m = state.mode;
+        cfg = MODE[m];
+        const center = CENTER[m];
+
+        /* ---------- 도선 ---------- */
+        if (m === 'straight') {
+            const wireH = 5.6;
+            const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, wireH, 20), wireMat);
+            wire.position.set(0, wireH / 2 + 0.05, 0);
+            wire.castShadow = true;
+            conductorGroup.add(wire);
+
+            const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 0.1, 24), wireDarkMat);
+            foot.position.y = 0.05;
+            foot.castShadow = true;
+            conductorGroup.add(foot);
+
+            const topCap = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), wireMat);
+            topCap.position.y = wireH + 0.05;
+            conductorGroup.add(topCap);
+
+            flowCurve = new THREE.LineCurve3(new THREE.Vector3(0, 0.15, 0), new THREE.Vector3(0, wireH, 0));
+
+            const pts = [];
+            for (let y = -9; y <= 9.001; y += 0.9) pts.push(new THREE.Vector3(0, y, 0));
+            fieldSegs = segsFromPoints(pts);
+
+            const radii = [1.15, 2.05, 3.0];
+            radii.forEach((r, ri) => {
+                const a0 = (ri % 2) * (Math.PI / 4);
+                for (let k = 0; k < 4; k++) {
+                    const a = a0 + k * Math.PI / 2;
+                    makeCompass(new THREE.Vector3(Math.cos(a) * r, 0.12, Math.sin(a) * r));
+                }
+            });
+
+        } else if (m === 'loop') {
+            const R = 1.7;
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.05, 12, 72), wireMat);
+            ring.position.copy(center);
+            ring.castShadow = true;
+            conductorGroup.add(ring);
+
+            const lead1 = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.42, 12), wireDarkMat);
+            lead1.position.set(-R, center.y - 0.2, 0);
+            conductorGroup.add(lead1);
+            const lead2 = lead1.clone();
+            lead2.position.set(R, center.y - 0.2, 0);
+            conductorGroup.add(lead2);
+
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, center.y - R + 0.02, 14), wireDarkMat);
+            post.position.set(0, (center.y - R) / 2, 0);
+            conductorGroup.add(post);
+            const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.08, 20), wireDarkMat);
+            foot.position.y = 0.04;
+            conductorGroup.add(foot);
+
+            const cp = [];
+            for (let i = 0; i <= 96; i++) {
+                const a = i / 96 * Math.PI * 2;
+                cp.push(new THREE.Vector3(Math.cos(a) * R, center.y + Math.sin(a) * R, 0));
+            }
+            flowCurve = new THREE.CatmullRomCurve3(cp, false, 'catmullrom', 0.5);
+
+            const pts = [];
+            for (let i = 0; i <= 72; i++) {
+                const a = i / 72 * Math.PI * 2;
+                pts.push(new THREE.Vector3(Math.cos(a) * R, center.y + Math.sin(a) * R, 0));
+            }
+            fieldSegs = segsFromPoints(pts);
+
+            for (let k = 0; k < 8; k++) {
+                const a = k * Math.PI / 4;
+                makeCompass(new THREE.Vector3(Math.cos(a) * 3.0, 0.12, Math.sin(a) * 3.0));
+            }
+            makeCompass(new THREE.Vector3(0, center.y, 0));
+            makeCompass(new THREE.Vector3(0, center.y, 2.3));
+            makeCompass(new THREE.Vector3(0, center.y, -2.3));
+
+        } else {
+            const R = 0.95, turns = 6, z0 = center.z - 2.5, z1 = center.z + 2.5;
+            const hp = helixPoints(R, turns, z0, z1, center, 30);
+            const curve = new THREE.CatmullRomCurve3(hp, false, 'catmullrom', 0.5);
+            const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 520, 0.05, 8, false), wireMat);
+            tube.castShadow = true;
+            conductorGroup.add(tube);
+
+            const endA = hp[0], endB = hp[hp.length - 1];
+            [-1, 1].forEach(sgn => {
+                const endP = sgn < 0 ? endA : endB;
+                // 받침 기둥
+                const postH = center.y - R - 0.04;
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, postH, 14), wireDarkMat);
+                post.position.set(0, postH / 2, center.z + sgn * 2.5);
+                conductorGroup.add(post);
+                const ft = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.07, 22), wireDarkMat);
+                ft.position.set(0, 0.035, center.z + sgn * 2.5);
+                conductorGroup.add(ft);
+                // 도선 끝 → 기둥 꼭대기 연결
+                const lead = new THREE.CatmullRomCurve3([
+                    endP.clone(),
+                    new THREE.Vector3(endP.x * 0.7, endP.y - 0.35, endP.z),
+                    new THREE.Vector3(0.1, postH, center.z + sgn * 2.5)
+                ]);
+                conductorGroup.add(new THREE.Mesh(new THREE.TubeGeometry(lead, 26, 0.042, 6, false), wireDarkMat));
+            });
+
+            flowCurve = curve;
+            fieldSegs = segsFromPoints(hp.map(p => p.clone()));
+
+            for (let i = -2; i <= 2; i++) makeCompass(new THREE.Vector3(0, center.y, center.z + i * 0.9));
+            makeCompass(new THREE.Vector3(0, center.y, center.z + 3.6));
+            makeCompass(new THREE.Vector3(0, center.y, center.z - 3.6));
+            makeCompass(new THREE.Vector3(2.4, 0.12, center.z));
+            makeCompass(new THREE.Vector3(-2.4, 0.12, center.z));
+        }
+
+        /* ---------- 전류 흐름 점 ---------- */
+        const dotCount = (m === 'coil') ? 18 : (m === 'loop' ? 14 : 10);
+        const dotGeo = new THREE.SphereGeometry(0.1, 12, 10);
+        for (let i = 0; i < dotCount; i++) {
+            const d = new THREE.Mesh(dotGeo, flowMat);
+            d.userData.phase = i / dotCount;
+            flowGroup.add(d);
+            flowDots.push(d);
+        }
+
+        /* ---------- 자기장선 ---------- */
+        if (m === 'straight') {
+            const radii = [0.62, 1.1, 1.7, 2.45, 3.3];
+            const heights = [0.55, 1.9, 3.25, 4.6];
+            radii.forEach(r => heights.forEach(hh => {
+                addFieldLine(new THREE.Vector3(r, hh, 0), { steps: 340, h: 0.09, radius: 0.014, arrows: 3 });
+            }));
+        } else if (m === 'loop') {
+            const R = 1.7;
+            const seeds = [0.78, 1.02, 1.26];
+            for (let rot = 0; rot < 3; rot++) {
+                const a = rot * Math.PI / 3;
+                seeds.forEach(r => addLoopOval(a, r, R, center.y, center.z));
+            }
+            const bcL = fieldVec(center.x, center.y, center.z, 1);
+            buildAxisArrow(center, bcL.z >= 0 ? 1 : -1, 2.6);
+        } else {
+            const R = 0.95, halfL = 2.5;
+            const seeds = [0.14, 0.5, 0.82];
+            for (let rot = 0; rot < 4; rot++) {
+                const a = rot * Math.PI / 4;
+                seeds.forEach(r => addSolenoidLoop(a, r, R, halfL, center.y, center.z));
+            }
+            const bcC = fieldVec(center.x, center.y, center.z, 1);
+            buildAxisArrow(center, bcC.z >= 0 ? 1 : -1, 3.0);
+        }
+
+        orientArrows();
+
+        /* ---------- N/S 극 라벨 ---------- */
+        if (m !== 'straight') {
+            const bc = fieldVec(center.x, center.y, center.z, 1);
+            const zSign = bc.z >= 0 ? 1 : -1;
+            const dist = (m === 'loop') ? 3.25 : 3.6;
+            const nLab = makeLabel('N극', '#ff3b30', 0.95, 'rgba(255,255,255,0.85)');
+            const sLab = makeLabel('S극', '#2f7dff', 0.95, 'rgba(255,255,255,0.85)');
+            nLab.position.set(0, center.y, zSign * dist);
+            sLab.position.set(0, center.y, -zSign * dist);
+            labelGroup.add(nLab);
+            labelGroup.add(sLab);
+            poleLabels = [nLab, sLab];
+        }
+
+        buildHand();
+        updateFieldVisibility();
+        compassGroup.visible = state.showCompass;
+        flowGroup.visible = state.on;
+    }
+
+    /* ============================================================
+       오른손 모델
+       ============================================================ */
+    function buildHand() {
+        const holder = new THREE.Group();
+        handPivot = new THREE.Group();
+        holder.add(handPivot);
+
+        const GR = 0.6;
+        const g = new THREE.Group();
+
+        // 손바닥 (원통 껍질)
+        // 손바닥 (납작한 타원체)
+        const palmA = THREE.MathUtils.degToRad(206);
+        const palmG = new THREE.Group();
+        palmG.rotation.y = -palmA;
+        const palm = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 16), skinMat);
+        palm.scale.set(0.3, 0.62, 0.54);
+        palm.position.set(GR + 0.02, 0.0, 0);
+        palmG.add(palm);
+        // 손등 살
+        const palmBack = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), skinMat);
+        palmBack.scale.set(0.26, 0.5, 0.46);
+        palmBack.position.set(GR + 0.28, 0.02, 0);
+        palmG.add(palmBack);
+        // 손목
+        const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.3, 0.55, 16), skinMat);
+        wrist.position.set(GR + 0.14, -0.78, 0);
+        palmG.add(wrist);
+        g.add(palmG);
+
+        // 손가락 4개 (φ 감소 방향으로 감김)
+        const fingerYs = [0.42, 0.15, -0.12, -0.39];
+        const fingerEnd = [58, 50, 44, 40];
+        const fingerR = [GR + 0.03, GR + 0.05, GR + 0.04, GR + 0.02];
+        fingerYs.forEach((yy, i) => {
+            const start = THREE.MathUtils.degToRad(184 - i * 2);
+            const end = THREE.MathUtils.degToRad(fingerEnd[i]);
+            const pts = [];
+            const steps = 14;
+            for (let k = 0; k <= steps; k++) {
+                const a = start + (end - start) * (k / steps);
+                const rr = fingerR[i] * (1 - 0.06 * (k / steps));
+                pts.push(new THREE.Vector3(Math.cos(a) * rr, yy - 0.03 * (k / steps), Math.sin(a) * rr));
+            }
+            const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.5);
+            g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.068 - i * 0.005, 8, false), fingerMat));
+            const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.075 - i * 0.004, 10, 8), fingerMat);
+            knuckle.position.copy(pts[0]);
+            g.add(knuckle);
+            const tip = new THREE.Mesh(new THREE.SphereGeometry(0.062 - i * 0.005, 10, 8), fingerMat);
+            tip.position.copy(pts[pts.length - 1]);
+            g.add(tip);
+        });
+
+        // 엄지 (+Y 방향)
+        const thumbStart = new THREE.Vector3(
+            Math.cos(THREE.MathUtils.degToRad(212)) * (GR + 0.06), -0.42,
+            Math.sin(THREE.MathUtils.degToRad(212)) * (GR + 0.06)
+        );
+        const thumbEnd = new THREE.Vector3(
+            Math.cos(THREE.MathUtils.degToRad(226)) * (GR + 0.34), 0.78,
+            Math.sin(THREE.MathUtils.degToRad(226)) * (GR + 0.34)
+        );
+        const thumbCurve = new THREE.CatmullRomCurve3([
+            thumbStart,
+            thumbStart.clone().lerp(thumbEnd, 0.45),
+            thumbEnd
+        ]);
+        g.add(new THREE.Mesh(new THREE.TubeGeometry(thumbCurve, 20, 0.095, 8, false), fingerMat));
+        const thumbTip = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 8), fingerMat);
+        thumbTip.position.copy(thumbEnd);
+        g.add(thumbTip);
+
+        handPivot.add(g);
+
+        // 엄지 방향 화살표 (빨강)
+        const tDir = thumbEnd.clone().normalize();
+        const redMat = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+        const tHead = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 12), redMat);
+        tHead.position.copy(thumbEnd.clone().addScaledVector(tDir, 0.3));
+        tHead.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tDir);
+        handPivot.add(tHead);
+        const tShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.36, 8), redMat);
+        tShaft.position.copy(thumbEnd.clone().addScaledVector(tDir, 0.02));
+        tShaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tDir);
+        handPivot.add(tShaft);
+
+        // 손가락 감김 화살표 (파랑)
+        const arcPts = [];
+        for (let k = 0; k <= 24; k++) {
+            const a = THREE.MathUtils.degToRad(170 - k * 6.4);
+            arcPts.push(new THREE.Vector3(Math.cos(a) * (GR + 0.34), 0.02, Math.sin(a) * (GR + 0.34)));
+        }
+        const arcCurve = new THREE.CatmullRomCurve3(arcPts);
+        const blueMat = new THREE.MeshBasicMaterial({ color: 0x0a84ff });
+        handPivot.add(new THREE.Mesh(new THREE.TubeGeometry(arcCurve, 40, 0.022, 6, false), blueMat));
+        const arcEnd = arcCurve.getPointAt(1);
+        const arcTan = arcCurve.getTangentAt(1).normalize();
+        const arcHead = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 10), blueMat);
+        arcHead.position.copy(arcEnd.clone().addScaledVector(arcTan, 0.09));
+        arcHead.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), arcTan);
+        handPivot.add(arcHead);
+
+        // 라벨
+        const thumbLabel = makeLabel(state.mode === 'straight' ? '엄지 = 전류' : '엄지 = N극', '#ff3b30', 0.72, 'rgba(255,255,255,0.92)');
+        thumbLabel.position.copy(thumbEnd.clone().addScaledVector(tDir, 0.55));
+        handPivot.add(thumbLabel);
+
+        const fingLabel = makeLabel(state.mode === 'straight' ? '손가락 = 자기장' : '손가락 = 전류', '#0a84ff', 0.72, 'rgba(255,255,255,0.92)');
+        fingLabel.position.copy(arcEnd.clone().addScaledVector(arcTan, 0.45));
+        handPivot.add(fingLabel);
+
+        handLabelSprites = [thumbLabel, fingLabel];
+        handMeshes = [];
+        handPivot.traverse(o => { if (o.isMesh) handMeshes.push(o); });
+
+        handHolder.add(holder);
+        handHolder.userData.holder = holder;
+        handHolder.userData.pivot = handPivot;
+        holder.visible = state.handOn;
+        handHolder.visible = true;
+        updateHandTransform();
+    }
+
+    function handAxisAfterBase() {
+        return (state.mode === 'straight') ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
+    }
+
+    function handThumbDir() {
+        if (state.mode === 'straight') return new THREE.Vector3(0, state.dir, 0);
+        const c = CENTER[state.mode];
+        const b = fieldVec(c.x, c.y, c.z, state.dir);
+        if (b.length() < 1e-9) return new THREE.Vector3(0, 0, 1);
+        return b.normalize();
+    }
+
+    function handWorldPos() {
+        const m = state.mode;
+        if (m === 'straight') return new THREE.Vector3(0, THREE.MathUtils.lerp(cfg.handMin, cfg.handMax, state.handT), 0);
+        return new THREE.Vector3(0, CENTER[m].y, THREE.MathUtils.lerp(cfg.handMin, cfg.handMax, state.handT));
+    }
+
+    function updateHandTransform() {
+        if (!handPivot || !handHolder.userData.holder) return;
+        const holder = handHolder.userData.holder;
+        const pos = handWorldPos();
+        holder.position.copy(pos);
+
+        const base = (state.mode === 'straight') ? 0 : Math.PI / 2;
+        const thumb = handThumbDir();
+        const flip = (thumb.dot(handAxisAfterBase()) < 0) ? Math.PI : 0;
+        handPivot.rotation.set(base + flip, 0, 0);
+        const hs = cfg ? cfg.handScale : 1;
+        handPivot.scale.setScalar(hs);
+        handLabelSprites.forEach(sp => {
+            if (sp && sp.userData.baseScale) sp.scale.copy(sp.userData.baseScale).multiplyScalar(1 / hs);
+        });
+
+        const lbl = document.getElementById('lbl-hand');
+        if (lbl) {
+            lbl.textContent = (state.mode === 'straight')
+                ? pos.y.toFixed(1)
+                : (pos.z >= 0 ? '+' : '') + pos.z.toFixed(1);
+        }
+        const vh = document.getElementById('val-hand');
+        if (vh) {
+            vh.textContent = (state.mode === 'straight')
+                ? ('높이 ' + pos.y.toFixed(1))
+                : ('축 ' + (pos.z >= 0 ? '+' : '') + pos.z.toFixed(1));
+        }
+    }
+
+    /* ============================================================
+       전류 흐름 / 표시
+       ============================================================ */
+    let flowPhase = 0;
+    function updateFlow(dt) {
+        if (!flowCurve || !flowDots.length) return;
+        flowGroup.visible = state.on;
+        if (!state.on) return;
+        const speed = 0.05 + state.current * 0.05;
+        flowPhase = (flowPhase + dt * speed * state.dir + 1) % 1;
+        flowDots.forEach(d => {
+            let t = (d.userData.phase + flowPhase) % 1;
+            if (t < 0) t += 1;
+            if (state.dir < 0) t = 1 - t;
+            const p = flowCurve.getPoint(t);
+            d.position.copy(p);
+            d.scale.setScalar(0.85 + state.current * 0.06);
+        });
+    }
+
+    function updateFieldVisibility() {
+        fieldGroup.visible = state.showField && state.on;
+    }
+
+    function updateReadouts() {
+        const vc = document.getElementById('val-current');
+        if (vc) {
+            vc.textContent = (state.on ? state.current.toFixed(1) : '0.0') + ' A';
+            vc.style.color = state.on ? '#ff9500' : '#8e8e93';
+        }
+        const vf = document.getElementById('val-field');
+        if (vf) {
+            const ref = (state.mode === 'straight')
+                ? fieldVec(1.0, 2.4, 0, 1)
+                : fieldVec(CENTER[state.mode].x, CENTER[state.mode].y, CENTER[state.mode].z, 1);
+            const val = ref.length() * state.current * (state.on ? 1 : 0);
+            vf.textContent = val.toFixed(1);
+        }
+        const lc = document.getElementById('lbl-current');
+        if (lc) lc.textContent = state.current.toFixed(1) + ' A';
+    }
+
+    /* ============================================================
+       손 끌기
+       ============================================================ */
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let dragging = false;
+
+    function setPointer(e) {
+        const r = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    }
+
+    function axisLine() {
+        if (state.mode === 'straight') {
+            return { p0: new THREE.Vector3(0, cfg.handMin, 0), dir: new THREE.Vector3(0, 1, 0) };
+        }
+        const y = (state.mode === 'straight') ? 2.0 : CENTER[state.mode].y;
+        return { p0: new THREE.Vector3(0, y, cfg.handMin), dir: new THREE.Vector3(0, 0, 1) };
+    }
+
+    function closestParam(ray, p0, dir) {
+        const w0 = new THREE.Vector3().subVectors(p0, ray.origin);
+        const a = dir.dot(dir), b = dir.dot(ray.direction), c = ray.direction.dot(ray.direction);
+        const d = dir.dot(w0), e = ray.direction.dot(w0);
+        const den = a * c - b * b;
+        if (Math.abs(den) < 1e-6) return null;
+        return (b * e - c * d) / den;
+    }
+
+    renderer.domElement.addEventListener('pointerdown', e => {
+        if (!state.handOn) return;
+        setPointer(e);
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(handMeshes, false);
+        if (hits.length) {
+            dragging = true;
+            controls.enabled = false;
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
+
+    renderer.domElement.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        setPointer(e);
+        raycaster.setFromCamera(pointer, camera);
+        const { p0, dir } = axisLine();
+        const t = closestParam(raycaster.ray, p0, dir);
+        if (t === null) return;
+        const min = cfg.handMin, max = cfg.handMax;
+        const v = Math.max(min, Math.min(max, t));
+        state.handT = (v - min) / (max - min);
+        const rng = document.getElementById('rng-hand');
+        if (rng) rng.value = state.handT;
+        updateHandTransform();
+        e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('pointerup', () => {
+        if (dragging) { dragging = false; controls.enabled = true; }
+    });
+
+    /* ============================================================
+       UI
+       ============================================================ */
+    const panelSettings = document.getElementById('panel-settings');
+    const panelHand = document.getElementById('panel-hand');
+    const btnOpenSettings = document.getElementById('btn-open-settings');
+    const btnOpenHand = document.getElementById('btn-open-hand');
+
+    function closePanels() {
+        panelSettings.classList.remove('show');
+        panelHand.classList.remove('show');
+        btnOpenSettings.classList.remove('active');
+        btnOpenHand.classList.remove('active');
+    }
+
+    btnOpenSettings.addEventListener('click', () => {
+        const on = panelSettings.classList.contains('show');
+        closePanels();
+        if (!on) { panelSettings.classList.add('show'); btnOpenSettings.classList.add('active'); }
+    });
+
+    btnOpenHand.addEventListener('click', () => {
+        const wasOpen = panelHand.classList.contains('show');
+        closePanels();
+        state.handOn = !wasOpen;
+        if (handHolder.userData.holder) handHolder.userData.holder.visible = state.handOn;
+        if (state.handOn) { panelHand.classList.add('show'); btnOpenHand.classList.add('active'); }
+        refreshHandUI();
+    });
+
+    function refreshHandUI() {
+        const ruleEl = document.getElementById('hand-rule');
+        if (ruleEl) ruleEl.innerHTML = cfg.rule;
+        const tipEl = document.getElementById('guide-tooltip');
+        if (tipEl) {
+            tipEl.textContent = state.handOn
+                ? '✋ 손을 잡고 축을 따라 움직여 보세요'
+                : cfg.tip;
+            tipEl.style.opacity = '1';
+        }
+    }
+
+    function setCameraPreset() {
+        const p = cfg.camPos, t = cfg.target;
+        camera.position.set(p[0], p[1], p[2]);
+        controls.target.set(t[0], t[1], t[2]);
+        controls.update();
+    }
+
+    document.querySelectorAll('[data-mode]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('[data-mode]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.mode = btn.dataset.mode;
+            state.handT = 0.5;
+            const rng = document.getElementById('rng-hand');
+            if (rng) rng.value = 0.5;
+            buildMode();
+            setCameraPreset();
+            refreshHandUI();
+            updateReadouts();
+            closePanels();
+        });
+    });
+
+    document.getElementById('btn-power').addEventListener('click', e => {
+        state.on = !state.on;
+        e.target.textContent = state.on ? '켜짐' : '꺼짐';
+        e.target.classList.toggle('on', state.on);
+        updateFieldVisibility();
+        updateReadouts();
+    });
+
+    document.getElementById('btn-dir').addEventListener('click', () => {
+        state.dir *= -1;
+        orientArrows();
+        rebuildPoles();
+        updateHandTransform();
+        if (axisArrow) axisArrow.scale.z = -axisArrow.scale.z;
+    });
+
+    function rebuildPoles() {
+        if (state.mode === 'straight' || poleLabels.length !== 2) return;
+        const c = CENTER[state.mode];
+        const bc = fieldVec(c.x, c.y, c.z, state.dir);
+        const zSign = bc.z >= 0 ? 1 : -1;
+        const dist = (state.mode === 'loop') ? 3.25 : 3.6;
+        poleLabels[0].position.set(0, c.y, zSign * dist);
+        poleLabels[1].position.set(0, c.y, -zSign * dist);
+    }
+
+    document.getElementById('rng-current').addEventListener('input', e => {
+        state.current = parseFloat(e.target.value);
+        orientArrows();
+        updateReadouts();
+    });
+
+    document.getElementById('btn-field').addEventListener('click', e => {
+        state.showField = !state.showField;
+        e.target.textContent = state.showField ? '표시' : '숨김';
+        e.target.classList.toggle('on', state.showField);
+        updateFieldVisibility();
+    });
+
+    document.getElementById('btn-compass').addEventListener('click', e => {
+        state.showCompass = !state.showCompass;
+        e.target.textContent = state.showCompass ? '표시' : '숨김';
+        e.target.classList.toggle('on', state.showCompass);
+        compassGroup.visible = state.showCompass;
+    });
+
+    document.getElementById('rng-hand').addEventListener('input', e => {
+        state.handT = parseFloat(e.target.value);
+        updateHandTransform();
+    });
+
+    document.getElementById('btn-align').addEventListener('click', () => setCameraPreset());
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        state.current = 2.0;
+        state.dir = 1;
+        state.on = true;
+        state.showField = true;
+        state.showCompass = true;
+        state.handT = 0.5;
+        document.getElementById('rng-current').value = 2.0;
+        document.getElementById('rng-hand').value = 0.5;
+        document.getElementById('btn-power').textContent = '켜짐';
+        document.getElementById('btn-power').classList.add('on');
+        document.getElementById('btn-field').textContent = '표시';
+        document.getElementById('btn-field').classList.add('on');
+        document.getElementById('btn-compass').textContent = '표시';
+        document.getElementById('btn-compass').classList.add('on');
+        buildMode();
+        setCameraPreset();
+        updateReadouts();
+        refreshHandUI();
+    });
+
+    const themeBtn = document.getElementById('theme-toggle');
+    themeBtn.addEventListener('click', () => {
+        state.dark = !state.dark;
+        document.body.classList.toggle('dark-mode', state.dark);
+        themeBtn.textContent = state.dark ? '☀️' : '🌙';
+        scene.background.set(state.dark ? 0x10151d : 0xeaf1f7);
+        boardMat.color.set(state.dark ? 0x1a2029 : 0xffffff);
+        hemi.intensity = state.dark ? 0.45 : 1.0;
+        sun.intensity = state.dark ? 0.55 : 0.85;
+        fill.intensity = state.dark ? 0.2 : 0.35;
+        fieldMat.color.set(state.dark ? 0x59b6ff : 0x2b8cff);
+        fieldMat.opacity = state.dark ? 0.62 : 0.55;
+    });
+
+    /* ============================================================
+       렌더 루프
+       ============================================================ */
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        updateFlow(dt);
+        updateCompasses(dt);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    /* ---------------- 시작 ---------------- */
+    function startApp() {
+        buildMode();
+        setCameraPreset();
+        refreshHandUI();
+        updateReadouts();
+        animate();
+    }
+
+    if (document.fonts && document.fonts.load) {
+        Promise.race([
+            document.fonts.load("bold 76px 'SeoulNamsan'"),
+            new Promise(r => setTimeout(r, 900))
+        ]).then(startApp).catch(startApp);
+    } else {
+        startApp();
+    }
+    </script>
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+</body>
+</html>
