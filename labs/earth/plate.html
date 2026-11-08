@@ -567,8 +567,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         <input type="range" id="sld-dist" min="10" max="120" step="5" value="60">
     </div>
     <div class="slider-row">
-        <div class="slider-header"><span>단층 이동량 (과장)</span><span id="txt-slip">3.0</span></div>
-        <input type="range" id="sld-slip" min="0" max="6" step="0.5" value="3">
+        <div class="slider-header"><span>단층 이동량 (과장)</span><span id="txt-slip">1.2</span></div>
+        <input type="range" id="sld-slip" min="0" max="4" step="0.2" value="1.2">
     </div>
     <div class="slider-row">
         <div class="slider-header"><span>재생 속도</span><span id="txt-speed">×2</span></div>
@@ -649,7 +649,7 @@ const $ = function (id) { return document.getElementById(id); };
 
 const KM = 0.5;                 // 1 km = 0.5 world unit
 const VP = 6.0, VS = 3.5;       // 지각 내 지진파 속도 (km/s)
-const LAM = 22;                 // 파장(km)
+const LAM = 30;                 // 파장(km)
 const A0 = 5.0;                 // 진폭(km, 교육용 과장)
 const DIP = 60 * Math.PI / 180; // 단층면 경사
 
@@ -675,7 +675,7 @@ const FAULTS = {
 };
 
 const state = {
-    fault: 'normal', depth: 12, dist: 60, slipTarget: 3,
+    fault: 'normal', depth: 12, dist: 60, slipTarget: 1.2,
     slip: 0, t: 0, running: false, speed: 2, quake: false
 };
 
@@ -764,14 +764,16 @@ for (let i = 0; i < N_BAND; i++) {
     const mH = new THREE.Mesh(gH, matH);
     hanging.add(mH);
 
-    // 층 경계선
-    const linePts = i === N_BAND - 1
-        ? [[-60, yBot, 15], [-60, yBot, -15], [60, yBot, -15], [60, yBot, 15]]
-        : [[-60, yBot, 15], [60, yBot, 15]];
+    // 층 경계선 (각 지괴에 붙여 함께 움직이게)
     if (i < N_BAND - 1) {
-        const lg = new THREE.BufferGeometry().setFromPoints(linePts.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2] + 0.02); }));
-        const ln = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0x4c4038, transparent: true, opacity: 0.28 }));
-        scene.add(ln);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x4c4038, transparent: true, opacity: 0.26 });
+        [[-60, 0, footwall], [0, 60, hanging]].forEach(function (seg) {
+            const lg = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(seg[0], yBot, 15.02),
+                new THREE.Vector3(seg[1], yBot, 15.02)
+            ]);
+            seg[2].add(new THREE.Line(lg, lineMat));
+        });
     }
 }
 
@@ -1039,8 +1041,8 @@ function updateWaves(t) {
         const r = Math.sqrt(dx * dx + dy * dy + dz * dz) || 0.001;
 
         const fP = r - rp, fS = r - rs;
-        const envP = Math.exp(-(fP * fP) / (13 * 13));
-        const envS = Math.exp(-(fS * fS) / (12 * 12));
+        const envP = Math.exp(-(fP * fP) / (17 * 17));
+        const envS = Math.exp(-(fS * fS) / (16 * 16));
         const decay = Math.pow(15 / Math.max(r, 15), 0.62);
         const aP = A0 * decay * envP * Math.sin(2 * Math.PI * fP / LAM);
         const aS = A0 * decay * envS * Math.sin(2 * Math.PI * fS / LAM);
