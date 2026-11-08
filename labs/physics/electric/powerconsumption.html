@@ -1,0 +1,2145 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>전기에너지와 소비전력 3D</title>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+    @font-face {
+        font-family: 'SeoulNamsan';
+        src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+             url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+        font-weight: 400; font-style: normal; font-display: swap;
+    }
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+    body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(120% 100% at 50% 8%, #ffffff 0%, #eef2f8 45%, #e0e7f0 100%);
+        color: #1c1c1e;
+        touch-action: none;
+        transition: background-color .35s ease, color .35s ease;
+    }
+    body.dark-mode { background: radial-gradient(120% 100% at 50% 8%, #1b2333 0%, #0d131d 55%, #070a11 100%); color: #f2f5fa; }
+
+    #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
+    #canvas-container canvas { display: block; }
+
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.74);
+        backdrop-filter: blur(22px) saturate(180%);
+        -webkit-backdrop-filter: blur(22px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(16, 32, 64, 0.10);
+        z-index: 10;
+    }
+    body.dark-mode .glass-panel {
+        background: rgba(20, 26, 38, 0.76);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        color: #eef3fa;
+    }
+
+    .top-left-bar { position: absolute; top: 18px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+    .back-btn {
+        display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+        font-size: 14px; font-weight: bold; color: #1c1c1e; text-decoration: none;
+        cursor: pointer; transition: all .2s ease;
+    }
+    body.dark-mode .back-btn { color: #eaf1ff; }
+    button.back-btn { font-family: inherit; border: none; }
+
+    .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+    .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; white-space: nowrap; }
+    .vision-badge {
+        background: rgba(10, 132, 255, 0.16); color: #0a7cff;
+        padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; letter-spacing: .2px;
+    }
+    body.dark-mode .vision-badge { background: rgba(10, 132, 255, 0.28); color: #7cc0ff; }
+
+    .top-right-bar { position: absolute; top: 18px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+    .data-card { display: flex; align-items: center; gap: 16px; padding: 9px 18px; }
+    .data-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .data-label { font-size: 11px; color: #77808f; font-weight: bold; }
+    body.dark-mode .data-label { color: #9aa8bd; }
+    .data-value { font-size: 15px; font-weight: bold; white-space: nowrap; }
+    .icon-btn {
+        width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; cursor: pointer; border: none; font-family: inherit;
+        background: rgba(255, 255, 255, 0.78); color: #1c1c1e; font-size: 16px;
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); transition: all .2s;
+    }
+    body.dark-mode .icon-btn { background: rgba(30, 40, 60, 0.8); color: #eaf1ff; }
+
+    .center-tooltip {
+        position: absolute; top: 9%; left: 50%; transform: translateX(-50%);
+        padding: 8px 18px; font-size: 13px; font-weight: bold; color: #4b5563;
+        border-radius: 30px; pointer-events: none; z-index: 5;
+        transition: opacity .45s ease; white-space: nowrap; max-width: 92vw;
+    }
+    body.dark-mode .center-tooltip { color: #cfdcf0; }
+
+    /* ---------- 서브 패널 ---------- */
+    .sub-panel {
+        position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%);
+        padding: 14px 14px; width: 320px;
+        display: none; flex-direction: column; gap: 10px; z-index: 11;
+    }
+    .sub-panel.show { display: flex; }
+    .sub-panel > * { flex: 0 0 auto; }
+    .panel-title {
+        font-size: 11.5px; font-weight: bold; color: #0a7cff; letter-spacing: .2px;
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    }
+    body.dark-mode .panel-title { color: #7cc0ff; }
+    .panel-note { font-size: 10.5px; line-height: 1.55; color: #6b7280; font-weight: bold; word-break: keep-all; }
+    body.dark-mode .panel-note { color: #8fa0ba; }
+    .control-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; }
+    .preset-btn {
+        display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+        padding: 8px 12px; border-radius: 11px; border: 1px solid rgba(0, 0, 0, 0.07);
+        background: rgba(255, 255, 255, 0.9); color: #1c1c1e;
+        font-family: inherit; font-size: 12px; font-weight: bold; cursor: pointer; transition: all .2s;
+    }
+    body.dark-mode .preset-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); color: #e6edf9; }
+    .preset-btn:hover { border-color: #0a84ff; }
+
+    .slider-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; color: #77808f; }
+    body.dark-mode .slider-header { color: #9aa8bd; }
+    input[type="range"] { width: 100%; height: 22px; accent-color: #0a84ff; cursor: pointer; margin: 0; }
+    .val-strong { color: #0a84ff; }
+    body.dark-mode .val-strong { color: #7cc0ff; }
+
+    .state-pill {
+        padding: 3px 9px; border-radius: 9px; font-size: 10px; font-weight: bold;
+        background: rgba(48, 209, 88, 0.16); color: #1f9d47;
+    }
+    body.dark-mode .state-pill { background: rgba(48, 209, 88, 0.22); color: #6ee39a; }
+    .state-pill.idle { background: rgba(140, 150, 165, 0.18); color: #6b7482; }
+    body.dark-mode .state-pill.idle { background: rgba(160, 175, 195, 0.2); color: #a9b8cc; }
+
+    /* ---------- 가전 패널 ---------- */
+    #panel-apps {
+        left: 20px; right: auto; top: 50%; bottom: auto; transform: translateY(-50%);
+        width: 268px; max-height: calc(100vh - 180px); gap: 8px; padding: 14px 12px;
+    }
+    #app-count { font-size: 10px; color: #8a93a3; font-weight: bold; }
+    body.dark-mode #app-count { color: #93a1b5; }
+    .chip-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .chip {
+        padding: 5px 2px; border-radius: 9px; border: 1px solid rgba(0, 0, 0, 0.07);
+        background: rgba(255, 255, 255, 0.75); color: #3a4250;
+        font-family: inherit; font-size: 10.5px; font-weight: bold; cursor: pointer; transition: all .18s;
+        white-space: nowrap;
+    }
+    body.dark-mode .chip { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.13); color: #e6edf9; }
+    .chip.on { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+    .app-list {
+        display: flex; flex-direction: column; gap: 4px; overflow-y: auto;
+        -webkit-overflow-scrolling: touch; padding-right: 2px; min-height: 0;
+    }
+    .app-list::-webkit-scrollbar { width: 4px; }
+    .app-list::-webkit-scrollbar-thumb { background: rgba(120, 135, 155, .35); border-radius: 3px; }
+    .app-row {
+        display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px 8px;
+        border-radius: 12px; border: 1px solid transparent; background: rgba(255, 255, 255, 0.55);
+        font-family: inherit; cursor: pointer; text-align: left; transition: all .16s; color: inherit;
+    }
+    body.dark-mode .app-row { background: rgba(255, 255, 255, 0.06); }
+    .app-row:hover { background: rgba(255, 255, 255, 0.92); }
+    body.dark-mode .app-row:hover { background: rgba(255, 255, 255, 0.12); }
+    .app-row.sel { border-color: #0a84ff; background: rgba(10, 132, 255, 0.10); }
+    .app-row.on { background: rgba(48, 209, 88, 0.10); }
+    .app-row.on.sel { border-color: #0a84ff; }
+    .app-row.dim { opacity: .34; }
+    .app-ico { font-size: 15px; width: 20px; text-align: center; flex: 0 0 auto; }
+    .app-txt { display: flex; flex-direction: column; gap: 0; flex: 1 1 auto; min-width: 0; }
+    .app-name { font-size: 11.5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-row.on .app-name { color: #12873f; }
+    body.dark-mode .app-row.on .app-name { color: #6ee39a; }
+    .app-sub { font-size: 9.5px; color: #8a93a3; font-weight: bold; white-space: nowrap; }
+    body.dark-mode .app-sub { color: #93a1b5; }
+    .app-dots { display: flex; gap: 2px; flex: 0 0 auto; }
+    .app-dots i { display: block; width: 5px; height: 5px; border-radius: 50%; }
+    .app-sw {
+        width: 28px; height: 16px; border-radius: 9px; background: rgba(120, 130, 145, .32);
+        position: relative; flex: 0 0 auto; transition: background .2s;
+    }
+    .app-sw::after {
+        content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+        border-radius: 50%; background: #fff; transition: left .2s; box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+    }
+    .app-row.on .app-sw { background: #30d158; }
+    .app-row.on .app-sw::after { left: 14px; }
+
+    /* ---------- 전력량계 패널 ---------- */
+    #panel-meter {
+        right: 20px; left: auto; top: 50%; bottom: auto; transform: translateY(-50%);
+        width: 322px; max-height: calc(100vh - 180px); gap: 8px; padding: 14px 14px;
+    }
+    .meter-box {
+        background: linear-gradient(160deg, #22303f 0%, #101a26 70%);
+        border-radius: 14px; padding: 10px 12px 9px; position: relative; overflow: hidden;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+    }
+    .lcd { display: flex; align-items: baseline; gap: 5px; }
+    .lcd-num {
+        font-size: 27px; font-weight: bold; letter-spacing: 1.5px; line-height: 1.1;
+        color: #7df5c1; text-shadow: 0 0 14px rgba(125, 245, 193, .55);
+        font-variant-numeric: tabular-nums;
+    }
+    .lcd-unit { font-size: 11px; font-weight: bold; color: rgba(125, 245, 193, .8); }
+    .meter-foot {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-top: 3px; font-size: 9.5px; font-weight: bold; color: #93a9bf;
+    }
+    .meter-io { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .disc {
+        width: 22px; height: 22px; border-radius: 50%; position: relative;
+        background: radial-gradient(circle at 35% 30%, #5b7089, #1b2836 72%);
+        border: 1px solid rgba(255, 255, 255, .2); flex: 0 0 auto;
+    }
+    .disc::after {
+        content: ''; position: absolute; left: 50%; top: 2px; width: 2px; height: 8px;
+        margin-left: -1px; background: #ffd60a; border-radius: 1px;
+    }
+    .led {
+        width: 9px; height: 9px; border-radius: 50%; background: #ff453a; opacity: .22;
+        flex: 0 0 auto; transition: opacity .2s;
+    }
+    .led.on { animation: ledBlink 1.2s infinite; }
+    @keyframes ledBlink {
+        0%, 100% { opacity: .15; box-shadow: none; }
+        50% { opacity: 1; box-shadow: 0 0 10px rgba(255, 69, 58, .9); }
+    }
+    .meter-tag { font-size: 9px; font-weight: bold; color: #7b8ea3; margin-left: auto; }
+
+    .tier-wrap { display: flex; flex-direction: column; gap: 3px; }
+    .tier-bar { position: relative; height: 10px; margin-top: 2px; }
+    .tier-segs { display: flex; height: 10px; border-radius: 5px; overflow: hidden; }
+    .tier-segs > div { height: 100%; }
+    .tier-marker {
+        position: absolute; top: -4px; width: 3px; height: 18px; border-radius: 2px;
+        background: #0a84ff; box-shadow: 0 0 0 2px rgba(255, 255, 255, .85); transition: left .25s ease;
+    }
+    body.dark-mode .tier-marker { box-shadow: 0 0 0 2px rgba(15, 20, 30, .9); }
+    .tier-scale { display: flex; justify-content: space-between; font-size: 8.5px; font-weight: bold; color: #98a2b3; }
+    body.dark-mode .tier-scale { color: #8d9cb0; }
+    .tier-label { font-size: 10px; font-weight: bold; color: #4b5563; }
+    body.dark-mode .tier-label { color: #a9b8cc; }
+
+    .bill-rows { display: flex; flex-direction: column; gap: 2px; }
+    .bill-row {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 11px; font-weight: bold; color: #6b7280; padding: 1px 0;
+    }
+    body.dark-mode .bill-row { color: #9aa8bd; }
+    .bill-row span:last-child { color: #2c3440; font-variant-numeric: tabular-nums; }
+    body.dark-mode .bill-row span:last-child { color: #e6edf9; }
+    .bill-row.total {
+        margin-top: 3px; padding-top: 6px; border-top: 1px dashed rgba(120, 135, 155, .32);
+        font-size: 13px; color: #1c1c1e;
+    }
+    body.dark-mode .bill-row.total { color: #f2f5fa; }
+    .bill-row.total span:last-child { font-size: 16px; color: #0a84ff; }
+    body.dark-mode .bill-row.total span:last-child { color: #7cc0ff; }
+
+    .tip-box {
+        background: rgba(10, 132, 255, 0.08); border: 1px solid rgba(10, 132, 255, 0.16);
+        border-radius: 11px; padding: 7px 9px; font-size: 10px; line-height: 1.55;
+        font-weight: bold; color: #3d5a80; word-break: keep-all;
+    }
+    body.dark-mode .tip-box { background: rgba(10, 132, 255, 0.14); border-color: rgba(10, 132, 255, 0.24); color: #b9d4f5; }
+
+    /* ---------- 가전 상세 패널 ---------- */
+    #panel-detail { width: 384px; bottom: 92px; gap: 9px; }
+    #detail-title { font-size: 13px; color: #1c1c1e; display: flex; align-items: center; gap: 6px; }
+    body.dark-mode #detail-title { color: #f2f5fa; }
+    .mini-close {
+        border: none; background: rgba(0, 0, 0, 0.06); width: 22px; height: 22px; border-radius: 50%;
+        font-size: 11px; cursor: pointer; font-family: inherit; color: inherit; flex: 0 0 auto;
+    }
+    body.dark-mode .mini-close { background: rgba(255, 255, 255, 0.12); }
+    .detail-meta { font-size: 10.5px; font-weight: bold; color: #8a93a3; margin-top: -4px; }
+    body.dark-mode .detail-meta { color: #93a1b5; }
+    .conv-line { font-size: 11.5px; font-weight: bold; color: #4b5563; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+    body.dark-mode .conv-line { color: #c9d4e4; }
+    .badge {
+        display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 8px;
+        font-size: 10px; font-weight: bold; color: #fff;
+    }
+    .calc-grid { display: flex; flex-direction: column; gap: 5px; }
+    .calc-item {
+        display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px;
+        background: rgba(255, 255, 255, 0.62); border: 1px solid rgba(0, 0, 0, 0.05);
+        border-radius: 11px; padding: 6px 9px;
+    }
+    body.dark-mode .calc-item { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.1); }
+    .calc-item > span { font-size: 10px; font-weight: bold; color: #78828f; flex: 1 1 auto; }
+    body.dark-mode .calc-item > span { color: #9aa8bd; }
+    .calc-item > b { font-size: 13px; color: #0a84ff; font-variant-numeric: tabular-nums; }
+    body.dark-mode .calc-item > b { color: #7cc0ff; }
+    .calc-item > small { font-size: 9.5px; font-weight: bold; color: #98a2b3; flex: 0 0 100%; }
+    body.dark-mode .calc-item > small { color: #8d9cb0; }
+    .calc-note { font-size: 10.5px; font-weight: bold; color: #6b7280; line-height: 1.5; word-break: keep-all; }
+    body.dark-mode .calc-note { color: #9aa8bd; }
+    .calc-note b { color: #ff9f0a; }
+
+    /* ---------- 하단 컨트롤 바 ---------- */
+    .bottom-control-bar {
+        position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 4px; padding: 6px; z-index: 10;
+    }
+    .control-tab-btn {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 2px; padding: 7px 14px; min-width: 70px; border-radius: 14px; border: none;
+        background: transparent; color: #1c1c1e; font-size: 12px; font-weight: bold;
+        font-family: inherit; cursor: pointer; transition: all .2s; line-height: 1.2;
+    }
+    body.dark-mode .control-tab-btn { color: #e6edf9; }
+    .control-tab-btn span:first-child { font-size: 16px; line-height: 1.1; }
+    .control-tab-btn.active { background: #0a84ff; color: #fff; box-shadow: 0 4px 12px rgba(10, 132, 255, 0.32); }
+
+    .bottom-right-bar { position: absolute; bottom: 24px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+
+    /* ---------- 원리 모달 ---------- */
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(10, 16, 28, 0.42); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        display: none; align-items: center; justify-content: center; z-index: 60; padding: 20px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-card {
+        width: min(580px, 92vw); max-height: 84vh; overflow-y: auto;
+        padding: 20px 22px; display: flex; flex-direction: column; gap: 13px;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .modal-title { font-size: 16px; font-weight: bold; display: flex; flex-direction: column; gap: 4px; }
+    .modal-badge { font-size: 11px; color: #0a7cff; font-weight: bold; }
+    body.dark-mode .modal-badge { color: #7cc0ff; }
+    .modal-close-btn {
+        border: none; background: rgba(0, 0, 0, 0.06); width: 30px; height: 30px; border-radius: 50%;
+        font-size: 14px; cursor: pointer; font-family: inherit; color: inherit; flex: 0 0 auto;
+    }
+    body.dark-mode .modal-close-btn { background: rgba(255, 255, 255, 0.12); }
+    .modal-body { display: flex; flex-direction: column; gap: 9px; }
+    .example-item { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.82); border: 1px solid rgba(0, 0, 0, 0.06); }
+    body.dark-mode .example-item { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); }
+    .example-title { font-size: 12.5px; font-weight: bold; margin-bottom: 4px; }
+    .example-desc { font-size: 12.5px; line-height: 1.65; color: #404754; font-weight: bold; word-break: keep-all; }
+    body.dark-mode .example-desc { color: #c9d4e4; }
+    .example-desc b { color: #0a84ff; }
+    body.dark-mode .example-desc b { color: #7cc0ff; }
+    .conv-table { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin-top: 5px; font-size: 12px; font-weight: bold; color: #404754; }
+    body.dark-mode .conv-table { color: #c9d4e4; }
+    .conv-table .badge { justify-content: center; }
+
+/* @@MOBILE-BASE v1@@ *////* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+/* @@/MOBILE-BASE@@ */
+</style>
+<style>
+    /* ---- 페이지별 모바일 보정 ---- */
+    @media (max-width: 900px) {
+        #panel-apps, #panel-meter, #panel-detail {
+            top: auto !important; bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+            transform: none !important; left: 8px !important; right: 8px !important;
+            width: auto !important; max-height: 48vh !important;
+        }
+        #panel-apps .app-list { max-height: 28vh; }
+        .app-row { padding: 6px 7px !important; }
+        #panel-detail { gap: 7px !important; }
+        .lcd-num { font-size: 23px !important; }
+        .bill-row.total span:last-child { font-size: 15px !important; }
+        #panel-detail .calc-item > b { font-size: 12px !important; }
+    }
+    @media (max-width: 430px) {
+        .vision-badge { display: none !important; }
+        .app-dots { display: none; }
+    }
+    @media (max-width: 900px) and (min-width: 431px) {
+        #panel-apps { max-width: 320px !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; }
+        #panel-meter { max-width: 340px !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+        #panel-apps {
+            left: 8px !important; right: auto !important; top: 46px !important; bottom: auto !important;
+            transform: none !important; width: 214px !important; max-height: 58vh !important; padding: 8px 10px !important;
+        }
+        #panel-meter {
+            right: 8px !important; left: auto !important; top: 46px !important; bottom: auto !important;
+            transform: none !important; width: 232px !important; max-height: 62vh !important; padding: 8px 10px !important;
+        }
+        #panel-detail {
+            left: 50% !important; right: auto !important; bottom: 44px !important; top: auto !important;
+            transform: translateX(-50%) !important; width: min(360px, 52vw) !important; max-height: 60vh !important;
+        }
+        .app-list { max-height: 26vh !important; }
+        .chip-row { gap: 3px !important; }
+        .chip { font-size: 9px !important; padding: 4px 1px !important; }
+        .lcd-num { font-size: 20px !important; }
+        .tip-box { font-size: 8.5px !important; }
+        .bill-row { font-size: 9.5px !important; }
+        .meter-box { padding: 7px 9px !important; }
+    }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="/index.html" class="glass-panel back-btn"><span>⬅</span> 메인</a>
+    <div class="glass-panel tag-badge">
+        <span class="title-text title-capsule">전기에너지와 소비전력 3D</span>
+        <span class="vision-badge">visionOS</span>
+    </div>
+</div>
+
+<div class="top-right-bar">
+    <div class="glass-panel data-card">
+        <div class="data-item">
+            <span class="data-label">지금 소비전력</span>
+            <span class="data-value" id="val-power" style="color:#0a84ff;">3 W</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">하루 전력량</span>
+            <span class="data-value" id="val-day" style="color:#30d158;">0.02 kWh</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">한 달 예상 요금</span>
+            <span class="data-value" id="val-bill" style="color:#ff9f0a;">0원</span>
+        </div>
+    </div>
+    <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+</div>
+
+<div class="glass-panel center-tooltip" id="guide-tooltip">
+    🏠 가전제품을 눌러 전원을 켜 보세요 · 드래그로 집을 둘러볼 수 있어요
+</div>
+
+<!-- 가전 목록 패널 -->
+<div class="glass-panel sub-panel show" id="panel-apps">
+    <div class="panel-title">
+        <span>🏠 우리 집 가전</span>
+        <span id="app-count">0/11 켜짐</span>
+    </div>
+    <div class="chip-row" id="chip-row">
+        <button class="chip on" data-f="all">🏠 전체</button>
+        <button class="chip" data-f="heat">🔥 열</button>
+        <button class="chip" data-f="light">💡 빛</button>
+        <button class="chip" data-f="motion">🌀 운동</button>
+        <button class="chip" data-f="sound">🔊 소리</button>
+        <button class="chip" data-f="chem">🔋 화학</button>
+    </div>
+    <div class="app-list" id="app-list"></div>
+    <button class="preset-btn" id="btn-all-off">🌙 모두 끄기</button>
+</div>
+
+<!-- 전력량계 · 요금 패널 -->
+<div class="glass-panel sub-panel show" id="panel-meter">
+    <div class="panel-title">
+        <span>⚡ 전력량계 · 전기 요금</span>
+        <span class="state-pill idle" id="meter-state">대기 중</span>
+    </div>
+    <div class="meter-box">
+        <div class="lcd"><span class="lcd-num" id="lcd-kwh">0000.0</span><span class="lcd-unit">kWh</span></div>
+        <div class="meter-foot"><span>이번 달 누적 전력량 (30일)</span><span id="lcd-now">3 W</span></div>
+        <div class="meter-io">
+            <div class="disc" id="meter-disc"></div>
+            <div class="led" id="meter-led"></div>
+            <span class="meter-tag">전력을 쓸수록 빨리 돌아요</span>
+        </div>
+    </div>
+    <div class="tier-wrap">
+        <div class="tier-bar">
+            <div class="tier-segs">
+                <div style="flex:0 0 33.33%; background:rgba(48,209,88,.62);"></div>
+                <div style="flex:0 0 33.33%; background:rgba(255,159,10,.62);"></div>
+                <div style="flex:1 1 auto; background:rgba(255,69,58,.62);"></div>
+            </div>
+            <div class="tier-marker" id="tier-marker" style="left:0%;"></div>
+        </div>
+        <div class="tier-scale"><span>0</span><span>200</span><span>400</span><span>600+</span></div>
+        <div class="tier-label" id="tier-label">1단계 · 200 kWh 이하</div>
+    </div>
+    <div class="bill-rows">
+        <div class="bill-row"><span>기본요금</span><span id="bill-base">910원</span></div>
+        <div class="bill-row"><span>전력량요금</span><span id="bill-energy">0원</span></div>
+        <div class="bill-row"><span>기후환경요금</span><span id="bill-climate">0원</span></div>
+        <div class="bill-row"><span>부가세 (10%)</span><span id="bill-vat">0원</span></div>
+        <div class="bill-row total"><span>한 달 예상 요금</span><span id="bill-total">0원</span></div>
+    </div>
+    <div class="tip-box">
+        💡 1 Wh = 3,600 J · 1 kWh = 1,000 Wh = 3,600,000 J<br>
+        전력량(Wh) = 소비전력(W) × 사용 시간(h)
+    </div>
+    <div class="panel-note">주택용 저압 요금표(누진제)로 계산한 어림값이에요. 실제 고지서와는 조금 다를 수 있어요.</div>
+</div>
+
+<!-- 가전 상세 패널 -->
+<div class="glass-panel sub-panel" id="panel-detail">
+    <div class="panel-title">
+        <span id="detail-title">📺 텔레비전</span>
+        <button class="mini-close" id="detail-close">✕</button>
+    </div>
+    <div class="detail-meta" id="detail-meta">거실 · 100 W · 꺼짐</div>
+    <div class="conv-line" id="detail-conv"></div>
+    <div>
+        <div class="slider-header"><span>하루 사용 시간</span><span class="val-strong" id="detail-hours">4.0시간</span></div>
+        <input type="range" id="rng-hours" min="0" max="24" step="0.5" value="4">
+    </div>
+    <div class="calc-grid" id="detail-calc"></div>
+    <div class="calc-note" id="detail-saving"></div>
+</div>
+
+<!-- 원리 모달 -->
+<div class="modal-overlay" id="modal-overlay">
+    <div class="glass-panel modal-card">
+        <div class="modal-header">
+            <div class="modal-title">
+                <span>⚡ 전기에너지와 소비전력</span>
+                <span class="modal-badge">중학교 2학년 · 전기</span>
+            </div>
+            <button class="modal-close-btn" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="example-item">
+                <div class="example-title">1. 소비전력은 1초에 쓰는 전기에너지</div>
+                <div class="example-desc">가전제품에 적힌 <b>소비전력</b>은 그 제품이 <b>1초 동안 사용하는 전기에너지</b>예요. 단위는 W(와트)를 쓰고, <b>1 W = 1 J/s</b>예요. 텔레비전 100 W는 1초에 100 J의 전기에너지를 쓴다는 뜻이에요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">2. 전기에너지 E = P × t (J)</div>
+                <div class="example-desc">전기에너지는 소비전력에 시간(초)을 곱해 구해요. <b>E(J) = P(W) × t(s)</b><br>1800 W 전기주전자를 10분(600초) 사용하면 E = 1800 × 600 = <b>1,080,000 J</b>이에요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">3. 전력량은 시간 단위로 센 전기에너지</div>
+                <div class="example-desc">일상에서는 시간(h)을 곱한 <b>전력량</b>을 더 많이 써요. <b>W(Wh) = P(W) × t(h)</b><br>같은 주전자로 10분 = 1/6시간이니까 1800 × 1/6 = <b>300 Wh = 0.3 kWh</b>예요.<br><b>1 Wh = 3,600 J</b> (1시간은 3,600초니까요), <b>1 kWh = 1,000 Wh = 3,600,000 J</b>.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">4. 전기에너지는 다른 에너지로 전환돼요</div>
+                <div class="conv-table">
+                    <span class="badge" style="background:#ff453a;">🔥 열에너지</span><span>전기밥솥, 전기주전자, 전기다리미, 전기장판</span>
+                    <span class="badge" style="background:#30d158;">💡 빛에너지</span><span>조명, 텔레비전 화면, LED</span>
+                    <span class="badge" style="background:#0a84ff;">🌀 운동에너지</span><span>선풍기, 믹서기, 세탁기, 청소기</span>
+                    <span class="badge" style="background:#ff9f0a;">🔊 소리에너지</span><span>스피커, 텔레비전 소리</span>
+                    <span class="badge" style="background:#bf5af2;">🔋 화학에너지</span><span>배터리 충전기, 스마트폰 충전</span>
+                </div>
+                <div class="example-desc" style="margin-top:6px;">텔레비전은 <b>빛에너지와 소리에너지</b>를 함께 만들어요. 이렇게 하나의 가전이 여러 에너지로 전환하기도 해요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">5. 전기 요금은 누진제로 계산해요</div>
+                <div class="example-desc">우리 집 전기 요금은 <b>기본요금 + 전력량요금</b>에 기후환경요금과 부가세를 더해 정해져요. 전력량요금은 <b>200 kWh까지, 200~400 kWh, 400 kWh 초과</b> 구간마다 kWh당 값이 달라지는 <b>누진제</b>예요. 많이 쓸수록 뒤쪽 구간의 비싼 요금이 붙어서 요금이 빠르게 늘어나요.</div>
+            </div>
+            <div class="example-item">
+                <div class="example-title">6. 그래서 전기를 아껴 써요</div>
+                <div class="example-desc">소비전력이 큰 가전(전기주전자 1800 W, 전기밥솥 1455 W, 전기다리미 1200 W)은 <b>사용 시간을 짧게</b>, 오래 켜 두는 가전(조명, 텔레비전)은 <b>필요할 때만</b> 켜 두면 전력량이 크게 줄어요. 쓰지 않는 가전의 플러그를 뽑아 두는 것도 방법이에요.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="glass-panel bottom-control-bar">
+    <button class="control-tab-btn active" id="tab-apps"><span>🏠</span><span>가전</span></button>
+    <button class="control-tab-btn active" id="tab-meter"><span>⚡</span><span>요금</span></button>
+    <button class="control-tab-btn" id="tab-help"><span>📖</span><span>원리</span></button>
+</div>
+
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" class="glass-panel back-btn">
+        <span id="fullscreenIcon">⛶</span>
+        <span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<script>
+/* ============================================================
+   전기에너지와 소비전력 3D
+   - 3D 아이소메트릭 우리 집: 가전제품을 눌러 전원 ON/OFF
+   - 소비전력 → 전기에너지(J) · 전력량(Wh, kWh) · 누진제 요금
+   ============================================================ */
+
+/* ---------- 에너지 전환 종류 ---------- */
+const CONV = {
+    heat:   { name: '열에너지',   color: '#ff453a' },
+    light:  { name: '빛에너지',   color: '#30d158' },
+    motion: { name: '운동에너지', color: '#0a84ff' },
+    sound:  { name: '소리에너지', color: '#ff9f0a' },
+    chem:   { name: '화학에너지', color: '#bf5af2' }
+};
+
+/* ---------- 가전제품 목록 ---------- */
+const APPS = [
+    { id: 'lamp',      name: '스탠드 조명',   icon: '💡', w: 3,    conv: ['light'],          h: 5,   on: true,  room: '침실' },
+    { id: 'standlamp', name: 'LED 장스탠드',  icon: '🔆', w: 15,   conv: ['light'],          h: 6,   on: false, room: '거실' },
+    { id: 'tv',        name: '텔레비전',      icon: '📺', w: 100,  conv: ['light', 'sound'], h: 4,   on: false, room: '거실' },
+    { id: 'rice',      name: '전기밥솥',      icon: '🍚', w: 1455, conv: ['heat'],           h: 1,   on: false, room: '주방' },
+    { id: 'kettle',    name: '전기주전자',    icon: '🫖', w: 1800, conv: ['heat'],           h: 0.5, on: false, room: '주방' },
+    { id: 'blender',   name: '믹서기',        icon: '🥤', w: 600,  conv: ['motion'],         h: 0.2, on: false, room: '주방' },
+    { id: 'charger',   name: '배터리 충전기', icon: '🔋', w: 6,    conv: ['chem'],           h: 3,   on: false, room: '서재' },
+    { id: 'fan',       name: '선풍기',        icon: '🌀', w: 44,   conv: ['motion'],         h: 6,   on: false, room: '거실' },
+    { id: 'washer',    name: '세탁기',        icon: '🧺', w: 800,  conv: ['motion'],         h: 1.5, on: false, room: '베란다' },
+    { id: 'speaker',   name: '스피커',        icon: '🔊', w: 10,   conv: ['sound'],          h: 2,   on: false, room: '서재' },
+    { id: 'iron',      name: '전기다리미',    icon: '👕', w: 1200, conv: ['heat'],           h: 0.5, on: false, room: '침실' }
+];
+
+const state = { on: {}, hours: {}, sel: null, filter: 'all', dark: false, dispKwh: 0 };
+APPS.forEach(function (a) { state.on[a.id] = !!a.on; state.hours[a.id] = a.h; });
+
+function appById(id) { for (let i = 0; i < APPS.length; i++) if (APPS[i].id === id) return APPS[i]; return null; }
+function $(id) { return document.getElementById(id); }
+
+/* ---------- 계산 ---------- */
+function powerNow() {
+    let p = 0;
+    APPS.forEach(function (a) { if (state.on[a.id]) p += a.w; });
+    return p;
+}
+function appWh(a) { return state.on[a.id] ? a.w * state.hours[a.id] : 0; }
+function dailyWh() { let s = 0; APPS.forEach(function (a) { s += appWh(a); }); return s; }
+function monthlyKwh() { return dailyWh() * 30 / 1000; }
+
+/* 주택용 저압(누진제) 요금표 — 교육용 어림값 */
+const TIER = {
+    base: [910, 1600, 7300],       /* 기본요금(원) */
+    rate: [120.0, 214.6, 307.3]    /* 전력량요금(원/kWh, 누진) */
+};
+function calcBill(kwh) {
+    kwh = Math.max(0, kwh);
+    const tier = kwh <= 200 ? 0 : (kwh <= 400 ? 1 : 2);
+    const base = TIER.base[tier];
+    const e1 = Math.min(kwh, 200) * TIER.rate[0];
+    const e2 = Math.max(0, Math.min(kwh, 400) - 200) * TIER.rate[1];
+    const e3 = Math.max(0, kwh - 400) * TIER.rate[2];
+    const energy = e1 + e2 + e3;
+    const climate = kwh * 9;                       /* 기후환경요금 9원/kWh */
+    const vat = (base + energy + climate) * 0.1;   /* 부가세 10% */
+    const total = Math.round((base + energy + climate + vat) / 10) * 10;
+    return { tier: tier, base: base, energy: energy, climate: climate, vat: vat, total: total };
+}
+
+/* ---------- 표기 ---------- */
+function won(n) { return Math.round(n).toLocaleString('ko-KR') + '원'; }
+function wonNum(n) { return Math.round(n).toLocaleString('ko-KR'); }
+function wTxt(w) { return w >= 1000 ? (w / 1000).toFixed(2).replace(/\.?0+$/, '') + ' kW' : Math.round(w) + ' W'; }
+function hTxt(h) { return (Math.round(h * 10) / 10).toFixed(1) + '시간'; }
+function kwhTxt(k) { return (k < 10 ? k.toFixed(2) : k.toFixed(1)); }
+function jTxt(j) {
+    const n = Math.round(j);
+    if (n >= 1000000) return n.toLocaleString('ko-KR') + ' J <small>(' + (n / 1000000).toFixed(2) + ' MJ)</small>';
+    return n.toLocaleString('ko-KR') + ' J';
+}
+
+/* ---------- HUD 갱신 ---------- */
+function updateHud() {
+    const p = powerNow(), dw = dailyWh(), mk = monthlyKwh();
+    const b = calcBill(mk);
+
+    $('val-power').textContent = wTxt(p);
+    $('val-day').textContent = kwhTxt(dw / 1000) + ' kWh';
+    $('val-bill').textContent = won(b.total);
+
+    $('lcd-now').textContent = wTxt(p);
+    $('bill-base').textContent = won(b.base);
+    $('bill-energy').textContent = won(b.energy);
+    $('bill-climate').textContent = won(b.climate);
+    $('bill-vat').textContent = won(b.vat);
+    $('bill-total').textContent = won(b.total);
+
+    const pill = $('meter-state');
+    if (p > 0) { pill.textContent = '사용 중'; pill.className = 'state-pill'; }
+    else { pill.textContent = '대기 중'; pill.className = 'state-pill idle'; }
+
+    $('tier-marker').style.left = (Math.min(mk, 600) / 600 * 100).toFixed(1) + '%';
+    const names = ['1단계 · 200 kWh 이하', '2단계 · 200~400 kWh', '3단계 · 400 kWh 초과'];
+    $('tier-label').textContent = names[b.tier] + ' (이번 달 ' + kwhTxt(mk) + ' kWh)';
+
+    if (state.sel) renderDetail();
+    syncLed(p);
+}
+
+/* 계량기 회전판 · 펄스 LED */
+function syncLed(p) {
+    const led = $('meter-led');
+    if (p > 0) {
+        led.classList.add('on');
+        led.style.animationDuration = Math.max(0.16, Math.min(2.6, 1400 / (p + 30))).toFixed(2) + 's';
+    } else {
+        led.classList.remove('on');
+    }
+}
+
+/* ---------- 가전 목록 ---------- */
+function renderApps() {
+    const list = $('app-list');
+    const items = APPS.filter(function (a) { return state.filter === 'all' || a.conv.indexOf(state.filter) >= 0; });
+    list.innerHTML = items.map(function (a) {
+        const dots = a.conv.map(function (c) { return '<i style="background:' + CONV[c].color + '"></i>'; }).join('');
+        return '<button class="app-row' + (state.on[a.id] ? ' on' : '') + (state.sel === a.id ? ' sel' : '') +
+            '" data-id="' + a.id + '">' +
+            '<span class="app-ico">' + a.icon + '</span>' +
+            '<span class="app-txt"><span class="app-name">' + a.name + '</span>' +
+            '<span class="app-sub">' + a.w + ' W · ' + (Math.round(state.hours[a.id] * 10) / 10) + '시간/일</span></span>' +
+            '<span class="app-dots">' + dots + '</span>' +
+            '<span class="app-sw"></span></button>';
+    }).join('');
+    if (!items.length) list.innerHTML = '<div class="panel-note" style="padding:10px 4px;">이 에너지로 바뀌는 가전이 없어요.</div>';
+    $('app-count').textContent = APPS.filter(function (a) { return state.on[a.id]; }).length + '/' + APPS.length + ' 켜짐';
+}
+
+function updateRow(id) {
+    const row = document.querySelector('.app-row[data-id="' + id + '"]');
+    if (!row) return;
+    row.classList.toggle('on', !!state.on[id]);
+    const sub = row.querySelector('.app-sub');
+    if (sub) sub.textContent = appById(id).w + ' W · ' + (Math.round(state.hours[id] * 10) / 10) + '시간/일';
+    $('app-count').textContent = APPS.filter(function (a) { return state.on[a.id]; }).length + '/' + APPS.length + ' 켜짐';
+}
+
+/* ---------- 상세 패널 ---------- */
+function renderDetail() {
+    const a = appById(state.sel);
+    const panel = $('panel-detail');
+    if (!a) { panel.classList.remove('show'); return; }
+    panel.classList.add('show');
+
+    const h = state.hours[a.id];
+    const sec = h * 3600;
+    const E = a.w * sec;
+    const wh = a.w * h;
+    const mk = wh * 30 / 1000;
+
+    $('detail-title').textContent = a.icon + ' ' + a.name;
+    $('detail-meta').textContent = a.room + ' · ' + a.w + ' W · ' + (state.on[a.id] ? '켜짐' : '꺼짐');
+    $('detail-conv').innerHTML = '전기에너지 → ' + a.conv.map(function (c) {
+        return '<span class="badge" style="background:' + CONV[c].color + ';">' + CONV[c].name + '</span>';
+    }).join(' + ');
+    $('detail-hours').textContent = hTxt(h);
+    $('rng-hours').value = h;
+
+    const total = calcBill(monthlyKwh());
+    const without = calcBill(monthlyKwh() - mk);
+    const saving = Math.max(0, total.total - without.total);
+
+    $('detail-calc').innerHTML =
+        '<div class="calc-item"><span>전기에너지 E = P × t</span><b>' + jTxt(E) + '</b>' +
+        '<small>' + a.w + ' W × ' + Math.round(sec).toLocaleString('ko-KR') + ' s</small></div>' +
+        '<div class="calc-item"><span>전력량 = P × t(h)</span><b>' + Math.round(wh).toLocaleString('ko-KR') + ' Wh = ' + kwhTxt(wh / 1000) + ' kWh</b>' +
+        '<small>' + a.w + ' W × ' + (Math.round(h * 10) / 10) + ' h</small></div>' +
+        '<div class="calc-item"><span>한 달(30일) 전력량</span><b>' + kwhTxt(mk) + ' kWh</b>' +
+        '<small>하루 ' + kwhTxt(wh / 1000) + ' kWh × 30일</small></div>';
+
+    if (!state.on[a.id]) {
+        $('detail-saving').innerHTML = '지금은 꺼져 있어요. 전원을 켜면 전력량과 요금에 더해져요.';
+    } else {
+        $('detail-saving').innerHTML = '이 가전만 한 달 동안 끄면 약 <b>' + wonNum(saving) + '원</b> 아껴요. (누진제라서 많이 쓸수록 1 kWh의 값이 비싸져요)';
+    }
+}
+
+/* ---------- 패널 탭 ---------- */
+function panelEl(name) { return $(name === 'apps' ? 'panel-apps' : 'panel-meter'); }
+function panelShow(name, on) { panelEl(name).classList.toggle('show', on); }
+function panelVisible(name) { return panelEl(name).classList.contains('show'); }
+function syncTabs() {
+    $('tab-apps').classList.toggle('active', panelVisible('apps'));
+    $('tab-meter').classList.toggle('active', panelVisible('meter'));
+}
+function onTab(name) {
+    if (name === 'help') { $('modal-overlay').classList.add('show'); return; }
+    if (window.innerWidth <= 900) {
+        const was = panelVisible(name);
+        panelShow('apps', false); panelShow('meter', false);
+        if (!was) panelShow(name, true);
+        $('panel-detail').classList.remove('show');
+    } else {
+        panelShow(name, !panelVisible(name));
+    }
+    syncTabs();
+}
+
+/* ============================================================
+   THREE.js 장면
+   ============================================================ */
+const container = $('canvas-container');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 400);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = false;
+controls.minDistance = 8;
+controls.maxDistance = 46;
+controls.minPolarAngle = 0.18;
+controls.maxPolarAngle = 1.32;
+controls.target.set(0, 0.7, 0);
+
+/* ---------- 조명 ---------- */
+const hemi = new THREE.HemisphereLight(0xffffff, 0x9fb0c8, 0.58);
+scene.add(hemi);
+
+const key = new THREE.DirectionalLight(0xfff4e4, 0.74);
+key.position.set(9, 16, 10);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+key.shadow.camera.left = -12; key.shadow.camera.right = 12;
+key.shadow.camera.top = 12; key.shadow.camera.bottom = -12;
+key.shadow.camera.near = 1; key.shadow.camera.far = 44;
+key.shadow.bias = -0.0007;
+key.shadow.normalBias = 0.02;
+scene.add(key);
+
+const fill = new THREE.DirectionalLight(0xd8e6ff, 0.26);
+fill.position.set(-11, 8, -9);
+scene.add(fill);
+
+/* ---------- 재질 도우미 ---------- */
+const themed = [];
+function reg(m, lightHex, darkHex) { themed.push({ m: m, l: lightHex, d: darkHex }); return m; }
+function mat(colorHex, o) {
+    o = o || {};
+    const m = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        roughness: o.rough != null ? o.rough : 0.88,
+        metalness: o.metal != null ? o.metal : 0.05,
+        transparent: !!o.opacity,
+        opacity: o.opacity != null ? o.opacity : 1,
+        emissive: o.emissive != null ? o.emissive : 0x000000,
+        emissiveIntensity: o.ei != null ? o.ei : 1,
+        side: o.side || THREE.FrontSide,
+        depthWrite: o.depthWrite !== false
+    });
+    if (o.dark != null) reg(m, colorHex, o.dark);
+    return m;
+}
+function box(w, h, d, material, o) {
+    o = o || {};
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), typeof material === 'number' ? mat(material, o) : material);
+    m.castShadow = o.cast !== false;
+    m.receiveShadow = o.recv !== false;
+    return m;
+}
+function cyl(rt, rb, h, material, o) {
+    o = o || {};
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, o.seg || 20), typeof material === 'number' ? mat(material, o) : material);
+    m.castShadow = o.cast !== false;
+    m.receiveShadow = o.recv !== false;
+    return m;
+}
+function at(obj, x, y, z, parent) {
+    obj.position.set(x, y, z);
+    (parent || scene).add(obj);
+    return obj;
+}
+
+/* ---------- 바닥 텍스처 ---------- */
+const woodCanvas = (function () {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+    const g = c.getContext('2d');
+    const tones = ['#dcbd92', '#e3c69e', '#d5b389', '#e6cba4', '#d9ba8f', '#dfc198', '#d2b086', '#e1c39a'];
+    for (let i = 0; i < 8; i++) {
+        g.fillStyle = tones[i];
+        g.fillRect(0, i * 32, 256, 32);
+        g.strokeStyle = 'rgba(150,115,70,.22)'; g.lineWidth = 1.4;
+        g.beginPath(); g.moveTo(0, i * 32 + 31.5); g.lineTo(256, i * 32 + 31.5); g.stroke();
+        g.strokeStyle = 'rgba(160,125,80,.13)';
+        for (let k = 0; k < 3; k++) {
+            g.beginPath();
+            const yy = i * 32 + 6 + k * 9;
+            g.moveTo(0, yy); g.bezierCurveTo(80, yy + 2, 170, yy - 2, 256, yy + 1); g.stroke();
+        }
+    }
+    return c;
+})();
+
+const tileCanvas = (function () {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ccd6de'; g.fillRect(0, 0, 256, 256);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
+        g.fillStyle = (i + j) % 2 ? '#d8e1e8' : '#cdd7df';
+        g.fillRect(i * 64 + 1, j * 64 + 1, 62, 62);
+    }
+    g.strokeStyle = 'rgba(105,125,145,.55)'; g.lineWidth = 2;
+    for (let i = 0; i <= 4; i++) {
+        g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, 256); g.stroke();
+        g.beginPath(); g.moveTo(0, i * 64); g.lineTo(256, i * 64); g.stroke();
+    }
+    return c;
+})();
+
+function floorMaterial(kind) {
+    const t = new THREE.CanvasTexture(kind === 'wood' ? woodCanvas : tileCanvas);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    const m = new THREE.MeshStandardMaterial({
+        map: t,
+        roughness: kind === 'wood' ? 0.92 : 0.55,
+        metalness: kind === 'wood' ? 0.02 : 0.05
+    });
+    reg(m, 0xffffff, 0x8e94a2);
+    return m;
+}
+
+/* ---------- 집 구조 ---------- */
+const HOUSE = { x1: -5.6, x2: 5.6, z1: -3.8, z2: 3.8 };
+const WALL_H = 2.15, INNER_H = 1.45, WALL_T = 0.14;
+
+function buildShell() {
+    /* 기초 슬래브 */
+    at(box(12.1, 0.34, 8.5, 0xe6dfd2, { rough: 0.96, dark: 0x2b3240, cast: false }), 0, -0.18, 0);
+
+    /* 방별 바닥 */
+    const floors = [
+        [-5.6, -1.9, -3.8, -0.6, 'wood'],
+        [-5.6, -1.9, -0.6, 3.8, 'tile'],
+        [-1.9, 3.0, -3.8, 3.8, 'wood'],
+        [3.0, 5.6, -3.8, 0.6, 'wood'],
+        [3.0, 5.6, 0.6, 3.8, 'tile']
+    ];
+    floors.forEach(function (f) {
+        const w = f[1] - f[0], d = f[3] - f[2];
+        const m = floorMaterial(f[4]);
+        m.map.repeat.set(w / 1.6, d / 1.6);
+        const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m);
+        p.rotation.x = -Math.PI / 2;
+        p.position.set((f[0] + f[1]) / 2, 0.001, (f[2] + f[3]) / 2);
+        p.receiveShadow = true;
+        scene.add(p);
+    });
+
+    const wallMat = mat(0xf0e9dc, { rough: 0.95, dark: 0x333d4d });
+    const innerMat = mat(0xf7f2e8, { rough: 0.95, dark: 0x3a4557 });
+    const capMat = mat(0xd9d1c2, { rough: 0.95, dark: 0x2a3242 });
+    const frameMat = mat(0xffffff, { rough: 0.6, dark: 0x8a94a6 });
+    const glassMat = mat(0xbfe4ff, { rough: 0.25, metal: 0.2, emissive: 0x9fd4ff, ei: 0.28, dark: 0x7fb6e8 });
+
+    function wall(w, h, d, x, y, z, material) {
+        at(box(w, h, d, material || wallMat, { rough: 0.95 }), x, y, z);
+    }
+    wall(HOUSE.x2 - HOUSE.x1 + 0.14, WALL_H, WALL_T, 0, WALL_H / 2, HOUSE.z1 - WALL_T / 2);
+    wall(WALL_T, WALL_H, HOUSE.z2 - HOUSE.z1 + 0.14, HOUSE.x1 - WALL_T / 2, WALL_H / 2, 0);
+    wall(HOUSE.x2 - HOUSE.x1 + 0.14, 0.38, WALL_T, 0, 0.19, HOUSE.z2 + WALL_T / 2);
+    wall(WALL_T, 0.38, HOUSE.z2 - HOUSE.z1 + 0.14, HOUSE.x2 + WALL_T / 2, 0.19, 0);
+
+    at(box(11.4, 0.07, 0.2, capMat), 0, WALL_H + 0.03, HOUSE.z1 - WALL_T / 2);
+    at(box(0.2, 0.07, 7.8, capMat), HOUSE.x1 - WALL_T / 2, WALL_H + 0.03, 0);
+
+    /* 창문 (뒷벽) */
+    function windowX(x, y, w, h) {
+        at(box(w, h, 0.03, glassMat), x, y, HOUSE.z1 + 0.02);
+        at(box(w + 0.1, 0.06, 0.08, frameMat), x, y + h / 2, HOUSE.z1 + 0.05);
+        at(box(w + 0.1, 0.06, 0.08, frameMat), x, y - h / 2, HOUSE.z1 + 0.05);
+        at(box(0.05, h, 0.08, frameMat), x, y, HOUSE.z1 + 0.05);
+    }
+    windowX(-4.35, 1.35, 1.3, 1.0);
+    windowX(1.95, 1.45, 1.1, 0.9);
+    /* 창문 (왼벽) */
+    at(box(0.03, 0.9, 1.2, glassMat), HOUSE.x1 + 0.02, 1.4, 1.1);
+    at(box(0.08, 0.06, 1.3, frameMat), HOUSE.x1 + 0.05, 1.85, 1.1);
+    at(box(0.08, 0.06, 1.3, frameMat), HOUSE.x1 + 0.05, 0.95, 1.1);
+
+    /* 내부 벽 (문 틈을 비워 둔다) */
+    function seg(axis, fixed, a, b) {
+        const len = b - a;
+        if (len <= 0.02) return;
+        if (axis === 'x') at(box(WALL_T, INNER_H, len, innerMat), fixed, INNER_H / 2, (a + b) / 2);
+        else at(box(len, INNER_H, WALL_T, innerMat), (a + b) / 2, INNER_H / 2, fixed);
+    }
+    seg('x', -1.9, -3.8, -3.0);
+    seg('x', -1.9, -2.1, 1.6);
+    seg('x', -1.9, 2.6, 3.8);
+    seg('z', -0.6, -5.6, -4.4);
+    seg('z', -0.6, -3.4, -1.9);
+    seg('x', 3.0, -3.8, -1.5);
+    seg('x', 3.0, -0.5, 1.4);
+    seg('x', 3.0, 3.0, 3.8);
+
+    /* 서재 | 베란다 미닫이 유리문 */
+    const gd = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.35, 0.05), mat(0xd8ecff, { opacity: 0.34, rough: 0.1, metal: 0.3, dark: 0x9fc4e8 }));
+    at(gd, 4.28, 0.72, 0.6);
+    at(box(2.6, 0.06, 0.08, frameMat), 4.28, 1.42, 0.6);
+    at(box(0.05, 1.4, 0.08, frameMat), 4.28, 0.7, 0.6);
+    at(box(0.06, 1.4, 0.08, frameMat), 3.06, 0.7, 0.6);
+    at(box(0.06, 1.4, 0.08, frameMat), 5.5, 0.7, 0.6);
+}
+
+/* ---------- 방 이름 라벨 ---------- */
+const labelSpecs = [
+    { text: '침실', pos: [-3.3, 2.28, -1.5], color: '#7a5cab' },
+    { text: '주방', pos: [-3.2, 2.28, 1.0], color: '#a06a2c' },
+    { text: '거실', pos: [0.35, 2.28, -0.1], color: '#2f6d9e' },
+    { text: '서재', pos: [4.25, 2.28, -1.55], color: '#4a7d5c' },
+    { text: '베란다', pos: [4.25, 2.28, 2.55], color: '#6b7280' }
+];
+let labelSprites = [];
+function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+}
+function makeLabel(text, color) {
+    const fs = 42, padX = 24, padY = 12;
+    const c = document.createElement('canvas');
+    let g = c.getContext('2d');
+    g.font = 'bold ' + fs + "px 'SeoulNamsan', sans-serif";
+    const tw = g.measureText(text).width;
+    c.width = Math.ceil(tw + padX * 2);
+    c.height = fs + padY * 2;
+    g = c.getContext('2d');
+    g.font = 'bold ' + fs + "px 'SeoulNamsan', sans-serif";
+    g.fillStyle = 'rgba(255,255,255,0.93)';
+    roundRect(g, 1, 1, c.width - 2, c.height - 2, 16);
+    g.fill();
+    g.strokeStyle = 'rgba(120,135,155,0.32)'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = color;
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, c.width / 2, c.height / 2 + 2);
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    const s = 0.0076;
+    sp.scale.set(c.width * s, c.height * s, 1);
+    return sp;
+}
+function buildLabels() {
+    labelSprites.forEach(function (s) {
+        scene.remove(s);
+        if (s.material.map) s.material.map.dispose();
+        s.material.dispose();
+    });
+    labelSprites = [];
+    labelSpecs.forEach(function (spec) {
+        const sp = makeLabel(spec.text, spec.color);
+        sp.position.set(spec.pos[0], spec.pos[1], spec.pos[2]);
+        scene.add(sp);
+        labelSprites.push(sp);
+    });
+}
+
+/* ============================================================
+   가전제품
+   ============================================================ */
+const pickables = [];
+const groups = {};
+const rings = {};
+const glowList = [];
+const spins = {};
+const lampLights = [];
+const puffs = {};
+const waves = {};
+const anim = {};
+
+let batteryMesh = null;
+
+function registerApp(id, group, ringR) {
+    group.userData.id = id;
+    group.traverse(function (o) {
+        if (o.isMesh) {
+            o.userData.app = id;
+            o.userData.oOpacity = o.material.opacity;
+            o.userData.oTransparent = o.material.transparent;
+            pickables.push(o);
+        }
+    });
+    scene.add(group);
+    groups[id] = group;
+    anim[id] = { speed: 0 };
+
+    const a = appById(id);
+    const rm = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(CONV[a.conv[0]].color),
+        transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(ringR * 0.82, ringR, 44), rm);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(group.position.x, group.position.y + 0.016, group.position.z);
+    ring.renderOrder = 2;
+    scene.add(ring);
+    rings[id] = ring;
+}
+
+function addGlow(m, onVal, offVal, isOn) { glowList.push({ m: m, on: onVal, off: offVal, isOn: isOn }); return m; }
+
+const puffTex = (function () {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grd = g.createRadialGradient(32, 32, 1, 32, 32, 31);
+    grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+    grd.addColorStop(0.55, 'rgba(255,255,255,0.42)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.beginPath(); g.arc(32, 32, 31, 0, Math.PI * 2); g.fill();
+    return new THREE.CanvasTexture(c);
+})();
+
+function makePuffs(parent, x, y, z) {
+    const items = [];
+    for (let i = 0; i < 4; i++) {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, opacity: 0, depthWrite: false }));
+        sp.position.set(x, y, z);
+        sp.scale.setScalar(0.14);
+        parent.add(sp);
+        items.push({ sprite: sp, baseX: x, baseY: y, baseZ: z, life: i / 4 });
+    }
+    return items;
+}
+function makeWaves(parent, x, y, z, color, radius) {
+    const arr = [];
+    for (let i = 0; i < 3; i++) {
+        const m = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0, depthWrite: false });
+        const r = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.007, 6, 26), m);
+        r.position.set(x, y, z);
+        parent.add(r);
+        arr.push(r);
+    }
+    return arr;
+}
+
+function buildAppliances() {
+    /* ---------- 1. 침실 스탠드 조명 (3 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(-3.02, 0.575, -3.3);
+        at(cyl(0.085, 0.1, 0.03, 0xdfe3e8, { metal: 0.4 }), 0, 0.015, 0, g);
+        at(cyl(0.015, 0.015, 0.3, 0xc9ced6, { metal: 0.6 }), 0, 0.18, 0, g);
+        const shadeMat = addGlow(mat(0xfff8e6, { rough: 0.5, emissive: 0xffe9b0, ei: 0 }), 0.95, 0, function () { return state.on.lamp; });
+        const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.145, 0.17, 20, 1, true), shadeMat);
+        shade.castShadow = false;
+        at(shade, 0, 0.39, 0, g);
+        at(cyl(0.1, 0.1, 0.015, 0xfff8e6, { rough: 0.6 }), 0, 0.475, 0, g);
+        const pl = new THREE.PointLight(0xffe3a8, 0, 2.6);
+        at(pl, 0, 0.37, 0, g);
+        lampLights.push({ light: pl, on: 0.85, isOn: function () { return state.on.lamp; } });
+        registerApp('lamp', g, 0.34);
+    })();
+
+    /* ---------- 2. 거실 LED 장스탠드 (15 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(-1.5, 0, -2.55);
+        at(cyl(0.15, 0.18, 0.04, 0xdfe3e8, { metal: 0.35 }), 0, 0.02, 0, g);
+        at(cyl(0.02, 0.02, 1.42, 0xc9ced6, { metal: 0.6 }), 0, 0.73, 0, g);
+        const shadeMat = addGlow(mat(0xfffaf0, { rough: 0.45, emissive: 0xffeec0, ei: 0 }), 0.9, 0, function () { return state.on.standlamp; });
+        const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 0.24, 22, 1, true), shadeMat);
+        shade.castShadow = false;
+        at(shade, 0, 1.55, 0, g);
+        at(cyl(0.14, 0.14, 0.02, 0xfffaf0, { rough: 0.6 }), 0, 1.67, 0, g);
+        const pl = new THREE.PointLight(0xffeec8, 0, 3.4);
+        at(pl, 0, 1.5, 0, g);
+        lampLights.push({ light: pl, on: 0.9, isOn: function () { return state.on.standlamp; } });
+        registerApp('standlamp', g, 0.36);
+    })();
+
+    /* ---------- 3. 텔레비전 (100 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(0.5, 0, -3.56);
+        at(box(2.2, 0.42, 0.42, 0x9a7a53, { rough: 0.8, dark: 0x5d4a34 }), 0, 0.21, 0.02, g);
+        at(box(2.24, 0.05, 0.46, 0xb18c60, { rough: 0.7, dark: 0x6b5740 }), 0, 0.44, 0.02, g);
+        at(box(0.06, 0.18, 0.06, 0x4a5260, { metal: 0.5 }), -0.7, 0.55, 0, g);
+        at(box(0.06, 0.18, 0.06, 0x4a5260, { metal: 0.5 }), 0.7, 0.55, 0, g);
+        at(box(1.86, 1.04, 0.07, 0x2a2f38, { rough: 0.5, dark: 0x151a22 }), 0, 1.16, 0, g);
+
+        const sc = document.createElement('canvas'); sc.width = 320; sc.height = 180;
+        const cg = sc.getContext('2d');
+        const sky = cg.createLinearGradient(0, 0, 0, 110);
+        sky.addColorStop(0, '#8ec9f0'); sky.addColorStop(1, '#dff0fb');
+        cg.fillStyle = sky; cg.fillRect(0, 0, 320, 180);
+        cg.fillStyle = '#ffe9a8'; cg.beginPath(); cg.arc(252, 44, 18, 0, Math.PI * 2); cg.fill();
+        cg.fillStyle = 'rgba(255,255,255,.85)';
+        [[60, 42, 17], [85, 48, 12], [200, 34, 13]].forEach(function (c) { cg.beginPath(); cg.arc(c[0], c[1], c[2], 0, Math.PI * 2); cg.fill(); });
+        cg.fillStyle = '#6ea86b'; cg.beginPath(); cg.moveTo(0, 118); cg.quadraticCurveTo(90, 82, 168, 116); cg.quadraticCurveTo(240, 84, 320, 112); cg.lineTo(320, 180); cg.lineTo(0, 180); cg.fill();
+        cg.fillStyle = '#3f7fa8'; cg.beginPath(); cg.moveTo(0, 140); cg.quadraticCurveTo(160, 124, 320, 142); cg.lineTo(320, 180); cg.lineTo(0, 180); cg.fill();
+        cg.fillStyle = 'rgba(255,255,255,.35)'; cg.fillRect(20, 152, 120, 4); cg.fillRect(180, 164, 90, 3);
+        const tvTex = new THREE.CanvasTexture(sc);
+        tvTex.anisotropy = 4;
+        const scrMat = new THREE.MeshStandardMaterial({
+            map: tvTex, color: 0xffffff, roughness: 0.35, metalness: 0.05,
+            emissive: 0xffffff, emissiveMap: tvTex, emissiveIntensity: 0.05
+        });
+        addGlow(scrMat, 0.95, 0.05, function () { return state.on.tv; });
+        const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.72, 0.94), scrMat);
+        scr.castShadow = false;
+        at(scr, 0, 1.16, 0.045, g);
+
+        at(box(1.1, 0.09, 0.09, 0x3a4048, { rough: 0.6, dark: 0x1d232b }), 0, 0.51, 0.14, g);
+        waves.tv = makeWaves(g, 0.62, 0.56, 0.16, 0xffb340, 0.07);
+        registerApp('tv', g, 0.75);
+    })();
+
+    /* ---------- 4. 전기밥솥 (1455 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(-5.2, 0.92, 1.35);
+        at(cyl(0.2, 0.21, 0.26, 0xf7f2e6, { rough: 0.55, dark: 0x8f8a80 }), 0, 0.13, 0, g);
+        at(cyl(0.205, 0.205, 0.05, 0xfdfaf2, { rough: 0.5, dark: 0x9c968b }), 0, 0.285, 0, g);
+        at(cyl(0.03, 0.03, 0.03, 0xd9d4c8, { metal: 0.5 }), 0, 0.32, 0, g);
+        const ledMat = addGlow(mat(0xff3b30, { emissive: 0xff3b30, ei: 0.05 }),
+            1.6, 0.05, function () { return state.on.rice && Math.floor(tAll * 2) % 2 === 0; });
+        at(box(0.07, 0.03, 0.012, ledMat), 0, 0.215, 0.203, g);
+        at(box(0.16, 0.1, 0.02, 0xdad4c6, { rough: 0.4, dark: 0x77726a }), 0, 0.13, 0.207, g);
+        puffs.rice = makePuffs(g, 0, 0.34, 0);
+        registerApp('rice', g, 0.3);
+    })();
+
+    /* ---------- 5. 전기주전자 (1800 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(-5.2, 0.92, 2.98);
+        at(cyl(0.155, 0.175, 0.25, 0xd7dde4, { rough: 0.28, metal: 0.55, dark: 0x9aa3ae }), 0, 0.125, 0, g);
+        at(cyl(0.16, 0.155, 0.04, 0xbfc7d0, { rough: 0.3, metal: 0.6, dark: 0x8f98a3 }), 0, 0.265, 0, g);
+        at(cyl(0.025, 0.025, 0.05, 0x9aa3ad, { metal: 0.7 }), 0, 0.3, 0.03, g);
+        const handle = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.014, 8, 18, Math.PI * 1.05), mat(0x5a626c, { rough: 0.5, metal: 0.4 }));
+        handle.rotation.z = -0.15;
+        at(handle, 0.13, 0.17, 0, g);
+        const spout = cyl(0.02, 0.045, 0.1, 0xcfd6dd, { metal: 0.6 });
+        spout.rotation.z = -0.9;
+        at(spout, -0.15, 0.24, 0, g);
+        const baseMat = addGlow(mat(0xd0d6dd, { metal: 0.4, emissive: 0xff7a2f, ei: 0 }), 0.5, 0, function () { return state.on.kettle; });
+        at(cyl(0.18, 0.18, 0.02, baseMat), 0, 0.01, 0, g);
+        puffs.kettle = makePuffs(g, 0, 0.31, 0);
+        registerApp('kettle', g, 0.28);
+    })();
+
+    /* ---------- 6. 믹서기 (600 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(-5.2, 0.92, 0.05);
+        at(box(0.19, 0.13, 0.19, 0x3c4552, { rough: 0.55, dark: 0x222a34 }), 0, 0.065, 0, g);
+        at(box(0.06, 0.03, 0.06, 0x8e97a3, { metal: 0.5 }), 0.06, 0.13, 0, g);
+        const jarMat = mat(0xdfeaf2, { opacity: 0.42, rough: 0.15, metal: 0.1, dark: 0xa8bacb });
+        const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.095, 0.28, 18, 1, true), jarMat);
+        at(jar, 0, 0.29, 0, g);
+        at(cyl(0.1, 0.085, 0.17, 0xf0893e, { rough: 0.5, emissive: 0xff7a2f, ei: 0.05 }), 0, 0.245, 0, g);
+        at(cyl(0.12, 0.12, 0.025, 0x4a5361, { rough: 0.5 }), 0, 0.435, 0, g);
+        const blades = new THREE.Group(); blades.position.set(0, 0.16, 0); g.add(blades);
+        for (let i = 0; i < 3; i++) {
+            const b = box(0.06, 0.008, 0.015, 0xc8ced6, { metal: 0.7 });
+            b.rotation.y = i * Math.PI * 2 / 3;
+            b.position.set(Math.cos(i * Math.PI * 2 / 3) * 0.045, 0, Math.sin(i * Math.PI * 2 / 3) * 0.045);
+            blades.add(b);
+        }
+        spins.blender = { obj: blades, axis: 'y', fast: 26 };
+        registerApp('blender', g, 0.26);
+    })();
+
+    /* ---------- 7. 배터리 충전기 (6 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(3.78, 0.775, -3.22);
+        at(cyl(0.115, 0.115, 0.014, 0x40474f, { rough: 0.5, dark: 0x232a33 }), 0, 0.007, 0, g);
+        at(cyl(0.03, 0.03, 0.016, 0x9aa3ad, { metal: 0.6 }), 0, 0.018, 0, g);
+        const ph = box(0.19, 0.014, 0.35, 0x2b303a, { rough: 0.35, metal: 0.4, dark: 0x161b22 });
+        ph.rotation.y = 0.25;
+        at(ph, 0, 0.026, 0.02, g);
+        const scrMat = addGlow(mat(0x0f1a24, { emissive: 0x2fd6ff, ei: 0, rough: 0.2 }), 0.55, 0, function () { return state.on.charger; });
+        const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.165, 0.31), scrMat);
+        scr.rotation.x = -Math.PI / 2; scr.rotation.z = -0.25;
+        at(scr, 0, 0.034, 0.02, g);
+
+        const battGroup = new THREE.Group();
+        battGroup.position.set(-0.055, 0.038, -0.09);
+        battGroup.rotation.y = -0.25;
+        g.add(battGroup);
+        batteryMesh = box(0.1, 0.005, 0.018, 0x6ef7a5, { emissive: 0x30d158, ei: 1.1, rough: 0.3 });
+        batteryMesh.geometry.translate(0.05, 0, 0);
+        battGroup.add(batteryMesh);
+        registerApp('charger', g, 0.22);
+    })();
+
+    /* ---------- 8. 선풍기 (44 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(-1.32, 0, 1.55);
+        at(cyl(0.19, 0.22, 0.05, 0xdfe3e8, { rough: 0.5, dark: 0x8d95a2 }), 0, 0.025, 0, g);
+        at(cyl(0.025, 0.025, 0.72, 0xd3d8de, { metal: 0.4, dark: 0x9aa1ac }), 0, 0.4, 0, g);
+        const head = new THREE.Group(); head.position.set(0, 0.86, 0.02); g.add(head);
+        const motor = cyl(0.075, 0.075, 0.13, 0xdfe3e8, { rough: 0.5, dark: 0x8d95a2 });
+        motor.rotation.x = Math.PI / 2;
+        at(motor, 0, 0, -0.05, head);
+        const blades = new THREE.Group(); blades.position.set(0, 0, 0.03); head.add(blades);
+        for (let i = 0; i < 3; i++) {
+            const b = box(0.055, 0.2, 0.012, 0xf2f5f8, { rough: 0.4, dark: 0xc2cbd6 });
+            b.position.set(Math.sin(i * Math.PI * 2 / 3) * 0.1, Math.cos(i * Math.PI * 2 / 3) * 0.1, 0);
+            b.rotation.z = -i * Math.PI * 2 / 3;
+            b.rotation.y = 0.35;
+            blades.add(b);
+        }
+        at(cyl(0.03, 0.03, 0.04, 0x9aa3ad, { metal: 0.6 }), 0, 0, 0.04, head);
+        const guard = new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.008, 6, 34), mat(0xc2c9d2, { metal: 0.5, dark: 0x8c94a0 }));
+        at(guard, 0, 0, 0.06, head);
+        const guard2 = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.006, 6, 30), mat(0xc2c9d2, { metal: 0.5, dark: 0x8c94a0 }));
+        at(guard2, 0, 0, 0.055, head);
+        spins.fan = { obj: blades, axis: 'z', fast: 17 };
+        registerApp('fan', g, 0.3);
+    })();
+
+    /* ---------- 9. 세탁기 (800 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(3.9, 0, 1.35);
+        at(box(0.64, 0.86, 0.62, 0xf2f5f8, { rough: 0.45, dark: 0x9aa3b2 }), 0, 0.43, 0, g);
+        at(box(0.64, 0.09, 0.62, 0xdfe4ea, { rough: 0.5, dark: 0x8792a3 }), 0, 0.87, 0, g);
+        at(box(0.22, 0.05, 0.03, 0xd6dbe1, { rough: 0.4, dark: 0x77808f }), 0.17, 0.84, 0.31, g);
+        const ledMat = addGlow(mat(0x30d158, { emissive: 0x30d158, ei: 0.04 }),
+            1.4, 0.04, function () { return state.on.washer && Math.floor(tAll * 1.6) % 2 === 0; });
+        at(box(0.05, 0.02, 0.012, ledMat), 0.06, 0.82, 0.325, g);
+        const door = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.028, 8, 30), mat(0xc9d0d8, { metal: 0.5, rough: 0.35, dark: 0x8d95a2 }));
+        at(door, 0, 0.45, 0.315, g);
+        const glass = new THREE.Mesh(new THREE.CircleGeometry(0.175, 30), mat(0x2a3542, { rough: 0.2, metal: 0.5, opacity: 0.94, dark: 0x151d27 }));
+        at(glass, 0, 0.45, 0.312, g);
+        const drumMark = new THREE.Group(); drumMark.position.set(0, 0.45, 0.322); g.add(drumMark);
+        at(box(0.13, 0.022, 0.006, 0x6f7d8c, { metal: 0.3 }), 0, 0.06, 0, drumMark);
+        at(box(0.13, 0.022, 0.006, 0x6f7d8c, { metal: 0.3 }), 0, -0.06, 0, drumMark);
+        spins.washer = { obj: drumMark, axis: 'z', fast: 5.5 };
+        registerApp('washer', g, 0.42);
+    })();
+
+    /* ---------- 10. 스피커 (10 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(5.0, 0.775, -3.28);
+        at(box(0.17, 0.3, 0.17, 0x2f3742, { rough: 0.55, dark: 0x1a212a }), 0, 0.15, 0, g);
+        const c1 = cyl(0.05, 0.055, 0.012, 0x4a5462, { rough: 0.5, dark: 0x2a3340 });
+        c1.rotation.x = Math.PI / 2;
+        at(c1, 0, 0.21, 0.088, g);
+        const c2 = cyl(0.032, 0.036, 0.012, 0x4a5462, { rough: 0.5, dark: 0x2a3340 });
+        c2.rotation.x = Math.PI / 2;
+        at(c2, 0, 0.09, 0.088, g);
+        waves.speaker = makeWaves(g, 0, 0.15, 0.1, 0xffb340, 0.06);
+        registerApp('speaker', g, 0.2);
+    })();
+
+    /* ---------- 11. 전기다리미 (1200 W) ---------- */
+    (function () {
+        const g = new THREE.Group(); g.position.set(-2.52, 0.76, -1.05);
+        const plateMat = addGlow(mat(0xb9c2cc, { metal: 0.65, rough: 0.3, dark: 0x8d96a3, emissive: 0xff5a2f, ei: 0 }),
+            0.55, 0, function () { return state.on.iron; });
+        at(box(0.3, 0.025, 0.16, plateMat), 0, 0.012, 0, g);
+        const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.001, 0.081, 0.13, 4), mat(0xb9c2cc, { metal: 0.65, rough: 0.3, dark: 0x8d96a3 }));
+        nose.rotation.z = -Math.PI / 2; nose.rotation.y = Math.PI / 4;
+        at(nose, -0.2, 0.025, 0, g);
+        at(box(0.26, 0.08, 0.15, 0x5f6b7a, { rough: 0.45, metal: 0.2, dark: 0x38424f }), 0.02, 0.065, 0, g);
+        const handle = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.017, 8, 18, Math.PI), mat(0x39424e, { rough: 0.6, dark: 0x1e242c }));
+        handle.rotation.y = Math.PI / 2;
+        at(handle, 0.02, 0.11, 0, g);
+        puffs.iron = makePuffs(g, 0.02, 0.14, 0);
+        registerApp('iron', g, 0.24);
+    })();
+}
+
+/* ============================================================
+   가구 (장식)
+   ============================================================ */
+function buildFurniture() {
+    const wood = 0xb98b5e, woodD = 0x8d6540, fabric = 0x93b6a4, woodTop = 0xc9a072;
+
+    /* ---- 침실 ---- */
+    const bed = new THREE.Group(); bed.position.set(-4.35, 0, -2.9);
+    at(box(2.0, 0.26, 1.62, woodD, { rough: 0.8, dark: 0x5c4a36 }), 0, 0.15, 0, bed);
+    at(box(1.88, 0.24, 1.5, 0xfdfaf3, { rough: 0.9, dark: 0x9aa0ab }), 0, 0.4, 0, bed);
+    at(box(1.5, 0.1, 1.4, 0xa8c6b7, { rough: 0.95, dark: 0x5f7a72 }), 0.16, 0.55, 0.04, bed);
+    at(box(0.66, 0.13, 0.32, 0xffffff, { rough: 0.95, dark: 0xbcc3cd }), -0.52, 0.6, -0.5, bed);
+    at(box(2.0, 0.62, 0.1, wood, { rough: 0.8, dark: 0x5c4a36 }), 0, 0.5, -0.8, bed);
+    scene.add(bed);
+
+    at(box(0.5, 0.52, 0.46, wood, { rough: 0.8, dark: 0x5c4a36 }), -3.02, 0.26, -3.32);
+    at(box(0.54, 0.05, 0.5, woodTop, { rough: 0.75, dark: 0x6b5740 }), -3.02, 0.54, -3.32);
+    at(box(0.52, 1.5, 1.24, 0xc9a072, { rough: 0.75, dark: 0x6b5740 }), -5.28, 0.75, -1.4);
+    at(box(0.02, 1.3, 0.02, woodD, { rough: 0.6 }), -5.01, 0.75, -1.4);
+    at(box(0.86, 0.74, 0.42, wood, { rough: 0.8, dark: 0x5c4a36 }), -2.52, 0.37, -1.05);
+    at(box(0.9, 0.04, 0.46, woodTop, { rough: 0.75, dark: 0x6b5740 }), -2.52, 0.74, -1.05);
+    at(box(2.3, 0.02, 1.7, 0xeadfd2, { rough: 0.98, dark: 0x4a4f5c, cast: false }), -3.7, 0.012, -1.85);
+
+    /* ---- 주방 ---- */
+    at(box(0.62, 0.86, 3.5, 0xeceff2, { rough: 0.6, dark: 0x8d95a2 }), -5.27, 0.43, 1.55);
+    at(box(0.7, 0.07, 3.56, 0xd6dbe1, { rough: 0.45, dark: 0x7d8794 }), -5.27, 0.895, 1.55);
+    at(box(0.06, 0.5, 3.5, 0xdfe6ec, { rough: 0.7, dark: 0x7f8896 }), -5.54, 1.18, 1.55);
+    at(box(0.32, 0.6, 1.7, 0xf4f7fa, { rough: 0.55, dark: 0x8d95a2 }), -5.42, 1.86, 1.4);
+    at(box(0.42, 0.02, 0.56, 0x9aa4ae, { metal: 0.4, rough: 0.35, dark: 0x77808d }), -5.24, 0.935, 0.55);
+    at(cyl(0.012, 0.012, 0.22, 0xb9c2cc, { metal: 0.8 }), -5.46, 1.04, 0.55);
+    const tap2 = cyl(0.01, 0.01, 0.12, 0xb9c2cc, { metal: 0.8 });
+    tap2.rotation.z = Math.PI / 2;
+    at(tap2, -5.4, 1.14, 0.55);
+    at(box(0.55, 0.02, 0.5, 0x3d4652, { rough: 0.5, dark: 0x232a33 }), -5.25, 0.935, 2.32);
+    at(cyl(0.1, 0.1, 0.015, 0x1f262e, { rough: 0.6, dark: 0x121820 }), -5.25, 0.945, 2.2);
+    at(cyl(0.1, 0.1, 0.015, 0x1f262e, { rough: 0.6, dark: 0x121820 }), -5.25, 0.945, 2.44);
+
+    const table = new THREE.Group(); table.position.set(-3.35, 0, 2.75);
+    at(box(1.05, 0.06, 0.95, woodTop, { rough: 0.7, dark: 0x6b5740 }), 0, 0.72, 0, table);
+    [[-0.42, -0.36], [0.42, -0.36], [-0.42, 0.36], [0.42, 0.36]].forEach(function (p) {
+        at(cyl(0.03, 0.03, 0.72, woodD, { rough: 0.7, dark: 0x4d3d2c }), p[0], 0.36, p[1], table);
+    });
+    scene.add(table);
+
+    [[-3.35, 3.5], [-3.35, 2.02]].forEach(function (p) {
+        at(box(0.4, 0.05, 0.4, 0xa8c6b7, { rough: 0.9, dark: 0x5f7a72 }), p[0], 0.45, p[1]);
+        at(box(0.4, 0.42, 0.05, 0xa8c6b7, { rough: 0.9, dark: 0x5f7a72 }), p[0], 0.66, p[1] + (p[1] > 2.7 ? 0.18 : -0.18));
+        [[-0.15, -0.15], [0.15, -0.15], [-0.15, 0.15], [0.15, 0.15]].forEach(function (q) {
+            at(cyl(0.02, 0.02, 0.45, woodD, { rough: 0.7, dark: 0x4d3d2c }), p[0] + q[0], 0.225, p[1] + q[1]);
+        });
+    });
+    at(cyl(0.1, 0.12, 0.1, 0xb9c2cc, { metal: 0.7, rough: 0.4 }), -5.24, 1.0, 1.95);
+
+    /* ---- 거실 ---- */
+    at(box(3.4, 0.02, 2.3, 0xf0e6da, { rough: 0.98, dark: 0x474d59, cast: false }), 0.5, 0.012, 0.6);
+    const sofa = new THREE.Group(); sofa.position.set(0.45, 0, 2.1);
+    at(box(2.5, 0.32, 0.95, fabric, { rough: 0.95, dark: 0x4f6b62 }), 0, 0.28, 0, sofa);
+    at(box(2.5, 0.66, 0.2, fabric, { rough: 0.95, dark: 0x4f6b62 }), 0, 0.66, 0.42, sofa);
+    at(box(0.2, 0.52, 0.95, fabric, { rough: 0.95, dark: 0x4f6b62 }), -1.15, 0.5, 0, sofa);
+    at(box(0.2, 0.52, 0.95, fabric, { rough: 0.95, dark: 0x4f6b62 }), 1.15, 0.5, 0, sofa);
+    at(box(1.05, 0.16, 0.85, 0xa9c8b8, { rough: 0.95, dark: 0x5d7a72 }), -0.56, 0.5, -0.02, sofa);
+    at(box(1.05, 0.16, 0.85, 0xa9c8b8, { rough: 0.95, dark: 0x5d7a72 }), 0.56, 0.5, -0.02, sofa);
+    at(box(0.36, 0.36, 0.12, 0xe8c9a8, { rough: 0.9, dark: 0x7a6a5b }), -0.85, 0.62, 0.24, sofa);
+    at(box(0.36, 0.36, 0.12, 0xd9a9a0, { rough: 0.9, dark: 0x7a5d5b }), 0.85, 0.62, 0.24, sofa);
+    scene.add(sofa);
+
+    at(box(1.3, 0.07, 0.7, woodTop, { rough: 0.7, dark: 0x6b5740 }), 0.45, 0.38, 0.75);
+    [[-0.52, -0.24], [0.52, -0.24], [-0.52, 0.24], [0.52, 0.24]].forEach(function (p) {
+        at(cyl(0.025, 0.025, 0.38, woodD, { rough: 0.7, dark: 0x4d3d2c }), 0.45 + p[0], 0.19, 0.75 + p[1]);
+    });
+    at(cyl(0.05, 0.045, 0.08, 0xf6f2ea, { rough: 0.5, dark: 0xb9c0cb }), 0.7, 0.455, 0.72);
+    at(box(0.3, 0.03, 0.22, 0xd98f6a, { rough: 0.7, dark: 0x7a5540 }), 0.15, 0.43, 0.8);
+
+    at(cyl(0.13, 0.1, 0.26, 0xc98f6a, { rough: 0.8, dark: 0x7a5540 }), 2.55, 0.13, -3.25);
+    at(new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), mat(0x74a86f, { rough: 0.9, dark: 0x3f6242 })), 2.55, 0.46, -3.25);
+    at(new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), mat(0x8bbd83, { rough: 0.9, dark: 0x4d7050 })), 2.4, 0.62, -3.2);
+    const clockMesh = cyl(0.12, 0.12, 0.03, 0xffffff, { rough: 0.5, dark: 0x8d95a2 });
+    clockMesh.rotation.x = Math.PI / 2;
+    at(clockMesh, 2.2, 1.9, -3.72);
+
+    /* ---- 서재 ---- */
+    at(box(1.9, 0.06, 0.72, woodTop, { rough: 0.7, dark: 0x6b5740 }), 4.3, 0.74, -3.35);
+    [[-0.85, -0.3], [0.85, -0.3], [-0.85, 0.3], [0.85, 0.3]].forEach(function (p) {
+        at(cyl(0.028, 0.028, 0.74, woodD, { rough: 0.7, dark: 0x4d3d2c }), 4.3 + p[0], 0.37, -3.35 + p[1]);
+    });
+    at(box(0.44, 0.05, 0.44, 0x8fa3b8, { rough: 0.85, dark: 0x4a5768 }), 4.3, 0.44, -2.6);
+    at(box(0.44, 0.44, 0.05, 0x8fa3b8, { rough: 0.85, dark: 0x4a5768 }), 4.3, 0.66, -2.38);
+    [[-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16], [0.16, 0.16]].forEach(function (p) {
+        at(cyl(0.02, 0.02, 0.44, woodD, { rough: 0.7, dark: 0x4d3d2c }), 4.3 + p[0], 0.22, -2.6 + p[1]);
+    });
+    at(box(0.32, 1.5, 1.5, woodTop, { rough: 0.75, dark: 0x6b5740 }), 5.42, 0.75, -1.4);
+    [0.5, 0.9, 1.3].forEach(function (y) {
+        at(box(0.3, 0.04, 1.44, 0xe3cba8, { rough: 0.8, dark: 0x7a6550 }), 5.4, y, -1.4);
+    });
+    [[0.62, -1.7, 0xd06a5a], [0.62, -1.55, 0x5a7fd0], [0.62, -1.4, 0xd0b25a], [1.02, -1.75, 0x6ab38a], [1.02, -1.6, 0xa86ad0]].forEach(function (b) {
+        at(box(0.2, 0.26, 0.07, b[2], { rough: 0.85, dark: 0x555c68 }), 5.4, b[0] + 0.13, b[1]);
+    });
+    at(box(0.34, 0.03, 0.24, 0xb9c2cc, { metal: 0.6, rough: 0.3, dark: 0x6d7785 }), 4.72, 0.785, -3.3);
+    at(box(0.26, 0.02, 0.18, 0xe8edf2, { rough: 0.5, dark: 0x8d95a2 }), 3.32, 0.78, -3.2);
+
+    /* ---- 베란다 ---- */
+    at(box(1.4, 0.03, 0.03, 0xc2c9d2, { metal: 0.5, dark: 0x8c94a0 }), 4.6, 1.25, 2.9);
+    at(box(1.4, 0.03, 0.03, 0xc2c9d2, { metal: 0.5, dark: 0x8c94a0 }), 4.6, 1.05, 2.9);
+    [[3.95, 2.9], [5.25, 2.9]].forEach(function (p) {
+        at(cyl(0.018, 0.018, 1.25, 0xc2c9d2, { metal: 0.5, dark: 0x8c94a0 }), p[0], 0.63, p[1]);
+    });
+    at(box(0.34, 0.4, 0.02, 0xe9d7c4, { rough: 0.95, dark: 0x8c8378 }), 4.35, 1.0, 2.9);
+    at(box(0.3, 0.34, 0.02, 0xbcd3e8, { rough: 0.95, dark: 0x6f7f8f }), 4.95, 1.03, 2.9);
+    at(cyl(0.14, 0.11, 0.3, 0xc98f6a, { rough: 0.8, dark: 0x7a5540 }), 5.3, 0.15, 3.45);
+    at(new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), mat(0x74a86f, { rough: 0.9, dark: 0x3f6242 })), 5.3, 0.5, 3.45);
+    at(cyl(0.1, 0.08, 0.2, 0xa8b8c8, { rough: 0.8, dark: 0x5f6a78 }), 3.35, 0.1, 3.4);
+    at(box(0.24, 0.3, 0.2, 0xe8b35a, { rough: 0.85, dark: 0x8a6a35 }), 5.25, 0.15, 1.05);
+}
+
+/* ============================================================
+   상호작용
+   ============================================================ */
+const raycaster = new THREE.Raycaster();
+const ptr = new THREE.Vector2();
+let hovered = null;
+let downPos = null;
+
+function pickAt(clientX, clientY) {
+    const r = renderer.domElement.getBoundingClientRect();
+    ptr.x = ((clientX - r.left) / r.width) * 2 - 1;
+    ptr.y = -((clientY - r.top) / r.height) * 2 + 1;
+    raycaster.setFromCamera(ptr, camera);
+    const hits = raycaster.intersectObjects(pickables, false);
+    for (let i = 0; i < hits.length; i++) {
+        const id = hits[i].object.userData.app;
+        if (id) return id;
+    }
+    return null;
+}
+
+function setHover(id) {
+    if (hovered === id) return;
+    if (hovered && groups[hovered]) groups[hovered].scale.setScalar(1);
+    hovered = id;
+    if (id && groups[id]) groups[id].scale.setScalar(1.05);
+    renderer.domElement.style.cursor = id ? 'pointer' : 'grab';
+    if (id) {
+        const a = appById(id);
+        const tip = $('guide-tooltip');
+        tip.style.opacity = '1';
+        tip.innerHTML = a.icon + ' ' + a.name + ' · ' + a.w + ' W · ' + (state.on[id] ? '켜짐 (눌러서 끄기)' : '꺼짐 (눌러서 켜기)');
+    }
+}
+
+function toggleApp(id) {
+    state.on[id] = !state.on[id];
+    state.sel = id;
+    if (window.innerWidth <= 900) {
+        if (panelVisible('apps') || panelVisible('meter')) $('panel-detail').classList.remove('show');
+        else $('panel-detail').classList.add('show');
+    } else {
+        $('panel-detail').classList.add('show');
+    }
+    renderApps();
+    updateHud();
+    const a = appById(id);
+    const tip = $('guide-tooltip');
+    tip.style.opacity = '1';
+    tip.innerHTML = a.icon + ' ' + a.name + ' ' + (state.on[id] ? 'ON · ' + a.w + ' W를 쓰고 있어요' : 'OFF · 전력을 쓰지 않아요');
+}
+
+renderer.domElement.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'touch') return;
+    setHover(pickAt(e.clientX, e.clientY));
+});
+renderer.domElement.addEventListener('pointerdown', function (e) {
+    downPos = { x: e.clientX, y: e.clientY };
+});
+renderer.domElement.addEventListener('pointerup', function (e) {
+    if (!downPos) return;
+    const dx = e.clientX - downPos.x, dy = e.clientY - downPos.y;
+    downPos = null;
+    if (Math.sqrt(dx * dx + dy * dy) > 9) return;
+    const id = pickAt(e.clientX, e.clientY);
+    if (id) toggleApp(id);
+    else setHover(null);
+});
+renderer.domElement.style.cursor = 'grab';
+
+/* ---------- 애니메이션 ---------- */
+const clock = new THREE.Clock();
+let tAll = 0;
+let discAngle = 0;
+
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+    tAll += dt;
+
+    /* 회전 기구 */
+    Object.keys(spins).forEach(function (k) {
+        const s = spins[k];
+        const target = state.on[k] ? s.fast : 0;
+        anim[k].speed += (target - anim[k].speed) * Math.min(1, dt * 4);
+        if (s.axis === 'z') s.obj.rotation.z += anim[k].speed * dt;
+        else if (s.axis === 'y') s.obj.rotation.y += anim[k].speed * dt;
+    });
+
+    /* 스탠드 불빛 */
+    lampLights.forEach(function (l) {
+        const target = l.isOn() ? l.on : 0;
+        l.light.intensity += (target - l.light.intensity) * Math.min(1, dt * 6);
+    });
+
+    /* 발광 재질 (켜짐/꺼짐 부드럽게) */
+    glowList.forEach(function (g) {
+        const target = g.isOn() ? g.on : g.off;
+        g.m.emissiveIntensity += (target - g.m.emissiveIntensity) * Math.min(1, dt * 7);
+    });
+
+    /* 충전 게이지 */
+    if (batteryMesh) {
+        if (state.on.charger) {
+            batteryMesh.visible = true;
+            batteryMesh.scale.x = 0.08 + 0.92 * ((tAll * 0.22) % 1);
+        } else {
+            batteryMesh.visible = false;
+        }
+    }
+
+    /* 수증기 */
+    Object.keys(puffs).forEach(function (id) {
+        const on = state.on[id];
+        puffs[id].forEach(function (p, i) {
+            if (on) { p.life += dt * (0.55 + i * 0.05); if (p.life > 1) p.life -= 1; }
+            const k = p.life;
+            p.sprite.position.y = p.baseY + k * 0.5;
+            p.sprite.position.x = p.baseX + Math.sin((tAll + i * 1.7) * 1.5) * 0.045;
+            p.sprite.position.z = p.baseZ + Math.cos((tAll + i * 1.3) * 1.2) * 0.045;
+            p.sprite.material.opacity = on ? Math.sin(Math.PI * Math.min(1, k)) * 0.5 : 0;
+            p.sprite.scale.setScalar(0.1 + k * 0.2);
+        });
+    });
+
+    /* 소리 물결 */
+    Object.keys(waves).forEach(function (id) {
+        const on = state.on[id];
+        waves[id].forEach(function (r, i) {
+            if (!on) { r.material.opacity = 0; return; }
+            const k = (tAll * 0.85 + i / 3) % 1;
+            r.scale.setScalar(1 + k * 2.1);
+            r.material.opacity = (1 - k) * 0.5;
+        });
+    });
+
+    /* 켜진 가전 표시 링 */
+    APPS.forEach(function (a) {
+        const r = rings[a.id];
+        if (!r) return;
+        const on = state.on[a.id];
+        const base = hovered === a.id ? 0.3 : 0.22;
+        const target = on ? base + 0.08 * Math.sin(tAll * 3 + a.w) : 0;
+        r.material.opacity += (target - r.material.opacity) * Math.min(1, dt * 7);
+        r.scale.setScalar(hovered === a.id ? 1.08 : 1);
+    });
+
+    /* 세탁기 진동 */
+    if (groups.washer) {
+        const amp = state.on.washer ? 0.006 : 0;
+        groups.washer.position.x = 3.9 + Math.sin(tAll * 26) * amp;
+    }
+
+    /* 계량기 회전판 */
+    const p = powerNow();
+    discAngle = (discAngle + p * 0.5 * dt) % 360;
+    $('meter-disc').style.transform = 'rotate(' + discAngle.toFixed(1) + 'deg)';
+
+    /* 누적 전력량 표시 */
+    const mk = monthlyKwh();
+    state.dispKwh += (mk - state.dispKwh) * Math.min(1, dt * 3.2);
+    if (Math.abs(mk - state.dispKwh) < 0.02) state.dispKwh = mk;
+    const v = Math.max(0, state.dispKwh);
+    $('lcd-kwh').textContent = ('0000' + Math.floor(v).toString()).slice(-4) + '.' + Math.floor((v % 1) * 10);
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+/* ============================================================
+   초기화
+   ============================================================ */
+function applyTheme() {
+    themed.forEach(function (t) { t.m.color.setHex(state.dark ? t.d : t.l); });
+    if (state.dark) { hemi.intensity = 0.42; key.intensity = 0.5; fill.intensity = 0.16; }
+    else { hemi.intensity = 0.58; key.intensity = 0.74; fill.intensity = 0.26; }
+}
+
+const CAM_TARGET = new THREE.Vector3(0, 0.55, 0);
+const CAM_DIR = new THREE.Vector3(0.76, 0.84, 1).normalize();
+function fitView() {
+    const w = window.innerWidth, h = window.innerHeight, ar = w / h;
+    let d = 20;
+    if (ar < 0.8) d = 28;
+    else if (ar < 1.05) d = 24;
+    else if (ar < 1.35) d = 21.5;
+    else if (ar < 1.7) d = 20;
+    else d = 18.5;
+    if (h <= 500) d = 24;
+    camera.position.copy(CAM_TARGET).add(CAM_DIR.clone().multiplyScalar(d));
+    controls.target.copy(CAM_TARGET);
+    controls.update();
+}
+
+window.addEventListener('resize', function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ---------- 이벤트 연결 ---------- */
+$('app-list').addEventListener('click', function (e) {
+    const row = e.target.closest('.app-row');
+    if (!row) return;
+    toggleApp(row.getAttribute('data-id'));
+});
+$('chip-row').addEventListener('click', function (e) {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    state.filter = chip.getAttribute('data-f');
+    Array.prototype.forEach.call(this.children, function (c) { c.classList.toggle('on', c === chip); });
+    renderApps();
+    const tip = $('guide-tooltip');
+    tip.style.opacity = '1';
+    tip.textContent = state.filter === 'all' ? '🏠 모든 가전을 보여 줘요' : ('같은 에너지로 바뀌는 가전만 모았어요 — ' + CONV[state.filter].name);
+});
+$('btn-all-off').addEventListener('click', function () {
+    APPS.forEach(function (a) { state.on[a.id] = false; });
+    renderApps(); updateHud();
+    const tip = $('guide-tooltip');
+    tip.style.opacity = '1';
+    tip.textContent = '🌙 모든 가전을 껐어요. 소비전력이 0 W가 되었어요!';
+});
+$('rng-hours').addEventListener('input', function () {
+    const a = appById(state.sel);
+    if (!a) return;
+    state.hours[a.id] = parseFloat(this.value);
+    updateRow(a.id);
+    updateHud();
+});
+$('detail-close').addEventListener('click', function () {
+    state.sel = null;
+    $('panel-detail').classList.remove('show');
+    renderApps();
+});
+$('tab-apps').addEventListener('click', function () { onTab('apps'); });
+$('tab-meter').addEventListener('click', function () { onTab('meter'); });
+$('tab-help').addEventListener('click', function () {
+    $('modal-overlay').classList.add('show');
+    $('tab-help').classList.add('active');
+});
+$('modal-close').addEventListener('click', function () {
+    $('modal-overlay').classList.remove('show');
+    $('tab-help').classList.remove('active');
+});
+$('modal-overlay').addEventListener('click', function (e) {
+    if (e.target === this) { this.classList.remove('show'); $('tab-help').classList.remove('active'); }
+});
+$('theme-toggle').addEventListener('click', function () {
+    state.dark = !state.dark;
+    document.body.classList.toggle('dark-mode', state.dark);
+    this.textContent = state.dark ? '☀️' : '🌙';
+    applyTheme();
+});
+
+/* ---------- 시작 ---------- */
+let started = false;
+function start() {
+    if (started) return;
+    started = true;
+    buildShell();
+    buildFurniture();
+    buildAppliances();
+    buildLabels();
+    applyTheme();
+    fitView();
+    renderApps();
+    updateHud();
+    syncTabs();
+    if (window.innerWidth <= 900) {
+        panelShow('apps', false); panelShow('meter', false); syncTabs();
+        $('guide-tooltip').textContent = '🏠 아래 [가전] 버튼을 눌러 가전제품을 켜고 꺼 보세요';
+    }
+    animate();
+}
+
+if (document.fonts && document.fonts.load) {
+    Promise.race([
+        document.fonts.load("bold 20px 'SeoulNamsan'"),
+        new Promise(function (r) { setTimeout(r, 1200); })
+    ]).then(function () {
+        start();
+        setTimeout(buildLabels, 40);
+    }).catch(function () { start(); });
+} else {
+    start();
+}
+
+/* 검증용 (개발 확인) */
+window.__lab = {
+    state: state, APPS: APPS, toggle: toggleApp,
+    powerNow: powerNow, dailyWh: dailyWh, monthlyKwh: monthlyKwh,
+    calcBill: calcBill, groups: groups, camera: camera, fitView: fitView, scene: scene
+};
+
+</script>
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+<script src="../../common/feedback.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>물의 수소 결합</title>
+    <!-- Three.js & OrbitControls Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(25px) saturate(190%);
+            -webkit-backdrop-filter: blur(25px) saturate(190%);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 22px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* Top Left Header */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* Top Right Bar */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .icon-btn {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.25s ease;
+            font-size: 18px;
+        }
+
+        .icon-btn:hover {
+            transform: scale(1.08);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        /* Temperature & Status Control Panel (Width expanded to fit single line preset buttons) */
+        .temp-control-panel {
+            position: absolute;
+            top: 85px;
+            left: 20px;
+            padding: 20px 22px;
+            width: 360px;
+            max-width: calc(100vw - 40px);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 10;
+        }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .temp-display {
+            font-size: 22px;
+            font-weight: bold;
+            color: #007aff;
+            font-family: monospace;
+        }
+
+        .temp-display.frozen {
+            color: #5ac8fa;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #5ac8fa, #ff9500, #ff3b30);
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+            cursor: pointer;
+            border: 2px solid #007aff;
+        }
+
+        .preset-btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .preset-btn {
+            padding: 11px 10px;
+            border-radius: 14px;
+            border: 1px solid rgba(0, 122, 255, 0.2);
+            background: rgba(255, 255, 255, 0.55);
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: #1c1c1e;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .preset-btn:hover {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+        }
+
+        /* State Indicator Badge (Right Upper Floating) */
+        .status-badge-panel {
+            position: absolute;
+            top: 85px;
+            right: 20px;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+            min-width: 200px;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .status-val {
+            font-weight: bold;
+            color: #007aff;
+        }
+
+        /* Center Tooltip (Located Top) */
+        .center-tooltip {
+            position: absolute;
+            top: 85px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 22px;
+            font-size: 13px;
+            color: #48484a;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        /* Bottom Control Bar */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
+            border-radius: 16px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 13px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .control-tab-btn:hover {
+            background: rgba(0, 122, 255, 0.08);
+            color: #007aff;
+        }
+
+        /* Detailed Modal Glass Card */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s ease;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            width: 90%;
+            max-width: 520px;
+            padding: 28px;
+            transform: translateY(20px) scale(0.95);
+            transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal-overlay.show .modal-card {
+            transform: translateY(0) scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1c1c1e;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-badge {
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 10px;
+            background: rgba(0, 122, 255, 0.12);
+            color: #007aff;
+        }
+
+        .modal-close-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.05);
+            color: #8e8e93;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal-close-btn:hover {
+            background: rgba(255, 59, 48, 0.15);
+            color: #ff3b30;
+        }
+
+        .modal-body {
+            font-size: 14.5px;
+            line-height: 1.65;
+            color: #3a3a3c;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .example-item {
+            background: rgba(255, 255, 255, 0.6);
+            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+        }
+
+        .example-title {
+            font-size: 13.5px;
+            font-weight: bold;
+            color: #007aff;
+            margin-bottom: 4px;
+        }
+
+        .example-desc {
+            font-size: 13.5px;
+            color: #1c1c1e;
+            word-break: keep-all;
+        }
+
+        /* Dark Mode Styling */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.78);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .back-btn, body.dark-mode .control-tab-btn, body.dark-mode .panel-title, body.dark-mode .preset-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .preset-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.78);
+            color: #fff;
+        }
+
+        body.dark-mode .center-tooltip {
+            color: #aeaeb2;
+        }
+
+        body.dark-mode .modal-card {
+            background: rgba(32, 32, 35, 0.88);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        body.dark-mode .modal-title, body.dark-mode .example-desc {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .example-item {
+            background: rgba(20, 20, 22, 0.5);
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        body.dark-mode .modal-close-btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #aeaeb2;
+        }
+    
+        /* Bottom Right Bar (Fullscreen) */
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        button.back-btn, button.tag-badge {
+            font-family: inherit;
+            border: none;
+        }
+        @media (max-width: 768px) {
+            .bottom-right-bar {
+                bottom: 15px;
+                right: 15px;
+            }
+        }
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+
+@media (max-width: 900px) and (min-height: 501px) {
+    .status-badge-panel {
+        top: auto !important;
+        bottom: calc(74px + env(safe-area-inset-bottom)) !important;
+        left: 8px !important;
+        right: 8px !important;
+        padding: 7px 11px !important;
+        gap: 4px !important;
+        min-width: 0 !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        justify-content: space-between !important;
+    }
+    .status-row { font-size: 10px !important; gap: 4px !important; }
+    .status-val { font-size: 10.5px !important; }
+    .temp-control-panel {
+        top: calc(max(8px, env(safe-area-inset-top)) + 148px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        width: auto !important;
+        max-width: none !important;
+        padding: 10px 12px !important;
+        gap: 8px !important;
+    }
+    .temp-control-panel .panel-title { font-size: 11px !important; }
+    .temp-display { font-size: 17px !important; }
+    .preset-btn-group { gap: 6px !important; }
+    .preset-btn { padding: 6px 4px !important; font-size: 10px !important; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+    .status-badge-panel {
+        top: calc(max(6px, env(safe-area-inset-top)) + 58px) !important;
+        right: 8px !important;
+        left: auto !important;
+        padding: 6px 10px !important;
+        gap: 3px !important;
+        min-width: 168px !important;
+    }
+    .status-row { font-size: 9.5px !important; }
+    .status-val { font-size: 10px !important; }
+    .temp-control-panel {
+        top: calc(max(6px, env(safe-area-inset-top)) + 58px) !important;
+        left: 8px !important;
+        width: 258px !important;
+        padding: 8px 10px !important;
+        gap: 5px !important;
+    }
+    .temp-control-panel .panel-title { font-size: 10.5px !important; }
+    .temp-display { font-size: 15px !important; }
+    .preset-btn-group { gap: 5px !important; }
+    .preset-btn { padding: 4px 3px !important; font-size: 9.5px !important; }
+}
+
+/* @@/MOBILE-BASE@@ */
+</style>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- Top Left Header -->
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>물의 수소 결합</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- Top Right Bar -->
+    <div class="top-right-bar">
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- Temperature Control Panel -->
+    <div class="glass-panel temp-control-panel">
+        <div class="panel-title">
+            <span>🌡️ 온도 조절</span>
+            <span class="temp-display" id="temp-val">20°C</span>
+        </div>
+        <div class="slider-container">
+            <input type="range" id="temp-slider" min="-20" max="40" value="20" step="1">
+        </div>
+        <div class="preset-btn-group">
+            <button class="preset-btn" id="btn-freeze">❄️ 영하 (-10°C)</button>
+            <button class="preset-btn" id="btn-zero">🧊 어는점(녹는점) (0°C)</button>
+            <button class="preset-btn" id="btn-room">🌡️ 상온 (20°C)</button>
+            <button class="preset-btn" id="btn-warm">☀️ 따뜻함 (40°C)</button>
+        </div>
+    </div>
+
+    <!-- Real-time Status Badge Panel -->
+    <div class="glass-panel status-badge-panel">
+        <div class="status-row">
+            <span>물질 상태:</span>
+            <span class="status-val" id="state-text">액체 (Liquid)</span>
+        </div>
+        <div class="status-row">
+            <span>부피 변화:</span>
+            <span class="status-val" id="volume-text">100% (기준)</span>
+        </div>
+        <div class="status-row">
+            <span>수소 결합:</span>
+            <span class="status-val" id="hbond-text">유동적 (끊어짐/생성)</span>
+        </div>
+    </div>
+
+    <!-- Center Guide Tooltip (Located Top) -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        ✨ 온도를 낮춰 물 분자들이 수소 결합을 통해 육각형 공간을 형성하고 부피가 커지는 과정을 관찰하세요
+    </div>
+
+    <!-- Bottom Control Bar -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-hbond">
+            <span>🔗</span>
+            <span id="hbond-btn-text">수소 결합선 표시</span>
+        </button>
+        <button class="control-tab-btn" id="btn-explain">
+            <span>💡</span>
+            <span>원리 설명</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점 정렬</span>
+        </button>
+    </div>
+
+    <!-- Principle Explanation Detail Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="glass-panel modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>💧 물이 얼 때 부피가 커지는 이유</span>
+                    <span class="modal-badge">수소 결합</span>
+                </div>
+                <button class="modal-close-btn" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="example-item">
+                    <div class="example-title">1. 액체 상태의 물 분자 (상온)</div>
+                    <div class="example-desc">
+                        상온의 액체 상태에서는 물 분자들이 열에너지에 의해 빠르게 움직이며, 분자 사이의 수소 결합이 끊어지고 형성되기를 계속 반복합니다. 입자들이 밀집되어 무질서하게 채워져 있습니다.
+                    </div>
+                </div>
+                <div class="example-item">
+                    <div class="example-title">2. 고체(얼음)가 될 때의 수소 결합 구조</div>
+                    <div class="example-desc">
+                        온도가 내려가 0°C 이하가 되면 입자의 열운동이 줄어들고, 물 분자 1개가 주위의 다른 물 분자 4개와 강하고 규칙적인 <b>수소 결합</b>을 형성합니다.
+                    </div>
+                </div>
+                <div class="example-item">
+                    <div class="example-title">3. 빈 공간(공극) 형성과 부피 팽창</div>
+                    <div class="example-desc">
+                        수소 결합에 의해 입체적인 <b>육각형 고리 결정 구조</b>가 만들어집니다. 이 육각형 구조의 중심부에는 아무것도 없는 빈 공간이 생기므로, 액체 상태일 때보다 <b>전체 부피가 약 9% 증가</b>하고 밀도는 낮아집니다.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- Fullscreen / Windowed Mode Button -->
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. Three.js Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 6.0, 11.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 1.2, 0);
+        controls.maxPolarAngle = Math.PI / 2 - 0.02;
+
+        // --- 2. Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(8, 15, 10);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0x5ac8fa, 0.6, 15);
+        pointLight.position.set(0, 3, 0);
+        scene.add(pointLight);
+
+        // --- 3. Floor (Grid Lines Removed) ---
+        const floorGeo = new THREE.PlaneGeometry(30, 30);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.85 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.05;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- 4. Transparent Beaker / Glass Container ---
+        const beakerRadius = 2.4;
+        const beakerHeight = 4.2;
+
+        // Glass Cylinder Mesh
+        const glassGeo = new THREE.CylinderGeometry(beakerRadius, beakerRadius, beakerHeight, 48, 1, true);
+        const glassMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.22,
+            roughness: 0.1,
+            transmission: 0.9,
+            thickness: 0.6,
+            side: THREE.DoubleSide
+        });
+        const beakerMesh = new THREE.Mesh(glassGeo, glassMat);
+        beakerMesh.position.set(0, beakerHeight / 2, 0);
+        scene.add(beakerMesh);
+
+        // Beaker Rim Ring & Base Ring
+        const rimGeo = new THREE.TorusGeometry(beakerRadius, 0.04, 16, 64);
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0x007aff, roughness: 0.2 });
+        const rimTop = new THREE.Mesh(rimGeo, rimMat);
+        rimTop.rotation.x = Math.PI / 2;
+        rimTop.position.set(0, beakerHeight, 0);
+        scene.add(rimTop);
+
+        const rimBottom = new THREE.Mesh(rimGeo, rimMat);
+        rimBottom.rotation.x = Math.PI / 2;
+        rimBottom.position.set(0, 0.02, 0);
+        scene.add(rimBottom);
+
+        // Dynamic Water Surface Disk (shows expansion height)
+        const waterSurfaceGeo = new THREE.CircleGeometry(beakerRadius - 0.05, 48);
+        const waterSurfaceMat = new THREE.MeshPhysicalMaterial({
+            color: 0x5ac8fa,
+            transparent: true,
+            opacity: 0.45,
+            roughness: 0.2,
+            side: THREE.DoubleSide
+        });
+        const waterSurfaceMesh = new THREE.Mesh(waterSurfaceGeo, waterSurfaceMat);
+        waterSurfaceMesh.rotation.x = Math.PI / 2;
+        waterSurfaceMesh.position.set(0, 2.2, 0);
+        scene.add(waterSurfaceMesh);
+
+        // Water level marker line
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-beakerRadius - 0.2, 2.2, 0),
+            new THREE.Vector3(beakerRadius + 0.2, 2.2, 0)
+        ]);
+        const lineMat = new THREE.LineDashedMaterial({ color: 0xff3b30, dashSize: 0.1, gapSize: 0.1 });
+        const baseLevelLine = new THREE.Line(lineGeo, lineMat);
+        baseLevelLine.computeLineDistances();
+        scene.add(baseLevelLine);
+
+        // --- 5. Water Molecules (H2O) Modeling ---
+        const O_RADIUS = 0.22;
+        const H_RADIUS = 0.12;
+        const BOND_LEN = 0.32;
+        const BOND_ANGLE = 104.5 * (Math.PI / 180);
+
+        const oGeo = new THREE.SphereGeometry(O_RADIUS, 24, 24);
+        const hGeo = new THREE.SphereGeometry(H_RADIUS, 18, 18);
+        const oMat = new THREE.MeshStandardMaterial({ color: 0xff3b30, roughness: 0.3, metalness: 0.1 });
+        const hMat = new THREE.MeshStandardMaterial({ color: 0xf2f2f7, roughness: 0.3, metalness: 0.1 });
+        const covalentBondMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.5 });
+
+        function createSingleWaterMolecule() {
+            const group = new THREE.Group();
+
+            // Oxygen Center
+            const oMesh = new THREE.Mesh(oGeo, oMat);
+            oMesh.castShadow = true;
+            group.add(oMesh);
+
+            // 2 Hydrogens
+            const h1Pos = new THREE.Vector3(
+                BOND_LEN * Math.sin(BOND_ANGLE / 2),
+                BOND_LEN * Math.cos(BOND_ANGLE / 2),
+                0
+            );
+            const h2Pos = new THREE.Vector3(
+                -BOND_LEN * Math.sin(BOND_ANGLE / 2),
+                BOND_LEN * Math.cos(BOND_ANGLE / 2),
+                0
+            );
+
+            const h1Mesh = new THREE.Mesh(hGeo, hMat);
+            h1Mesh.position.copy(h1Pos);
+            h1Mesh.castShadow = true;
+            group.add(h1Mesh);
+
+            const h2Mesh = new THREE.Mesh(hGeo, hMat);
+            h2Mesh.position.copy(h2Pos);
+            h2Mesh.castShadow = true;
+            group.add(h2Mesh);
+
+            // Covalent bond cylinders
+            function addBondCylinder(toPos) {
+                const bondGeo = new THREE.CylinderGeometry(0.04, 0.04, BOND_LEN, 8);
+                const bondMesh = new THREE.Mesh(bondGeo, covalentBondMat);
+                bondMesh.position.copy(toPos.clone().multiplyScalar(0.5));
+                bondMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), toPos.clone().normalize());
+                group.add(bondMesh);
+            }
+            addBondCylinder(h1Pos);
+            addBondCylinder(h2Pos);
+
+            return { group, oMesh, h1Mesh, h2Mesh, h1Pos, h2Pos };
+        }
+
+        // --- 6. Molecules Setup & Hexagonal Ice Lattice Generation ---
+        const MOLECULE_COUNT = 36;
+        const molecules = [];
+
+        const iceLatticePositions = [];
+        const layers = 3;
+        const perLayer = 12;
+        const hexR = 0.95;
+
+        for (let l = 0; l < layers; l++) {
+            const y = 0.6 + l * 0.95;
+            for (let i = 0; i < perLayer; i++) {
+                let angle = (i % 6) * (Math.PI / 3) + (l % 2 === 1 ? Math.PI / 6 : 0);
+                let radius = i < 6 ? hexR : hexR * 1.85;
+                let x = radius * Math.cos(angle);
+                let z = radius * Math.sin(angle);
+                iceLatticePositions.push(new THREE.Vector3(x, y, z));
+            }
+        }
+
+        for (let i = 0; i < MOLECULE_COUNT; i++) {
+            const mol = createSingleWaterMolecule();
+
+            const r = Math.random() * 1.6;
+            const theta = Math.random() * Math.PI * 2;
+            const liquidPos = new THREE.Vector3(
+                r * Math.cos(theta),
+                0.4 + Math.random() * 1.6,
+                r * Math.sin(theta)
+            );
+
+            mol.group.position.copy(liquidPos);
+            mol.group.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+            scene.add(mol.group);
+
+            molecules.push({
+                ...mol,
+                liquidPos: liquidPos,
+                icePos: iceLatticePositions[i] || liquidPos,
+                velocity: new THREE.Vector3((Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.8),
+                rotVel: new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2)
+            });
+        }
+
+        // --- 7. Hydrogen Bond Lines Visualization ---
+        const maxHBonds = 120;
+        const hBondLineGeo = new THREE.BufferGeometry();
+        const hBondPositions = new Float32Array(maxHBonds * 6);
+        hBondLineGeo.setAttribute('position', new THREE.BufferAttribute(hBondPositions, 3));
+
+        const hBondMat = new THREE.LineDashedMaterial({
+            color: 0x007aff,
+            dashSize: 0.12,
+            gapSize: 0.08,
+            transparent: true,
+            opacity: 0.85,
+            linewidth: 2
+        });
+        const hBondLinesMesh = new THREE.LineSegments(hBondLineGeo, hBondMat);
+        scene.add(hBondLinesMesh);
+
+        let showHBonds = true;
+
+        // --- 8. Simulation State Variables & Controls ---
+        let targetTemp = 20;
+        let currentTemp = 20;
+        let freezeFactor = 0;
+
+        const tempSlider = document.getElementById('temp-slider');
+        const tempVal = document.getElementById('temp-val');
+        const stateText = document.getElementById('state-text');
+        const volumeText = document.getElementById('volume-text');
+        const hbondText = document.getElementById('hbond-text');
+
+        function updateTemperature(newTemp) {
+            targetTemp = parseInt(newTemp);
+            tempSlider.value = targetTemp;
+            tempVal.innerText = targetTemp + '°C';
+
+            if (targetTemp <= 0) {
+                tempVal.className = 'temp-display frozen';
+            } else {
+                tempVal.className = 'temp-display';
+            }
+        }
+
+        tempSlider.addEventListener('input', (e) => updateTemperature(e.target.value));
+        document.getElementById('btn-freeze').addEventListener('click', () => updateTemperature(-10));
+        document.getElementById('btn-zero').addEventListener('click', () => updateTemperature(0));
+        document.getElementById('btn-room').addEventListener('click', () => updateTemperature(20));
+        document.getElementById('btn-warm').addEventListener('click', () => updateTemperature(40));
+
+        // Toggle H-Bonds Line Display
+        document.getElementById('btn-toggle-hbond').addEventListener('click', () => {
+            showHBonds = !showHBonds;
+            hBondLinesMesh.visible = showHBonds;
+            document.getElementById('hbond-btn-text').innerText = showHBonds ? '수소 결합선 숨기기' : '수소 결합선 표시';
+        });
+
+        // Modal Controls
+        const modalOverlay = document.getElementById('modal-overlay');
+        document.getElementById('btn-explain').addEventListener('click', () => modalOverlay.classList.add('show'));
+        document.getElementById('modal-close').addEventListener('click', () => modalOverlay.classList.remove('show'));
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) modalOverlay.classList.remove('show');
+        });
+
+        // Bottom Control Buttons
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            updateTemperature(20);
+            camera.position.set(0, 6.0, 11.5);
+            controls.target.set(0, 1.2, 0);
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 6.0, 11.5);
+            controls.target.set(0, 1.2, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+            glassMat.color.setHex(isDark ? 0x8e8e93 : 0xffffff);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 9. Physics & Animation Loop ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            currentTemp += (targetTemp - currentTemp) * 0.05;
+
+            const targetFreeze = currentTemp <= 0 ? Math.min(1.0, (0 - currentTemp + 5) / 10) : 0;
+            freezeFactor += (targetFreeze - freezeFactor) * 0.04;
+
+            if (freezeFactor > 0.6) {
+                stateText.innerText = '고체 (얼음 - Ice)';
+                stateText.style.color = '#5ac8fa';
+                volumeText.innerText = `약 ${Math.round(100 + freezeFactor * 9.2)}% (팽창!)`;
+                volumeText.style.color = '#ff3b30';
+                hbondText.innerText = '육각형 정렬 수소 결합';
+                hbondText.style.color = '#007aff';
+            } else if (freezeFactor > 0.1) {
+                stateText.innerText = '상태 변화 중 (응고)';
+                stateText.style.color = '#ff9500';
+                volumeText.innerText = `약 ${Math.round(100 + freezeFactor * 9.2)}%`;
+                volumeText.style.color = '#ff9500';
+                hbondText.innerText = '결합 형성 시작';
+            } else {
+                stateText.innerText = '액체 (물 - Liquid)';
+                stateText.style.color = '#007aff';
+                volumeText.innerText = '100% (기준)';
+                volumeText.style.color = '#1c1c1e';
+                hbondText.innerText = '유동적 (끊어짐/생성)';
+            }
+
+            const baseLevelY = 2.1;
+            const expandedLevelY = 2.5;
+            waterSurfaceMesh.position.y = THREE.MathUtils.lerp(baseLevelY, expandedLevelY, freezeFactor);
+            waterSurfaceMat.color.setHSL(0.55, 0.8, THREE.MathUtils.lerp(0.5, 0.75, freezeFactor));
+
+            const speedScale = Math.max(0.05, (currentTemp + 20) / 40);
+
+            molecules.forEach((mol, idx) => {
+                if (freezeFactor < 0.85) {
+                    mol.liquidPos.addScaledVector(mol.velocity, delta * speedScale * (1 - freezeFactor));
+
+                    const distXZ = Math.sqrt(mol.liquidPos.x * mol.liquidPos.x + mol.liquidPos.z * mol.liquidPos.z);
+                    if (distXZ > beakerRadius - 0.35) {
+                        const normal = new THREE.Vector3(mol.liquidPos.x, 0, mol.liquidPos.z).normalize();
+                        mol.velocity.reflect(normal).multiplyScalar(0.9);
+                        mol.liquidPos.x = normal.x * (beakerRadius - 0.35);
+                        mol.liquidPos.z = normal.z * (beakerRadius - 0.35);
+                    }
+                    if (mol.liquidPos.y < 0.35 || mol.liquidPos.y > waterSurfaceMesh.position.y - 0.35) {
+                        mol.velocity.y *= -1;
+                        mol.liquidPos.y = THREE.MathUtils.clamp(mol.liquidPos.y, 0.35, waterSurfaceMesh.position.y - 0.35);
+                    }
+
+                    mol.group.rotation.x += mol.rotVel.x * delta * speedScale * (1 - freezeFactor);
+                    mol.group.rotation.y += mol.rotVel.y * delta * speedScale * (1 - freezeFactor);
+                }
+
+                const targetPos = mol.icePos;
+                const currentPos = new THREE.Vector3().lerpVectors(mol.liquidPos, targetPos, freezeFactor);
+
+                if (freezeFactor > 0.5) {
+                    const vib = Math.sin(time * 15 + idx) * 0.015 * (1 - freezeFactor * 0.5);
+                    currentPos.x += vib;
+                    currentPos.y += vib;
+                }
+
+                mol.group.position.copy(currentPos);
+
+                if (freezeFactor > 0.2) {
+                    const targetRot = new THREE.Euler(0, (idx % 6) * (Math.PI / 3), (idx % 2 === 0 ? 0.3 : -0.3));
+                    mol.group.quaternion.slerp(new THREE.Quaternion().setFromEuler(targetRot), freezeFactor * 0.1);
+                }
+            });
+
+            let bondLineIdx = 0;
+            const posAttr = hBondLineGeo.attributes.position;
+
+            if (showHBonds) {
+                for (let i = 0; i < molecules.length; i++) {
+                    for (let j = i + 1; j < molecules.length; j++) {
+                        if (bondLineIdx >= maxHBonds) break;
+
+                        const m1 = molecules[i];
+                        const m2 = molecules[j];
+                        const dist = m1.group.position.distanceTo(m2.group.position);
+
+                        const threshold = THREE.MathUtils.lerp(0.85, 1.45, freezeFactor);
+
+                        if (dist < threshold && dist > 0.4) {
+                            const oWorld = m1.group.position.clone();
+                            const hWorld = m2.group.position.clone().add(m2.h1Pos.clone().applyQuaternion(m2.group.quaternion));
+
+                            posAttr.setXYZ(bondLineIdx * 2, oWorld.x, oWorld.y, oWorld.z);
+                            posAttr.setXYZ(bondLineIdx * 2 + 1, hWorld.x, hWorld.y, hWorld.z);
+                            bondLineIdx++;
+                        }
+                    }
+                }
+            }
+
+            for (let k = bondLineIdx * 2; k < maxHBonds * 2; k++) {
+                posAttr.setXYZ(k, 0, 0, 0);
+            }
+
+            posAttr.needsUpdate = true;
+            hBondLineGeo.computeBoundingSphere();
+            hBondLinesMesh.computeLineDistances();
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    
+        /* ---------- Fullscreen / Windowed Mode Logic ---------- */
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        const fullscreenText = document.getElementById('fullscreenText');
+
+        function updateFullscreenUI() {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (fullscreenIcon) fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+            if (fullscreenText) fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+        }
+
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                try {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) req.call(document.documentElement);
+                    } else {
+                        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    }
+                } catch (err) {
+                    console.error('전체화면 모드를 전환할 수 없습니다:', err);
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+<script src="../../common/feedback.js" defer></script>
+</body>
+</html>

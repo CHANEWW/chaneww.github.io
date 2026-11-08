@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>별의 연주시차 3D</title>
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #06080f;
+            color: #f2f5fa;
+            touch-action: none;
+            transition: background-color .3s ease, color .3s ease;
+        }
+        body.light-mode { background-color: #eef3f9; color: #1c1c1e; }
+
+        #canvas-container {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0;
+            z-index: 1; touch-action: none;
+        }
+
+        .glass-panel {
+            background: rgba(22, 30, 46, 0.72);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            z-index: 10;
+        }
+        body.light-mode .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: rgba(255, 255, 255, 0.7);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            color: #1c1c1e;
+        }
+
+        .top-left-bar {
+            position: absolute; top: 18px; left: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; font-size: 14px; font-weight: bold;
+            color: #eaf1ff; text-decoration: none; cursor: pointer;
+            transition: all .2s ease;
+        }
+        body.light-mode .back-btn { color: #1c1c1e; }
+        button.back-btn { font-family: inherit; border: none; }
+
+        .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+        .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; }
+        .vision-badge {
+            background: rgba(10, 132, 255, 0.28); color: #7cc0ff;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; letter-spacing: .2px;
+        }
+        body.light-mode .vision-badge { background: rgba(0, 122, 255, 0.14); color: #007aff; }
+
+        .top-right-bar {
+            position: absolute; top: 18px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+        .data-card { display: flex; align-items: center; gap: 16px; padding: 10px 20px; }
+        .data-item { display: flex; flex-direction: column; align-items: center; }
+        .data-label { font-size: 11px; color: #9aa8bd; font-weight: bold; }
+        body.light-mode .data-label { color: #8e8e93; }
+        .data-value { font-size: 15px; font-weight: bold; color: #f2f5fa; }
+        body.light-mode .data-value { color: #1c1c1e; }
+
+        .icon-btn {
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; border: none;
+            background: rgba(30, 40, 60, 0.75); color: #eaf1ff;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            transition: all .2s; font-size: 16px; font-family: inherit;
+        }
+        body.light-mode .icon-btn { background: rgba(255,255,255,.8); color: #1c1c1e; }
+
+        .center-tooltip {
+            position: absolute; top: 9%; left: 50%; transform: translateX(-50%);
+            padding: 8px 18px; font-size: 13px; font-weight: bold;
+            color: #cfdcf0; border-radius: 30px;
+            pointer-events: none; z-index: 5;
+            transition: opacity .5s ease; white-space: nowrap;
+        }
+        body.light-mode .center-tooltip { color: #4a5568; }
+
+        /* ---------- 관측 뷰 패널 ---------- */
+        #obs-panel {
+            position: absolute; left: 20px; bottom: 24px;
+            width: 320px; padding: 12px 14px 12px;
+            display: flex; flex-direction: column; gap: 8px;
+            z-index: 9;
+        }
+        #obs-panel.hidden { display: none; }
+        .obs-head {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 11.5px; font-weight: bold; color: #9ec5ff;
+        }
+        body.light-mode .obs-head { color: #007aff; }
+        .obs-head span.zoom { font-size: 10.5px; font-weight: bold; color: #7f8ea6; }
+        #obsCanvas {
+            width: 100%; height: 168px; display: block;
+            border-radius: 12px; background: #04060d;
+            border: 1px solid rgba(120, 160, 220, 0.25);
+        }
+        .obs-rows { display: flex; flex-direction: column; gap: 6px; }
+        .obs-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: bold; }
+        .obs-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+        .obs-name { width: 34px; flex: 0 0 auto; color: #dbe6f7; }
+        body.light-mode .obs-name { color: #1c1c1e; }
+        .obs-bar-wrap { flex: 1 1 auto; height: 7px; border-radius: 4px; background: rgba(255,255,255,0.1); overflow: hidden; }
+        body.light-mode .obs-bar-wrap { background: rgba(0,0,0,0.08); }
+        .obs-bar { display: block; height: 100%; border-radius: 4px; transition: width .2s ease; }
+        .obs-val { width: 86px; text-align: right; flex: 0 0 auto; color: #cddcf2; font-variant-numeric: tabular-nums; }
+        body.light-mode .obs-val { color: #33415a; }
+        .obs-foot { font-size: 10.5px; color: #7f8ea6; font-weight: bold; line-height: 1.4; }
+
+        /* ---------- 하단 제어 바 ---------- */
+        .bottom-control-bar {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 4px;
+            padding: 6px; z-index: 10;
+        }
+        .control-tab-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 2px; padding: 7px 12px; min-width: 66px;
+            border-radius: 14px; border: none; background: transparent;
+            color: #e6edf9; font-size: 12px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; line-height: 1.2;
+        }
+        body.light-mode .control-tab-btn { color: #1c1c1e; }
+        .control-tab-btn span:first-child { font-size: 16px; line-height: 1.1; }
+        .control-tab-btn.active { background: #0a84ff; color: #fff; box-shadow: 0 4px 12px rgba(10,132,255,.35); }
+
+        .sub-panel {
+            position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%);
+            padding: 16px 18px; width: 336px;
+            display: none; flex-direction: column; gap: 12px; z-index: 11;
+        }
+        .sub-panel.show { display: flex; }
+        .panel-title { font-size: 11.5px; font-weight: bold; color: #7cc0ff; letter-spacing: .4px; }
+        body.light-mode .panel-title { color: #007aff; }
+        .control-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; }
+        .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+        .toggle-btn {
+            padding: 6px 12px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.08);
+            color: #e6edf9; font-size: 12px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        body.light-mode .toggle-btn { background: #fff; color: #1c1c1e; border-color: #d6d9de; }
+        .toggle-btn.on { background: #0a84ff; color: #fff; border-color: #0a84ff; }
+        .slider-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; color: #9aa8bd; }
+        body.light-mode .slider-header { color: #5b6472; }
+        input[type="range"] { width: 100%; height: 22px; accent-color: #0a84ff; cursor: pointer; margin: 0; }
+        .panel-note { font-size: 11.5px; line-height: 1.5; color: #8fa0ba; font-weight: bold; }
+        body.light-mode .panel-note { color: #6b7280; }
+
+        .bottom-right-bar {
+            position: absolute; bottom: 24px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+
+        @media (max-width: 900px) {
+            body.panel-open #obs-panel { display: none; }
+            #obs-panel { width: calc(100% - 16px); left: 8px; bottom: 76px; padding: 9px 10px; gap: 6px; }
+            #obsCanvas { height: 132px; }
+            .obs-val { width: 96px; font-size: 10px; white-space: nowrap; }
+            .obs-name { width: 30px; }
+            .obs-row { font-size: 10.5px; }
+            .center-tooltip { display: none; }
+        }
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+/* @@/MOBILE-BASE@@ */
+    </style>
+
+
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn"><span>⬅</span> 메인</a>
+        <div class="glass-panel tag-badge title-capsule">
+            <span class="title-text">별의 연주시차 3D</span>
+            <span class="vision-badge">visionOS</span>
+        </div>
+    </div>
+
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">날짜</span>
+                <span class="data-value" id="val-month" style="color:#ffd60a;">1월</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">별 A 시차</span>
+                <span class="data-value" id="val-pa" style="color:#ff9f0a;">0.500″</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">별 B 시차</span>
+                <span class="data-value" id="val-pb" style="color:#64d2ff;">0.083″</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        지구가 공전하면 가까운 별이 배경 별에 비해 크게 흔들려 보여요
+    </div>
+
+    <!-- 관측 뷰 -->
+    <div class="glass-panel" id="obs-panel">
+        <div class="obs-head">
+            <span>🔭 망원경 관측 뷰</span>
+            <span class="zoom">시차 확대 표시</span>
+        </div>
+        <canvas id="obsCanvas"></canvas>
+        <div class="obs-rows">
+            <div class="obs-row">
+                <span class="obs-dot" style="background:#ff9f0a;"></span>
+                <span class="obs-name">별 A</span>
+                <span class="obs-bar-wrap"><span class="obs-bar" id="bar-a" style="width:100%;background:#ff9f0a;"></span></span>
+                <span class="obs-val" id="row-a">2.0 pc · 0.500″</span>
+            </div>
+            <div class="obs-row">
+                <span class="obs-dot" style="background:#64d2ff;"></span>
+                <span class="obs-name">별 B</span>
+                <span class="obs-bar-wrap"><span class="obs-bar" id="bar-b" style="width:17%;background:#64d2ff;"></span></span>
+                <span class="obs-val" id="row-b">12.0 pc · 0.083″</span>
+            </div>
+        </div>
+        <div class="obs-foot" id="obs-foot">1월과 7월, 6개월 간격으로 찍은 별의 위치 차이 = 연주시차 2p</div>
+    </div>
+
+    <!-- 날짜 패널 -->
+    <div class="glass-panel sub-panel" id="panel-date">
+        <div class="panel-title">지구의 공전 · 날짜</div>
+        <div class="control-row">
+            <span>자동 공전</span>
+            <button class="toggle-btn on" id="btn-play">⏸ 멈춤</button>
+        </div>
+        <div>
+            <div class="slider-header"><span>날짜</span><span id="lbl-month">1월</span></div>
+            <input type="range" id="rng-month" min="1" max="12.99" step="0.01" value="1">
+        </div>
+        <div class="control-row">
+            <span>6개월 간격</span>
+            <div class="btn-group">
+                <button class="toggle-btn" id="btn-e1">1월 (E1)</button>
+                <button class="toggle-btn" id="btn-e2">7월 (E2)</button>
+            </div>
+        </div>
+        <div class="panel-note">지구가 태양 둘레를 1년에 한 바퀴 돌면서 별을 바라보는 방향이 달라져요.</div>
+    </div>
+
+    <!-- 별 거리 패널 -->
+    <div class="glass-panel sub-panel" id="panel-stars">
+        <div class="panel-title">별의 거리</div>
+        <div>
+            <div class="slider-header"><span>별 A 거리</span><span id="lbl-da">2.0 pc</span></div>
+            <input type="range" id="rng-da" min="1" max="6" step="0.1" value="2">
+        </div>
+        <div>
+            <div class="slider-header"><span>별 B 거리</span><span id="lbl-db">12.0 pc</span></div>
+            <input type="range" id="rng-db" min="6" max="40" step="0.5" value="12">
+        </div>
+        <div class="control-row">
+            <button class="toggle-btn" id="btn-measure">📐 1월 ↔ 7월 이동량 보기</button>
+        </div>
+        <div class="panel-note">거리가 멀수록 연주시차가 작아져요. 별을 화면에서 직접 끌어당겨도 거리가 바뀝니다.</div>
+    </div>
+
+    <!-- 시점 패널 -->
+    <div class="glass-panel sub-panel" id="panel-view">
+        <div class="panel-title">시점</div>
+        <div class="btn-group">
+            <button class="toggle-btn on" id="btn-view-oblique">비스듬히</button>
+            <button class="toggle-btn" id="btn-view-top">위에서</button>
+            <button class="toggle-btn" id="btn-view-earth">지구에서</button>
+        </div>
+        <div class="control-row">
+            <button class="toggle-btn" id="btn-reset">🔄 초기화</button>
+        </div>
+        <div class="panel-note">태양·지구·별의 위치를 돌려 보며 시차가 생기는 까닭을 확인해 보세요.</div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn active" id="btn-tab-date"><span>📅</span><span>날짜</span></button>
+        <button class="control-tab-btn" id="btn-tab-stars"><span>⭐</span><span>별 거리</span></button>
+        <button class="control-tab-btn" id="btn-tab-view"><span>🎥</span><span>시점</span></button>
+        <button class="control-tab-btn" id="btn-tab-obs"><span>🔭</span><span>관측 뷰</span></button>
+    </div>
+
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+    /* ============================================================
+       별의 연주시차 3D
+       - 태양 중심 지구 공전 + 가까운 별/먼 별
+       - 관측 뷰(2D)에서 별의 겉보기 위치 이동과 시차 비교
+       ============================================================ */
+
+    const container = document.getElementById('canvas-container');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x06080f);
+
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 6000);
+    camera.position.set(12, 5.2, 21);
+    window.camera = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 3;
+    controls.maxDistance = 90;
+    controls.target.set(0, 1.2, -8);
+
+    /* ---------------- 조명 ---------------- */
+    scene.add(new THREE.AmbientLight(0x8899bb, 0.55));
+    const sunLight = new THREE.PointLight(0xfff2cc, 2.2, 0, 1);
+    sunLight.position.set(0, 0, 0);
+    scene.add(sunLight);
+    const rim = new THREE.DirectionalLight(0x9fc2ff, 0.35);
+    rim.position.set(-10, 8, -14);
+    scene.add(rim);
+
+    /* ---------------- 상수 ---------------- */
+    const ORBIT_R = 3.2;
+    const K3D = 10;              // 1 pc → 18 units
+    const PC_LY = 3.2616;
+    const OBS_SCALE = 100;       // 1 arcsec → 100 px
+
+    const state = {
+        month: 1,
+        playing: true,
+        dA: 2.0,
+        dB: 12.0,
+        showObs: true,
+        showMeasure: false,
+        preset: 'oblique',
+        dark: true
+    };
+
+    /* ---------------- 해 · 궤도 · 지구 ---------------- */
+    const sunGroup = new THREE.Group();
+    const sunCore = new THREE.Mesh(
+        new THREE.SphereGeometry(0.82, 32, 24),
+        new THREE.MeshBasicMaterial({ color: 0xffe08a })
+    );
+    sunGroup.add(sunCore);
+    const sunGlowTex = (() => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const g = c.getContext('2d');
+        const grd = g.createRadialGradient(128, 128, 6, 128, 128, 126);
+        grd.addColorStop(0, 'rgba(255,236,170,1)');
+        grd.addColorStop(0.25, 'rgba(255,206,90,0.55)');
+        grd.addColorStop(0.55, 'rgba(255,170,50,0.18)');
+        grd.addColorStop(1, 'rgba(255,150,40,0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+    })();
+    const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: sunGlowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    sunGlow.scale.set(4.6, 4.6, 1);
+    sunGroup.add(sunGlow);
+    scene.add(sunGroup);
+
+    // 궤도
+    const orbitPts = [];
+    for (let i = 0; i <= 180; i++) {
+        const a = i / 180 * Math.PI * 2;
+        orbitPts.push(new THREE.Vector3(Math.cos(a) * ORBIT_R, 0, Math.sin(a) * ORBIT_R));
+    }
+    const orbitLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(orbitPts),
+        new THREE.LineDashedMaterial({ color: 0x4f7bd0, dashSize: 0.28, gapSize: 0.2, transparent: true, opacity: 0.85 })
+    );
+    orbitLine.computeLineDistances();
+    scene.add(orbitLine);
+
+    // 지구
+    const earth = new THREE.Group();
+    const earthMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.32, 28, 20),
+        new THREE.MeshStandardMaterial({ color: 0x2f7fd6, roughness: 0.75, metalness: 0.05, emissive: 0x0b2340, emissiveIntensity: 0.6 })
+    );
+    earth.add(earthMesh);
+    const earthAtmo = new THREE.Mesh(
+        new THREE.SphereGeometry(0.39, 24, 18),
+        new THREE.MeshBasicMaterial({ color: 0x63b3ff, transparent: true, opacity: 0.18, side: THREE.BackSide })
+    );
+    earth.add(earthAtmo);
+    const earthLight = new THREE.PointLight(0xffffff, 0.8, 0, 1);
+    earth.add(earthLight);
+    scene.add(earth);
+
+    // E1 / E2 마커
+    const e1Pos = new THREE.Vector3(ORBIT_R, 0, 0);
+    const e2Pos = new THREE.Vector3(-ORBIT_R, 0, 0);
+    const markerGroup = new THREE.Group();
+    scene.add(markerGroup);
+    function markerRing(pos, color) {
+        const g = new THREE.Group();
+        const ring = new THREE.Mesh(
+            new THREE.RingGeometry(0.5, 0.58, 32),
+            new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        g.add(ring);
+        g.position.copy(pos);
+        markerGroup.add(g);
+        return g;
+    }
+    markerRing(e1Pos, 0xffd60a);
+    markerRing(e2Pos, 0xffd60a);
+
+    // 기선
+    const baseLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([e1Pos, e2Pos]),
+        new THREE.LineDashedMaterial({ color: 0xffd60a, dashSize: 0.22, gapSize: 0.18, transparent: true, opacity: 0.75 })
+    );
+    baseLine.computeLineDistances();
+    scene.add(baseLine);
+
+    /* ---------------- 글자 라벨 ---------------- */
+    function makeLabel(text, color, scale, bg) {
+        const fs = 72;
+        const canvas = document.createElement('canvas');
+        let ctx = canvas.getContext('2d');
+        const font = "bold " + fs + "px 'SeoulNamsan', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif";
+        ctx.font = font;
+        const tw = ctx.measureText(text).width;
+        canvas.width = Math.ceil(tw + 52);
+        canvas.height = fs + 36;
+        ctx = canvas.getContext('2d');
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (bg) {
+            ctx.fillStyle = bg;
+            const r = 20, w = canvas.width, hh = canvas.height;
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(w - r, 0); ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, hh - r); ctx.quadraticCurveTo(w, hh, w - r, hh);
+            ctx.lineTo(r, hh); ctx.quadraticCurveTo(0, hh, 0, hh - r);
+            ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath(); ctx.fill();
+        }
+        ctx.fillStyle = color || '#ffffff';
+        ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 3);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+        const sp = new THREE.Sprite(mat);
+        const wpp = 0.0055 * (scale || 1);
+        sp.scale.set(canvas.width * wpp, canvas.height * wpp, 1);
+        sp.userData.baseScale = sp.scale.clone();
+        sp.renderOrder = 20;
+        return sp;
+    }
+
+    const sunLabel = makeLabel('태양', '#ffd873', 0.72, 'rgba(10,14,24,0.55)');
+    sunLabel.position.set(0, 1.35, 0);
+    scene.add(sunLabel);
+
+    const earthLabel = makeLabel('지구', '#8ec6ff', 0.6, 'rgba(10,14,24,0.55)');
+    scene.add(earthLabel);
+
+    const e1Label = makeLabel('E1 · 1월', '#ffd60a', 0.55, 'rgba(10,14,24,0.5)');
+    e1Label.position.set(e1Pos.x + 0.95, 0.5, e1Pos.z + 1.0);
+    scene.add(e1Label);
+    const e2Label = makeLabel('E2 · 7월', '#ffd60a', 0.55, 'rgba(10,14,24,0.5)');
+    e2Label.position.set(e2Pos.x - 0.95, 0.5, e2Pos.z - 1.0);
+    scene.add(e2Label);
+
+    const baseLabel = makeLabel('기선 2 AU', '#ffe680', 0.5, 'rgba(10,14,24,0.5)');
+    baseLabel.position.set(0.2, 0.45, 2.7);
+    scene.add(baseLabel);
+
+    /* ---------------- 배경 별 ---------------- */
+    (function buildStarfield() {
+        const N = 1400;
+        const pos = new Float32Array(N * 3);
+        const col = new Float32Array(N * 3);
+        for (let i = 0; i < N; i++) {
+            const u = Math.random() * 2 - 1;
+            const th = Math.random() * Math.PI * 2;
+            const r = 1400 + Math.random() * 400;
+            const s = Math.sqrt(1 - u * u);
+            pos[i * 3] = Math.cos(th) * s * r;
+            pos[i * 3 + 1] = u * r * 0.75;
+            pos[i * 3 + 2] = Math.sin(th) * s * r;
+            const b = 0.55 + Math.random() * 0.45;
+            const warm = Math.random();
+            col[i * 3] = b * (0.85 + warm * 0.15);
+            col[i * 3 + 1] = b * 0.92;
+            col[i * 3 + 2] = b;
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        const m = new THREE.PointsMaterial({ size: 2.4, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9 });
+        scene.add(new THREE.Points(g, m));
+    })();
+
+    /* ---------------- 별 A · B ---------------- */
+    const DIR_A = new THREE.Vector3(0.2, 0.1, -1).normalize();
+    const DIR_B = new THREE.Vector3(-0.14, 0.17, -1).normalize();
+
+    function glowTexture(inner, outer) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const g = c.getContext('2d');
+        const grd = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+        grd.addColorStop(0, inner);
+        grd.addColorStop(0.35, outer);
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 128, 128);
+        return new THREE.CanvasTexture(c);
+    }
+
+    const starGroupA = new THREE.Group();
+    const starGroupB = new THREE.Group();
+    const starSpriteA = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture('rgba(255,255,255,1)', 'rgba(255,170,60,0.55)'),
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    const starSpriteB = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture('rgba(255,255,255,1)', 'rgba(90,200,255,0.5)'),
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    }));
+    starGroupA.add(starSpriteA);
+    starGroupB.add(starSpriteB);
+    scene.add(starGroupA);
+    scene.add(starGroupB);
+
+    const starLabelA = makeLabel('별 A (가까움)', '#ffb44d', 0.8, 'rgba(10,14,24,0.55)');
+    const starLabelB = makeLabel('별 B (멀음)', '#7fd4ff', 0.8, 'rgba(10,14,24,0.55)');
+    scene.add(starLabelA);
+    scene.add(starLabelB);
+
+    /* ---------- 지구에서 별까지 시선 ---------- */
+    function makeSightline(color) {
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]);
+        const mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.45 });
+        const line = new THREE.Line(geo, mat);
+        scene.add(line);
+        return line;
+    }
+    const sightA = makeSightline(0xffb44d);
+    const sightB = makeSightline(0x7fd4ff);
+    const e1SightA = makeSightline(0xffb44d);
+    const e2SightA = makeSightline(0xffb44d);
+    e1SightA.material.opacity = 0.18;
+    e2SightA.material.opacity = 0.18;
+
+    function setLine(line, a, b) {
+        const pos = line.geometry.attributes.position;
+        pos.setXYZ(0, a.x, a.y, a.z);
+        pos.setXYZ(1, b.x, b.y, b.z);
+        pos.needsUpdate = true;
+        line.geometry.computeBoundingSphere();
+    }
+
+    /* ---------------- 별 위치 갱신 ---------------- */
+    function starDistancePc(which) { return which === 'A' ? state.dA : state.dB; }
+
+    function updateStarPositions() {
+        const dA3 = K3D * state.dA;
+        const dB3 = K3D * state.dB;
+        const pA = DIR_A.clone().multiplyScalar(dA3);
+        const pB = DIR_B.clone().multiplyScalar(dB3);
+        starGroupA.position.copy(pA);
+        starGroupB.position.copy(pB);
+
+        // 별의 겉보기 크기는 거리와 무관하게 일정하게(실제 별처럼)
+        const camDistA = camera.position.distanceTo(pA);
+        const camDistB = camera.position.distanceTo(pB);
+        starSpriteA.scale.set(camDistA * 0.034, camDistA * 0.034, 1);
+        starSpriteB.scale.set(camDistB * 0.034, camDistB * 0.034, 1);
+
+        starLabelA.position.copy(pA).add(new THREE.Vector3(0, camDistA * 0.045, 0));
+        starLabelB.position.copy(pB).add(new THREE.Vector3(0, camDistB * 0.045, 0));
+        const sA = camDistA / 30, sB = camDistB / 30;
+        starLabelA.scale.copy(starLabelA.userData.baseScale).multiplyScalar(sA);
+        starLabelB.scale.copy(starLabelB.userData.baseScale).multiplyScalar(sB);
+
+        setLine(sightA, earth.position, pA);
+        setLine(sightB, earth.position, pB);
+        setLine(e1SightA, e1Pos, pA);
+        setLine(e2SightA, e2Pos, pA);
+    }
+
+    /* ---------------- 날짜 ---------------- */
+    function monthToTheta(m) { return (m - 1) / 12 * Math.PI * 2; }
+
+    function updateEarth() {
+        const th = monthToTheta(state.month);
+        earth.position.set(Math.cos(th) * ORBIT_R, 0, Math.sin(th) * ORBIT_R);
+        earthLabel.position.set(earth.position.x, 1.05, earth.position.z);
+        earthMesh.rotation.y = th * 2.0;
+        earthLight.position.set(0, 0.6, 0);
+
+        const monthLabel = Math.round(state.month) + '월';
+        document.getElementById('val-month').textContent = monthLabel;
+        document.getElementById('lbl-month').textContent = monthLabel;
+        const rng = document.getElementById('rng-month');
+        if (document.activeElement !== rng) rng.value = state.month;
+    }
+
+    /* ---------------- 시차 계산 (진짜 값) ---------------- */
+    function parallaxArcsec(which) { return 1 / starDistancePc(which); }
+
+    /* 관측 뷰: 지구 위치에 따른 겉보기 위치 이동(초 단위) */
+    function apparentOffset(which, theta) {
+        const dir = (which === 'A' ? DIR_A : DIR_B).clone();
+        const d = starDistancePc(which);
+        const E = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)); // 1 AU
+        // 시선 방향 성분 제거
+        const perp = E.clone().sub(dir.clone().multiplyScalar(E.dot(dir)));
+        // 동/북 기저
+        const east = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+        const north = new THREE.Vector3().crossVectors(east, dir).normalize();
+        const dx = -perp.dot(east) / d;   // arcsec
+        const dy = -perp.dot(north) / d;  // arcsec
+        return { x: dx, y: dy };
+    }
+
+    /* ---------------- 관측 뷰 캔버스 ---------------- */
+    const obsCanvas = document.getElementById('obsCanvas');
+    const octx = obsCanvas.getContext('2d');
+    let obsW = 300, obsH = 168, obsDpr = 1;
+
+    function fitObs() {
+        const rect = obsCanvas.getBoundingClientRect();
+        obsDpr = Math.min(window.devicePixelRatio || 1, 2);
+        obsW = Math.max(120, rect.width);
+        obsH = Math.max(90, rect.height);
+        obsCanvas.width = Math.round(obsW * obsDpr);
+        obsCanvas.height = Math.round(obsH * obsDpr);
+    }
+
+    const obsBgStars = (() => {
+        const arr = [];
+        for (let i = 0; i < 90; i++) {
+            arr.push({
+                x: Math.random(), y: Math.random(),
+                r: 0.4 + Math.random() * 0.9,
+                a: 0.25 + Math.random() * 0.6
+            });
+        }
+        return arr;
+    })();
+
+    function drawObservation() {
+        if (!state.showObs) return;
+        const W = obsW, H = obsH;
+        octx.setTransform(obsDpr, 0, 0, obsDpr, 0, 0);
+        octx.clearRect(0, 0, W, H);
+
+        // 배경
+        const grd = octx.createLinearGradient(0, 0, W, H);
+        grd.addColorStop(0, '#050810');
+        grd.addColorStop(1, '#0b1020');
+        octx.fillStyle = grd;
+        octx.fillRect(0, 0, W, H);
+
+        obsBgStars.forEach(s => {
+            octx.globalAlpha = s.a;
+            octx.fillStyle = '#cfe0ff';
+            octx.beginPath();
+            octx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+            octx.fill();
+        });
+        octx.globalAlpha = 1;
+
+        const cxA = W * 0.38, cyA = H * 0.44;
+        const cxB = W * 0.64, cyB = H * 0.62;
+
+        // 궤적
+        const trail = (which, cx, cy, color) => {
+            octx.strokeStyle = color;
+            octx.globalAlpha = 0.32;
+            octx.lineWidth = 1.1;
+            octx.beginPath();
+            for (let i = 0; i <= 72; i++) {
+                const th = i / 72 * Math.PI * 2;
+                const off = apparentOffset(which, th);
+                const x = cx + off.x * OBS_SCALE;
+                const y = cy - off.y * OBS_SCALE;
+                if (i === 0) octx.moveTo(x, y); else octx.lineTo(x, y);
+            }
+            octx.closePath();
+            octx.stroke();
+            octx.globalAlpha = 1;
+        };
+        trail('A', cxA, cyA, '#ff9f0a');
+        trail('B', cxB, cyB, '#64d2ff');
+
+        // 1월 / 7월 위치 (측정 표시)
+        const p1A = apparentOffset('A', 0), p2A = apparentOffset('A', Math.PI);
+        const p1B = apparentOffset('B', 0), p2B = apparentOffset('B', Math.PI);
+
+        if (state.showMeasure) {
+            octx.setLineDash([4, 3]);
+            octx.lineWidth = 1.2;
+            octx.strokeStyle = '#ffd60a';
+            octx.globalAlpha = 0.9;
+            octx.beginPath();
+            octx.moveTo(cxA + p1A.x * OBS_SCALE, cyA - p1A.y * OBS_SCALE);
+            octx.lineTo(cxA + p2A.x * OBS_SCALE, cyA - p2A.y * OBS_SCALE);
+            octx.stroke();
+            octx.beginPath();
+            octx.moveTo(cxB + p1B.x * OBS_SCALE, cyB - p1B.y * OBS_SCALE);
+            octx.lineTo(cxB + p2B.x * OBS_SCALE, cyB - p2B.y * OBS_SCALE);
+            octx.stroke();
+            octx.setLineDash([]);
+        }
+
+        // E1 / E2 마커
+        const mark = (x, y, color) => {
+            octx.fillStyle = color;
+            octx.beginPath();
+            octx.arc(x, y, 2.6, 0, Math.PI * 2);
+            octx.fill();
+        };
+        mark(cxA + p1A.x * OBS_SCALE, cyA - p1A.y * OBS_SCALE, 'rgba(255,214,10,0.9)');
+        mark(cxA + p2A.x * OBS_SCALE, cyA - p2A.y * OBS_SCALE, 'rgba(255,214,10,0.9)');
+        mark(cxB + p1B.x * OBS_SCALE, cyB - p1B.y * OBS_SCALE, 'rgba(255,214,10,0.9)');
+        mark(cxB + p2B.x * OBS_SCALE, cyB - p2B.y * OBS_SCALE, 'rgba(255,214,10,0.9)');
+
+        // 현재 위치
+        const th = monthToTheta(state.month);
+        const oA = apparentOffset('A', th);
+        const oB = apparentOffset('B', th);
+        const ax = cxA + oA.x * OBS_SCALE, ay = cyA - oA.y * OBS_SCALE;
+        const bx = cxB + oB.x * OBS_SCALE, by = cyB - oB.y * OBS_SCALE;
+
+        const drawStar = (x, y, color, label) => {
+            const g2 = octx.createRadialGradient(x, y, 0, x, y, 12);
+            g2.addColorStop(0, color);
+            g2.addColorStop(1, 'rgba(255,255,255,0)');
+            octx.fillStyle = g2;
+            octx.beginPath();
+            octx.arc(x, y, 12, 0, Math.PI * 2);
+            octx.fill();
+            octx.fillStyle = '#ffffff';
+            octx.beginPath();
+            octx.arc(x, y, 2.2, 0, Math.PI * 2);
+            octx.fill();
+            octx.fillStyle = color;
+            octx.font = "bold 10px 'SeoulNamsan', sans-serif";
+            octx.fillText(label, x + 8, y - 7);
+        };
+        drawStar(bx, by, '#64d2ff', 'B');
+        drawStar(ax, ay, '#ff9f0a', 'A');
+
+        // 눈금 (1")
+        const barPx = OBS_SCALE;
+        const bx0 = W - 16 - barPx, by0 = H - 14;
+        octx.strokeStyle = 'rgba(200,220,255,0.6)';
+        octx.lineWidth = 1.4;
+        octx.beginPath();
+        octx.moveTo(bx0, by0); octx.lineTo(bx0 + barPx, by0);
+        octx.moveTo(bx0, by0 - 4); octx.lineTo(bx0, by0 + 4);
+        octx.moveTo(bx0 + barPx, by0 - 4); octx.lineTo(bx0 + barPx, by0 + 4);
+        octx.stroke();
+        octx.fillStyle = 'rgba(200,220,255,0.8)';
+        octx.font = "bold 9.5px 'SeoulNamsan', sans-serif";
+        octx.fillText("1″", bx0 + barPx / 2 - 6, by0 - 7);
+    }
+
+    /* ---------------- 수치 표시 ---------------- */
+    function updateNumbers() {
+        const pA = parallaxArcsec('A'), pB = parallaxArcsec('B');
+        document.getElementById('val-pa').textContent = pA.toFixed(3) + '″';
+        document.getElementById('val-pb').textContent = pB.toFixed(3) + '″';
+        document.getElementById('row-a').textContent = state.dA.toFixed(1) + ' pc · ' + pA.toFixed(3) + '″';
+        document.getElementById('row-b').textContent = state.dB.toFixed(1) + ' pc · ' + pB.toFixed(3) + '″';
+        document.getElementById('lbl-da').textContent = state.dA.toFixed(1) + ' pc (' + (state.dA * PC_LY).toFixed(1) + ' 광년)';
+        document.getElementById('lbl-db').textContent = state.dB.toFixed(1) + ' pc (' + (state.dB * PC_LY).toFixed(1) + ' 광년)';
+        const barA = document.getElementById('bar-a');
+        const barB = document.getElementById('bar-b');
+        const maxP = Math.max(pA, pB);
+        barA.style.width = Math.max(4, pA / maxP * 100) + '%';
+        barB.style.width = Math.max(4, pB / maxP * 100) + '%';
+        const foot = document.getElementById('obs-foot');
+        foot.textContent = '1월↔7월 이동: A ' + (2 * pA).toFixed(2) + '″ · B ' + (2 * pB).toFixed(2) + '″ (약 ' + (pA / pB).toFixed(1) + '배)';
+    }
+
+    /* ---------------- 시점 ---------------- */
+    function setSceneVisible(v) {
+        [sunGroup, orbitLine, baseLine, e1Label, e2Label, baseLabel, earth, earthLabel, sunLabel].forEach(o => { if (o) o.visible = v; });
+        [sightA, sightB, e1SightA, e2SightA].forEach(o => { if (o) o.visible = v; });
+        if (markerGroup) markerGroup.visible = v;
+    }
+
+    function setPreset(name) {
+        state.preset = name;
+        setSceneVisible(name !== 'earth');
+        if (name === 'oblique') {
+            camera.position.set(12, 5.2, 21);
+            controls.target.set(0, 1.2, -8);
+        } else if (name === 'top') {
+            camera.position.set(0.2, 24, 8);
+            controls.target.set(0, 0, -7);
+        } else if (name === 'earth') {
+            const p = earth.position.clone();
+            camera.position.set(p.x + 0.6, 1.4, p.z + 1.6);
+            controls.target.set(DIR_A.x * 40, DIR_A.y * 40 + 1.4, DIR_A.z * 40);
+        }
+        controls.enabled = (name !== 'earth');
+        const tipEl = document.getElementById('guide-tooltip');
+        if (tipEl) {
+            tipEl.textContent = (name === 'earth')
+                ? '지구에서 본 하늘 — 1년 동안 별 A는 크게, 별 B는 조금 흔들려 보여요'
+                : '지구가 공전하면 가까운 별이 배경 별에 비해 크게 흔들려 보여요';
+        }
+        if (name !== 'earth' && window.innerWidth < 700) {
+            const off = camera.position.clone().sub(controls.target).multiplyScalar(1.5);
+            camera.position.copy(controls.target).add(off);
+        }
+        controls.update();
+        document.querySelectorAll('[id^="btn-view-"]').forEach(b => b.classList.toggle('on', b.id === 'btn-view-' + name));
+    }
+
+    /* ---------------- 별 끌기 (거리 조절) ---------------- */
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let dragWhich = null;
+
+    function setPointer(e) {
+        const r = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    }
+
+    renderer.domElement.addEventListener('pointerdown', e => {
+        setPointer(e);
+        raycaster.setFromCamera(pointer, camera);
+        const hitsA = raycaster.intersectObject(starSpriteA, false);
+        const hitsB = raycaster.intersectObject(starSpriteB, false);
+        if (hitsA.length || hitsB.length) {
+            dragWhich = (hitsA.length && (!hitsB.length || hitsA[0].distance <= hitsB[0].distance)) ? 'A' : 'B';
+            controls.enabled = false;
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
+
+    renderer.domElement.addEventListener('pointermove', e => {
+        if (!dragWhich) return;
+        setPointer(e);
+        raycaster.setFromCamera(pointer, camera);
+        const dir = dragWhich === 'A' ? DIR_A : DIR_B;
+        // 시선(별 방향)에 가장 가까운 지점까지의 거리
+        const w0 = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), raycaster.ray.origin);
+        const a = dir.dot(dir), b = dir.dot(raycaster.ray.direction), c = raycaster.ray.direction.dot(raycaster.ray.direction);
+        const d0 = dir.dot(w0), e0 = raycaster.ray.direction.dot(w0);
+        const den = a * c - b * b;
+        if (Math.abs(den) < 1e-6) return;
+        const t = (b * e0 - c * d0) / den;
+        const dist = Math.max(0.2, t) / K3D;
+        if (dragWhich === 'A') {
+            const v = Math.max(1, Math.min(6, dist));
+            state.dA = Math.round(v * 10) / 10;
+            document.getElementById('rng-da').value = state.dA;
+        } else {
+            const v = Math.max(6, Math.min(40, dist));
+            state.dB = Math.round(v * 2) / 2;
+            document.getElementById('rng-db').value = state.dB;
+        }
+        updateStarPositions();
+        updateNumbers();
+        e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('pointerup', () => {
+        if (dragWhich) { dragWhich = null; controls.enabled = true; }
+    });
+
+    /* ---------------- UI ---------------- */
+    const panels = {
+        date: document.getElementById('panel-date'),
+        stars: document.getElementById('panel-stars'),
+        view: document.getElementById('panel-view')
+    };
+    const tabs = {
+        date: document.getElementById('btn-tab-date'),
+        stars: document.getElementById('btn-tab-stars'),
+        view: document.getElementById('btn-tab-view'),
+        obs: document.getElementById('btn-tab-obs')
+    };
+
+    function closePanels() {
+        Object.values(panels).forEach(p => p.classList.remove('show'));
+        ['date', 'stars', 'view'].forEach(k => tabs[k].classList.remove('active'));
+        document.body.classList.remove('panel-open');
+    }
+
+    function openPanel(key) {
+        const isOpen = panels[key].classList.contains('show');
+        closePanels();
+        if (!isOpen) {
+            panels[key].classList.add('show');
+            tabs[key].classList.add('active');
+            document.body.classList.add('panel-open');
+        }
+    }
+
+    tabs.date.addEventListener('click', () => openPanel('date'));
+    tabs.stars.addEventListener('click', () => openPanel('stars'));
+    tabs.view.addEventListener('click', () => {
+        openPanel('view');
+        setPreset(state.preset);
+    });
+
+    tabs.obs.addEventListener('click', () => {
+        state.showObs = !state.showObs;
+        document.getElementById('obs-panel').classList.toggle('hidden', !state.showObs);
+        tabs.obs.classList.toggle('active', state.showObs);
+        if (state.showObs) { fitObs(); drawObservation(); }
+    });
+    tabs.obs.classList.add('active');
+
+    document.getElementById('btn-play').addEventListener('click', e => {
+        state.playing = !state.playing;
+        e.target.textContent = state.playing ? '⏸ 멈춤' : '▶ 재생';
+        e.target.classList.toggle('on', state.playing);
+    });
+
+    document.getElementById('rng-month').addEventListener('input', e => {
+        state.month = parseFloat(e.target.value);
+        updateEarth();
+        drawObservation();
+    });
+
+    document.getElementById('btn-e1').addEventListener('click', () => {
+        state.month = 1;
+        state.playing = false;
+        document.getElementById('btn-play').textContent = '▶ 재생';
+        document.getElementById('btn-play').classList.remove('on');
+        updateEarth(); drawObservation();
+    });
+    document.getElementById('btn-e2').addEventListener('click', () => {
+        state.month = 7;
+        state.playing = false;
+        document.getElementById('btn-play').textContent = '▶ 재생';
+        document.getElementById('btn-play').classList.remove('on');
+        updateEarth(); drawObservation();
+    });
+
+    document.getElementById('rng-da').addEventListener('input', e => {
+        state.dA = parseFloat(e.target.value);
+        updateStarPositions(); updateNumbers(); drawObservation();
+    });
+    document.getElementById('rng-db').addEventListener('input', e => {
+        state.dB = parseFloat(e.target.value);
+        updateStarPositions(); updateNumbers(); drawObservation();
+    });
+
+    document.getElementById('btn-measure').addEventListener('click', e => {
+        state.showMeasure = !state.showMeasure;
+        e.target.classList.toggle('on', state.showMeasure);
+        drawObservation();
+    });
+
+    ['oblique', 'top', 'earth'].forEach(k => {
+        document.getElementById('btn-view-' + k).addEventListener('click', () => setPreset(k));
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        state.month = 1;
+        state.playing = true;
+        state.dA = 2.0;
+        state.dB = 12.0;
+        document.getElementById('rng-month').value = 1;
+        document.getElementById('rng-da').value = 2.0;
+        document.getElementById('rng-db').value = 12;
+        document.getElementById('btn-play').textContent = '⏸ 멈춤';
+        document.getElementById('btn-play').classList.add('on');
+        updateEarth();
+        updateStarPositions();
+        updateNumbers();
+        drawObservation();
+        setPreset('oblique');
+    });
+
+    const themeBtn = document.getElementById('theme-toggle');
+    themeBtn.addEventListener('click', () => {
+        state.dark = !state.dark;
+        document.body.classList.toggle('light-mode', !state.dark);
+        themeBtn.textContent = state.dark ? '🌙' : '☀️';
+    });
+
+    /* ---------------- 렌더 루프 ---------------- */
+    const clock = new THREE.Clock();
+    let lastMonth = 0;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        if (state.playing) {
+            state.month += dt * 0.55;
+            if (state.month > 12.99) state.month = 1;
+            updateEarth();
+            drawObservation();
+        }
+        updateStarPositions();
+        if (state.preset === 'earth') {
+            camera.position.set(earth.position.x + 0.6, 1.4, earth.position.z + 1.6);
+            camera.lookAt(DIR_A.x * 1000, DIR_A.y * 1000 + 1.4, DIR_A.z * 1000);
+        } else {
+            controls.update();
+        }
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        fitObs();
+        drawObservation();
+    });
+
+    /* ---------------- 시작 ---------------- */
+    function startApp() {
+        updateEarth();
+        updateStarPositions();
+        updateNumbers();
+        fitObs();
+        drawObservation();
+        setPreset('oblique');
+        animate();
+    }
+
+    if (document.fonts && document.fonts.load) {
+        Promise.race([
+            document.fonts.load("bold 72px 'SeoulNamsan'"),
+            new Promise(r => setTimeout(r, 900))
+        ]).then(startApp).catch(startApp);
+    } else {
+        startApp();
+    }
+    </script>
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+<script src="../../common/feedback.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>별의 연주 운동 3D</title>
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #06080f;
+            color: #f2f5fa;
+            touch-action: none;
+            transition: background-color .3s ease, color .3s ease;
+        }
+        body.light-mode { background-color: #eef3f9; color: #1c1c1e; }
+
+        #canvas-container {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0;
+            z-index: 1; touch-action: none;
+        }
+
+        .glass-panel {
+            background: rgba(22, 30, 46, 0.72);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            z-index: 10;
+        }
+        body.light-mode .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: rgba(255, 255, 255, 0.7);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            color: #1c1c1e;
+        }
+
+        .top-left-bar {
+            position: absolute; top: 18px; left: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; font-size: 14px; font-weight: bold;
+            color: #eaf1ff; text-decoration: none; cursor: pointer;
+            transition: all .2s ease;
+        }
+        body.light-mode .back-btn { color: #1c1c1e; }
+        button.back-btn { font-family: inherit; border: none; }
+
+        .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+        .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; }
+        .vision-badge {
+            background: rgba(10, 132, 255, 0.28); color: #7cc0ff;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; letter-spacing: .2px;
+        }
+        body.light-mode .vision-badge { background: rgba(0, 122, 255, 0.14); color: #007aff; }
+
+        .top-right-bar {
+            position: absolute; top: 18px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+        .data-card { display: flex; align-items: center; gap: 16px; padding: 10px 20px; }
+        .data-item { display: flex; flex-direction: column; align-items: center; }
+        .data-label { font-size: 11px; color: #9aa8bd; font-weight: bold; }
+        body.light-mode .data-label { color: #8e8e93; }
+        .data-value { font-size: 15px; font-weight: bold; color: #f2f5fa; }
+        body.light-mode .data-value { color: #1c1c1e; }
+
+        .icon-btn {
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; border: none;
+            background: rgba(30, 40, 60, 0.75); color: #eaf1ff;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            transition: all .2s; font-size: 16px; font-family: inherit;
+        }
+        body.light-mode .icon-btn { background: rgba(255,255,255,.8); color: #1c1c1e; }
+
+        .center-tooltip {
+            position: absolute; top: 9%; left: 50%; transform: translateX(-50%);
+            padding: 8px 18px; font-size: 13px; font-weight: bold;
+            color: #cfdcf0; border-radius: 30px;
+            pointer-events: none; z-index: 5;
+            transition: opacity .5s ease; white-space: nowrap;
+        }
+        body.light-mode .center-tooltip { color: #4a5568; }
+
+        /* ---------- 하단 제어 바 ---------- */
+        .bottom-control-bar {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 4px;
+            padding: 6px; z-index: 10;
+        }
+        .control-tab-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 2px; padding: 7px 12px; min-width: 66px;
+            border-radius: 14px; border: none; background: transparent;
+            color: #e6edf9; font-size: 12px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; line-height: 1.2;
+        }
+        body.light-mode .control-tab-btn { color: #1c1c1e; }
+        .control-tab-btn span:first-child { font-size: 16px; line-height: 1.1; }
+        .control-tab-btn.active { background: #0a84ff; color: #fff; box-shadow: 0 4px 12px rgba(10,132,255,.35); }
+
+        .sub-panel {
+            position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%);
+            padding: 16px 18px; width: 336px;
+            display: none; flex-direction: column; gap: 12px; z-index: 11;
+        }
+        .sub-panel.show { display: flex; }
+        .panel-title { font-size: 11.5px; font-weight: bold; color: #7cc0ff; letter-spacing: .4px; }
+        body.light-mode .panel-title { color: #007aff; }
+        .control-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; }
+        .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+        .toggle-btn {
+            padding: 6px 12px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.08);
+            color: #e6edf9; font-size: 12px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        body.light-mode .toggle-btn { background: #fff; color: #1c1c1e; border-color: #d6d9de; }
+        .toggle-btn.on { background: #0a84ff; color: #fff; border-color: #0a84ff; }
+        .slider-header { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; color: #9aa8bd; }
+        body.light-mode .slider-header { color: #5b6472; }
+        input[type="range"] { width: 100%; height: 22px; accent-color: #0a84ff; cursor: pointer; margin: 0; }
+        .panel-note { font-size: 11.5px; line-height: 1.5; color: #8fa0ba; font-weight: bold; }
+        body.light-mode .panel-note { color: #6b7280; }
+
+        .bottom-right-bar {
+            position: absolute; bottom: 24px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+
+        /* ---------- 지금 하늘 패널 ---------- */
+        #sky-panel {
+            position: absolute; left: 20px; bottom: 24px;
+            width: 372px; padding: 12px 14px;
+            display: flex; flex-direction: column; gap: 9px;
+            z-index: 9;
+        }
+        #sky-panel.hidden { display: none; }
+        .sky-head {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 11.5px; font-weight: bold; color: #9ec5ff;
+        }
+        body.light-mode .sky-head { color: #007aff; }
+        .sky-badge {
+            font-size: 10.5px; font-weight: bold; padding: 2px 9px; border-radius: 9px;
+            background: rgba(255, 214, 10, 0.16); color: #ffd60a;
+        }
+        .sky-badge.day { background: rgba(255, 159, 10, 0.18); color: #ffb340; }
+        .sky-badge.night { background: rgba(100, 160, 255, 0.18); color: #8ec6ff; }
+        .sky-row { display: flex; align-items: flex-start; gap: 8px; }
+        .sky-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; flex: 0 0 auto; }
+        .sky-dot.sun { background: #ffd60a; box-shadow: 0 0 8px rgba(255, 214, 10, 0.7); }
+        .sky-dot.night { background: #64a0ff; box-shadow: 0 0 8px rgba(100, 160, 255, 0.7); }
+        .sky-lbl { font-size: 10.5px; color: #8fa0ba; font-weight: bold; line-height: 1.3; }
+        body.light-mode .sky-lbl { color: #6b7280; }
+        .sky-val { font-size: 14px; font-weight: bold; color: #eaf1ff; line-height: 1.3; }
+        body.light-mode .sky-val { color: #1c1c1e; }
+        .sky-val small { font-size: 10.5px; color: #8fa0ba; font-weight: bold; }
+        .season-strip { display: flex; gap: 5px; }
+        .season-chip {
+            flex: 1 1 0; padding: 5px 0; border-radius: 9px; text-align: center;
+            border: 1px solid rgba(255,255,255,0.16); background: rgba(255,255,255,0.06);
+            color: #cddcf2; font-size: 11px; font-weight: bold; cursor: pointer;
+            font-family: inherit; transition: all .2s; white-space: nowrap;
+        }
+        body.light-mode .season-chip { background: #fff; color: #1c1c1e; border-color: #d6d9de; }
+        .season-chip.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+        .season-list {
+            font-size: 11px; line-height: 1.5; color: #a9bcd6; font-weight: bold;
+            border-top: 1px solid rgba(255,255,255,0.1); padding-top: 7px;
+        }
+        body.light-mode .season-list { color: #4a5568; border-color: rgba(0,0,0,0.08); }
+
+        @media (max-width: 900px) {
+            body.panel-open #sky-panel { display: none; }
+            #sky-panel { width: calc(100% - 16px); left: 8px; bottom: 76px; padding: 9px 11px; gap: 6px; }
+            .sky-val { font-size: 12.5px; }
+            .sky-lbl { font-size: 9.5px; }
+            .season-list { font-size: 10px; line-height: 1.4; }
+        }
+        @media (max-width: 900px) and (max-height: 500px) {
+            #sky-panel { left: 8px !important; right: auto !important; width: 250px !important; bottom: 44px !important; padding: 6px 8px !important; }
+            .season-list { display: none; }
+            .sky-val { font-size: 11px; }
+        }
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+/* @@/MOBILE-BASE@@ */
+    </style>
+
+
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn"><span>⬅</span> 메인</a>
+        <div class="glass-panel tag-badge title-capsule">
+            <span class="title-text">별의 연주 운동 3D</span>
+            <span class="vision-badge">visionOS</span>
+        </div>
+    </div>
+
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">날짜</span>
+                <span class="data-value" id="val-date" style="color:#ffd60a;">1월 1일</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">시각</span>
+                <span class="data-value" id="val-hour" style="color:#64d2ff;">21:00</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">계절</span>
+                <span class="data-value" id="val-season" style="color:#b18cff;">겨울</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        지구를 끌어서 움직여 보세요 — 태양 반대편 별자리가 밤하늘에 보여요
+    </div>
+
+    <!-- 지금 하늘 패널 -->
+    <div class="glass-panel" id="sky-panel">
+        <div class="sky-head">
+            <span>🔭 지금 하늘</span>
+            <span class="sky-badge night" id="badge-daynight">밤 🌙</span>
+        </div>
+        <div class="sky-row">
+            <span class="sky-dot sun"></span>
+            <div>
+                <div class="sky-lbl">태양이 있는 별자리 <span id="sun-state">(낮 · 안 보임)</span></div>
+                <div class="sky-val" id="sun-con">염소자리</div>
+            </div>
+        </div>
+        <div class="sky-row">
+            <span class="sky-dot night"></span>
+            <div>
+                <div class="sky-lbl">한밤중 남쪽 하늘 (태양 정반대편)</div>
+                <div class="sky-val" id="mid-con">게자리</div>
+            </div>
+        </div>
+        <div class="season-strip">
+            <button class="season-chip" data-season="spring">봄</button>
+            <button class="season-chip" data-season="summer">여름</button>
+            <button class="season-chip" data-season="autumn">가을</button>
+            <button class="season-chip" data-season="winter">겨울</button>
+        </div>
+        <div class="season-list" id="season-list"></div>
+    </div>
+
+    <!-- 날짜 · 시간 패널 -->
+    <div class="glass-panel sub-panel" id="panel-date">
+        <div class="panel-title">지구의 공전 · 날짜와 시각</div>
+        <div class="control-row">
+            <span>자동 공전</span>
+            <button class="toggle-btn on" id="btn-play">⏸ 멈춤</button>
+        </div>
+        <div>
+            <div class="slider-header"><span>날짜</span><span id="lbl-date">1월 1일</span></div>
+            <input type="range" id="rng-day" min="1" max="365" step="1" value="1">
+        </div>
+        <div>
+            <div class="slider-header"><span>시각</span><span id="lbl-hour">21:00</span></div>
+            <input type="range" id="rng-hour" min="0" max="23.99" step="0.05" value="21">
+        </div>
+        <div class="control-row">
+            <span>빠른 이동</span>
+            <div class="btn-group">
+                <button class="toggle-btn" data-day="80">3월</button>
+                <button class="toggle-btn" data-day="172">6월</button>
+                <button class="toggle-btn" data-day="266">9월</button>
+                <button class="toggle-btn" data-day="355">12월</button>
+            </div>
+        </div>
+        <div class="panel-note">지구를 직접 끌어도 날짜가 바뀝니다. 밤 9시처럼 같은 시각에 보면 별자리가 매일 조금씩 서쪽으로 옮겨 가요.</div>
+    </div>
+
+    <!-- 시점 패널 -->
+    <div class="glass-panel sub-panel" id="panel-view">
+        <div class="panel-title">시점</div>
+        <div class="btn-group">
+            <button class="toggle-btn on" id="btn-view-oblique">비스듬히</button>
+            <button class="toggle-btn" id="btn-view-top">위에서</button>
+            <button class="toggle-btn" id="btn-view-earth">지구에서</button>
+        </div>
+        <div class="control-row">
+            <span>별자리 이름</span>
+            <button class="toggle-btn on" id="btn-names">보기</button>
+        </div>
+        <div class="control-row">
+            <span>태양·관측 방향선</span>
+            <button class="toggle-btn on" id="btn-rays">보기</button>
+        </div>
+        <div class="control-row">
+            <button class="toggle-btn" id="btn-reset">🔄 초기화</button>
+        </div>
+        <div class="panel-note">‘지구에서’를 누르면 그 자리에서 밤하늘을 바라본 모습을 볼 수 있어요.</div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn active" id="btn-tab-date"><span>📅</span><span>날짜</span></button>
+        <button class="control-tab-btn" id="btn-tab-view"><span>🎥</span><span>시점</span></button>
+        <button class="control-tab-btn active" id="btn-tab-sky"><span>🔭</span><span>지금 하늘</span></button>
+    </div>
+
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+    /* ============================================================
+       별의 연주 운동 3D
+       - 태양 둘레를 공전하는 지구 + 황도 12궁/계절 별자리
+       - 지구를 끌어 날짜를 바꾸고, 낮/밤과 태양 반대편 별자리 확인
+       ============================================================ */
+
+    const DEG = Math.PI / 180;
+    const TILT = 23.5 * DEG;
+    const R_ORBIT = 4.3;
+    const R_EARTH = 0.52;
+    const R_ZOD = 7.6;
+    const LAT = 37.5 * DEG;
+
+    const AXIS_E = new THREE.Vector3(Math.sin(TILT), Math.cos(TILT), 0).normalize();
+    const P_E = new THREE.Vector3(0, 0, 1).sub(AXIS_E.clone().multiplyScalar(AXIS_E.z)).normalize();
+    const Q_E = new THREE.Vector3().crossVectors(AXIS_E, P_E).normalize();
+
+    const state = {
+        day: 1,
+        hour: 21,
+        playing: true,
+        speed: 12,
+        preset: 'oblique',
+        dark: true,
+        showNames: true,
+        showRays: true,
+        showSky: true
+    };
+
+    /* ---------- 날짜 ↔ 태양의 황경 ---------- */
+    function sunLongitude(day) { return (280.5 + (day - 1) * 0.98565) * DEG; }
+    function earthAngle(day) { return sunLongitude(day) - 270 * DEG; }
+
+    /* ---------- 적도·황도 좌표 ---------- */
+    function lambdaDir(lam, bet) {
+        const u = lam - Math.PI / 2;
+        return new THREE.Vector3(
+            Math.cos(u) * Math.cos(bet),
+            Math.sin(bet),
+            Math.sin(u) * Math.cos(bet)
+        );
+    }
+
+    /* ---------- 3D 기본 ---------- */
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x05070f);
+
+    const camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.05, 5000);
+    camera.position.set(0.5, 9.4, 12.4);
+    window.camera = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 3.2;
+    controls.maxDistance = 34;
+    controls.target.set(0, 0.2, 0);
+
+    scene.add(new THREE.AmbientLight(0x8fa8cc, 0.34));
+    const sunLight = new THREE.PointLight(0xfff0cc, 2.1, 0, 1.4);
+    scene.add(sunLight);
+    const fill = new THREE.DirectionalLight(0x7fa6ff, 0.35);
+    fill.position.set(-8, 6, -6);
+    scene.add(fill);
+
+    /* ---------- 텍스트 라벨 ---------- */
+    const LABELS = [];
+    function labelTexture(text, color, bg) {
+        const fs = 64;
+        let cv = document.createElement('canvas');
+        let ctx = cv.getContext('2d');
+        const font = "bold " + fs + "px 'SeoulNamsan', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif";
+        ctx.font = font;
+        const tw = ctx.measureText(text).width;
+        cv.width = Math.ceil(tw + 46);
+        cv.height = fs + 30;
+        ctx = cv.getContext('2d');
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (bg) {
+            ctx.fillStyle = bg;
+            const r = 18, w = cv.width, h = cv.height;
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(w - r, 0); ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r); ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h); ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath(); ctx.fill();
+        }
+        ctx.fillStyle = color || '#ffffff';
+        ctx.fillText(text, cv.width / 2, cv.height / 2 + 2);
+        return cv;
+    }
+    function makeLabel(text, color, scale, bg) {
+        const cv = labelTexture(text, color, bg);
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+        const sp = new THREE.Sprite(mat);
+        const wpp = 0.0052 * (scale || 1);
+        sp.scale.set(cv.width * wpp, cv.height * wpp, 1);
+        sp.userData.args = { text: text, color: color, scale: scale, bg: bg };
+        sp.userData.baseScale = sp.scale.clone();
+        sp.renderOrder = 20;
+        LABELS.push(sp);
+        return sp;
+    }
+    function refreshLabels() {
+        LABELS.forEach(sp => {
+            const a = sp.userData.args;
+            const cv = labelTexture(a.text, a.color, a.bg);
+            const tex = new THREE.CanvasTexture(cv);
+            tex.minFilter = THREE.LinearFilter;
+            sp.material.map = tex;
+            sp.material.needsUpdate = true;
+            const wpp = 0.0052 * (a.scale || 1);
+            sp.scale.set(cv.width * wpp, cv.height * wpp, 1);
+            sp.userData.baseScale = sp.scale.clone();
+        });
+    }
+
+    /* ---------- 태양 ---------- */
+    const sunGroup = new THREE.Group();
+    scene.add(sunGroup);
+    const sunCore = new THREE.Mesh(new THREE.SphereGeometry(0.62, 32, 24), new THREE.MeshBasicMaterial({ color: 0xffe08a }));
+    sunGroup.add(sunCore);
+    const sunGlowTex = (function () {
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const g = c.getContext('2d');
+        const grd = g.createRadialGradient(128, 128, 6, 128, 128, 126);
+        grd.addColorStop(0, 'rgba(255,240,180,1)');
+        grd.addColorStop(0.22, 'rgba(255,208,90,0.6)');
+        grd.addColorStop(0.55, 'rgba(255,168,50,0.2)');
+        grd.addColorStop(1, 'rgba(255,150,40,0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+    })();
+    const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunGlowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sunGlow.scale.set(3.4, 3.4, 1);
+    sunGroup.add(sunGlow);
+    const sunLabel = makeLabel('태양', '#ffd873', 0.62, 'rgba(8,12,22,0.55)');
+    sunLabel.position.set(0, 1.05, 0);
+    sunGroup.add(sunLabel);
+
+    /* ---------- 공전 궤도 ---------- */
+    const FPHIDE = [];
+    (function buildOrbit() {
+        const pts = [];
+        for (let i = 0; i <= 240; i++) {
+            const a = i / 240 * Math.PI * 2;
+            pts.push(new THREE.Vector3(Math.cos(a) * R_ORBIT, 0, Math.sin(a) * R_ORBIT));
+        }
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineDashedMaterial({ color: 0x4f7bd0, dashSize: 0.24, gapSize: 0.18, transparent: true, opacity: 0.8 }));
+        line.computeLineDistances();
+        scene.add(line);
+        FPHIDE.push(line);
+
+        const monthDays = [1, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
+        const MONTHS = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+        monthDays.forEach((d, i) => {
+            const a = earthAngle(d);
+            const p = new THREE.Vector3(Math.cos(a) * R_ORBIT, 0, Math.sin(a) * R_ORBIT);
+            const tick = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ color: 0x6f8fd0 }));
+            tick.position.copy(p);
+            scene.add(tick);
+            const lb = makeLabel(MONTHS[i], '#8fa8d8', 0.4, 'rgba(8,12,22,0.45)');
+            lb.position.copy(p).multiplyScalar(1.16);
+            scene.add(lb);
+            FPHIDE.push(lb);
+        });
+    })();
+
+    /* ---------- 지구 ---------- */
+    const earthTex = (function buildEarthTexture() {
+        const W = 1024, H = 512;
+        const cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        const g = cv.getContext('2d');
+        const ocean = g.createLinearGradient(0, 0, 0, H);
+        ocean.addColorStop(0, '#123a63');
+        ocean.addColorStop(0.5, '#17507f');
+        ocean.addColorStop(1, '#123a63');
+        g.fillStyle = ocean;
+        g.fillRect(0, 0, W, H);
+        const LAND = [
+            [[-168,65],[-150,60],[-132,55],[-125,48],[-117,32],[-105,22],[-95,17],[-83,9],[-77,8],[-80,25],[-75,35],[-66,45],[-55,50],[-60,58],[-95,70],[-125,70],[-168,65]],
+            [[-81,8],[-75,10],[-60,10],[-50,0],[-35,-5],[-38,-20],[-48,-25],[-58,-35],[-62,-40],[-65,-55],[-75,-50],[-72,-30],[-70,-18],[-81,-5],[-81,8]],
+            [[-17,15],[0,15],[15,25],[32,30],[40,12],[51,12],[42,-2],[40,-15],[32,-25],[25,-34],[18,-34],[12,-18],[8,4],[-8,5],[-17,15]],
+            [[-10,36],[0,44],[10,45],[20,40],[28,41],[30,45],[40,48],[30,60],[25,70],[5,58],[-5,50],[-10,44],[-10,36]],
+            [[30,45],[40,48],[60,45],[80,45],[100,50],[120,50],[135,55],[140,45],[130,35],[122,31],[120,22],[105,20],[100,10],[95,20],[80,8],[70,20],[60,25],[45,30],[35,35],[30,45]],
+            [[113,-22],[122,-18],[130,-12],[142,-11],[147,-20],[153,-28],[150,-38],[140,-38],[129,-32],[115,-34],[113,-22]],
+            [[-45,60],[-20,70],[-20,82],[-45,83],[-58,76],[-55,65],[-45,60]]
+        ];
+        g.fillStyle = '#2f7d52';
+        g.strokeStyle = '#3f9a68';
+        g.lineWidth = 3;
+        LAND.forEach(poly => {
+            g.beginPath();
+            poly.forEach((pt, i) => {
+                const x = (pt[0] + 180) / 360 * W;
+                const y = (90 - pt[1]) / 180 * H;
+                if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+            });
+            g.closePath(); g.fill(); g.stroke();
+        });
+        g.fillStyle = '#dfe9f2';
+        g.fillRect(0, H * 0.93, W, H * 0.07);
+        const kx = (127.5 + 180) / 360 * W, ky = (90 - 37.5) / 180 * H;
+        g.fillStyle = '#ffb340';
+        g.beginPath(); g.arc(kx, ky, 7, 0, Math.PI * 2); g.fill();
+        return new THREE.CanvasTexture(cv);
+    })();
+
+    const earthPivot = new THREE.Group();   // 위치
+    scene.add(earthPivot);
+    const earthTilt = new THREE.Group();    // 자전축 기울기 (공간에 고정)
+    earthTilt.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(P_E, AXIS_E, new THREE.Vector3().crossVectors(P_E, AXIS_E)));
+    earthPivot.add(earthTilt);
+    const earthSpin = new THREE.Group();    // 자전
+    earthTilt.add(earthSpin);
+
+    const earthMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(R_EARTH, 48, 32),
+        new THREE.MeshStandardMaterial({ map: earthTex, roughness: 0.9, metalness: 0, emissive: 0x0a1626, emissiveIntensity: 0.35 })
+    );
+    earthSpin.add(earthMesh);
+
+    // 자전축
+    (function buildAxis() {
+        const line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, -R_EARTH * 1.5, 0), new THREE.Vector3(0, R_EARTH * 1.5, 0)
+            ]),
+            new THREE.LineBasicMaterial({ color: 0xffd060, transparent: true, opacity: 0.85 })
+        );
+        earthTilt.add(line);
+        const nPole = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd060 }));
+        nPole.position.set(0, R_EARTH * 1.5, 0);
+        earthTilt.add(nPole);
+        const sPole = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd060 }));
+        sPole.position.set(0, -R_EARTH * 1.5, 0);
+        earthTilt.add(sPole);
+    })();
+
+    // 관측자
+    const obsGroup = new THREE.Group();
+    const localU = new THREE.Vector3(Math.cos(LAT), Math.sin(LAT), 0).normalize();
+    obsGroup.position.copy(localU).multiplyScalar(R_EARTH);
+    obsGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), localU);
+    earthSpin.add(obsGroup);
+    (function buildObserver() {
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 0.075, 10),
+            new THREE.MeshStandardMaterial({ color: 0xffa53d, roughness: 0.6, emissive: 0x552200, emissiveIntensity: 0.6 }));
+        body.position.y = 0.038;
+        obsGroup.add(body);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffe0b0 }));
+        head.position.y = 0.09;
+        obsGroup.add(head);
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.035, 0.05, 20), new THREE.MeshBasicMaterial({ color: 0xffa53d, side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.002;
+        obsGroup.add(ring);
+    })();
+
+    // 밤 관측 방향 콘 (관측자의 천정 방향)
+    const nightCone = new THREE.Mesh(
+        new THREE.ConeGeometry(0.62, 2.6, 22, 1, true),
+        new THREE.MeshBasicMaterial({ color: 0x5aa6ff, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false })
+    );
+    scene.add(nightCone);
+    const nightConeLabel = makeLabel('밤하늘 관측 방향', '#8ec6ff', 0.4, 'rgba(8,12,22,0.5)');
+    scene.add(nightConeLabel);
+
+    const earthLabel = makeLabel('지구', '#8ec6ff', 0.52, 'rgba(8,12,22,0.55)');
+    scene.add(earthLabel);
+
+    /* ---------- 태양 방향 · 반대 방향 선 ---------- */
+    function makeRay(color) {
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]);
+        const mat = new THREE.LineDashedMaterial({ color: color, dashSize: 0.22, gapSize: 0.16, transparent: true, opacity: 0.85 });
+        const line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        scene.add(line);
+        return line;
+    }
+    const sunRay = makeRay(0xffd60a);
+    const midRay = makeRay(0x64a0ff);
+    function setLine(line, a, b) {
+        const pos = line.geometry.attributes.position;
+        pos.setXYZ(0, a.x, a.y, a.z);
+        pos.setXYZ(1, b.x, b.y, b.z);
+        pos.needsUpdate = true;
+        line.geometry.computeBoundingSphere();
+        line.computeLineDistances();
+    }
+    const sunRayLabel = makeLabel('낮 · 태양이 있는 별자리', '#ffd60a', 0.42, 'rgba(8,12,22,0.6)');
+    const midRayLabel = makeLabel('한밤중 남쪽 하늘', '#8ec6ff', 0.42, 'rgba(8,12,22,0.6)');
+    scene.add(sunRayLabel); scene.add(midRayLabel);
+
+    /* ---------- 별자리 ---------- */
+    const CONS = [
+        { name: '양자리', lam: 40, bet: 2, pts: [[-0.85, 0], [-0.25, 0.16], [0.45, 0.02], [0.95, -0.4]], pairs: [[0, 1], [1, 2], [2, 3]] },
+        { name: '황소자리', lam: 71, bet: -2, pts: [[-0.8, 0.62], [-0.55, 0], [-0.85, -0.5], [0.05, 0], [0.6, 0.42], [1.05, 0.18]], pairs: [[0, 1], [1, 2], [1, 3], [3, 4], [4, 5]] },
+        { name: '쌍둥이자리', lam: 104, bet: 3, pts: [[-0.6, 0.6], [-0.5, -0.6], [0.4, 0.72], [0.5, -0.5]], pairs: [[0, 1], [2, 3], [0, 2], [1, 3]] },
+        { name: '게자리', lam: 128, bet: 4, pts: [[-0.6, 0.2], [0, 0], [0.6, 0.2], [0.3, 0.6]], pairs: [[0, 1], [1, 2], [1, 3]] },
+        { name: '사자자리', lam: 156, bet: 6, pts: [[-0.85, 0.3], [-0.7, 0.8], [-0.2, 0.6], [0.1, 0.2], [0.75, 0.1], [0.55, -0.5]], pairs: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 3]] },
+        { name: '처녀자리', lam: 195, bet: -2, pts: [[-0.8, 0.3], [-0.3, -0.1], [0.3, 0.1], [0.8, -0.2], [0.45, 0.6]], pairs: [[0, 1], [1, 2], [2, 3], [3, 4]] },
+        { name: '천칭자리', lam: 229, bet: 1, pts: [[-0.7, 0], [0, 0.3], [0.7, 0], [0, -0.3]], pairs: [[0, 1], [1, 2], [2, 3], [3, 0]] },
+        { name: '전갈자리', lam: 244, bet: -4, pts: [[-0.8, 0.5], [-0.62, 0], [-0.2, -0.32], [0.3, -0.42], [0.7, -0.12], [0.8, 0.4], [0.5, 0.8]], pairs: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6]] },
+        { name: '사수자리', lam: 282, bet: -3, pts: [[-0.6, -0.3], [0, -0.5], [0.5, -0.2], [0.4, 0.3], [-0.2, 0.4], [-0.6, 0.1]], pairs: [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [2, 5]] },
+        { name: '염소자리', lam: 312, bet: -2, pts: [[-0.7, 0.2], [-0.2, 0.5], [0.3, 0.2], [0.7, -0.2], [0.2, -0.5]], pairs: [[0, 1], [1, 2], [2, 3], [3, 4]] },
+        { name: '물병자리', lam: 340, bet: 1, pts: [[-0.7, 0.4], [-0.3, 0], [-0.5, -0.4], [0.2, -0.2], [0.6, 0.2], [0.8, -0.3]], pairs: [[0, 1], [1, 2], [1, 3], [3, 4], [4, 5]] },
+        { name: '물고기자리', lam: 10, bet: 4, pts: [[-0.8, 0.2], [-0.4, -0.2], [0.1, 0.1], [0.6, -0.1], [0.9, 0.3]], pairs: [[0, 1], [1, 2], [2, 3], [3, 4]] },
+        { name: '목동자리', lam: 204, bet: 30, pts: [[0, 0.8], [0.5, 0.1], [0, -0.6], [-0.5, 0.1], [-0.45, -1.0]], pairs: [[0, 1], [1, 2], [2, 3], [3, 0], [2, 4]] },
+        { name: '거문고자리', lam: 285, bet: 60, pts: [[0, 0.8], [0.4, 0.2], [-0.3, 0.1], [0.1, -0.45]], pairs: [[0, 1], [0, 2], [1, 3]] },
+        { name: '백조자리', lam: 310, bet: 55, pts: [[0, 0.9], [0, 0.1], [0, -0.9], [-0.9, -0.2], [0.9, -0.1]], pairs: [[0, 1], [1, 2], [3, 1], [1, 4]] },
+        { name: '독수리자리', lam: 296, bet: 29, pts: [[-0.8, 0.3], [0, 0.1], [0.8, 0.3], [0.1, -0.5]], pairs: [[0, 1], [1, 2], [1, 3]] },
+        { name: '페가수스자리', lam: 353, bet: 20, pts: [[-0.75, 0.75], [0.75, 0.75], [0.75, -0.5], [-0.75, -0.5], [-0.3, 0.1]], pairs: [[0, 1], [1, 2], [2, 3], [3, 0], [0, 4]] },
+        { name: '안드로메다자리', lam: 9, bet: 28, pts: [[-0.8, 0.4], [0, 0.2], [0.8, -0.4]], pairs: [[0, 1], [1, 2]] },
+        { name: '오리온자리', lam: 84, bet: -18, pts: [[-0.55, 0.75], [0.55, 0.65], [-0.45, -0.7], [0.55, -0.6], [-0.18, 0.06], [0.08, 0.02], [0.34, -0.02]], pairs: [[0, 1], [0, 4], [4, 5], [5, 6], [6, 1], [4, 2], [6, 3]] },
+        { name: '큰개자리', lam: 104, bet: -30, pts: [[-0.8, 0.3], [0, 0], [0.6, -0.4], [0.8, 0.4]], pairs: [[0, 1], [1, 2], [2, 3]] }
+    ];
+
+    /* ---------- 황도 12궁 (태양이 지나는 날짜 구간) ---------- */
+    const ZODIAC = [
+        ['물병자리', 47, 71], ['물고기자리', 71, 109], ['양자리', 109, 134], ['황소자리', 134, 173],
+        ['쌍둥이자리', 173, 202], ['게자리', 202, 223], ['사자자리', 223, 260], ['처녀자리', 260, 304],
+        ['천칭자리', 304, 328], ['전갈자리', 328, 334], ['사수자리', 352, 385], ['염소자리', 20, 47]
+    ];
+    function lamOfDay(d) { return (((280.5 + (d - 1) * 0.98565) % 360) + 360) % 360; }
+    ZODIAC.forEach(z => {
+        const a = lamOfDay(z[1]);
+        const b = lamOfDay(z[2]);
+        z.a = a;
+        z.span = ((b - a) % 360 + 360) % 360;
+        z.lam = (a + z.span / 2) % 360;
+        const c = CONS.find(x => x.name === z[0]);
+        if (c) c.lam = z.lam;
+    });
+    function zodiacAt(lamDeg) {
+        const L = ((lamDeg % 360) + 360) % 360;
+        for (let i = 0; i < ZODIAC.length; i++) {
+            const z = ZODIAC[i];
+            const d = ((L - z.a) % 360 + 360) % 360;
+            if (d < z.span) return CONS.find(x => x.name === z[0]);
+        }
+        return null;
+    }
+
+    const conGroup = new THREE.Group();
+    scene.add(conGroup);
+
+    (function buildConstellations() {
+        const pts = [];
+        const cols = [];
+        const linePts = [];
+        CONS.forEach(c => {
+            const lam = c.lam * DEG, bet = c.bet * DEG;
+            const dir = lambdaDir(lam, bet);
+            const u = lam - Math.PI / 2;
+            const east = new THREE.Vector3(-Math.sin(u), 0, Math.cos(u));
+            const northB = new THREE.Vector3(-Math.cos(u) * Math.sin(bet), Math.cos(bet), -Math.sin(u) * Math.sin(bet));
+            const base = dir.clone().multiplyScalar(R_ZOD);
+            const world = c.pts.map(p => {
+                return base.clone()
+                    .addScaledVector(east, p[0])
+                    .addScaledVector(northB, p[1]);
+            });
+            world.forEach(w => {
+                pts.push(w.x, w.y, w.z);
+                cols.push(0.85, 0.92, 1.0);
+            });
+            c.pairs.forEach(pr => {
+                const a = world[pr[0]], b = world[pr[1]];
+                linePts.push(a.x, a.y, a.z, b.x, b.y, b.z);
+            });
+            c._dir = dir;
+            c._labelPos = base.clone().addScaledVector(northB, -0.7);
+        });
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+        g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
+        const p = new THREE.Points(g, new THREE.PointsMaterial({ size: 4.4, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false }));
+        conGroup.add(p);
+        const lg = new THREE.BufferGeometry();
+        lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(linePts), 3));
+        conGroup.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x9fc4f2, transparent: true, opacity: 0.5, depthWrite: false })));
+
+        CONS.forEach(c => {
+            const lb = makeLabel(c.name, '#b9d3f2', 0.46, 'rgba(8,12,22,0.45)');
+            lb.position.copy(c._labelPos);
+            c._label = lb;
+            conGroup.add(lb);
+        });
+    })();
+
+    // 배경 별
+    (function buildBackStars() {
+        const N = 900;
+        const pos = new Float32Array(N * 3);
+        const col = new Float32Array(N * 3);
+        for (let i = 0; i < N; i++) {
+            const u = Math.random() * 2 - 1;
+            const th = Math.random() * Math.PI * 2;
+            const r = Math.sqrt(Math.max(0, 1 - u * u));
+            const d = new THREE.Vector3(Math.cos(th) * r, u, Math.sin(th) * r).multiplyScalar(R_ZOD * 0.995);
+            pos[i * 3] = d.x; pos[i * 3 + 1] = d.y; pos[i * 3 + 2] = d.z;
+            const b = 0.4 + Math.random() * 0.55;
+            col[i * 3] = b * 0.95; col[i * 3 + 1] = b * 0.97; col[i * 3 + 2] = b;
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false })));
+    })();
+
+    // 황도 (별자리가 놓인 길)
+    (function buildEcliptic() {
+        const pts = [];
+        for (let i = 0; i <= 240; i++) {
+            const lam = i / 240 * Math.PI * 2;
+            pts.push(lambdaDir(lam, 0).multiplyScalar(R_ZOD));
+        }
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineBasicMaterial({ color: 0x6f8fd0, transparent: true, opacity: 0.28, depthWrite: false }));
+        scene.add(line);
+        FPHIDE.push(line);
+        const lb = makeLabel('황도 (태양이 지나는 길)', '#8fa8d8', 0.38, 'rgba(8,12,22,0.45)');
+        lb.position.copy(lambdaDir(200 * DEG, 0).multiplyScalar(R_ZOD * 1.02));
+        scene.add(lb);
+        FPHIDE.push(lb);
+    })();
+
+    // 강조 표시 (태양 별자리 / 한밤중 별자리)
+    function makeHighlighter(color) {
+        const c = document.createElement('canvas');
+        c.width = c.height = 128;
+        const g = c.getContext('2d');
+        const grd = g.createRadialGradient(64, 64, 10, 64, 64, 62);
+        grd.addColorStop(0, color);
+        grd.addColorStop(0.42, color);
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 128, 128);
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 }));
+        sp.scale.set(1.5, 1.5, 1);
+        scene.add(sp);
+        return sp;
+    }
+    const sunHi = makeHighlighter('rgba(255,214,10,0.55)');
+    const midHi = makeHighlighter('rgba(100,160,255,0.55)');
+
+    /* ---------- 상태 갱신 ---------- */
+    const vEarth = new THREE.Vector3();
+    const vSunDir = new THREE.Vector3();
+    const vMidDir = new THREE.Vector3();
+    const vObsUp = new THREE.Vector3();
+    let current = { sunCon: null, midCon: null, season: '겨울', isNight: true };
+
+    function seasonOf(day) {
+        const m = monthOf(day);
+        if (m >= 3 && m <= 5) return 'spring';
+        if (m >= 6 && m <= 8) return 'summer';
+        if (m >= 9 && m <= 11) return 'autumn';
+        return 'winter';
+    }
+    const SEASON_INFO = {
+        spring: { name: '봄', list: '처녀자리 · 목동자리 · 사자자리', rep: 105 },
+        summer: { name: '여름', list: '거문고자리 · 백조자리 · 독수리자리 (여름철 대삼각형)', rep: 196 },
+        autumn: { name: '가을', list: '페가수스자리 · 안드로메다자리 · 물고기자리', rep: 288 },
+        winter: { name: '겨울', list: '오리온자리 · 큰개자리 · 황소자리 · 쌍둥이자리', rep: 15 }
+    };
+    function monthOf(day) {
+        const cum = [31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365];
+        for (let i = 0; i < 12; i++) if (day <= cum[i]) return i + 1;
+        return 12;
+    }
+    function dayInMonth(day) {
+        const cum = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+        const m = monthOf(day);
+        return day - cum[m - 1];
+    }
+    function fmtDate(day) { const d = Math.max(1, Math.min(365, Math.round(day))); return monthOf(d) + '월 ' + dayInMonth(d) + '일'; }
+    function fmtHour(h) {
+        const hh = Math.floor(h) % 24;
+        const mm = Math.floor((h - Math.floor(h)) * 60);
+        return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+    }
+
+    function nearestConstellation(dir) {
+        let best = null, bestDot = -2;
+        CONS.forEach(c => {
+            const d = c._dir.dot(dir);
+            if (d > bestDot) { bestDot = d; best = c; }
+        });
+        return best;
+    }
+
+    function updateAll() {
+        const day = state.day;
+        const lamSun = sunLongitude(day);
+        const a = earthAngle(day);
+        vEarth.set(Math.cos(a) * R_ORBIT, 0, Math.sin(a) * R_ORBIT);
+        earthPivot.position.copy(vEarth);
+
+        vSunDir.copy(vEarth).multiplyScalar(-1).normalize();   // 지구 → 태양
+        vMidDir.copy(vEarth).normalize();                      // 지구 → 태양 반대편
+
+        // 지구 자전: 정오에 관측자의 자오선이 태양을 향하도록
+        const lamSunEq = Math.atan2(vSunDir.dot(Q_E), vSunDir.dot(P_E));
+        const spin = lamSunEq + (state.hour - 12) * 15 * DEG;
+        earthSpin.rotation.y = spin;
+
+        // 관측자의 천정 (월드)
+        obsGroup.updateWorldMatrix(true, false);
+        vObsUp.copy(localU).applyQuaternion(obsGroup.getWorldQuaternion(new THREE.Quaternion()));
+        const isNight = vObsUp.dot(vSunDir) < 0.02;
+
+        // 밤 콘
+        const coneLen = 2.8;
+        const obsPos = obsGroup.getWorldPosition(new THREE.Vector3());
+        nightCone.position.copy(obsPos).addScaledVector(vObsUp, coneLen / 2);
+        nightCone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vObsUp.clone().multiplyScalar(-1));
+        nightCone.material.color.setHex(isNight ? 0x5aa6ff : 0xffc46b);
+        nightCone.material.opacity = isNight ? 0.13 : 0.06;
+        nightConeLabel.position.copy(obsPos).addScaledVector(vObsUp, coneLen + 0.25);
+        nightConeLabel.material.opacity = isNight ? 1 : 0.45;
+
+        // 태양 방향 / 반대 방향 선
+        const start = vEarth.clone();
+        const sunEnd = vSunDir.clone().multiplyScalar(R_ZOD);
+        setLine(sunRay, start, sunEnd.add(vEarth));
+        const midEnd = vMidDir.clone().multiplyScalar(R_ZOD).add(vEarth);
+        setLine(midRay, start, midEnd);
+
+        const sunCon = zodiacAt(lamSun / DEG) || nearestConstellation(lambdaDir(lamSun, 0));
+        const midCon = zodiacAt(lamSun / DEG + 180) || nearestConstellation(lambdaDir(lamSun + Math.PI, 0));
+        current.sunCon = sunCon; current.midCon = midCon;
+        current.season = seasonOf(day);
+        current.isNight = isNight;
+
+        sunHi.position.copy(sunCon._dir).multiplyScalar(R_ZOD);
+        midHi.position.copy(midCon._dir).multiplyScalar(R_ZOD);
+
+        sunRayLabel.position.copy(sunEnd).add(new THREE.Vector3(0, 0.45, 0));
+        midRayLabel.position.copy(midEnd).add(new THREE.Vector3(0, 0.45, 0));
+
+        // 강조 색
+        CONS.forEach(c => {
+            if (!c._label) return;
+            if (c === midCon) { c._label.material.opacity = 1; }
+            else if (c === sunCon) { c._label.material.opacity = 0.55; }
+            else { c._label.material.opacity = state.showNames ? 0.9 : 0; }
+        });
+
+        earthLabel.position.copy(vEarth).add(new THREE.Vector3(0, R_EARTH * 2.0, 0));
+        updateHUD();
+    }
+
+    function updateHUD() {
+        document.getElementById('val-date').textContent = fmtDate(state.day);
+        document.getElementById('val-hour').textContent = fmtHour(state.hour);
+        const s = SEASON_INFO[current.season];
+        document.getElementById('val-season').textContent = s.name;
+        document.getElementById('lbl-date').textContent = fmtDate(state.day);
+        document.getElementById('lbl-hour').textContent = fmtHour(state.hour);
+
+        const badge = document.getElementById('badge-daynight');
+        badge.textContent = current.isNight ? '밤 🌙' : '낮 ☀️';
+        badge.className = 'sky-badge ' + (current.isNight ? 'night' : 'day');
+        document.getElementById('sun-state').textContent = current.isNight
+            ? '(지구 반대편 · 안 보임)' : '(낮 · 태양 때문에 안 보임)';
+        document.getElementById('sun-con').textContent = current.sunCon ? current.sunCon.name : '-';
+        document.getElementById('mid-con').textContent =
+            (current.midCon ? current.midCon.name : '-') + (current.isNight ? '' : ' (지금은 낮이라 안 보여요)');
+        document.getElementById('season-list').textContent = s.name + '철 밤하늘: ' + s.list;
+        document.querySelectorAll('.season-chip').forEach(b => b.classList.toggle('active', b.dataset.season === current.season));
+
+        const rng = document.getElementById('rng-day');
+        if (document.activeElement !== rng) rng.value = Math.round(state.day);
+        const rngH = document.getElementById('rng-hour');
+        if (document.activeElement !== rngH) rngH.value = state.hour;
+    }
+
+    /* ---------- 드래그 (지구를 끌어 날짜 변경) ---------- */
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    let dragging = false;
+    let wasPlaying = false;
+
+    function setPointer(e) {
+        const r = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+    }
+    renderer.domElement.addEventListener('pointerdown', e => {
+        if (state.preset === 'earth') return;
+        setPointer(e);
+        raycaster.setFromCamera(pointer, camera);
+        const hit = raycaster.intersectObject(earthMesh, false);
+        if (hit.length) {
+            dragging = true;
+            wasPlaying = state.playing;
+            state.playing = false;
+            const pb = document.getElementById('btn-play');
+            pb.textContent = '▶ 재생';
+            pb.classList.remove('on');
+            controls.enabled = false;
+            try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) {}
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    renderer.domElement.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        setPointer(e);
+        raycaster.setFromCamera(pointer, camera);
+        const p = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(dragPlane, p)) return;
+        let ang = Math.atan2(p.z, p.x);
+        // ang = earthAngle(day)
+        let day = (ang / DEG + 270 - 280.5) / 0.98565 + 1;
+        day = ((day - 1) % 365 + 365) % 365 + 1;
+        state.day = Math.round(day);
+        updateAll();
+        e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('pointerup', () => {
+        if (dragging) { dragging = false; controls.enabled = true; }
+    });
+
+    /* ---------- UI ---------- */
+    const panels = {
+        date: document.getElementById('panel-date'),
+        view: document.getElementById('panel-view')
+    };
+    const tabs = {
+        date: document.getElementById('btn-tab-date'),
+        view: document.getElementById('btn-tab-view'),
+        sky: document.getElementById('btn-tab-sky')
+    };
+    function closePanels() {
+        Object.values(panels).forEach(p => p.classList.remove('show'));
+        ['date', 'view'].forEach(k => tabs[k].classList.remove('active'));
+        document.body.classList.remove('panel-open');
+    }
+    function openPanel(key) {
+        const isOpen = panels[key].classList.contains('show');
+        closePanels();
+        if (!isOpen) {
+            panels[key].classList.add('show');
+            tabs[key].classList.add('active');
+            document.body.classList.add('panel-open');
+        }
+    }
+    tabs.date.addEventListener('click', () => openPanel('date'));
+    tabs.view.addEventListener('click', () => openPanel('view'));
+    tabs.sky.addEventListener('click', () => {
+        state.showSky = !state.showSky;
+        document.getElementById('sky-panel').classList.toggle('hidden', !state.showSky);
+        tabs.sky.classList.toggle('active', state.showSky);
+    });
+
+    document.getElementById('btn-play').addEventListener('click', e => {
+        state.playing = !state.playing;
+        e.target.textContent = state.playing ? '⏸ 멈춤' : '▶ 재생';
+        e.target.classList.toggle('on', state.playing);
+    });
+    document.getElementById('rng-day').addEventListener('input', e => {
+        state.day = parseFloat(e.target.value);
+        updateAll();
+    });
+    document.getElementById('rng-hour').addEventListener('input', e => {
+        state.hour = parseFloat(e.target.value);
+        updateAll();
+    });
+    document.querySelectorAll('[data-day]').forEach(b => {
+        b.addEventListener('click', () => {
+            state.day = parseFloat(b.dataset.day);
+            state.playing = false;
+            const pb = document.getElementById('btn-play');
+            pb.textContent = '▶ 재생';
+            pb.classList.remove('on');
+            updateAll();
+        });
+    });
+    document.querySelectorAll('.season-chip').forEach(b => {
+        b.addEventListener('click', () => {
+            state.day = SEASON_INFO[b.dataset.season].rep;
+            state.playing = false;
+            const pb = document.getElementById('btn-play');
+            pb.textContent = '▶ 재생';
+            pb.classList.remove('on');
+            updateAll();
+        });
+    });
+    document.getElementById('btn-names').addEventListener('click', e => {
+        state.showNames = !state.showNames;
+        e.target.textContent = state.showNames ? '보기' : '숨기기';
+        e.target.classList.toggle('on', state.showNames);
+        updateAll();
+    });
+    document.getElementById('btn-rays').addEventListener('click', e => {
+        state.showRays = !state.showRays;
+        sunRay.visible = midRay.visible = state.showRays;
+        sunRayLabel.visible = midRayLabel.visible = state.showRays;
+        sunHi.visible = midHi.visible = state.showRays;
+        e.target.textContent = state.showRays ? '보기' : '숨기기';
+        e.target.classList.toggle('on', state.showRays);
+    });
+
+    /* ---------- 시점 ---------- */
+    const earthSide = [sunGroup, sunLabel];
+    const VIEW_TIPS = {
+        oblique: '지구를 끌어서 움직여 보세요 — 태양 반대편 별자리가 밤하늘에 보여요',
+        top: '지구는 태양 둘레를 1년에 한 바퀴 서→동으로 돌아요 (반시계 방향)',
+        earth: '관측자의 눈으로 본 밤하늘 — 지금 남쪽 하늘에 보이는 별자리예요'
+    };
+    function applyPreset(name) {
+        state.preset = name;
+        if (name === 'oblique') {
+            controls.enabled = true;
+            nightConeLabel.visible = true;
+            earthLabel.visible = true;
+            FPHIDE.forEach(o => { o.visible = true; });
+            conGroup.children.forEach(o => {
+                if (o.isSprite && o.userData.baseScale) o.scale.copy(o.userData.baseScale);
+            });
+            camera.up.set(0, 1, 0);
+            camera.position.set(0.5, 9.4, 12.4);
+            controls.target.set(0, 0.2, 0);
+            controls.update();
+            conGroup.visible = true;
+            sunGroup.visible = true;
+            earthTilt.visible = true;
+            nightCone.visible = true;
+            [sunRay, midRay, sunRayLabel, midRayLabel, sunHi, midHi].forEach(o => { o.visible = state.showRays; });
+            document.getElementById('sky-panel').classList.toggle('hidden', !state.showSky);
+            camera.fov = 54; camera.updateProjectionMatrix();
+        } else if (name === 'top') {
+            controls.enabled = true;
+            nightConeLabel.visible = true;
+            earthLabel.visible = true;
+            FPHIDE.forEach(o => { o.visible = true; });
+            conGroup.children.forEach(o => {
+                if (o.isSprite && o.userData.baseScale) o.scale.copy(o.userData.baseScale);
+            });
+            camera.up.copy(P_E);
+            camera.position.set(0.001, 14.5, 0.001);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            conGroup.visible = true;
+            sunGroup.visible = true;
+            earthTilt.visible = true;
+            nightCone.visible = true;
+            [sunRay, midRay, sunRayLabel, midRayLabel, sunHi, midHi].forEach(o => { o.visible = state.showRays; });
+            document.getElementById('sky-panel').classList.toggle('hidden', !state.showSky);
+            camera.fov = 54; camera.updateProjectionMatrix();
+        } else if (name === 'earth') {
+            controls.enabled = false;
+            earthTilt.visible = false;
+            sunGroup.visible = false;
+            nightCone.visible = false;
+            nightConeLabel.visible = false;
+            earthLabel.visible = false;
+            FPHIDE.forEach(o => { o.visible = false; });
+            sunHi.scale.set(0.55, 0.55, 1);
+            midHi.scale.set(0.55, 0.55, 1);
+            conGroup.children.forEach(o => {
+                if (o.isSprite && o.userData.baseScale) o.scale.copy(o.userData.baseScale).multiplyScalar(0.5);
+            });
+            [sunRay, midRay, sunRayLabel, midRayLabel].forEach(o => { o.visible = false; });
+            document.getElementById('sky-panel').classList.add('hidden');
+            camera.fov = 62; camera.updateProjectionMatrix();
+        }
+        const tip = document.getElementById('guide-tooltip');
+        if (tip) tip.textContent = VIEW_TIPS[name];
+        document.querySelectorAll('[id^="btn-view-"]').forEach(b => b.classList.toggle('on', b.id === 'btn-view-' + name));
+        updateEarthCamera();
+    }
+    function updateEarthCamera() {
+        if (state.preset !== 'earth') return;
+        const eye = obsGroup.getWorldPosition(new THREE.Vector3()).addScaledVector(vObsUp, 0.02);
+        const south = vMidDir.clone().addScaledVector(vObsUp, -vMidDir.dot(vObsUp));
+        if (south.lengthSq() < 1e-6) south.copy(vMidDir);
+        south.normalize();
+        const look = south.clone().multiplyScalar(Math.cos(35 * DEG)).addScaledVector(vObsUp, Math.sin(35 * DEG)).normalize();
+        camera.up.copy(vObsUp);
+        camera.position.copy(eye);
+        camera.lookAt(eye.clone().addScaledVector(look, 10));
+    }
+    document.getElementById('btn-view-oblique').addEventListener('click', () => applyPreset('oblique'));
+    document.getElementById('btn-view-top').addEventListener('click', () => applyPreset('top'));
+    document.getElementById('btn-view-earth').addEventListener('click', () => applyPreset('earth'));
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        state.day = 1; state.hour = 21; state.playing = true; state.speed = 12;
+        state.showNames = state.showRays = state.showSky = true;
+        document.getElementById('rng-day').value = 1;
+        document.getElementById('rng-hour').value = 21;
+        const pb = document.getElementById('btn-play');
+        pb.textContent = '⏸ 멈춤'; pb.classList.add('on');
+        ['btn-names', 'btn-rays'].forEach(id => { const b = document.getElementById(id); b.textContent = '보기'; b.classList.add('on'); });
+        sunRay.visible = midRay.visible = sunRayLabel.visible = midRayLabel.visible = sunHi.visible = midHi.visible = true;
+        document.getElementById('sky-panel').classList.remove('hidden');
+        tabs.sky.classList.add('active');
+        updateAll();
+        applyPreset('oblique');
+    });
+
+    const themeBtn = document.getElementById('theme-toggle');
+    themeBtn.addEventListener('click', () => {
+        state.dark = !state.dark;
+        document.body.classList.toggle('light-mode', !state.dark);
+        themeBtn.textContent = state.dark ? '🌙' : '☀️';
+    });
+
+    /* ---------- 렌더 루프 ---------- */
+    const clock = new THREE.Clock();
+    let acc = 0;
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.06);
+        if (state.playing && !dragging) {
+            state.day += dt * state.speed;
+            if (state.day > 365) state.day -= 365;
+            updateAll();
+        }
+        if (state.preset !== 'earth') controls.update();
+        else updateEarthCamera();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    /* ---------- 시작 ---------- */
+    function startApp() {
+        updateAll();
+        applyPreset('oblique');
+        animate();
+    }
+    if (document.fonts && document.fonts.load) {
+        Promise.race([
+            document.fonts.load("bold 64px 'SeoulNamsan'"),
+            new Promise(r => setTimeout(r, 1000))
+        ]).then(() => { refreshLabels(); startApp(); }).catch(startApp);
+    } else {
+        startApp();
+    }
+    </script>
+
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+<script src="../../common/feedback.js" defer></script>
+</body>
+</html>

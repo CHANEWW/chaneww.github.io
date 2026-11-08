@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>달의 위상 변화 3D</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* 좌측 상단 헤더 */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 우측 상단 실시간 데이터 표시 카드 */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 메세지 */
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+            white-space: nowrap;
+        }
+
+        /* 좌측 하단 지구에서 본 달 위상 패널 */
+        .phase-panel {
+            position: absolute;
+            left: 20px;
+            bottom: 24px;
+            padding: 12px 14px 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            z-index: 10;
+        }
+
+        #phase-canvas {
+            width: 118px;
+            height: 118px;
+            display: block;
+        }
+
+        .phase-name {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .phase-sub {
+            font-size: 11px;
+            font-weight: bold;
+            color: #8e8e93;
+        }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 서브 물리 설정 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 20px;
+            width: 330px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #007aff;
+        }
+
+        .quick-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .quick-btn {
+            flex: 1;
+            min-width: 58px;
+            padding: 7px 4px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.6);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: bold;
+            color: #1c1c1e;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-btn:hover { background: #ffffff; }
+
+        .panel-note {
+            font-size: 11px;
+            color: #8e8e93;
+            line-height: 1.5;
+            font-weight: bold;
+        }
+
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #10131c;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 34, 46, 0.78);
+            border-color: rgba(255, 255, 255, 0.12);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn,
+        body.dark-mode .phase-name, body.dark-mode .control-tab-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+
+        body.dark-mode .quick-btn {
+            background: rgba(60, 64, 78, 0.8);
+            color: #eee;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Bottom Right Bar (Fullscreen) */
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        button.back-btn, button.tag-badge {
+            font-family: inherit;
+            border: none;
+        }
+
+        @media (max-width: 768px) {
+            .bottom-right-bar {
+                bottom: 15px;
+                right: 15px;
+            }
+            .center-tooltip { display: none; }
+            .phase-panel { left: 12px; bottom: 84px; padding: 8px 10px 6px; }
+            #phase-canvas { width: 78px; height: 78px; }
+            .bottom-control-bar { bottom: 14px; }
+            .control-tab-btn { min-width: 54px; padding: 6px 8px; font-size: 11px; }
+            .sub-panel { width: 280px; bottom: 78px; }
+            .data-card { gap: 10px; padding: 8px 12px; }
+            .data-value { font-size: 13px; }
+        }
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+/* @@/MOBILE-BASE@@ */
+</style>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>달의 위상 변화 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">경과일</span>
+                <span class="data-value" id="val-day" style="color:#007aff;">7.4일</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">태양과의 이각</span>
+                <span class="data-value" id="val-elong" style="color:#34c759;">90°</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">조명 비율</span>
+                <span class="data-value" id="val-lit" style="color:#ff9500;">50%</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 달의 공전 위치를 바꾸며 지구에서 보이는 밝은 부분이 어떻게 달라지는지 관찰하세요
+    </div>
+
+    <!-- 지구에서 본 달의 위상 -->
+    <div class="glass-panel phase-panel">
+        <canvas id="phase-canvas" width="260" height="260"></canvas>
+        <span class="phase-name" id="phase-name">상현달</span>
+        <span class="phase-sub" id="phase-sub">지구에서 본 달</span>
+    </div>
+
+    <!-- 서브 설정 패널 -->
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="slider-row">
+            <div class="slider-header">
+                <span>달의 공전 위치 (삭망 주기 29.5일)</span>
+                <span id="txt-day">7.4일</span>
+            </div>
+            <input type="range" id="sld-day" min="0" max="29.5" step="0.1" value="7.4">
+        </div>
+        <div class="quick-row">
+            <button class="quick-btn" data-day="0">삭</button>
+            <button class="quick-btn" data-day="7.4">상현달</button>
+            <button class="quick-btn" data-day="14.8">보름달</button>
+            <button class="quick-btn" data-day="22.1">하현달</button>
+        </div>
+        <div class="panel-note">
+            지구에서 달까지의 거리와 천체의 크기는 실제 비율이 아니며, 태양 빛의 방향과 위상 관계는 실제와 같습니다.
+        </div>
+    </div>
+
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>설정 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-play">
+            <span>▶️</span>
+            <span id="play-text">자동 공전</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-view">
+            <span>🔭</span>
+            <span id="view-text">우주 시점</span>
+        </button>
+    </div>
+
+    <!-- Fullscreen / Windowed Mode Button -->
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 1. Three.js 기본 씬 & 카메라 & 렌더러 설정 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.05, 400);
+        camera.position.set(0, 7.2, 9.4);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.target.set(0, 0, 0);
+        controls.minDistance = 2.2;
+        controls.maxDistance = 26;
+        controls.maxPolarAngle = Math.PI / 2 + 0.02;
+
+        // --- 2. 조명 설정 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.32);
+        scene.add(ambientLight);
+
+        // 태양 빛은 +X 방향에서 거의 평행하게 들어옴
+        const sunLight = new THREE.DirectionalLight(0xfff6e0, 2.0);
+        sunLight.position.set(18, 3, 0);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.left = -8;
+        sunLight.shadow.camera.right = 8;
+        sunLight.shadow.camera.top = 8;
+        sunLight.shadow.camera.bottom = -8;
+        scene.add(sunLight);
+        scene.add(sunLight.target);
+
+        // 별 (야간 모드에서만 표시)
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = [];
+        for (let i = 0; i < 900; i++) {
+            const r = 70 + Math.random() * 40;
+            const th = Math.random() * Math.PI * 2;
+            const ph = Math.acos(2 * Math.random() - 1);
+            starPos.push(r * Math.sin(ph) * Math.cos(th), r * Math.cos(ph), r * Math.sin(ph) * Math.sin(th));
+        }
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+        const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.5, sizeAttenuation: true, transparent: true, opacity: 0.9 });
+        const stars = new THREE.Points(starGeo, starMat);
+        stars.visible = false;
+        scene.add(stars);
+
+        // --- 4. 천체 텍스처 생성 ---
+        function makeEarthTexture() {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 256;
+            const ctx = c.getContext('2d');
+            const g = ctx.createLinearGradient(0, 0, 0, 256);
+            g.addColorStop(0, '#1b5fa8');
+            g.addColorStop(0.5, '#2d7fd0');
+            g.addColorStop(1, '#1b5fa8');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 512, 256);
+
+            // 대륙 (단순화한 모양)
+            ctx.fillStyle = '#2f8f57';
+            const blobs = [
+                [70, 70, 46, 26], [110, 120, 38, 34], [150, 150, 30, 22],
+                [250, 60, 60, 26], [255, 110, 34, 40], [300, 150, 26, 30],
+                [380, 80, 52, 30], [400, 150, 30, 26], [430, 62, 24, 18],
+                [200, 200, 40, 18], [330, 205, 36, 16]
+            ];
+            blobs.forEach(b => {
+                ctx.beginPath();
+                ctx.ellipse(b[0], b[1], b[2], b[3], 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            // 극지방
+            ctx.fillStyle = '#eef6ff';
+            ctx.fillRect(0, 0, 512, 16);
+            ctx.fillRect(0, 240, 512, 16);
+
+            return new THREE.CanvasTexture(c);
+        }
+
+        function makeMoonTexture() {
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#cfd2d8';
+            ctx.fillRect(0, 0, 512, 256);
+
+            // 크레이터
+            for (let i = 0; i < 90; i++) {
+                const x = Math.random() * 512;
+                const y = 20 + Math.random() * 216;
+                const r = 2 + Math.random() * 12;
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(150,154,164,' + (0.25 + Math.random() * 0.4) + ')';
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x - r * 0.25, y - r * 0.25, r * 0.7, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(235,238,244,0.35)';
+                ctx.fill();
+            }
+            // 바다(어두운 지역)
+            ctx.fillStyle = 'rgba(140,146,158,0.55)';
+            [[180, 90, 55, 30], [205, 110, 30, 22], [150, 120, 26, 18]].forEach(b => {
+                ctx.beginPath();
+                ctx.ellipse(b[0], b[1], b[2], b[3], 0.2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            const tex = new THREE.CanvasTexture(c);
+            tex.anisotropy = 4;
+            return tex;
+        }
+
+        // --- 5. 지구 / 달 / 태양 ---
+        const EARTH_R = 0.78;
+        const MOON_R = 0.21;
+        const ORBIT_R = 3.5;
+
+        const earth = new THREE.Mesh(
+            new THREE.SphereGeometry(EARTH_R, 64, 48),
+            new THREE.MeshStandardMaterial({ map: makeEarthTexture(), roughness: 0.85, metalness: 0.0 })
+        );
+        earth.rotation.z = 0.41;
+        earth.castShadow = true;
+        earth.receiveShadow = true;
+        scene.add(earth);
+
+        // 지구 대기 글로우
+        const atmo = new THREE.Mesh(
+            new THREE.SphereGeometry(EARTH_R * 1.06, 48, 32),
+            new THREE.MeshBasicMaterial({ color: 0x5aa9ff, transparent: true, opacity: 0.16, side: THREE.BackSide })
+        );
+        scene.add(atmo);
+
+        const moon = new THREE.Mesh(
+            new THREE.SphereGeometry(MOON_R, 48, 36),
+            new THREE.MeshStandardMaterial({ map: makeMoonTexture(), roughness: 0.95, metalness: 0.0 })
+        );
+        moon.castShadow = true;
+        moon.receiveShadow = true;
+        scene.add(moon);
+
+        // 태양 (발광 구체 + 글로우)
+        const sunGroup = new THREE.Group();
+        const sunMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.95, 48, 32),
+            new THREE.MeshBasicMaterial({ color: 0xffd966 })
+        );
+        sunGroup.add(sunMesh);
+
+        function makeGlowTexture() {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 256;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(128, 128, 10, 128, 128, 128);
+            g.addColorStop(0, 'rgba(255,240,180,0.95)');
+            g.addColorStop(0.22, 'rgba(255,214,110,0.55)');
+            g.addColorStop(0.55, 'rgba(255,190,80,0.16)');
+            g.addColorStop(1, 'rgba(255,180,60,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0, 0, 256, 256);
+            return new THREE.CanvasTexture(c);
+        }
+        const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: makeGlowTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+        }));
+        sunGlow.scale.set(4.6, 4.6, 1);
+        sunGroup.add(sunGlow);
+        sunGroup.position.set(6.2, 0.7, 0);
+        scene.add(sunGroup);
+
+        // 태양에서 오는 빛 화살표
+        const sunArrowMat = new THREE.LineDashedMaterial({ color: 0xffb340, dashSize: 0.22, gapSize: 0.16, transparent: true, opacity: 0.75 });
+        for (let k = 0; k < 3; k++) {
+            const zz = (k - 1) * 1.5;
+            const pts = [new THREE.Vector3(4.4, 0.35, zz), new THREE.Vector3(3.0, 0.18, zz)];
+            const geo = new THREE.BufferGeometry().setFromPoints(pts);
+            const line = new THREE.Line(geo, sunArrowMat);
+            line.computeLineDistances();
+            scene.add(line);
+        }
+
+        // 달의 공전 궤도
+        const orbitPts = [];
+        for (let i = 0; i <= 128; i++) {
+            const a = (i / 128) * Math.PI * 2;
+            orbitPts.push(new THREE.Vector3(Math.cos(a) * ORBIT_R, 0, -Math.sin(a) * ORBIT_R));
+        }
+        const orbitGeo = new THREE.BufferGeometry().setFromPoints(orbitPts);
+        const orbitLine = new THREE.Line(orbitGeo, new THREE.LineDashedMaterial({
+            color: 0x8a94a6, dashSize: 0.16, gapSize: 0.14, transparent: true, opacity: 0.9
+        }));
+        orbitLine.computeLineDistances();
+        scene.add(orbitLine);
+
+        // 지구 -> 달 방향 표시선 (현재 위치 연결)
+        const linkGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(ORBIT_R, 0, 0)]);
+        const linkLine = new THREE.Line(linkGeo, new THREE.LineBasicMaterial({ color: 0x007aff, transparent: true, opacity: 0.35 }));
+        scene.add(linkLine);
+
+        // --- 6. 위상 계산 및 상태 ---
+        const SYNODIC = 29.53;                  // 삭망 주기(일)
+        const SUN_DIR = new THREE.Vector3(1, 0, 0); // 지구에서 태양을 보는 방향
+        let day = 7.4;                          // 현재 경과일
+        let orbitAngle = 0;                     // 공전 각도(rad)
+        let playing = false;
+        let viewMode = 'space';                 // 'space' | 'earth'
+        let isDark = false;
+
+        const moonDir = new THREE.Vector3(1, 0, 0);
+        const rightVec = new THREE.Vector3();
+        const UP = new THREE.Vector3(0, 1, 0);
+
+        function phaseInfo(cosElong) {
+            const elongate = Math.acos(Math.max(-1, Math.min(1, cosElong))) * 180 / Math.PI;
+            const lit = (1 - cosElong) / 2;
+            let name;
+            if (elongate < 22.5) name = '삭 (신월)';
+            else if (elongate < 67.5) name = '초승달';
+            else if (elongate < 112.5) name = '상현달';
+            else if (elongate < 157.5) name = '차오르는 달';
+            else if (elongate < 202.5) name = '보름달 (망)';
+            else if (elongate < 247.5) name = '기우는 달';
+            else if (elongate < 292.5) name = '하현달';
+            else if (elongate < 337.5) name = '그믐달';
+            else name = '삭 (신월)';
+            return { elong: elongate, lit: lit, name: name };
+        }
+
+        // --- 7. 지구에서 본 위상 캔버스 ---
+        const phaseCanvas = document.getElementById('phase-canvas');
+        const pctx = phaseCanvas.getContext('2d');
+
+        function drawPhaseCanvas(lit, litOnRight) {
+            const W = phaseCanvas.width, H = phaseCanvas.height;
+            const cx = W / 2, cy = H / 2, r = W * 0.4;
+            pctx.clearRect(0, 0, W, H);
+
+            // 어두운 부분(지구조)
+            pctx.beginPath();
+            pctx.arc(cx, cy, r, 0, Math.PI * 2);
+            pctx.fillStyle = '#2b3245';
+            pctx.fill();
+
+            // 밝은 부분
+            if (lit > 0.003) {
+                const a = Math.max(0.001, r * Math.abs(1 - 2 * lit));
+                const crescent = lit < 0.5;
+                pctx.save();
+                pctx.beginPath();
+                pctx.arc(cx, cy, r, 0, Math.PI * 2);
+                pctx.clip();
+
+                pctx.beginPath();
+                if (litOnRight) {
+                    pctx.arc(cx, cy, r, -Math.PI / 2, Math.PI / 2, false);
+                    if (crescent) pctx.ellipse(cx, cy, a, r, 0, Math.PI / 2, -Math.PI / 2, true);
+                    else pctx.ellipse(cx, cy, a, r, 0, Math.PI / 2, Math.PI * 1.5, false);
+                } else {
+                    pctx.arc(cx, cy, r, Math.PI / 2, Math.PI * 1.5, false);
+                    if (crescent) pctx.ellipse(cx, cy, a, r, 0, Math.PI * 1.5, Math.PI / 2, true);
+                    else pctx.ellipse(cx, cy, a, r, 0, Math.PI * 1.5, Math.PI * 2.5, false);
+                }
+                pctx.closePath();
+
+                const grad = pctx.createRadialGradient(cx - r * 0.25, cy - r * 0.3, r * 0.1, cx, cy, r * 1.1);
+                grad.addColorStop(0, '#fffdf3');
+                grad.addColorStop(0.7, '#f2eddc');
+                grad.addColorStop(1, '#d8d2bf');
+                pctx.fillStyle = grad;
+                pctx.fill();
+                pctx.restore();
+            }
+
+            // 테두리
+            pctx.beginPath();
+            pctx.arc(cx, cy, r, 0, Math.PI * 2);
+            pctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            pctx.lineWidth = 2;
+            pctx.stroke();
+        }
+
+        // --- 8. 상태 갱신 ---
+        function updateScene() {
+            orbitAngle = (day / SYNODIC) * Math.PI * 2;
+
+            // 공전 방향: 위상이 차오르는(초승달→보름달) 방향으로 회전
+            moon.position.set(Math.cos(orbitAngle) * ORBIT_R, 0, -Math.sin(orbitAngle) * ORBIT_R);
+            moon.lookAt(0, 0, 0);   // 동주기 자전: 항상 같은 면이 지구를 향함
+
+            linkGeo.setFromPoints([new THREE.Vector3(0, 0, 0), moon.position.clone()]);
+
+            // 태양 빛이 지구와 달을 비추도록 타깃 지정
+            sunLight.target.position.set(0, 0, 0);
+
+            // 위상 계산
+            moonDir.copy(moon.position).normalize();
+            const cosElong = moonDir.dot(SUN_DIR);
+            const info = phaseInfo(cosElong);
+
+            // 지구에서 보았을 때 태양이 달의 어느 쪽에 있는지
+            rightVec.crossVectors(moonDir, UP).normalize();
+            const litOnRight = SUN_DIR.dot(rightVec) > 0;
+
+            drawPhaseCanvas(info.lit, litOnRight);
+
+            document.getElementById('val-day').innerText = day.toFixed(1) + '일';
+            document.getElementById('val-elong').innerText = info.elong.toFixed(0) + '°';
+            document.getElementById('val-lit').innerText = (info.lit * 100).toFixed(0) + '%';
+            document.getElementById('txt-day').innerText = day.toFixed(1) + '일';
+            document.getElementById('phase-name').innerText = info.name;
+            document.getElementById('phase-sub').innerText = '지구에서 본 달 · 조명 ' + Math.round(info.lit * 100) + '%';
+
+            // 지구 시점: 달을 바라보는 위치로 카메라 고정
+            if (viewMode === 'earth') {
+                camera.position.copy(moonDir).multiplyScalar(EARTH_R * 1.9);
+                camera.position.y += 0.02;
+                controls.target.copy(moon.position);
+                camera.lookAt(moon.position);
+            }
+
+            // 지구 자전 (24시간 = 1일 기준, 보기 좋게 감속)
+            earth.rotation.y += 0.0009;
+        }
+
+        // --- 9. UI 제어 ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        const sldDay = document.getElementById('sld-day');
+        sldDay.addEventListener('input', (e) => {
+            day = parseFloat(e.target.value);
+            playing = false;
+            updatePlayUI();
+            updateScene();
+        });
+
+        document.querySelectorAll('.quick-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                day = parseFloat(b.dataset.day);
+                sldDay.value = day;
+                playing = false;
+                updatePlayUI();
+                updateScene();
+            });
+        });
+
+        const btnPlay = document.getElementById('btn-play');
+        function updatePlayUI() {
+            document.getElementById('play-text').innerText = playing ? '일시정지' : '자동 공전';
+            btnPlay.querySelector('span').innerText = playing ? '⏸' : '▶️';
+            btnPlay.classList.toggle('active', playing);
+        }
+        btnPlay.addEventListener('click', () => {
+            playing = !playing;
+            updatePlayUI();
+        });
+
+        function setView(mode) {
+            viewMode = mode;
+            const spaceVisible = (mode === 'space');
+            earth.visible = spaceVisible;
+            atmo.visible = spaceVisible;
+            orbitLine.visible = spaceVisible;
+            linkLine.visible = spaceVisible;
+
+            if (mode === 'earth') {
+                controls.enabled = false;
+                camera.fov = 20;
+                camera.updateProjectionMatrix();
+                document.getElementById('view-text').innerText = '지구 시점';
+                document.getElementById('guide-tooltip').innerText = '🌍 지구에서 달을 바라보면 밝은 부분의 모양이 위상으로 보입니다';
+            } else {
+                controls.enabled = true;
+                camera.fov = 45;
+                camera.updateProjectionMatrix();
+                camera.position.set(0, 7.2, 9.4);
+                controls.target.set(0, 0, 0);
+                document.getElementById('view-text').innerText = '우주 시점';
+                document.getElementById('guide-tooltip').innerText = '💡 달의 공전 위치를 바꾸며 지구에서 보이는 밝은 부분이 어떻게 달라지는지 관찰하세요';
+            }
+            updateScene();
+        }
+
+        document.getElementById('btn-view').addEventListener('click', () => {
+            setView(viewMode === 'space' ? 'earth' : 'space');
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            day = 7.4;
+            sldDay.value = 7.4;
+            playing = false;
+            updatePlayUI();
+            setView('space');
+            updateScene();
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', (e) => {
+            isDark = !isDark;
+            document.body.classList.toggle('dark-mode', isDark);
+            e.currentTarget.innerText = isDark ? '☀️' : '🌙';
+            scene.background.setHex(isDark ? 0x10131c : 0xf2f2f7);
+            stars.visible = isDark;
+            orbitLine.material.color.setHex(isDark ? 0x5d6a80 : 0x8a94a6);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 10. 애니메이션 루프 ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.05);
+
+            if (playing) {
+                // 29.53일을 30초에 걸쳐 공전
+                day += dt * (SYNODIC / 30);
+                if (day >= SYNODIC) day -= SYNODIC;
+                sldDay.value = day;
+                updateScene();
+            } else if (viewMode === 'earth') {
+                updateScene();
+            }
+
+            if (viewMode === 'space') controls.update();
+            renderer.render(scene, camera);
+        }
+
+        updateScene();
+        animate();
+
+        /* ---------- Fullscreen / Windowed Mode Logic ---------- */
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        const fullscreenText = document.getElementById('fullscreenText');
+
+        function updateFullscreenUI() {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (fullscreenIcon) fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+            if (fullscreenText) fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+        }
+
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                try {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) req.call(document.documentElement);
+                    } else {
+                        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    }
+                } catch (err) {
+                    console.error('전체화면 모드를 전환할 수 없습니다:', err);
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+<script src="../../common/feedback.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>물체를 보는 과정 3D</title>
+    <!-- Three.js 및 OrbitControls 3D 엔진 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, sans-serif;
+            background-color: #f2f2f7;
+            color: #1c1c1e;
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            touch-action: none;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+        }
+
+        /* 좌측 상단 헤더 */
+        .top-left-bar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1c1c1e;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.15);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* 우측 상단 데이터 패널 */
+        .top-right-bar {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .data-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 10px 20px;
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .data-label {
+            font-size: 11px;
+            color: #8e8e93;
+            font-weight: bold;
+        }
+
+        .data-value {
+            font-size: 15px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(20px);
+            transition: all 0.2s;
+        }
+
+        /* 중앙 안내 툴팁 */
+        .center-tooltip {
+            position: absolute;
+            top: 12%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            font-size: 13px;
+            color: #8e8e93;
+            border-radius: 30px;
+            pointer-events: none;
+            z-index: 5;
+            transition: opacity 0.5s ease;
+        }
+
+        /* 서브 조절 패널 */
+        .sub-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 16px 20px;
+            width: 320px;
+            display: none;
+            flex-direction: column;
+            gap: 14px;
+            z-index: 10;
+        }
+
+        .sub-panel.show { display: flex; }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .toggle-btn {
+            padding: 6px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.5);
+            color: #1c1c1e;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .toggle-btn.active-on {
+            background: #ff9500;
+            color: white;
+            border-color: #ff9500;
+        }
+        .toggle-btn.active-off {
+            background: #8e8e93;
+            color: white;
+            border-color: #8e8e93;
+        }
+
+        /* 하단 제어 바 */
+        .bottom-control-bar {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            z-index: 10;
+        }
+
+        .control-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 14px;
+            min-width: 68px;
+            border-radius: 14px;
+            border: none;
+            background: transparent;
+            color: #1c1c1e;
+            font-size: 12px;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .control-tab-btn.active {
+            background: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+        }
+
+        /* 다크 모드 */
+        body.dark-mode {
+            background-color: #121212;
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .glass-panel {
+            background: rgba(30, 30, 30, 0.75);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .data-value, body.dark-mode .back-btn {
+            color: #f2f2f7;
+        }
+
+        body.dark-mode .icon-btn {
+            background: rgba(40, 40, 40, 0.75);
+            color: #fff;
+        }
+    
+        /* Bottom Right Bar (Fullscreen) */
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        button.back-btn, button.tag-badge {
+            font-family: inherit;
+            border: none;
+        }
+        @media (max-width: 768px) {
+            .bottom-right-bar {
+                bottom: 15px;
+                right: 15px;
+            }
+        }
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+/* @@/MOBILE-BASE@@ */
+</style>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 좌측 상단 헤더 -->
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn">
+            <span>⬅</span> 메인
+        </a>
+        <div class="glass-panel tag-badge">
+            <span>물체를 보는 과정 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <!-- 우측 상단 실시간 데이터 패널 -->
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">광원 상태</span>
+                <span class="data-value" id="val-light-status" style="color:#ff9500;">ON (켜짐)</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">물체 인식</span>
+                <span class="data-value" id="val-visibility" style="color:#34c759;">보임</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle">🌙</button>
+    </div>
+
+    <!-- 중앙 안내 툴팁 -->
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        💡 광원, 물체, 사람을 드래그해서 이동시켜 보세요
+    </div>
+
+    <!-- 서브 물리 설정 패널 -->
+    <div class="glass-panel sub-panel" id="physics-panel">
+        <div class="control-row">
+            <span>광원 전원 스위치</span>
+            <div class="btn-group">
+                <button class="toggle-btn active-on" id="btn-light-on">켜기 (ON)</button>
+                <button class="toggle-btn" id="btn-light-off">끄기 (OFF)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 제어 바 -->
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-toggle-physics">
+            <span>⚙️</span>
+            <span>설정 조절</span>
+        </button>
+        <button class="control-tab-btn" id="btn-reset">
+            <span>🔄</span>
+            <span>초기화</span>
+        </button>
+        <button class="control-tab-btn" id="btn-align">
+            <span>📷</span>
+            <span>시점정렬</span>
+        </button>
+    </div>
+
+    
+    <!-- Fullscreen / Windowed Mode Button -->
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <script>
+        // --- 반 고흐 '해바라기' 캔버스 텍스처 생성 함수 ---
+        function createSunflowersTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 640;
+            const ctx = canvas.getContext('2d');
+
+            // 배경
+            ctx.fillStyle = '#f3e5ab';
+            ctx.fillRect(0, 0, 512, 640);
+
+            // 화병
+            ctx.fillStyle = '#f4c430';
+            ctx.beginPath();
+            ctx.arc(256, 460, 110, 0, Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#e6b800';
+            ctx.fillRect(146, 380, 220, 80);
+
+            ctx.strokeStyle = '#8b5a2b';
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.arc(256, 460, 110, 0, Math.PI);
+            ctx.stroke();
+
+            // 해바라기
+            function drawSunflower(x, y, radius, petalColor) {
+                ctx.fillStyle = petalColor;
+                for (let i = 0; i < 16; i++) {
+                    const angle = (i * Math.PI) / 8;
+                    const px = x + Math.cos(angle) * (radius * 1.5);
+                    const py = y + Math.sin(angle) * (radius * 1.5);
+                    ctx.beginPath();
+                    ctx.ellipse(px, py, radius * 0.5, radius * 0.25, angle, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.fillStyle = '#5c4033';
+                ctx.beginPath();
+                ctx.arc(x, y, radius * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#8b4513';
+                ctx.beginPath();
+                ctx.arc(x, y, radius * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            drawSunflower(256, 260, 35, '#ffcc00');
+            drawSunflower(200, 200, 40, '#ffd700');
+            drawSunflower(310, 210, 38, '#ffa500');
+            drawSunflower(160, 280, 32, '#ff8c00');
+            drawSunflower(350, 290, 35, '#ffcc00');
+            drawSunflower(256, 150, 42, '#ffd700');
+            drawSunflower(210, 330, 30, '#ffa500');
+            drawSunflower(300, 340, 32, '#ff8c00');
+
+            ctx.font = 'italic bold 22px serif';
+            ctx.fillStyle = '#1c1c1e';
+            ctx.fillText('Vincent', 220, 440);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // --- 1. Three.js 기본 씬 & 카메라 연출 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f2f7);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 0.6, 4.5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.05;
+
+        // --- 2. 조명 설정 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(3, 5, 3);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- 3. 바닥 및 원점 격자 스페이스 ---
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(20, 20),
+            new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.8 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -0.9;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- 4. 3D 요소 생성 (광원, 물체, 사람) ---
+
+        // (1) 광원 (Light Source)
+        const lightGroup = new THREE.Group();
+        
+        const wireGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.8, 16);
+        const wireMat = new THREE.MeshBasicMaterial({ color: 0x3a3a3c });
+        const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+        wireMesh.position.y = 0.4;
+        lightGroup.add(wireMesh);
+
+        const shadeGeo = new THREE.ConeGeometry(0.28, 0.22, 32, 1, true);
+        const shadeMat = new THREE.MeshStandardMaterial({ color: 0xe5e5ea, roughness: 0.3, side: THREE.DoubleSide });
+        const shadeMesh = new THREE.Mesh(shadeGeo, shadeMat);
+        shadeMesh.position.y = 0.08;
+        lightGroup.add(shadeMesh);
+
+        const bulbGeo = new THREE.SphereGeometry(0.12, 24, 24);
+        const bulbMat = new THREE.MeshStandardMaterial({
+            color: 0xffcc00,
+            emissive: 0xffaa00,
+            emissiveIntensity: 1.0,
+            roughness: 0.2
+        });
+        const bulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+        bulbMesh.position.y = -0.02;
+        lightGroup.add(bulbMesh);
+
+        const pointLight = new THREE.PointLight(0xffaa00, 1.8, 8);
+        pointLight.position.y = -0.02;
+        lightGroup.add(pointLight);
+
+        lightGroup.position.set(0.4, 0.8, 0);
+        scene.add(lightGroup);
+
+        // (2) 물체 (벽 가림판 + 오른쪽에만 그림 액자 배치)
+        const objectGroup = new THREE.Group();
+        const wallWidth = 0.18;
+        const wallHeight = 0.65;
+        const wallDepth = 0.45;
+
+        const objGeo = new THREE.BoxGeometry(wallWidth, wallHeight, wallDepth);
+        const objMat = new THREE.MeshStandardMaterial({ color: 0x8e8e93, roughness: 0.4, metalness: 0.1 });
+        const objMesh = new THREE.Mesh(objGeo, objMat);
+        objMesh.castShadow = true;
+        objMesh.receiveShadow = true;
+        objectGroup.add(objMesh);
+
+        // 오른쪽에만 해바라기 그림 부착
+        const sunflowersTexture = createSunflowersTexture();
+        const frameWidth = 0.03;
+        const frameHeight = 0.45;
+        const frameDepth = 0.35;
+
+        const frameGeo = new THREE.BoxGeometry(frameWidth, frameHeight, frameDepth);
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.6 });
+        
+        const rightFrameMesh = new THREE.Mesh(frameGeo, frameMat);
+        rightFrameMesh.position.set(wallWidth / 2 + frameWidth / 2, 0, 0);
+        objectGroup.add(rightFrameMesh);
+
+        const canvasGeo = new THREE.PlaneGeometry(frameDepth - 0.04, frameHeight - 0.04);
+        const canvasMat = new THREE.MeshStandardMaterial({ map: sunflowersTexture, roughness: 0.3 });
+        
+        const rightCanvasMesh = new THREE.Mesh(canvasGeo, canvasMat);
+        rightCanvasMesh.rotation.y = Math.PI / 2;
+        rightCanvasMesh.position.set(wallWidth / 2 + frameWidth + 0.001, 0, 0);
+        objectGroup.add(rightCanvasMesh);
+
+        objectGroup.position.set(-0.3, 0.05, 0);
+        scene.add(objectGroup);
+
+        // (3) 사람 (Person)
+        const personGroup = new THREE.Group();
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.5 });
+        const clothMat = new THREE.MeshStandardMaterial({ color: 0x007aff, roughness: 0.6 });
+        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1c1c1e, roughness: 0.7 });
+
+        // 머리
+        const headGeo = new THREE.SphereGeometry(0.18, 32, 32);
+        headGeo.scale(0.85, 1.05, 0.95);
+        const headMesh = new THREE.Mesh(headGeo, skinMat);
+        headMesh.position.y = 0.42;
+        headMesh.castShadow = true;
+        personGroup.add(headMesh);
+
+        // 머리카락
+        const hairGeo = new THREE.SphereGeometry(0.19, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.55);
+        hairGeo.scale(0.88, 1.05, 0.98);
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x2c1d11, roughness: 0.8 });
+        const hairMesh = new THREE.Mesh(hairGeo, hairMat);
+        hairMesh.position.set(0, 0.45, -0.02);
+        personGroup.add(hairMesh);
+
+        // 두 눈
+        const eyeWhiteGeo = new THREE.SphereGeometry(0.028, 16, 16);
+        const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        
+        const leftEyeWhite = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
+        leftEyeWhite.position.set(-0.045, 0.44, 0.14);
+        personGroup.add(leftEyeWhite);
+
+        const rightEyeWhite = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
+        rightEyeWhite.position.set(0.045, 0.44, 0.14);
+        personGroup.add(rightEyeWhite);
+
+        const pupilGeo = new THREE.SphereGeometry(0.014, 16, 16);
+        const pupilMat = new THREE.MeshBasicMaterial({ color: 0x1c1c1e });
+        
+        const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
+        leftPupil.position.set(-0.045, 0.44, 0.162);
+        personGroup.add(leftPupil);
+
+        const rightPupil = new THREE.Mesh(pupilGeo, pupilMat);
+        rightPupil.position.set(0.045, 0.44, 0.162);
+        personGroup.add(rightPupil);
+
+        // 코
+        const noseGeo = new THREE.ConeGeometry(0.022, 0.05, 16);
+        const noseMesh = new THREE.Mesh(noseGeo, skinMat);
+        noseMesh.rotation.x = Math.PI / 2;
+        noseMesh.position.set(0, 0.40, 0.155);
+        personGroup.add(noseMesh);
+
+        // 입
+        const mouthGeo = new THREE.TorusGeometry(0.022, 0.004, 8, 16, Math.PI);
+        const mouthMat = new THREE.MeshBasicMaterial({ color: 0xc0392b });
+        const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+        mouthMesh.rotation.x = Math.PI;
+        mouthMesh.position.set(0, 0.36, 0.15);
+        personGroup.add(mouthMesh);
+
+        // 몸통
+        const bodyGeo = new THREE.CylinderGeometry(0.12, 0.11, 0.40, 16);
+        const bodyMesh = new THREE.Mesh(bodyGeo, clothMat);
+        bodyMesh.position.y = 0.12;
+        bodyMesh.castShadow = true;
+        personGroup.add(bodyMesh);
+
+        // 팔
+        const armGeo = new THREE.CylinderGeometry(0.032, 0.03, 0.35, 16);
+        const armLeft = new THREE.Mesh(armGeo, skinMat);
+        armLeft.position.set(-0.16, 0.12, 0);
+        personGroup.add(armLeft);
+
+        const armRight = new THREE.Mesh(armGeo, skinMat);
+        armRight.position.set(0.16, 0.12, 0);
+        personGroup.add(armRight);
+
+        // 다리
+        const legGeo = new THREE.CylinderGeometry(0.04, 0.035, 0.45, 16);
+        const legLeft = new THREE.Mesh(legGeo, pantsMat);
+        legLeft.position.set(-0.06, -0.28, 0);
+        legLeft.castShadow = true;
+        personGroup.add(legLeft);
+
+        const legRight = new THREE.Mesh(legGeo, pantsMat);
+        legRight.position.set(0.06, -0.28, 0);
+        legRight.castShadow = true;
+        personGroup.add(legRight);
+
+        // 사람 눈 타겟점
+        const eyeTarget = new THREE.Object3D();
+        eyeTarget.position.set(0, 0.44, 0.162);
+        personGroup.add(eyeTarget);
+
+        personGroup.position.set(1.1, -0.15, 0);
+        scene.add(personGroup);
+
+        // --- 5. 광선 시각화 및 물체 인식 연산 ---
+        const rayGroup = new THREE.Group();
+        scene.add(rayGroup);
+
+        let isLightOn = true;
+
+        function createRayTube(colorHex) {
+            const geom = new THREE.CylinderGeometry(0.016, 0.016, 1, 16);
+            const mat = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                emissive: colorHex,
+                emissiveIntensity: 0.8,
+                roughness: 0.2,
+                transparent: true,
+                opacity: 0.85
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            
+            const coneGeom = new THREE.ConeGeometry(0.04, 0.11, 16);
+            const coneMesh = new THREE.Mesh(coneGeom, mat);
+            coneMesh.position.y = 0.5;
+            mesh.add(coneMesh);
+            
+            return { mesh, mat };
+        }
+
+        const rayLightToObj = createRayTube(0xffcc00); // 광원 -> 그림
+        const rayObjToEye = createRayTube(0xffcc00);   // 그림 -> 눈 (반사광)
+        const rayLightToEye = createRayTube(0xff9500); // 광원 -> 눈 (직접광)
+
+        rayGroup.add(rayLightToObj.mesh);
+        rayGroup.add(rayObjToEye.mesh);
+        rayGroup.add(rayLightToEye.mesh);
+
+        function isRayBlockedByWall(startPos, endPos) {
+            const wallX = objectGroup.position.x;
+            const wallYMin = objectGroup.position.y - wallHeight / 2;
+            const wallYMax = objectGroup.position.y + wallHeight / 2;
+
+            const minX = Math.min(startPos.x, endPos.x);
+            const maxX = Math.max(startPos.x, endPos.x);
+
+            if (wallX < minX || wallX > maxX) return false;
+
+            const t = (wallX - startPos.x) / (endPos.x - startPos.x);
+            const intersectY = startPos.y + t * (endPos.y - startPos.y);
+
+            return (intersectY >= wallYMin && intersectY <= wallYMax);
+        }
+
+        function updateRays() {
+            const txtVisibility = document.getElementById('val-visibility');
+
+            if (!isLightOn) {
+                rayGroup.visible = false;
+                objMat.color.setHex(0x2c2c2e);
+                txtVisibility.innerText = '안 보임 (광원 OFF)';
+                txtVisibility.style.color = '#ff3b30';
+                return;
+            }
+
+            rayGroup.visible = true;
+            objMat.color.setHex(0x8e8e93);
+
+            const lightPos = new THREE.Vector3();
+            bulbMesh.getWorldPosition(lightPos);
+
+            const eyePos = new THREE.Vector3();
+            eyeTarget.getWorldPosition(eyePos);
+
+            // 오른쪽에 부착된 그림 위치
+            const picturePos = objectGroup.position.clone();
+            picturePos.x += wallWidth / 2 + frameWidth;
+
+            // 사람을 물체쪽으로 바라보게 설정
+            personGroup.lookAt(objectGroup.position.x, personGroup.position.y, objectGroup.position.z);
+
+            const wallX = objectGroup.position.x;
+
+            // 광원과 사람이 둘 다 벽 오른쪽에 위치하는지 검사 (오른쪽 그림을 비추고 볼 수 있는지 조건)
+            const isLightOnRight = lightPos.x >= wallX;
+            const isPersonOnRight = personGroup.position.x >= wallX;
+
+            // 1. 직접광 가림 판정
+            const directBlocked = isRayBlockedByWall(lightPos, eyePos);
+
+            // 2. 그림 반사광 유효성 판정 (광원과 사람이 모두 오른쪽 영역에 있을 때)
+            const isPictureReflected = isLightOnRight && isPersonOnRight && !isRayBlockedByWall(picturePos, eyePos);
+
+            // Ray 1: 광원 -> 그림
+            if (isLightOnRight) {
+                rayLightToObj.mesh.visible = true;
+                const dir1 = new THREE.Vector3().subVectors(picturePos, lightPos);
+                const len1 = dir1.length();
+                rayLightToObj.mesh.scale.set(1, len1, 1);
+                rayLightToObj.mesh.position.copy(lightPos).add(picturePos).multiplyScalar(0.5);
+                rayLightToObj.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir1.clone().normalize());
+            } else {
+                rayLightToObj.mesh.visible = false;
+            }
+
+            // Ray 2: 광원 -> 눈 (직접광)
+            if (directBlocked) {
+                rayLightToEye.mesh.visible = false;
+            } else {
+                rayLightToEye.mesh.visible = true;
+                const dirDirect = new THREE.Vector3().subVectors(eyePos, lightPos);
+                const lenDirect = dirDirect.length();
+                rayLightToEye.mesh.scale.set(1, lenDirect, 1);
+                rayLightToEye.mesh.position.copy(lightPos).add(eyePos).multiplyScalar(0.5);
+                rayLightToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirDirect.clone().normalize());
+            }
+
+            // Ray 3: 그림 -> 눈 (반사광)
+            if (isPictureReflected) {
+                rayObjToEye.mesh.visible = true;
+                const dir2 = new THREE.Vector3().subVectors(eyePos, picturePos);
+                const len2 = dir2.length();
+                rayObjToEye.mesh.scale.set(1, len2, 1);
+                rayObjToEye.mesh.position.copy(picturePos).add(eyePos).multiplyScalar(0.5);
+                rayObjToEye.mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir2.clone().normalize());
+            } else {
+                rayObjToEye.mesh.visible = false;
+            }
+
+            // 물체 인식 상태 업데이트 (그림에 도달한 반사광이 눈으로 전달되는지 여부)
+            if (isPictureReflected) {
+                txtVisibility.innerText = '보임';
+                txtVisibility.style.color = '#34c759';
+            } else {
+                txtVisibility.innerText = '안 보임 (그림 반사광 차단)';
+                txtVisibility.style.color = '#ff3b30';
+            }
+        }
+
+        // --- 6. 드래그 인터랙션 ---
+        let draggedObject = null;
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const planeIntersect = new THREE.Vector3();
+        let dragOffset = new THREE.Vector3();
+
+        const interactableMeshes = [shadeMesh, bulbMesh, objMesh, rightFrameMesh, rightCanvasMesh, headMesh, hairMesh, bodyMesh];
+
+        function updateMousePos(e) {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onPointerDown(e) {
+            updateMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(interactableMeshes);
+
+            if (intersects.length > 0) {
+                const hit = intersects[0].object;
+                
+                if (hit === shadeMesh || hit === bulbMesh) draggedObject = lightGroup;
+                else if (hit === objMesh || hit === rightFrameMesh || hit === rightCanvasMesh) draggedObject = objectGroup;
+                else if (hit === headMesh || hit === hairMesh || hit === bodyMesh) draggedObject = personGroup;
+
+                if (draggedObject) {
+                    controls.enabled = false;
+                    if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                        dragOffset.copy(draggedObject.position).sub(planeIntersect);
+                    }
+
+                    const tooltip = document.getElementById('guide-tooltip');
+                    if (tooltip) tooltip.style.opacity = '0';
+                }
+            }
+        }
+
+        function onPointerMove(e) {
+            if (!draggedObject) return;
+            updateMousePos(e);
+            raycaster.setFromCamera(mouse, camera);
+
+            if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                let targetPos = planeIntersect.add(dragOffset);
+                targetPos.x = Math.max(-1.8, Math.min(1.8, targetPos.x));
+                targetPos.y = Math.max(-0.4, Math.min(1.2, targetPos.y));
+                targetPos.z = 0;
+                draggedObject.position.copy(targetPos);
+            }
+        }
+
+        function onPointerUp() {
+            if (draggedObject) {
+                draggedObject = null;
+                controls.enabled = true;
+            }
+        }
+
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+
+        // --- 7. UI 제어 및 이벤트 ---
+        const btnTogglePhysics = document.getElementById('btn-toggle-physics');
+        const physicsPanel = document.getElementById('physics-panel');
+        btnTogglePhysics.addEventListener('click', () => {
+            physicsPanel.classList.toggle('show');
+            btnTogglePhysics.classList.toggle('active');
+        });
+
+        const btnLightOn = document.getElementById('btn-light-on');
+        const btnLightOff = document.getElementById('btn-light-off');
+        const txtLightStatus = document.getElementById('val-light-status');
+
+        function setLightState(on) {
+            isLightOn = on;
+            if (isLightOn) {
+                btnLightOn.className = 'toggle-btn active-on';
+                btnLightOff.className = 'toggle-btn';
+                txtLightStatus.innerText = 'ON (켜짐)';
+                txtLightStatus.style.color = '#ff9500';
+                
+                bulbMat.emissiveIntensity = 1.0;
+                pointLight.intensity = 1.8;
+            } else {
+                btnLightOn.className = 'toggle-btn';
+                btnLightOff.className = 'toggle-btn active-off';
+                txtLightStatus.innerText = 'OFF (꺼짐)';
+                txtLightStatus.style.color = '#8e8e93';
+
+                bulbMat.emissiveIntensity = 0.0;
+                pointLight.intensity = 0.0;
+            }
+        }
+
+        btnLightOn.addEventListener('click', () => setLightState(true));
+        btnLightOff.addEventListener('click', () => setLightState(false));
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            lightGroup.position.set(0.4, 0.8, 0);
+            objectGroup.position.set(-0.3, 0.05, 0);
+            personGroup.position.set(1.1, -0.15, 0);
+            setLightState(true);
+        });
+
+        document.getElementById('btn-align').addEventListener('click', () => {
+            camera.position.set(0, 0.6, 4.5);
+            controls.target.set(0, 0, 0);
+        });
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            scene.background.setHex(isDark ? 0x121212 : 0xf2f2f7);
+            floor.material.color.setHex(isDark ? 0x1c1c1e : 0xe5e5ea);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 8. 메인 애니메이션 루프 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            updateRays();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    
+        /* ---------- Fullscreen / Windowed Mode Logic ---------- */
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+        const fullscreenText = document.getElementById('fullscreenText');
+
+        function updateFullscreenUI() {
+            const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (fullscreenIcon) fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+            if (fullscreenText) fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+        }
+
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                try {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) req.call(document.documentElement);
+                    } else {
+                        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    }
+                } catch (err) {
+                    console.error('전체화면 모드를 전환할 수 없습니다:', err);
+                }
+            });
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenUI);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+<script src="../../common/feedback.js" defer></script>
+</body>
+</html>
