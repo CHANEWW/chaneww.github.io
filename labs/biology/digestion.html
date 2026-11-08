@@ -829,7 +829,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         controls.update();
     }
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.72));
     const key = new THREE.DirectionalLight(0xffffff, 0.75);
     key.position.set(4, 7, 6);
     key.castShadow = true;
@@ -895,7 +895,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     const tractCurve = new THREE.CatmullRomCurve3(TRACT_POINTS, false, 'catmullrom', 0.5);
 
     const tissueMat = new THREE.MeshStandardMaterial({
-        color: 0xf0a49b, roughness: 0.55, metalness: 0.02,
+        color: 0xe9968c, roughness: 0.58, metalness: 0.02,
         transparent: true, opacity: 0.96
     });
     const tractMesh = new THREE.Mesh(new THREE.TubeGeometry(tractCurve, 620, 0.13, 12, false), tissueMat);
@@ -1004,6 +1004,10 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     const bolus = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 16), bolusMat);
     bolus.castShadow = true;
     scene.add(bolus);
+
+    // 음식물이 지나는 곳을 비추는 작은 빛
+    const bolusLight = new THREE.PointLight(0xffffff, 0.55, 1.15, 2);
+    bolus.add(bolusLight);
 
     const MAX_MOL = 90;
     const molGeo = new THREE.SphereGeometry(1, 10, 8);
@@ -1134,9 +1138,16 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             document.getElementById('n-' + type + '-2').style.width = p2 + '%';
             const info = TYPE_INFO[type];
             let txt;
-            if (sum === 0) txt = '없음';
-            else if (c[2] === sum) txt = info.stages[2] + ' 100%';
-            else txt = info.stages[0] + ' ' + Math.round(p0) + '%';
+            if (sum === 0) {
+                txt = '없음';
+            } else {
+                // 가장 많이 남아 있는 단계를 표시
+                const shares = [p0, p1, p2];
+                let idx = 0;
+                if (shares[2] >= shares[0] && shares[2] >= shares[1]) idx = 2;
+                else if (shares[1] >= shares[0]) idx = 1;
+                txt = info.stages[idx] + ' ' + Math.round(shares[idx]) + '%';
+            }
             document.getElementById('n-' + type + '-txt').textContent = txt;
         });
     }
@@ -1198,13 +1209,12 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         esophagus: tractMesh
     };
     function highlightOrgan(keyText) {
-        stomachMat.emissive = new THREE.Color(0x000000);
-        colonMat.emissive = new THREE.Color(0x000000);
-        tissueMat.emissive = new THREE.Color(0x000000);
-        if (keyText === 'stomach') stomachMat.emissive.setHex(0x552211);
-        else if (keyText === 'small') tissueMat.emissive.setHex(0x112255);
-        else if (keyText === 'colon') colonMat.emissive.setHex(0x443311);
-        else if (keyText === 'mouth' || keyText === 'esophagus') tissueMat.emissive.setHex(0x331111);
+        // 음식물이 있는 곳을 은은한 빛으로 표시 (관 전체가 하얗게 뜨지 않도록)
+        bolusLight.intensity = 0.55;
+        if (keyText === 'stomach') bolusLight.color.setHex(0xffd0c0);
+        else if (keyText === 'small') bolusLight.color.setHex(0xcfe0ff);
+        else if (keyText === 'colon') bolusLight.color.setHex(0xe8d8c0);
+        else bolusLight.color.setHex(0xffffff);
     }
 
     /* ---------- 9. 컨트롤 ---------- */
