@@ -642,7 +642,7 @@ scene.background = new THREE.Color(0xf2f2f7);
 scene.fog = new THREE.Fog(0xf2f2f7, 90, 190);
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 800);
-const TARGET_HOME = new THREE.Vector3(-2, 7.0, 0);
+const TARGET_HOME = new THREE.Vector3(-2, 9.5, 0);
 const CAM_DIR = new THREE.Vector3(0.48, 0.20, 0.85).normalize();
 camera.position.set(26, 18, 46);
 
@@ -1100,7 +1100,9 @@ function updateHud() {
     $('summary-box').innerHTML =
         '이론값(공기저항 없음) · 비행 시간 <b>' + T.toFixed(2) + ' s</b><br>' +
         '수평 도달 거리 <b>' + R.toFixed(1) + ' m</b> · 최고 높이 <b>' + peak.toFixed(1) + ' m</b><br>' +
-        '<span style="opacity:.8">자유낙하 공은 같은 시간 동안 ½gt² = ' + (0.5 * G * T * T).toFixed(1) + ' m 만큼 떨어져요.</span>';
+        (vy0 < 0.01
+            ? '<span style="opacity:.8">자유낙하 공은 같은 시간 동안 ½gt² = ' + (0.5 * G * T * T).toFixed(1) + ' m 떨어져요.</span>'
+            : '<span style="opacity:.8">비교 공도 연직 속도 v₀sinθ = ' + vy0.toFixed(1) + ' m/s 로 출발해 높이가 항상 같아요.</span>');
 }
 
 /* ---------- 11. y-t 그래프 ---------- */
@@ -1110,11 +1112,12 @@ function drawGraph() {
     const w = gCanvas.width, h = gCanvas.height;
     gCtx.clearRect(0, 0, w, h);
     const padL = 46, padR = 14, padT = 16, padB = 26;
-    const maxY = LAUNCH_Y;
     const th = params.angle * Math.PI / 180;
     const vy0 = params.speed * Math.sin(th);
     const T = Math.max(1.2, (vy0 + Math.sqrt(vy0 * vy0 + 2 * G * LAUNCH_Y)) / G);
     const maxT = T * 1.05;
+    const peakY = LAUNCH_Y + Math.max(0, vy0 * vy0 / (2 * G));
+    const maxY = Math.ceil(peakY * 1.08 / 2) * 2;
 
     gCtx.strokeStyle = 'rgba(130,145,165,0.35)';
     gCtx.lineWidth = 1.4;
@@ -1123,7 +1126,7 @@ function drawGraph() {
     gCtx.stroke();
     gCtx.fillStyle = 'rgba(120,132,150,0.9)';
     gCtx.font = "600 22px 'SeoulNamsan', sans-serif";
-    gCtx.fillText('12', 8, padT + 16);
+    gCtx.fillText(String(maxY), 8, padT + 16);
     gCtx.fillText('0', 26, h - padB + 6);
     gCtx.fillText(maxT.toFixed(1) + 's', w - padR - 46, h - padB + 6);
 
@@ -1133,7 +1136,7 @@ function drawGraph() {
     // 두 공의 높이 곡선
     if (params.compare) {
         gCtx.strokeStyle = '#0a84ff';
-        gCtx.lineWidth = 4;
+        gCtx.lineWidth = 9;
         gCtx.setLineDash([9, 7]);
         gCtx.beginPath();
         let started = false;
