@@ -59,9 +59,26 @@
         var r = null;
         try { r = theme ? theme.getBoundingClientRect() : null; } catch (e) { r = null; }
         if (r && r.width > 0 && r.height > 0) {
-            btn.style.top = Math.round(r.top + r.height / 2) + 'px';
-            btn.style.right = Math.max(8, Math.round(window.innerWidth - r.left + 8)) + 'px';
-            btn.style.transform = 'translateY(-50%)';
+            var needed = (btn.offsetWidth || 110) + 6;
+            var free = Infinity;
+            var prev = theme.previousElementSibling;   // 같은 바 안의 왼쪽 요소(데이터 카드 등)
+            if (prev) {
+                try {
+                    var pr = prev.getBoundingClientRect();
+                    if (pr && pr.width > 0) free = r.left - pr.right;
+                } catch (e) { free = Infinity; }
+            }
+            if (free >= needed) {
+                // 달 버튼 왼쪽에 공간이 있으면 그 자리에 붙인다
+                btn.style.top = Math.round(r.top + r.height / 2) + 'px';
+                btn.style.right = Math.max(8, Math.round(window.innerWidth - r.left + 8)) + 'px';
+                btn.style.transform = 'translateY(-50%)';
+            } else {
+                // 공간이 부족하면 달 버튼 바로 아래, 우측 정렬로 내린다
+                btn.style.top = Math.round(r.bottom + 8) + 'px';
+                btn.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+                btn.style.transform = 'none';
+            }
         } else {
             btn.style.top = '';
             btn.style.right = '';
@@ -163,8 +180,9 @@
         if (cls.contains('light-mode') || cls.contains('light')) return false;
         var bgs = [document.body, document.documentElement];
         for (var i = 0; i < bgs.length; i++) {
-            var m = (getComputedStyle(bgs[i]).backgroundColor || '').match(/\d+/g);
-            if (m && m.length >= 3) {
+            var m = (getComputedStyle(bgs[i]).backgroundColor || '').match(/[\d.]+/g);
+            var alpha = (m && m.length >= 4) ? +m[3] : 1;
+            if (m && m.length >= 3 && alpha > 0.05) {
                 var lum = (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) / 255;
                 return lum < 0.5;
             }
