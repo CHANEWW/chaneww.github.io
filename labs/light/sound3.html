@@ -972,6 +972,12 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                0.055 * Math.sin(5 * u + 1.9);
     }
 
+    // 진동수(Hz) → 오실로스코프 한 화면에 그릴 파동의 주기 수
+    // 110 Hz ≈ 1.1주기(넓고 완만) ~ 1000 Hz ≈ 10주기(촘촘)
+    function scopeCycles() {
+        return Math.max(1.0, (state.freq / 220) * 2.2);
+    }
+
     function drawOscilloscope() {
         const w = oscCanvas.width, h = oscCanvas.height;
         oscCtx.clearRect(0, 0, w, h);
@@ -991,10 +997,11 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         oscCtx.strokeStyle = 'rgba(120, 200, 200, 0.6)';
         oscCtx.beginPath(); oscCtx.moveTo(0, h / 2); oscCtx.lineTo(w, h / 2); oscCtx.stroke();
 
-        // 파형 (2주기)
+        // 파형: 진동수가 높을수록 한 화면에 더 많은 주기수가 들어간다
         const amp = (state.volume / 100) * (h * 0.38) + 2;
-        const cycles = 2;
+        const cycles = scopeCycles();
         const phase = state.time * 2.0;
+
         oscCtx.beginPath();
         for (let px = 0; px <= w; px += 2) {
             const u = (px / w) * cycles * Math.PI * 2 - phase;
@@ -1002,21 +1009,28 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             if (px === 0) oscCtx.moveTo(px, y); else oscCtx.lineTo(px, y);
         }
         oscCtx.strokeStyle = state.timbre === 'square' ? '#ffd60a' : '#63f0c0';
-        oscCtx.lineWidth = 4;
+        // 주기가 많아질수록 선을 가늘게 해 촘촘한 파형도 또렷하게 보이도록
+        oscCtx.lineWidth = cycles > 6 ? 2.6 : 4;
         oscCtx.shadowColor = oscCtx.strokeStyle;
-        oscCtx.shadowBlur = 14;
+        oscCtx.shadowBlur = Math.max(4, 14 - cycles * 0.9);
         oscCtx.stroke();
         oscCtx.shadowBlur = 0;
 
         // 텍스트
+        oscCtx.textAlign = 'left';
         oscCtx.fillStyle = '#8ff3d4';
         oscCtx.font = 'bold 22px "SeoulNamsan", sans-serif';
-        oscCtx.fillText(state.freq + ' Hz', 14, 30);
+        oscCtx.fillText(state.freq + ' Hz', 14, 32);
+        oscCtx.textAlign = 'right';
         oscCtx.fillStyle = '#79b8ff';
-        oscCtx.fillText('진폭 ' + state.volume + '%', w - 168, 30);
-        oscCtx.fillStyle = 'rgba(140, 220, 220, 0.75)';
+        oscCtx.fillText('진폭 ' + state.volume + '%', w - 14, 32);
+        oscCtx.textAlign = 'left';
+        oscCtx.fillStyle = 'rgba(140, 220, 220, 0.8)';
         oscCtx.font = 'bold 18px "SeoulNamsan", sans-serif';
-        oscCtx.fillText('CH1  ' + timbreName(state.timbre), 14, h - 16);
+        oscCtx.fillText('주기 ' + (1000 / state.freq).toFixed(1) + ' ms · ' + cycles.toFixed(1) + '주기', 14, h - 16);
+        oscCtx.textAlign = 'right';
+        oscCtx.fillText('CH1  ' + timbreName(state.timbre), w - 14, h - 16);
+        oscCtx.textAlign = 'left';
 
         oscTex.needsUpdate = true;
     }
@@ -1360,8 +1374,12 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         const A = 0.015 + amp * 0.2;
         // 화면용 파동 (진동수를 시각적으로 압축)
         const fDisp = 0.55 + (state.freq - 110) / 890 * 2.2;
-        const lambda = 2.3;
+        // 파장은 진동수에 반비례: 높은 소리일수록 압축·팽창 영역이 촘촘해진다
+        // 110 Hz λ≈3.3(관 전체 2.5주기) ~ 1000 Hz λ≈0.9(관 전체 9주기)
+        const lambda = 4.0 / (0.8 + (state.freq / 220) * 0.8);
         const K = 2 * Math.PI / lambda;
+        // 압축 색 대비는 파장과 상관없이 비슷한 세기로 보이도록 정규화
+        const REF_K = 2 * Math.PI / 2.3;
         const pos = pGeo.attributes.position.array;
         const col = pGeo.attributes.color.array;
 
@@ -1373,9 +1391,9 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             const disp = A * waveShape(u, state.timbre);
             const e = 1e-3;
             const dShape = (waveShape(u + e, state.timbre) - waveShape(u - e, state.timbre)) / (2 * e);
-            const strain = A * dShape * K;   // d(disp)/dx
-            // 음의 변형률 = 압축
-            let d = -strain * 4.2;
+            const strain = A * dShape;   // 변형률(음의 값 = 압축)
+            // 색 대비는 파장과 무관하게 같은 세기로 정규화해 진동수와 상관없이 잘 보이게
+            let d = -strain * REF_K * 4.2;
             if (d > 1) d = 1;
             if (d < -1) d = -1;
 
