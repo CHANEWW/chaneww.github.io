@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-mzoom="0.3">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -722,12 +722,13 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         ];
 
         // --- 2. 시작 시점 설정 (여기 값만 바꾸면 시작 각도 조절 가능) ---
-        const START_TARGET  = new THREE.Vector3(0, 2.5, 0);     // 바라보는 지점 (4개 층의 중앙 높이)
+        const START_TARGET  = new THREE.Vector3(0, 2.65, 0);     // 바라보는 지점 (4개 층의 중앙 높이)
         // 화면이 좁은 세로 모드(폰)에서는 카드가 작아 보이지 않도록 시작 위치를 살짝 당긴다
+        // (카드가 걸린 원(orbitRadius)보다 안쪽에 서서 안쪽 벽의 카드를 바라보는 구도)
         function startCameraPos() {
             return window.innerWidth < 700
-                ? new THREE.Vector3(0, 3.2, 4.4)
-                : new THREE.Vector3(0, 4.0, 5.8);
+                ? new THREE.Vector3(0, 3.0, 2.6)
+                : new THREE.Vector3(0, 3.1, 3.4);
         }
         const START_CAM_POS = startCameraPos();   // 카메라 위치 (높이, 뒤로 물러난 정도)
 
@@ -749,7 +750,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.enableZoom = true;
-        controls.minDistance = 2.5;      // 카드에 파고들지 않을 만큼만 가까이
+        controls.minDistance = 1.0;      // 카드 바로 앞까지 초근접 확대
         controls.maxDistance = 26.0;     // 4개 층 전체를 한눈에 볼 수 있을 만큼 멀리
         controls.minPolarAngle = 0.18;   // 천장 위로 넘어가지 않게
         controls.maxPolarAngle = Math.PI * 0.72;  // 층 아래(지구 안쪽)로 내려가지 않게
@@ -760,11 +761,11 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         // 층 이동 / 시점 정렬 시 부드럽게 카메라를 옮기기 위한 상태
         let camTween = null;
 
-        // --- 좌우 드래그/스와이프 방향 반전 ---
+        // --- 상하/좌우 드래그 방향 반전 ---
         // 이 버전의 OrbitControls는 rotateLeft를 외부에 공개하지 않으므로,
-        // 기본 회전 속도를 0으로 두고 회전을 직접 처리해 좌우 방향만 뒤집는다(카드를 손으로 미는 캐러셀 감각).
-        //  - 수평: 기존과 반대 방향
-        //  - 수직: 기존과 동일(자연스러운 틸트)
+        // 기본 회전 속도를 0으로 두고 회전을 직접 처리해 드래그 방향을 뒤집는다(카드를 손으로 미는 캐러셀 감각).
+        //  - 수평: 기본과 반대
+        //  - 수직: 기본과 반대(위로 밀면 시점이 아래로 간다)
         controls.rotateSpeed = 0;
         const ROTATE_SPEED = 0.55;
         const activePointers = new Map();
@@ -776,7 +777,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             rotSpherical.setFromVector3(rotOffset);
             const k = (2 * Math.PI / renderer.domElement.clientHeight) * ROTATE_SPEED;
             rotSpherical.theta += dx * k;   // 기본(-=)과 반대
-            rotSpherical.phi -= dy * k;     // 상하는 기존 그대로
+            rotSpherical.phi += dy * k;     // 상하도 기본(-=)과 반대로: 위로 밀면 시점이 올라간다
             rotSpherical.phi = Math.max(controls.minPolarAngle, Math.min(controls.maxPolarAngle, rotSpherical.phi));
             rotSpherical.makeSafe();
             rotOffset.setFromSpherical(rotSpherical);
@@ -812,95 +813,598 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         dirLight.position.set(10, 20, 15);
         scene.add(dirLight);
 
-        // --- 5. 우주 배경 & 별 ---
-        const starsGeo = new THREE.BufferGeometry();
-        const starsCount = 2000;
-        const starPositions = new Float32Array(starsCount * 3);
-        for (let i = 0; i < starsCount * 3; i++) {
-            starPositions[i] = (Math.random() - 0.5) * 180;
+        // --- 5. 우주 배경: 다층 항성 + 은하수 성운 ---
+        function makeGlowTexture() {
+            const S = 128;
+            const c = document.createElement('canvas');
+            c.width = c.height = S;
+            const x = c.getContext('2d');
+            const grd = x.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+            grd.addColorStop(0.00, 'rgba(255,255,255,1)');
+            grd.addColorStop(0.22, 'rgba(255,255,255,0.72)');
+            grd.addColorStop(0.55, 'rgba(255,255,255,0.18)');
+            grd.addColorStop(1.00, 'rgba(255,255,255,0)');
+            x.fillStyle = grd;
+            x.fillRect(0, 0, S, S);
+            return new THREE.CanvasTexture(c);
         }
-        starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-        const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.3, transparent: true, opacity: 0.8 });
-        scene.add(new THREE.Points(starsGeo, starsMat));
+        const glowTex = makeGlowTexture();
 
-        // --- 6. 발 밑 대형 지구 ---
-        function createEarthTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1024;
-            canvas.height = 512;
-            const ctx = canvas.getContext('2d');
+        // 성운용 아주 부드러운(대비 낮은) 구름 텍스처
+        function makeCloudTexture() {
+            const S = 128;
+            const c = document.createElement('canvas');
+            c.width = c.height = S;
+            const x = c.getContext('2d');
+            const grd = x.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+            grd.addColorStop(0.00, 'rgba(255,255,255,0.42)');
+            grd.addColorStop(0.30, 'rgba(255,255,255,0.26)');
+            grd.addColorStop(0.65, 'rgba(255,255,255,0.09)');
+            grd.addColorStop(1.00, 'rgba(255,255,255,0)');
+            x.fillStyle = grd;
+            x.fillRect(0, 0, S, S);
+            return new THREE.CanvasTexture(c);
+        }
+        const cloudTex = makeCloudTexture();
 
-            ctx.fillStyle = '#0b2545';
-            ctx.fillRect(0, 0, 1024, 512);
-
-            ctx.fillStyle = '#134074';
-            for (let i = 0; i < 40; i++) {
-                ctx.beginPath();
-                ctx.arc(Math.random() * 1024, Math.random() * 512, Math.random() * 80 + 20, 0, Math.PI * 2);
-                ctx.fill();
+        // 항성 분광형(색온도) 분포: 청백색 O/B → 흰색 A → 황백색 F → 태양형 G → 주황 K → 적색 M
+        const STAR_SPECTRA = [
+            { w: 0.10, c: [0.72, 0.82, 1.00] },
+            { w: 0.20, c: [0.88, 0.93, 1.00] },
+            { w: 0.28, c: [1.00, 0.98, 0.92] },
+            { w: 0.22, c: [1.00, 0.92, 0.72] },
+            { w: 0.14, c: [1.00, 0.80, 0.55] },
+            { w: 0.06, c: [1.00, 0.62, 0.45] }
+        ];
+        function pickStarColor() {
+            let r = Math.random(), acc = 0;
+            for (let i = 0; i < STAR_SPECTRA.length; i++) {
+                acc += STAR_SPECTRA[i].w;
+                if (r <= acc) return STAR_SPECTRA[i].c;
             }
-            return new THREE.CanvasTexture(canvas);
+            return STAR_SPECTRA[3].c;
         }
 
-        const earthRadius = 25;
-        const earth = new THREE.Mesh(
-            new THREE.SphereGeometry(earthRadius, 64, 64),
-            new THREE.MeshStandardMaterial({ map: createEarthTexture(), roughness: 0.6, metalness: 0.1 })
-        );
-        earth.position.set(0, -earthRadius - 2.0, 0);
-        scene.add(earth);
+        // 별은 밝기 등급(크기)별로 나누고, 등급마다 위상이 다른 두 그룹으로 쪼개어 반짝임(twinkle)을 만든다.
+        const starGroups = [];
+        const STAR_CLASSES = [
+            { count: 420, size: 5.2, opacity: 0.95 },
+            { count: 1500, size: 2.9, opacity: 0.9 },
+            { count: 2800, size: 1.7, opacity: 0.75 }
+        ];
+        STAR_CLASSES.forEach((cls, ci) => {
+            const per = Math.ceil(cls.count / 2);
+            for (let half = 0; half < 2; half++) {
+                const n = per;
+                const pos = new Float32Array(n * 3);
+                const col = new Float32Array(n * 3);
+                for (let i = 0; i < n; i++) {
+                    const u = Math.random() * 2 - 1;
+                    const th = Math.random() * Math.PI * 2;
+                    const rr = Math.sqrt(Math.max(0, 1 - u * u));
+                    const dist = 120 + Math.random() * 70;
+                    pos[i * 3] = Math.cos(th) * rr * dist;
+                    pos[i * 3 + 1] = u * dist;
+                    pos[i * 3 + 2] = Math.sin(th) * rr * dist;
+                    const c = pickStarColor();
+                    const b = 0.55 + Math.random() * 0.55;
+                    col[i * 3] = Math.min(1, c[0] * b);
+                    col[i * 3 + 1] = Math.min(1, c[1] * b);
+                    col[i * 3 + 2] = Math.min(1, c[2] * b);
+                }
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+                const mat = new THREE.PointsMaterial({
+                    size: cls.size,
+                    map: glowTex,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: cls.opacity,
+                    sizeAttenuation: false,   // 거리와 상관없이 같은 크기로 빛나게
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending,
+                    fog: false
+                });
+                const pts = new THREE.Points(geo, mat);
+                pts.frustumCulled = false;
+                scene.add(pts);
+                starGroups.push({
+                    mat: mat,
+                    base: cls.opacity,
+                    amp: 0.10 + Math.random() * 0.10,
+                    speed: 0.7 + ci * 0.55 + half * 1.9,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+        });
 
-        const atmosphere = new THREE.Mesh(
-            new THREE.SphereGeometry(earthRadius + 0.3, 64, 64),
-            new THREE.MeshBasicMaterial({ color: 0x007aff, transparent: true, opacity: 0.12, side: THREE.BackSide })
-        );
-        atmosphere.position.copy(earth.position);
-        scene.add(atmosphere);
+        // 은하수(성운): 보라 · 시안 · 마젠타 가스 구름 띠
+        const GAL_NORMAL = new THREE.Vector3(0.72, 0.46, 0.36).normalize();   // 은하수 띠가 머리 위로 비스듬히 걸치도록
+        const GAL_U = new THREE.Vector3().crossVectors(GAL_NORMAL, new THREE.Vector3(0, 0, 1)).normalize();
+        const GAL_V = new THREE.Vector3().crossVectors(GAL_NORMAL, GAL_U).normalize();
+        const nebulaGroup = new THREE.Group();
+        scene.add(nebulaGroup);
+        (function buildNebula() {
+            const PALETTE = [
+                [0.42, 0.28, 1.00],   // 보라
+                [0.20, 0.62, 1.00],   // 시안
+                [0.85, 0.30, 0.95],   // 마젠타
+                [0.30, 0.85, 0.95],
+                [0.55, 0.40, 1.00]
+            ];
+            const LAYERS = [
+                { count: 300, size: 110, bright: 0.20, spread: 0.26 },
+                { count: 560, size: 46, bright: 0.24, spread: 0.22 },
+                { count: 900, size: 16, bright: 0.30, spread: 0.18 },
+                { count: 620, size: 7, bright: 0.40, spread: 0.16 }
+            ];
+            LAYERS.forEach(L => {
+                const pos = new Float32Array(L.count * 3);
+                const col = new Float32Array(L.count * 3);
+                for (let i = 0; i < L.count; i++) {
+                    const a = Math.random() * Math.PI * 2;
+                    const off = (Math.random() + Math.random() + Math.random() - 1.5) * L.spread;
+                    const dir = new THREE.Vector3()
+                        .addScaledVector(GAL_U, Math.cos(a))
+                        .addScaledVector(GAL_V, Math.sin(a))
+                        .addScaledVector(GAL_NORMAL, off)
+                        .normalize()
+                        .multiplyScalar(125 + Math.random() * 55);
+                    pos[i * 3] = dir.x;
+                    pos[i * 3 + 1] = dir.y;
+                    pos[i * 3 + 2] = dir.z;
+                    const c = PALETTE[(Math.random() * PALETTE.length) | 0];
+                    const b = L.bright * (0.5 + Math.random());
+                    col[i * 3] = c[0] * b;
+                    col[i * 3 + 1] = c[1] * b;
+                    col[i * 3 + 2] = c[2] * b;
+                }
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+                const mat = new THREE.PointsMaterial({
+                    size: L.size,
+                    map: cloudTex,
+                    vertexColors: true,
+                    transparent: true,
+                    opacity: 0.92,
+                    sizeAttenuation: false,
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending,
+                    fog: false
+                });
+                const pts = new THREE.Points(geo, mat);
+                pts.frustumCulled = false;
+                nebulaGroup.add(pts);
+            });
+        })();
 
-        // --- 7. 카드 텍스처 생성기 ---
-        function createCardTexture(category, title, icon, colorHex) {
+        // --- 6. 발 밑 대형 지구: 지구본 수준의 디테일(대륙·빙하·구름·대기) ---
+        function buildEarthTexture() {
+            const W = 1024, H = 512;   // 첫 화면용 대체 텍스처(곱 실사 이미지로 교체된다)
+            const cv = document.createElement('canvas');
+            cv.width = W; cv.height = H;
+            const g = cv.getContext('2d');
+            const px = lon => (lon + 180) / 360 * W;
+            const py = lat => (90 - lat) / 180 * H;
+
+            // 심해 → 연해 그라데이션 (극지가 어둡고 적도가 밝다)
+            const ocean = g.createLinearGradient(0, 0, 0, H);
+            ocean.addColorStop(0.00, '#08203c');
+            ocean.addColorStop(0.16, '#0d3559');
+            ocean.addColorStop(0.50, '#1c5f96');
+            ocean.addColorStop(0.84, '#0d3559');
+            ocean.addColorStop(1.00, '#08203c');
+            g.fillStyle = ocean;
+            g.fillRect(0, 0, W, H);
+
+            // 바다의 은은한 얼룩(수심 변화 느낌)
+            for (let i = 0; i < 46; i++) {
+                const x = Math.random() * W;
+                const y = H * 0.10 + Math.random() * H * 0.80;
+                const r = 70 + Math.random() * 260;
+                const rg = g.createRadialGradient(x, y, 0, x, y, r);
+                rg.addColorStop(0, 'rgba(96,186,238,0.055)');
+                rg.addColorStop(1, 'rgba(96,186,238,0)');
+                g.fillStyle = rg;
+                g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+            }
+
+            // 7대륙 (경도, 위도)
+            const LAND = [
+                // 북아메리카
+                [[-168,65],[-150,60],[-132,55],[-125,48],[-117,32],[-105,22],[-95,17],[-83,9],[-77,8],[-80,25],[-75,35],[-66,45],[-55,50],[-60,58],[-95,70],[-125,70],[-168,65]],
+                // 남아메리카
+                [[-81,8],[-75,10],[-60,10],[-50,0],[-35,-5],[-38,-20],[-48,-25],[-58,-35],[-62,-40],[-65,-55],[-75,-50],[-72,-30],[-70,-18],[-81,-5],[-81,8]],
+                // 아프리카
+                [[-17,15],[0,15],[15,25],[32,30],[40,12],[51,12],[42,-2],[40,-15],[32,-25],[25,-34],[18,-34],[12,-18],[8,4],[-8,5],[-17,15]],
+                // 유럽
+                [[-10,36],[0,44],[10,45],[20,40],[28,41],[30,45],[40,48],[30,60],[25,70],[5,58],[-5,50],[-10,44],[-10,36]],
+                // 아시아
+                [[30,45],[40,48],[60,45],[80,45],[100,50],[120,50],[135,55],[140,45],[130,35],[122,31],[120,22],[105,20],[100,10],[95,20],[80,8],[70,20],[60,25],[45,30],[35,35],[30,45]],
+                // 오세아니아
+                [[113,-22],[122,-18],[130,-12],[142,-11],[147,-20],[153,-28],[150,-38],[140,-38],[129,-32],[115,-34],[113,-22]],
+                // 그린란드
+                [[-45,60],[-20,70],[-20,82],[-45,83],[-58,76],[-55,65],[-45,60]]
+            ];
+
+            function landPath() {
+                g.beginPath();
+                LAND.forEach(poly => {
+                    poly.forEach((pt, i) => {
+                        const x = px(pt[0]), y = py(pt[1]);
+                        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+                    });
+                    g.closePath();
+                });
+            }
+
+            // 육지 기본색
+            g.lineJoin = 'round';
+            g.fillStyle = '#2f7a52';
+            g.strokeStyle = '#57a878';
+            g.lineWidth = 4;
+            landPath();
+            g.fill();
+            g.stroke();
+
+            // 육지 안쪽만 칠해지는 지형(사막·열대우림·산맥)
+            g.save();
+            landPath();
+            g.clip();
+            function blob(color, lon, lat, lonR, latR, alpha, rot) {
+                const x = px(lon), y = py(lat);
+                const rx = lonR / 360 * W, ry = latR / 180 * H;
+                const rg = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+                rg.addColorStop(0, color);
+                rg.addColorStop(1, 'rgba(0,0,0,0)');
+                g.save();
+                g.translate(x, y);
+                g.rotate(rot || 0);
+                g.scale(rx, ry);
+                g.globalAlpha = alpha;
+                g.fillStyle = rg;
+                g.beginPath(); g.arc(0, 0, 1, 0, Math.PI * 2); g.fill();
+                g.restore();
+            }
+            // 사하라·아라비아·중앙아시아·호주 내륙 사막
+            blob('rgba(206,176,116,1)', 15, 22, 34, 11, 0.85, 0);
+            blob('rgba(214,186,126,1)', 45, 23, 16, 8, 0.75, 0);
+            blob('rgba(200,176,126,1)', 80, 40, 26, 9, 0.55, 0);
+            blob('rgba(208,170,110,1)', 132, -25, 18, 8, 0.8, 0);
+            blob('rgba(198,168,120,1)', -110, 34, 14, 7, 0.55, 0);
+            blob('rgba(200,168,112,1)', -68, -24, 12, 8, 0.5, 0);
+            // 열대우림
+            blob('rgba(26,92,56,1)', -62, -4, 18, 9, 0.85, 0);
+            blob('rgba(26,92,56,1)', 22, 0, 16, 8, 0.8, 0);
+            blob('rgba(28,98,60,1)', 112, 0, 18, 7, 0.7, 0);
+            // 산맥 (히말라야·안데스·로키)
+            blob('rgba(150,140,116,1)', 85, 33, 20, 5, 0.7, 0);
+            blob('rgba(140,132,112,1)', -70, -22, 4, 20, 0.55, 0);
+            blob('rgba(150,140,116,1)', -110, 42, 10, 8, 0.45, 0);
+            // 툰드라(고위도 육지)
+            blob('rgba(206,216,214,1)', 90, 66, 60, 10, 0.5, 0);
+            blob('rgba(206,216,214,1)', -100, 66, 50, 10, 0.5, 0);
+            g.restore();
+
+            // 대륙 테두리(해안선) 한 번 더
+            g.strokeStyle = 'rgba(112,196,146,0.75)';
+            g.lineWidth = 3;
+            landPath();
+            g.stroke();
+
+            // 구름 띠 (해양·육지 위를 은은하게)
+            for (let i = 0; i < 110; i++) {
+                const lon = Math.random() * 360 - 180;
+                const lat = (Math.random() * 2 - 1) * 68;
+                const x = px(lon), y = py(lat);
+                const len = 0.5 + Math.random() * 2.2;
+                const th = 0.15 + Math.random() * 0.5;
+                const rot = (Math.random() - 0.5) * 0.5;
+                const rg = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+                rg.addColorStop(0, 'rgba(255,255,255,' + (0.13 + Math.random() * 0.10).toFixed(3) + ')');
+                rg.addColorStop(1, 'rgba(255,255,255,0)');
+                g.save();
+                g.translate(x, y);
+                g.rotate(rot);
+                g.scale(len * 26, th * 26);
+                g.fillStyle = rg;
+                g.beginPath(); g.arc(0, 0, 1, 0, Math.PI * 2); g.fill();
+                g.restore();
+            }
+
+            // 남극 대륙
+            g.fillStyle = '#e9f3fc';
+            g.beginPath();
+            g.moveTo(0, H);
+            g.lineTo(0, H * 0.936);
+            for (let i = 0; i <= 40; i++) {
+                const x = i / 40 * W;
+                const y = H * (0.936 + Math.sin(i * 1.7) * 0.006 + Math.sin(i * 0.53) * 0.004);
+                g.lineTo(x, y);
+            }
+            g.lineTo(W, H);
+            g.closePath();
+            g.fill();
+
+            // 북극 해빙
+            const npg = g.createLinearGradient(0, 0, 0, H * 0.10);
+            npg.addColorStop(0, 'rgba(238,247,255,0.97)');
+            npg.addColorStop(0.55, 'rgba(226,240,252,0.72)');
+            npg.addColorStop(1, 'rgba(226,240,252,0)');
+            g.fillStyle = npg;
+            g.fillRect(0, 0, W, H * 0.10);
+
+            // 한반도(서울) 황금빛 표식
+            const sx = px(127.5), sy = py(37.5);
+            const sg = g.createRadialGradient(sx, sy, 0, sx, sy, 26);
+            sg.addColorStop(0, 'rgba(255,205,110,0.95)');
+            sg.addColorStop(0.35, 'rgba(255,179,64,0.55)');
+            sg.addColorStop(1, 'rgba(255,179,64,0)');
+            g.fillStyle = sg;
+            g.beginPath(); g.arc(sx, sy, 26, 0, Math.PI * 2); g.fill();
+            g.fillStyle = '#ffe6b8';
+            g.beginPath(); g.arc(sx, sy, 4.2, 0, Math.PI * 2); g.fill();
+
+            const tex = new THREE.CanvasTexture(cv);
+            tex.anisotropy = 8;
+            return tex;
+        }
+
+        const EARTH_R = 11;
+        const EARTH_POS = [0, -15, -9];   // 지구 중심(발 아래·앞쪽)
+        // 실제 지구 위성 이미지(three.js 예제 배포본, NASA Blue Marble). 로드되면 절차적 텍스처를 대체한다.
+        const EARTH_TEX_URL = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/earth_atmos_2048.jpg';
+        const EARTH_CLOUD_URL = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/textures/planets/earth_clouds_1024.png';
+        const earthRoot = new THREE.Group();               // 지구의 위치
+        earthRoot.position.set(EARTH_POS[0], EARTH_POS[1], EARTH_POS[2]);
+        scene.add(earthRoot);
+
+        const earthTilt = new THREE.Group();               // 23.5° 자전축 기울기
+        earthTilt.rotation.z = -THREE.MathUtils.degToRad(23.5);
+        earthRoot.add(earthTilt);
+
+        const earthSpin = new THREE.Group();               // 자전
+        earthTilt.add(earthSpin);
+
+        const earthMaterial = new THREE.MeshStandardMaterial({
+            map: buildEarthTexture(),      // 로드 전 임시(절차적) 지구본
+            roughness: 0.72,
+            metalness: 0.05,
+            emissive: 0x0a1a2e,
+            emissiveIntensity: 0.45
+        });
+        const earth = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R, 96, 64), earthMaterial);
+        earthSpin.add(earth);
+
+        // 구름층 (지구보다 살짝 빠르게 돈다)
+        const cloudMaterial = new THREE.MeshStandardMaterial({
+            transparent: true,
+            opacity: 0.0,
+            depthWrite: false,
+            roughness: 1.0,
+            metalness: 0.0
+        });
+        const cloudLayer = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.006, 64, 48), cloudMaterial);
+        cloudLayer.renderOrder = 2;
+        earthSpin.add(cloudLayer);
+
+        // 고해상도 실제 지구 이미지로 교체 (실패하면 절차적 텍스처 유지)
+        (function loadEarthTextures() {
+            const loader = new THREE.TextureLoader();
+            if (loader.setCrossOrigin) loader.setCrossOrigin('anonymous');
+            loader.load(EARTH_TEX_URL, function (tex) {
+                tex.anisotropy = 8;
+                const old = earthMaterial.map;
+                earthMaterial.map = tex;
+                earthMaterial.needsUpdate = true;
+                if (old && old.dispose) old.dispose();
+            }, undefined, function () { /* 실패 시 절차적 텍스처 유지 */ });
+            loader.load(EARTH_CLOUD_URL, function (tex) {
+                tex.anisotropy = 4;
+                cloudMaterial.map = tex;
+                cloudMaterial.opacity = 0.62;
+                cloudMaterial.needsUpdate = true;
+            }, undefined, function () { /* 구름은 없어도 됨 */ });
+        })();
+
+        // 위선·경선 그리드(은은한 홀로그램 느낌)
+        (function buildGraticule() {
+            const mat = new THREE.LineBasicMaterial({
+                color: 0x86dcff,
+                transparent: true,
+                opacity: 0.055,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            const RG = EARTH_R * 1.003;
+            [-60, -30, 0, 30, 60].forEach(latDeg => {
+                const lat = THREE.MathUtils.degToRad(latDeg);
+                const r = RG * Math.cos(lat);
+                const y = RG * Math.sin(lat);
+                const pts = [];
+                for (let i = 0; i <= 96; i++) {
+                    const a = i / 96 * Math.PI * 2;
+                    pts.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
+                }
+                earthSpin.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+            });
+            for (let lonDeg = 0; lonDeg < 360; lonDeg += 30) {
+                const lon = THREE.MathUtils.degToRad(lonDeg);
+                const pts = [];
+                for (let i = 0; i <= 64; i++) {
+                    const lat = -Math.PI / 2 * 0.88 + i / 64 * Math.PI * 0.88;   // 극점에 정확히 모이지 않게
+                    pts.push(new THREE.Vector3(
+                        Math.cos(lat) * Math.cos(lon) * RG,
+                        Math.sin(lat) * RG,
+                        Math.cos(lat) * Math.sin(lon) * RG
+                    ));
+                }
+                earthSpin.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat));
+            }
+        })();
+
+        // 자전축과 극 표식
+        (function buildEarthAxis() {
+            const L = EARTH_R * 1.035;
+            const axisLine = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(0, -L, 0), new THREE.Vector3(0, L, 0)
+                ]),
+                new THREE.LineBasicMaterial({ color: 0xffc85c, transparent: true, opacity: 0.55 })
+            );
+            earthTilt.add(axisLine);
+            [1, -1].forEach(s => {
+                const cap = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.16, 10, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xffd88a, transparent: true, opacity: 0.85 })
+                );
+                cap.position.y = L * s;
+                earthTilt.add(cap);
+            });
+        })();
+
+        // 대기권: 안쪽 옅은 헤이즈 + 바깥쪽 림 글로우
+        const atmoInner = new THREE.Mesh(
+            new THREE.SphereGeometry(EARTH_R * 1.012, 64, 48),
+            new THREE.MeshBasicMaterial({
+                color: 0x5fb8ff, transparent: true, opacity: 0.055,
+                side: THREE.FrontSide, blending: THREE.AdditiveBlending, depthWrite: false
+            })
+        );
+        earthTilt.add(atmoInner);
+
+        const atmoOuter = new THREE.Mesh(
+            new THREE.SphereGeometry(EARTH_R * 1.075, 64, 48),
+            new THREE.MeshBasicMaterial({
+                color: 0x4a9bff, transparent: true, opacity: 0.10,
+                side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false
+            })
+        );
+        earthTilt.add(atmoOuter);
+
+        // --- 7. 카드 텍스처 생성기 (1024x600 고해상도) ---
+        function roundRectPath(ctx, x, y, w, h, r) {
+            const rr = Array.isArray(r) ? r : [r, r, r, r];
+            ctx.beginPath();
+            ctx.moveTo(x + rr[0], y);
+            ctx.lineTo(x + w - rr[1], y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + rr[1]);
+            ctx.lineTo(x + w, y + h - rr[2]);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - rr[2], y + h);
+            ctx.lineTo(x + rr[3], y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - rr[3]);
+            ctx.lineTo(x, y + rr[0]);
+            ctx.quadraticCurveTo(x, y, x + rr[0], y);
+            ctx.closePath();
+        }
+
+        function hexToRgba(hex, a) {
+            const h = hex.replace('#', '');
+            const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+            return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+        }
+
+        // hires=false 이면 같은 그림을 절반 해상도로 먼저 그린다(첫 화면 지연 없이, 이후 선명하게 업그레이드).
+        function createCardTexture(category, title, icon, colorHex, hires) {
+            const W = 1024, H = 600;
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 300;
+            canvas.width = hires ? W : W / 2;
+            canvas.height = hires ? H : H / 2;
             const ctx = canvas.getContext('2d');
+            if (!hires) ctx.scale(0.5, 0.5);
+            const FONT = "'SeoulNamsan', -apple-system, BlinkMacSystemFont, sans-serif";
 
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
-            ctx.roundRect(0, 0, 512, 300, 24);
+            // 흰 바탕(살짝 푸른 그라데이션) — 경로를 매번 새로 시작해 카테고리 색이 카드 전체를 덮지 않게 한다
+            roundRectPath(ctx, 0, 0, W, H, 44);
+            const body = ctx.createLinearGradient(0, 0, 0, H);
+            body.addColorStop(0, '#ffffff');
+            body.addColorStop(0.55, '#f5f9fd');
+            body.addColorStop(1, '#e6eff8');
+            ctx.fillStyle = body;
             ctx.fill();
 
+            // 상단 카테고리 컬러 바
+            roundRectPath(ctx, 0, 0, W, 52, [44, 44, 0, 0]);
             ctx.fillStyle = colorHex;
-            ctx.roundRect(0, 0, 512, 16, [24, 24, 0, 0]);
             ctx.fill();
 
-            ctx.fillStyle = colorHex;
-            ctx.font = 'bold 22px "SeoulNamsan", -apple-system, sans-serif';
+            // 카테고리 뱃지
+            ctx.font = `bold 30px ${FONT}`;
             ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillText(`• ${category}`, 30, 38);
+            ctx.textBaseline = 'middle';
+            const catW = ctx.measureText(category).width;
+            roundRectPath(ctx, 44, 82, catW + 56, 54, 27);
+            ctx.fillStyle = hexToRgba(colorHex, 0.14);
+            ctx.fill();
+            roundRectPath(ctx, 44, 82, catW + 56, 54, 27);
+            ctx.strokeStyle = hexToRgba(colorHex, 0.32);
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = colorHex;
+            ctx.fillText(category, 72, 110);
 
-            ctx.font = '76px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+            // 아이콘
+            ctx.font = '188px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(icon, 256, 140);
+            ctx.fillText(icon, W / 2, 296);
 
-            ctx.fillStyle = '#2c3e50';
-            let fontSize = 30;
-            if (title.length > 8) fontSize = 24;
-            if (title.length > 12) fontSize = 20;
-            ctx.font = `bold ${fontSize}px 'SeoulNamsan', -apple-system, sans-serif`;
+            // 제목: 카드 폭(1024)에 맞춰 크기 자동 조절, 길면 두 줄
+            const MAXW = 900;
+            const measure = (s, size) => {
+                ctx.font = `bold ${size}px ${FONT}`;
+                return ctx.measureText(s).width;
+            };
+            let chosen = 0;
+            let lines = [title];
+            const tries = [70, 64, 58, 52, 46];
+            for (let i = 0; i < tries.length; i++) {
+                if (measure(title, tries[i]) <= MAXW) { chosen = tries[i]; break; }
+            }
+            if (!chosen) {
+                // 단어 경계에서 가장 고르게 두 줄로 나눈다
+                const words = title.split(' ');
+                let bestSplit = null;
+                if (words.length > 1) {
+                    for (let i = 1; i < words.length; i++) {
+                        const a = words.slice(0, i).join(' ');
+                        const b = words.slice(i).join(' ');
+                        const m = Math.max(measure(a, 52), measure(b, 52));
+                        if (!bestSplit || m < bestSplit.m) bestSplit = { m, a, b };
+                    }
+                }
+                if (bestSplit && bestSplit.m <= MAXW) {
+                    chosen = 52;
+                    lines = [bestSplit.a, bestSplit.b];
+                } else {
+                    chosen = 44;
+                    const mid = Math.ceil(title.length / 2);
+                    lines = [title.slice(0, mid), title.slice(mid)];
+                }
+            }
+            ctx.fillStyle = '#132433';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(title, 256, 235);
+            ctx.font = `bold ${chosen}px ${FONT}`;
+            const lineH = chosen * 1.18;
+            const firstY = lines.length > 1 ? 468 - lineH / 2 : 472;
+            lines.forEach((ln, i) => {
+                ctx.fillText(ln, W / 2, firstY + i * lineH);
+            });
 
-            return new THREE.CanvasTexture(canvas);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.anisotropy = 8;
+            return tex;
         }
 
         // --- 8. 다층(1F~4F) 카드 배치 ---
         const cardsGroup = new THREE.Group();
         const cardMeshes = [];
-        const orbitRadius = 8.0;
-        const CARD_W = 2.0;
-        const CARD_H = 1.17;
+        const orbitRadius = 6.2;      // 카드가 걸린 원 (작을수록 카드가 눈 앞으로 다가온다)
+        const CARD_W = 2.42;
+        const CARD_H = 1.418;         // 카드 텍스처 비율(1024x600)에 맞춤
 
         // 층 정의
         //  deckY    : 층 바닥(가이드 링) 높이
@@ -954,14 +1458,14 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             const n = Math.max(1, floorCounts[fi]);
             const slot = floorSlot[fi]++;
 
-            // 같은 층 카드는 원 둘레에 고르게(호 길이 약 4.6) 떨어지게 배치 -> 카드(폭 2.0)끼리 겹치지 않음
+            // 같은 층 카드는 원 둘레에 고르게(호 길이 약 3.5~3.8) 떨어지게 배치 -> 카드(폭 2.5)끼리 겹치지 않음
             const angle = floor.angleOffset + (slot + 0.5) * (Math.PI * 2) / n;
             const x = Math.sin(angle) * orbitRadius;
             const z = -Math.cos(angle) * orbitRadius;
             const baseY = floor.deckY + CARD_LIFT;
 
             const cardMaterial = new THREE.MeshStandardMaterial({
-                map: createCardTexture(lab.category, lab.title, lab.icon, lab.color),
+                map: createCardTexture(lab.category, lab.title, lab.icon, lab.color, false),
                 transparent: true,
                 opacity: 1.0,          // 카드가 커진 만큼 뒤 배경이 비쳐 보이지 않게 불투명하게
                 roughness: 0.2,
@@ -970,6 +1474,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
             const cardGroup = new THREE.Group();
             const frontFace = new THREE.Mesh(cardFrontGeo, cardMaterial);
+            // 뒷면(바깥을 바라보는 면): 어느 쪽에서 보아도 글자가 바로 읽히도록 180도 돌려 붙인다
             const backFace = new THREE.Mesh(cardBackGeo, cardMaterial);
             backFace.rotation.y = Math.PI;      // 바깥을 바라보는 면
             backFace.position.z = -0.004;       // 앞면과의 z-파이팅 방지
@@ -986,8 +1491,14 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                 title: lab.title,
                 floor: fi,
                 angle: angle,
+                baseX: x,
+                baseZ: z,
                 baseY: baseY,
                 targetY: baseY,
+                inwardX: -x / orbitRadius,   // 카드가 바라보는(원 안쪽) 방향
+                inwardZ: -z / orbitRadius,
+                pop: 0,
+                popTarget: 0,
                 targetScale: 1.0,
                 currentScale: 1.0,
                 material: cardMaterial
@@ -1102,43 +1613,77 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
         scene.add(deckGroup);
 
-        // 웹폰트 로드 후 카드 텍스처 갱신
-        if (document.fonts) {
-            document.fonts.ready.then(() => {
-                cardMeshes.forEach((card, idx) => {
-                    const lab = allLabs[idx];
-                    const mat = card.userData.material;
-                    if (!lab || !mat) return;
-                    mat.map = createCardTexture(lab.category, lab.title, lab.icon, lab.color);
+        // 웹폰트가 준비되면 카드 텍스처를 고해상도(1024x600)로 차근차근 업그레이드한다.
+        // 한 번에 그리면 첫 화면이 멈추므로 프레임당 몇 장씩 나누어 처리한다.
+        function upgradeCardTextures() {
+            let i = 0;
+            const step = () => {
+                const end = Math.min(cardMeshes.length, i + 3);
+                for (; i < end; i++) {
+                    const lab = allLabs[i];
+                    const mat = cardMeshes[i].userData.material;
+                    if (!lab || !mat) continue;
+                    const old = mat.map;
+                    mat.map = createCardTexture(lab.category, lab.title, lab.icon, lab.color, true);
                     mat.needsUpdate = true;
-                });
-            });
+                    if (old && old.dispose) old.dispose();
+                }
+                if (i < cardMeshes.length) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        }
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => setTimeout(upgradeCardTextures, 120));
+        } else {
+            setTimeout(upgradeCardTextures, 600);
         }
 
         // --- 9. 마우스/터치 인터랙션 ---
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
 
-        function onPointerMove(e) {
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        // 호버/탭 시 카드가 시원하게 커지며 안쪽으로 살짝 튀어나온다
+        const HOVER_SCALE = 1.28;
+        const HOVER_POP = 0.40;
+        const HOVER_LIFT = 0.10;
 
+        function pickCard(clientX, clientY) {
+            mouse.x = (clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(cardsGroup.children, true);
+            const hits = raycaster.intersectObjects(cardsGroup.children, true);
+            return hits.length > 0 ? hits[0].object.userData.card : null;
+        }
 
+        function onPointerMove(e) {
+            if (activePointers.size > 0) return;   // 드래그(둘러보기) 중에는 확대하지 않는다
+
+            const hot = pickCard(e.clientX, e.clientY);
             cardMeshes.forEach(mesh => {
+                if (mesh === hot) return;
                 mesh.userData.targetY = mesh.userData.baseY;
                 mesh.userData.targetScale = 1.0;
+                mesh.userData.popTarget = 0;
             });
 
-            if (intersects.length > 0) {
-                const card = intersects[0].object.userData.card;
-                card.userData.targetY = card.userData.baseY + 0.14;   // 살짝만 떠오르게(카드가 커서 클릭 지점이 벗어나지 않도록)
-                card.userData.targetScale = 1.1;
+            if (hot) {
+                hot.userData.targetY = hot.userData.baseY + HOVER_LIFT;
+                hot.userData.targetScale = HOVER_SCALE;
+                hot.userData.popTarget = HOVER_POP;
                 document.body.style.cursor = 'pointer';
             } else {
                 document.body.style.cursor = 'default';
             }
+        }
+
+        // 터치에서는 손을 떼면 강조를 원래대로
+        function clearHover() {
+            cardMeshes.forEach(mesh => {
+                mesh.userData.targetY = mesh.userData.baseY;
+                mesh.userData.targetScale = 1.0;
+                mesh.userData.popTarget = 0;
+            });
+            document.body.style.cursor = 'default';
         }
 
         // 클릭과 드래그 구분: 거의 움직이지 않고 손을 뗐을 때만 이동
@@ -1152,22 +1697,26 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             downY = e.clientY;
         });
 
+        let navigating = false;
         window.addEventListener('pointerup', (e) => {
             if (!downValid) return;
             downValid = false;
-            if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;   // 드래그였다면 무시
+            if (Math.hypot(e.clientX - downX, e.clientY - downY) > 8) return;   // 드래그였다면 무시
 
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(cardsGroup.children, true);
-
-            if (intersects.length > 0) {
-                const clickedCard = intersects[0].object.userData.card;
-                const targetUrl = clickedCard.userData.url;
-                clickedCard.scale.set(1.2, 1.2, 1.2);
-                setTimeout(() => { window.location.href = targetUrl; }, 200);
+            const clickedCard = pickCard(e.clientX, e.clientY);
+            if (!clickedCard) {
+                if (e.pointerType !== 'mouse') clearHover();
+                return;
             }
+            if (navigating) return;
+            navigating = true;
+
+            // 1.45배로 팡 튀어나오는 피드백을 보여준 뒤 이동한다
+            clickedCard.userData.targetScale = 1.45;
+            clickedCard.userData.popTarget = 0.95;
+            clickedCard.userData.targetY = clickedCard.userData.baseY + 0.18;
+            const targetUrl = clickedCard.userData.url;
+            setTimeout(() => { window.location.href = targetUrl; }, 260);
         });
 
         window.addEventListener('pointermove', onPointerMove);
@@ -1192,23 +1741,38 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             });
         }
 
-        // 해당 층의 카드가 눈높이에 오도록, 지금 보고 있는 방위는 유지한 채로 이동
+        // 해당 층으로 이동: 지금 보고 있는 방위의 카드를 정면으로 두고 카드 바로 앞까지 다가간다
         function focusFloor(fi) {
             const floor = FLOORS[fi];
             if (!floor) return;
             const targetY = floor.deckY + CARD_LIFT;
             const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
-            const distance = 11.8;
-            const pos = new THREE.Vector3(
-                Math.sin(az) * distance,
-                targetY + 1.15,
-                Math.cos(az) * distance
-            );
-            flyTo(pos, new THREE.Vector3(0, targetY, 0), 900);
+
+            // 그 방위에서 가장 가까운 카드(층별 슬롯)의 방위를 찾는다
+            let best = null;
+            cardMeshes.forEach(m => {
+                if (m.userData.floor !== fi) return;
+                const ca = Math.atan2(m.userData.baseX, m.userData.baseZ);
+                let d = Math.abs(((ca - az + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+                if (!best || d < best.d) best = { d: d, az: ca };
+            });
+            const faceAz = best ? best.az : az;
+            const dx = Math.sin(faceAz), dz = Math.cos(faceAz);
+
+            // 카드 앞 3.6 만큼 떨어져 단상 위에서 바라본다
+            const camR = Math.max(0.7, orbitRadius - 3.6);
+            const pos = new THREE.Vector3(dx * camR, targetY + 0.62, dz * camR);
+            const tgt = new THREE.Vector3(dx * orbitRadius, targetY, dz * orbitRadius);
+
+            controls.minDistance = 1.0;
+            controls.maxDistance = 9.0;    // 층을 볼 때는 너무 멀어지지 않게
+            flyTo(pos, tgt, 900);
             setActiveFloor(fi);
         }
 
         document.getElementById('btn-align').addEventListener('click', () => {
+            controls.minDistance = 1.0;
+            controls.maxDistance = 26.0;
             flyTo(startCameraPos(), START_TARGET, 900);
             setActiveFloor(-1);
         });
@@ -1228,10 +1792,22 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
+            const delta = Math.min(clock.getDelta(), 0.06);
             const elapsed = clock.elapsedTime;
 
-            earth.rotation.y += delta * 0.03;
+            // 지구 자전 (구름은 조금 더 빠르게 흐른다)
+            earthSpin.rotation.y += delta * 0.035;
+            cloudLayer.rotation.y += delta * 0.012;
+
+            // 별 반짝임(등급별로 위상이 달라 은하 전체가 살아 있는 느낌)
+            for (let i = 0; i < starGroups.length; i++) {
+                const s = starGroups[i];
+                s.mat.opacity = s.base * (1 - s.amp) + s.base * s.amp * Math.sin(elapsed * s.speed + s.phase);
+            }
+
+            // 성운이 아주 느리게 흐른다
+            nebulaGroup.rotation.y += delta * 0.004;
+            nebulaGroup.rotation.x += delta * 0.0015;
 
             // 층 가이드 링이 은은하게 명멸
             floorRings.forEach((r, i) => {
@@ -1250,11 +1826,16 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                 if (p >= 1) camTween = null;
             }
 
+            // 카드: 확대 + 살짝 앞으로 튀어나오기
             cardMeshes.forEach(mesh => {
-                mesh.position.y += (mesh.userData.targetY - mesh.position.y) * 0.1;
-                mesh.userData.currentScale += (mesh.userData.targetScale - mesh.userData.currentScale) * 0.1;
-                const s = mesh.userData.currentScale;
+                const u = mesh.userData;
+                u.currentScale += (u.targetScale - u.currentScale) * 0.18;
+                u.pop += (u.popTarget - u.pop) * 0.18;
+                const s = u.currentScale;
                 mesh.scale.set(s, s, s);
+                mesh.position.x = u.baseX + u.inwardX * u.pop;
+                mesh.position.z = u.baseZ + u.inwardZ * u.pop;
+                mesh.position.y += (u.targetY - mesh.position.y) * 0.15;
             });
 
             controls.update();
