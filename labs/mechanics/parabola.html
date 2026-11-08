@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>포물선 운동 3D</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+    @font-face {
+        font-family: 'SeoulNamsan';
+        src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+             url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+        font-weight: 400; font-style: normal; font-display: swap;
+    }
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+
+    body, html {
+        margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(120% 100% at 50% 8%, #ffffff 0%, #eef2f8 45%, #e0e7f0 100%);
+        color: #1c1c1e; touch-action: none;
+        transition: background-color .35s ease, color .35s ease;
+    }
+    body.dark-mode { background: radial-gradient(120% 100% at 50% 8%, #1b2333 0%, #0d131d 55%, #070a11 100%); color: #f2f5fa; }
+
+    #canvas-container { position: absolute; inset: 0; z-index: 1; touch-action: none; }
+    #canvas-container canvas { display: block; }
+
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.74);
+        backdrop-filter: blur(22px) saturate(180%);
+        -webkit-backdrop-filter: blur(22px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(16, 32, 64, 0.10);
+        z-index: 10;
+    }
+    body.dark-mode .glass-panel {
+        background: rgba(20, 26, 38, 0.76);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        color: #eef3fa;
+    }
+
+    .top-left-bar { position: absolute; top: calc(18px + env(safe-area-inset-top)); left: calc(20px + env(safe-area-inset-left)); display: flex; align-items: center; gap: 10px; z-index: 10; }
+    .back-btn {
+        display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+        font-size: 14px; font-weight: bold; color: #1c1c1e; text-decoration: none;
+        cursor: pointer; transition: all .2s ease;
+    }
+    body.dark-mode .back-btn { color: #eaf1ff; }
+    button.back-btn { font-family: inherit; border: none; }
+
+    .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+    .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; white-space: nowrap; }
+    .tag-pill {
+        background: rgba(10, 132, 255, 0.15); color: #0a7cff;
+        padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold;
+    }
+
+    .top-right-bar {
+        position: absolute; top: calc(18px + env(safe-area-inset-top)); right: calc(20px + env(safe-area-inset-right));
+        display: flex; flex-direction: column; align-items: flex-end; gap: 10px; z-index: 10;
+    }
+    .data-card { display: flex; align-items: center; gap: 16px; padding: 10px 20px; }
+    .data-item { display: flex; flex-direction: column; align-items: center; min-width: 52px; }
+    .data-label { font-size: 11px; color: #8e8e93; font-weight: bold; }
+    .data-value { font-size: 15px; font-weight: bold; color: #1c1c1e; white-space: nowrap; }
+    body.dark-mode .data-value { color: #f2f5fa; }
+    .icon-btn {
+        width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; cursor: pointer; border: none; font-size: 16px;
+        background: rgba(255, 255, 255, 0.74); backdrop-filter: blur(20px); transition: all .2s;
+    }
+    body.dark-mode .icon-btn { background: rgba(40, 46, 60, 0.8); color: #fff; }
+
+    .graph-panel { padding: 10px 14px; width: 268px; display: flex; flex-direction: column; gap: 6px; }
+    .graph-header { font-size: 11px; font-weight: bold; color: #1c1c1e; display: flex; justify-content: space-between; align-items: center; }
+    body.dark-mode .graph-header { color: #eef3fa; }
+    canvas.graph-canvas { width: 100%; height: 92px; background: rgba(255, 255, 255, 0.55); border-radius: 10px; border: 1px solid rgba(0, 0, 0, 0.05); }
+    body.dark-mode canvas.graph-canvas { background: rgba(0, 0, 0, 0.28); }
+    .graph-legend { display: flex; gap: 12px; font-size: 10px; color: #8e8e93; font-weight: bold; }
+    .graph-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+
+    .center-tooltip {
+        position: absolute; top: 12%; left: 50%; transform: translateX(-50%);
+        padding: 8px 18px; font-size: 13px; color: #5b6472; border-radius: 30px;
+        pointer-events: none; z-index: 5; white-space: nowrap; transition: opacity .4s ease;
+    }
+    body.dark-mode .center-tooltip { color: #b8c4d6; }
+
+    .result-badge {
+        position: absolute; top: calc(12% + 44px); left: 50%; transform: translateX(-50%) translateY(-6px);
+        padding: 9px 18px; border-radius: 999px; font-size: 13px; font-weight: bold;
+        color: #0b7a3b; background: rgba(48, 209, 88, 0.18); border: 1px solid rgba(48, 209, 88, 0.35);
+        opacity: 0; pointer-events: none; transition: opacity .35s ease, transform .35s ease; z-index: 6; white-space: nowrap;
+    }
+    .result-badge.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    body.dark-mode .result-badge { color: #7bf5a8; background: rgba(48, 209, 88, 0.16); }
+
+    .bottom-control-bar {
+        position: absolute; bottom: calc(24px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 6px; padding: 8px; z-index: 10;
+    }
+    .control-tab-btn {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 8px 13px; min-width: 62px; border-radius: 14px; border: none; background: transparent;
+        color: #1c1c1e; font-size: 11.5px; font-weight: bold; font-family: inherit; cursor: pointer; transition: all .2s;
+    }
+    body.dark-mode .control-tab-btn { color: #eef3fa; }
+    .control-tab-btn.active { background: #007aff; color: #fff; box-shadow: 0 4px 12px rgba(0, 122, 255, .3); }
+    .control-tab-btn span:first-child { font-size: 17px; line-height: 1.2; }
+
+    .sub-panel {
+        position: absolute; bottom: calc(98px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+        padding: 18px 20px; width: 340px; display: none; flex-direction: column; gap: 13px; z-index: 10;
+        max-height: 62vh; overflow-y: auto;
+    }
+    .sub-panel.show { display: flex; }
+    .slider-row { display: flex; flex-direction: column; gap: 5px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 12.5px; font-weight: bold; }
+    .slider-header span:last-child { color: #0a7cff; }
+    input[type="range"] { width: 100%; accent-color: #007aff; height: 22px; }
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: bold; gap: 10px; }
+    .switch { position: relative; width: 44px; height: 26px; flex: 0 0 auto; }
+    .switch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; z-index: 2; cursor: pointer; }
+    .switch .track { position: absolute; inset: 0; background: #d5d9e2; border-radius: 999px; transition: .2s; }
+    .switch .track:after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.22); transition: .2s; }
+    .switch input:checked + .track { background: #007aff; }
+    .switch input:checked + .track:after { transform: translateX(18px); }
+    body.dark-mode .switch .track { background: #3a4354; }
+
+    .quick-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .quick-btn {
+        border: none; background: rgba(0, 122, 255, .1); color: #0a7cff; font-family: inherit;
+        font-size: 11.5px; font-weight: bold; padding: 7px 11px; border-radius: 10px; cursor: pointer; transition: all .2s;
+    }
+    .quick-btn:hover { background: rgba(0, 122, 255, .18); }
+    body.dark-mode .quick-btn { background: rgba(10, 132, 255, .18); color: #7ec2ff; }
+
+    .summary-box { font-size: 11.5px; line-height: 1.55; color: #5b6472; background: rgba(0, 122, 255, .07); border-radius: 12px; padding: 9px 12px; }
+    body.dark-mode .summary-box { color: #aebdd2; background: rgba(10, 132, 255, .12); }
+    .summary-box b { color: #0a7cff; }
+    body.dark-mode .summary-box b { color: #7ec2ff; }
+    .panel-title { font-size: 12px; font-weight: bold; color: #8e8e93; display: flex; justify-content: space-between; align-items: center; }
+
+    .bottom-right-bar { position: absolute; bottom: calc(20px + env(safe-area-inset-bottom)); right: calc(20px + env(safe-area-inset-right)); display: flex; align-items: center; gap: 10px; z-index: 10; }
+
+    /* 원리 모달 */
+    .modal-overlay {
+        position: fixed; inset: 0; background: rgba(10, 16, 28, 0.45); backdrop-filter: blur(4px);
+        display: none; align-items: center; justify-content: center; z-index: 200; padding: 20px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-card { width: 520px; max-width: 100%; max-height: 84vh; overflow-y: auto; padding: 20px 22px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+    .modal-title { font-size: 17px; font-weight: bold; }
+    .modal-sub { font-size: 11.5px; color: #8e8e93; font-weight: bold; margin-top: 3px; }
+    .modal-close { border: none; background: rgba(120, 130, 150, .12); width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 14px; color: inherit; flex: 0 0 auto; }
+    .modal-body { font-size: 12.5px; line-height: 1.7; color: #3c4350; display: flex; flex-direction: column; gap: 12px; }
+    body.dark-mode .modal-body { color: #cdd7e6; }
+    .modal-body b { color: #0a7cff; }
+    .modal-body .formula { background: rgba(0,0,0,.05); border-radius: 10px; padding: 8px 12px; font-size: 13px; text-align: center; letter-spacing: .2px; }
+    body.dark-mode .modal-body .formula { background: rgba(255,255,255,.07); }
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 7px !important;
+        font-size: 10px !important;
+        gap: 0 !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+
+@media (max-width: 900px) and (min-height: 501px) {
+    #bTheme { top: max(8px, env(safe-area-inset-top)) !important; right: 46px !important; padding: 5px 9px !important; font-size: 11px !important; }
+    #top-left-wrap { left: 8px !important; top: max(8px, env(safe-area-inset-top)) !important; gap: 6px !important; height: 34px !important; }
+    #top-left-wrap .back-btn { padding: 0 10px !important; font-size: 12px !important; }
+    #hint { top: calc(max(8px, env(safe-area-inset-top)) + 46px) !important; font-size: 10.5px !important; padding: 6px 12px !important; white-space: normal !important; }
+    #boardHelp { display: none !important; }
+    #bar { left: 8px !important; right: 8px !important; bottom: calc(4px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; flex-wrap: wrap !important; justify-content: center !important; padding: 6px !important; gap: 5px !important; border-radius: 14px !important; }
+    .cbtn { font-size: 11px !important; padding: 6px 10px !important; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+    #bTheme { top: max(6px, env(safe-area-inset-top)) !important; right: 42px !important; padding: 3px 7px !important; font-size: 10px !important; }
+    #top-left-wrap { left: 6px !important; top: max(6px, env(safe-area-inset-top)) !important; gap: 5px !important; height: 28px !important; }
+    #top-left-wrap .back-btn { padding: 0 8px !important; font-size: 10.5px !important; }
+    #hint { top: calc(max(6px, env(safe-area-inset-top)) + 36px) !important; font-size: 10px !important; padding: 4px 10px !important; }
+    #boardHelp { display: none !important; }
+    #bar { left: 50% !important; right: auto !important; bottom: 3px !important; transform: translateX(-50%) !important; width: auto !important; flex-wrap: nowrap !important; padding: 3px 6px !important; gap: 4px !important; border-radius: 12px !important; }
+    .cbtn { font-size: 9.5px !important; padding: 3px 7px !important; }
+}
+
+/* @@/MOBILE-BASE@@ */
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="/index.html" class="glass-panel back-btn"><span>⬅</span> 메인</a>
+    <div class="glass-panel tag-badge">
+        <span class="title-text">포물선 운동 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+</div>
+
+<div class="top-right-bar">
+    <div style="display:flex; gap:10px; align-items:center;">
+        <div class="glass-panel data-card">
+            <div class="data-item"><span class="data-label">시간</span><span class="data-value" id="val-time" style="color:#007aff;">0.00 s</span></div>
+            <div class="data-item"><span class="data-label">높이</span><span class="data-value" id="val-height" style="color:#34c759;">12.0 m</span></div>
+            <div class="data-item"><span class="data-label">수평거리</span><span class="data-value" id="val-range" style="color:#ff9f0a;">0.0 m</span></div>
+            <div class="data-item"><span class="data-label">속력</span><span class="data-value" id="val-speed" style="color:#ff375f;">18.0 m/s</span></div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle" title="테마 전환">🌙</button>
+    </div>
+
+    <div class="glass-panel graph-panel">
+        <div class="graph-header"><span>높이 - 시간 (y-t)</span><span style="color:#0a84ff;">m</span></div>
+        <canvas id="canvas-graph" class="graph-canvas" width="520" height="184"></canvas>
+        <div class="graph-legend">
+            <span><i style="background:#ff9f0a;"></i>투사체</span>
+            <span><i style="background:#0a84ff;"></i>자유낙하 공</span>
+        </div>
+    </div>
+</div>
+
+<div class="glass-panel center-tooltip" id="guide-tooltip">
+    ▶ 을 눌러 수평 투사 공과 자유낙하 공을 동시에 떨어뜨려 보세요 · 드래그로 시점 회전
+</div>
+<div class="result-badge" id="result-badge"></div>
+
+<div class="glass-panel sub-panel" id="physics-panel">
+    <div class="panel-title"><span>⚙️ 발사 조건</span><span id="panel-note">각도를 바꾸면 다시 발사해요</span></div>
+    <div class="slider-row">
+        <div class="slider-header"><span>발사각 (θ)</span><span id="txt-angle">0°</span></div>
+        <input type="range" id="sld-angle" min="0" max="90" step="1" value="0">
+    </div>
+    <div class="slider-row">
+        <div class="slider-header"><span>발사 속력 (v₀)</span><span id="txt-speed">18 m/s</span></div>
+        <input type="range" id="sld-speed" min="4" max="30" step="1" value="18">
+    </div>
+    <div class="slider-row">
+        <div class="slider-header"><span>공의 질량 (m)</span><span id="txt-mass">1.0 kg</span></div>
+        <input type="range" id="sld-mass" min="0.5" max="5" step="0.1" value="1">
+    </div>
+    <div class="toggle-row"><span>💨 공기저항 (공기 중 운동)</span><label class="switch"><input type="checkbox" id="chk-drag"><span class="track"></span></label></div>
+    <div class="toggle-row"><span>🌈 궤적 잔상 (Trail)</span><label class="switch"><input type="checkbox" id="chk-trail" checked><span class="track"></span></label></div>
+    <div class="toggle-row"><span>🔵 자유낙하 공 동시 비교</span><label class="switch"><input type="checkbox" id="chk-compare" checked><span class="track"></span></label></div>
+    <div class="toggle-row"><span>🧭 속도 벡터 표시</span><label class="switch"><input type="checkbox" id="chk-vectors" checked><span class="track"></span></label></div>
+    <div class="quick-row">
+        <button class="quick-btn" id="btn-preset0">수평 투사 (0°)</button>
+        <button class="quick-btn" id="btn-fifty">45° 최대 사거리</button>
+        <button class="quick-btn" id="btn-clear-trail">잔상 지우기</button>
+    </div>
+    <div class="summary-box" id="summary-box">이론값을 계산하는 중…</div>
+</div>
+
+<div class="glass-panel modal-overlay" id="help-modal">
+    <div class="glass-panel modal-card">
+        <div class="modal-header">
+            <div>
+                <div class="modal-title">⚽ 포물선 운동과 운동의 독립성</div>
+                <div class="modal-sub">중학교 3학년 · 역학</div>
+            </div>
+            <button class="modal-close" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+            <div>
+                <b>1. 포물선 운동 = 수평 운동 + 연직 운동</b><br>
+                비스듬히 던진 공의 운동은 <b>수평 방향의 등속 운동</b>과 <b>연직 방향의 등가속도 운동</b>을 합친 것으로 볼 수 있어요.
+                두 운동은 서로 영향을 주지 않아요(운동의 독립성).
+            </div>
+            <div class="formula">
+                수평: x = v₀cosθ · t &nbsp;&nbsp;|&nbsp;&nbsp; 연직: y = h₀ + v₀sinθ · t − ½gt²
+            </div>
+            <div>
+                <b>2. 수평으로 던진 공과 자유낙하 공</b><br>
+                같은 높이에서 <b>수평으로 던진 공</b>과 그냥 <b>떨어뜨린 공</b>은 매 순간 높이가 같고 바닥에 <b>동시에 닿아요</b>.
+                수평으로 던져도 연직 방향 운동은 자유낙하와 똑같이 y = h₀ − ½gt² 이기 때문이에요.
+                화면의 주황색 선이 두 공을 이으며, 위쪽 그래프에서 두 곡선이 <b>완전히 겹치는</b> 것을 확인해 보세요.
+            </div>
+            <div>
+                <b>3. 속도 벡터의 분해</b><br>
+                수평 속도 vₓ는 공기저항이 없으면 <b>일정</b>하고, 연직 속도 v_y는 중력 때문에 <b>1초에 9.8 m/s씩</b> 변해요.
+                두 화살표를 합친 것이 실제 속도 벡터이고, 이 벡터의 방향이 궤적의 접선 방향이에요.
+            </div>
+            <div>
+                <b>4. 공기저항이 있으면?</b><br>
+                공기저항은 속도의 반대 방향으로 크기가 <b>속력의 제곱</b>에 비례하는 힘을 줘요.
+                그래서 질량이 작을수록, 속력이 빠를수록 궤적이 더 많이 휘고 사거리도 줄어요.
+                같은 이유로 두 공의 높이가 아주 조금 어긋나 <b>동시 도달이 깨져요</b>.
+            </div>
+            <div>
+                <b>5. 최대 사거리</b><br>
+                공기저항이 없을 때 같은 속력이라면 <b>45°</b>로 던질 때 가장 멀리 날아가요 (사거리 R = v₀²sin2θ / g).
+                위쪽 '45° 최대 사거리' 버튼으로 직접 비교해 보세요.
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="glass-panel bottom-control-bar">
+    <button class="control-tab-btn active" id="btn-play"><span id="icon-play">▶</span><span id="lbl-play">발사</span></button>
+    <button class="control-tab-btn" id="btn-settings"><span>⚙️</span><span>조건</span></button>
+    <button class="control-tab-btn" id="btn-reset"><span>🔄</span><span>초기화</span></button>
+    <button class="control-tab-btn" id="btn-align"><span>📷</span><span>시점</span></button>
+    <button class="control-tab-btn" id="btn-help"><span>📖</span><span>원리</span></button>
+</div>
+
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" class="glass-panel back-btn">
+        <span id="fullscreenIcon">⛶</span>
+        <span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<script>
+/* ============================================================
+   포물선 운동 3D
+   - 수평 투사 vs 자유낙하 동시 비교 (연직 운동의 동기화)
+   - 3D 속도 벡터 분해, 궤적 잔상, 공기저항
+   ============================================================ */
+const $ = function (id) { return document.getElementById(id); };
+
+const G = 9.8;
+const LAUNCH_X = -22;
+const LAUNCH_Y = 12;
+const BALL_R = 0.42;
+const COMPARE_DX = 5;        // 자유낙하 공의 수평 위치 차이(m)
+const DRAG_K = 0.030;        // 공기저항 계수(질량으로 나누어 사용)
+
+const params = {
+    angle: 0, speed: 18, mass: 1,
+    drag: false, trail: true, compare: true, vectors: true
+};
+
+/* ---------- 1. 씬 · 카메라 · 렌더러 ---------- */
+const container = $('canvas-container');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf2f2f7);
+scene.fog = new THREE.Fog(0xf2f2f7, 90, 190);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 800);
+const TARGET_HOME = new THREE.Vector3(-1, 5.5, 0);
+const CAM_DIR = new THREE.Vector3(0.46, 0.44, 0.77).normalize();
+camera.position.set(26, 26, 46);
+
+/* 화면 비율에 맞춰 궤적 전체가 들어오도록 카메라 거리를 잡는다 */
+function homeCamera() {
+    const halfW = 36;
+    const vFov = camera.fov * Math.PI / 180;
+    const d = Math.max(42, halfW / (Math.tan(vFov / 2) * camera.aspect) * 1.06);
+    controls.target.copy(TARGET_HOME);
+    camera.position.copy(TARGET_HOME).addScaledVector(CAM_DIR, Math.min(200, d));
+}
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.copy(TARGET_HOME);
+controls.maxPolarAngle = Math.PI / 2 - 0.03;
+controls.minDistance = 12;
+controls.maxDistance = 160;
+
+/* ---------- 2. 조명 ---------- */
+const hemi = new THREE.HemisphereLight(0xffffff, 0xdde3ea, 0.85);
+scene.add(hemi);
+const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0xffffff, 0.95);
+sun.position.set(24, 40, 26);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -55;
+sun.shadow.camera.right = 55;
+sun.shadow.camera.top = 55;
+sun.shadow.camera.bottom = -55;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 140;
+sun.shadow.radius = 3;
+scene.add(sun);
+
+/* ---------- 3. 바닥 ---------- */
+const floorMat = new THREE.MeshStandardMaterial({ color: 0xe9edf3, roughness: 0.95, metalness: 0.02 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(180, 110), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const grid = new THREE.GridHelper(160, 80, 0xb9c4d4, 0xdbe2ec);
+grid.position.y = 0.015;
+grid.material.transparent = true;
+grid.material.opacity = 0.75;
+scene.add(grid);
+
+/* ---------- 4. 발사대 ---------- */
+const metalMat = new THREE.MeshStandardMaterial({ color: 0x39404d, metalness: 0.65, roughness: 0.35 });
+const darkMat = new THREE.MeshStandardMaterial({ color: 0x232a35, metalness: 0.5, roughness: 0.5 });
+
+const tower = new THREE.Group();
+const column = new THREE.Mesh(new THREE.BoxGeometry(1.6, LAUNCH_Y, 1.8), metalMat);
+column.position.set(LAUNCH_X - 1.4, LAUNCH_Y / 2, 0);
+column.castShadow = true; column.receiveShadow = true;
+tower.add(column);
+
+const basePlate = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.35, 4.2), darkMat);
+basePlate.position.set(LAUNCH_X - 0.8, 0.17, 0);
+basePlate.receiveShadow = true;
+tower.add(basePlate);
+
+const deck = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.5, 3.6), metalMat);
+deck.position.set(LAUNCH_X - 0.6, LAUNCH_Y - 0.25, 0);
+deck.castShadow = true; deck.receiveShadow = true;
+tower.add(deck);
+
+const railL = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.12, 0.14), darkMat);
+railL.position.set(LAUNCH_X - 0.6, LAUNCH_Y + 0.5, -1.5);
+tower.add(railL);
+const railR = railL.clone();
+railR.position.z = 1.5;
+tower.add(railR);
+scene.add(tower);
+
+// 위험 표시 줄무늬가 있는 발사대 앞면
+const stripeCanvas = document.createElement('canvas');
+stripeCanvas.width = 128; stripeCanvas.height = 32;
+(function () {
+    const g = stripeCanvas.getContext('2d');
+    g.fillStyle = '#ffcf33'; g.fillRect(0, 0, 128, 32);
+    g.fillStyle = '#24262b';
+    for (let i = -32; i < 128; i += 32) {
+        g.beginPath(); g.moveTo(i, 32); g.lineTo(i + 16, 0); g.lineTo(i + 32, 0); g.lineTo(i + 16, 32); g.closePath(); g.fill();
+    }
+})();
+const stripeMat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(stripeCanvas), roughness: 0.8 });
+const stripe = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.5, 0.06), stripeMat);
+stripe.position.set(LAUNCH_X - 0.6, LAUNCH_Y - 0.25, 1.83);
+stripe.material.map.repeat.set(3, 1);
+stripe.material.map.wrapS = THREE.RepeatWrapping;
+tower.add(stripe);
+
+// 조준 가능한 포신
+const gun = new THREE.Group();
+gun.position.set(LAUNCH_X, LAUNCH_Y + 0.62, 0);
+const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.40, 2.6, 28, 1, true), new THREE.MeshStandardMaterial({ color: 0x4c93ff, metalness: 0.55, roughness: 0.28, side: THREE.DoubleSide }));
+barrel.rotation.z = -Math.PI / 2;
+barrel.position.x = 1.0;
+barrel.castShadow = true;
+gun.add(barrel);
+const muzzle = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.07, 12, 28), new THREE.MeshStandardMaterial({ color: 0xd8e6ff, metalness: 0.7, roughness: 0.25 }));
+muzzle.position.x = 2.3;
+muzzle.rotation.y = Math.PI / 2;
+gun.add(muzzle);
+const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.9, 24), darkMat);
+hinge.rotation.x = Math.PI / 2;
+gun.add(hinge);
+scene.add(gun);
+
+/* ---------- 5. 공 ---------- */
+function makeBall(color, emissive) {
+    const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.28, metalness: 0.15, emissive: new THREE.Color(emissive), emissiveIntensity: 0.22 });
+    const m = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 32, 24), mat);
+    m.castShadow = true;
+    return m;
+}
+const ball = makeBall(0xff9f0a, 0xff9f0a);
+scene.add(ball);
+const freeBall = makeBall(0x0a84ff, 0x0a84ff);
+scene.add(freeBall);
+
+/* ---------- 6. 텍스트 라벨 ---------- */
+function roundRect(g, x, y, w, h, r) {
+    g.beginPath(); g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+function makeLabel(text, color, size) {
+    size = size || 40;
+    const padX = 22, padY = 11;
+    const c = document.createElement('canvas');
+    let g = c.getContext('2d');
+    g.font = 'bold ' + size + "px 'SeoulNamsan', sans-serif";
+    const tw = g.measureText(text).width;
+    c.width = Math.ceil(tw + padX * 2);
+    c.height = size + padY * 2;
+    g = c.getContext('2d');
+    g.font = 'bold ' + size + "px 'SeoulNamsan', sans-serif";
+    g.fillStyle = 'rgba(255,255,255,0.94)';
+    roundRect(g, 1, 1, c.width - 2, c.height - 2, 14); g.fill();
+    g.strokeStyle = 'rgba(120,135,155,0.35)'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, c.width / 2, c.height / 2 + 2);
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+    const s = 0.0042 * (size / 40);
+    sp.scale.set(c.width * s, c.height * s, 1);
+    sp.renderOrder = 5;
+    return sp;
+}
+function setSpriteText(sp, text, color, size) {
+    const fresh = makeLabel(text, color, size);
+    sp.material.map.dispose();
+    sp.material.map = fresh.material.map;
+    sp.scale.copy(fresh.scale);
+    sp.material.needsUpdate = true;
+}
+
+const labelProj = makeLabel('투사체', '#c96a00');
+labelProj.position.set(0, 1.1, 0);
+ball.add(labelProj);
+
+const labelFree = makeLabel('자유낙하 공', '#0a6bd0');
+labelFree.position.set(0, 1.1, 0);
+freeBall.add(labelFree);
+
+// 발사대 라벨
+const labelHeight = makeLabel('12 m', '#4a5568');
+labelHeight.position.set(LAUNCH_X - 4.6, LAUNCH_Y + 0.4, 0);
+scene.add(labelHeight);
+
+const labelVx = makeLabel('vₓ', '#0093c4', 34);
+const labelVy = makeLabel('v_y', '#1c9c46', 34);
+const labelV = makeLabel('v', '#d0203f', 34);
+scene.add(labelVx); scene.add(labelVy); scene.add(labelV);
+
+/* 높이 눈금 */
+const rulerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(LAUNCH_X - 3.9, 0, -2.6), new THREE.Vector3(LAUNCH_X - 3.9, LAUNCH_Y, -2.6)]);
+const ruler = new THREE.Line(rulerGeo, new THREE.LineDashedMaterial({ color: 0x9aa6b8, dashSize: 0.4, gapSize: 0.3 }));
+ruler.computeLineDistances();
+scene.add(ruler);
+for (let h = 2; h <= 10; h += 2) {
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.06), new THREE.MeshBasicMaterial({ color: 0x9aa6b8 }));
+    tick.position.set(LAUNCH_X - 3.9, h, -2.6);
+    scene.add(tick);
+}
+
+/* ---------- 7. 속도 벡터 ---------- */
+const arrVx = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 1, 0x00b0d8, 0.7, 0.36);
+const arrVy = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 1, 0x2ec25f, 0.7, 0.36);
+const arrV = new THREE.ArrowHelper(new THREE.Vector3(1, 0.4, 0), new THREE.Vector3(), 1, 0xff375f, 0.8, 0.4);
+[arrVx, arrVy, arrV].forEach(function (a) { a.visible = false; scene.add(a); });
+
+/* ---------- 8. 궤적 잔상 ---------- */
+const TRAIL_MAX = 3000;
+const trailPos = new Float32Array(TRAIL_MAX * 3);
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+trailGeo.setDrawRange(0, 0);
+const trailLine = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xff9f0a, transparent: true, opacity: 0.95 }));
+trailLine.frustumCulled = false;
+scene.add(trailLine);
+let trailCount = 0;
+
+const ghosts = [];
+const ghostGeo = new THREE.SphereGeometry(BALL_R * 0.85, 16, 12);
+const ghostMatBase = new THREE.MeshBasicMaterial({ color: 0xffb340, transparent: true, opacity: 0.28, depthWrite: false });
+let ghostTimer = 0;
+function spawnGhost(x, y, z) {
+    const m = new THREE.Mesh(ghostGeo, ghostMatBase.clone());
+    m.position.set(x, y, z);
+    scene.add(m);
+    ghosts.push({ mesh: m, life: 1 });
+    if (ghosts.length > 26) {
+        const old = ghosts.shift();
+        scene.remove(old.mesh); old.mesh.material.dispose();
+    }
+}
+function clearGhosts() {
+    ghosts.forEach(function (g) { scene.remove(g.mesh); g.mesh.material.dispose(); });
+    ghosts.length = 0;
+}
+function clearTrail() {
+    trailCount = 0;
+    trailGeo.setDrawRange(0, 0);
+    clearGhosts();
+}
+
+/* 예상 궤적(점선) */
+const previewMat = new THREE.LineDashedMaterial({ color: 0x7f8ea6, dashSize: 0.7, gapSize: 0.5, transparent: true, opacity: 0.55 });
+const previewLine = new THREE.Line(new THREE.BufferGeometry(), previewMat);
+scene.add(previewLine);
+
+/* 동기화 점선(두 공을 잇는 선) + 낙하선 */
+const syncGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const syncLine = new THREE.Line(syncGeo, new THREE.LineDashedMaterial({ color: 0x6f7d92, dashSize: 0.55, gapSize: 0.4, transparent: true, opacity: 0.85 }));
+syncLine.computeLineDistances();
+scene.add(syncLine);
+
+const dropGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+const dropLine = new THREE.Line(dropGeo, new THREE.LineDashedMaterial({ color: 0xffb04a, dashSize: 0.45, gapSize: 0.35, transparent: true, opacity: 0.7 }));
+dropLine.computeLineDistances();
+scene.add(dropLine);
+
+/* 착지 표시 */
+function makeRing(color) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.85, 32), new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.03;
+    ring.visible = false;
+    scene.add(ring);
+    return ring;
+}
+const ringProj = makeRing(0xff9f0a);
+const ringFree = makeRing(0x0a84ff);
+
+/* ---------- 9. 시뮬레이션 상태 ---------- */
+const sim = {
+    t: 0, x: LAUNCH_X, y: LAUNCH_Y, vx: 0, vy: 0,
+    fx: LAUNCH_X + COMPARE_DX, fy: LAUNCH_Y, fvy: 0,
+    active: false, done: false, tLand: null, tLandF: null,
+    peak: LAUNCH_Y, angle: 0, speed: 18
+};
+const history = [];   // {t, y, fy}
+
+function setGunAngle(deg) {
+    gun.rotation.z = THREE.MathUtils.degToRad(deg);
+}
+
+function computeAim() {
+    const th = params.angle * Math.PI / 180;
+    return { th: th, vx: params.speed * Math.cos(th), vy: params.speed * Math.sin(th) };
+}
+
+function resetRun(autoplay) {
+    const aim = computeAim();
+    sim.t = 0; sim.x = LAUNCH_X; sim.y = LAUNCH_Y;
+    sim.vx = aim.vx; sim.vy = aim.vy;
+    sim.fx = LAUNCH_X + COMPARE_DX; sim.fy = LAUNCH_Y; sim.fvy = aim.vy;
+    sim.active = false; sim.done = false; sim.tLand = null; sim.tLandF = null;
+    sim.peak = LAUNCH_Y; sim.angle = params.angle; sim.speed = params.speed;
+    history.length = 0;
+    clearTrail();
+    ringProj.visible = false; ringFree.visible = false;
+    $('result-badge').classList.remove('show');
+    setGunAngle(params.angle);
+    ball.position.set(sim.x, sim.y, 0);
+    freeBall.position.set(sim.fx, sim.fy, 0);
+    freeBall.visible = params.compare;
+    syncLine.visible = false;
+    dropLine.visible = false;
+    arrVx.visible = false; arrVy.visible = false; arrV.visible = false;
+    labelVx.visible = false; labelVy.visible = false; labelV.visible = false;
+    buildPreview();
+    updateHud();
+    drawGraph();
+    playing = !!autoplay;
+    if (playing) { sim.active = true; }
+    updatePlayUI();
+}
+
+function buildPreview() {
+    // 공기저항까지 반영한 예상 궤적을 미리 계산한다
+    const aim = computeAim();
+    let x = LAUNCH_X, y = LAUNCH_Y, vx = aim.vx, vy = aim.vy;
+    const pts = [];
+    const h = 0.008;
+    for (let i = 0; i < 1400 && y > BALL_R - 0.02; i++) {
+        if (i % 3 === 0) pts.push(new THREE.Vector3(x, y, 0));
+        let ax = 0, ay = -G;
+        if (params.drag) {
+            const v = Math.hypot(vx, vy);
+            ax = -DRAG_K * v * vx / params.mass;
+            ay = -G - DRAG_K * v * vy / params.mass;
+        }
+        vx += ax * h; vy += ay * h;
+        x += vx * h; y += vy * h;
+    }
+    pts.push(new THREE.Vector3(x, Math.max(BALL_R, y), 0));
+    previewLine.geometry.dispose();
+    previewLine.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+    previewLine.computeLineDistances();
+    previewLine.material.opacity = params.drag ? 0.4 : 0.55;
+}
+
+function accel(vx, vy) {
+    let ax = 0, ay = -G;
+    if (params.drag) {
+        const v = Math.hypot(vx, vy);
+        ax = -DRAG_K * v * vx / params.mass;
+        ay = -G - DRAG_K * v * vy / params.mass;
+    }
+    return [ax, ay];
+}
+
+function stepPhysics(dt) {
+    if (!sim.active || sim.done) return;
+    const sub = 8;
+    const h = dt / sub;
+    for (let i = 0; i < sub; i++) {
+        if (sim.tLand === null) {
+            const a = accel(sim.vx, sim.vy);
+            sim.vx += a[0] * h; sim.vy += a[1] * h;
+            sim.x += sim.vx * h; sim.y += sim.vy * h;
+            if (sim.y > sim.peak) sim.peak = sim.y;
+            if (sim.y <= BALL_R && sim.vy < 0) {
+                sim.y = BALL_R; sim.vy = 0; sim.vx = 0;
+                sim.tLand = sim.t;
+                ringProj.visible = true;
+                ringProj.position.set(sim.x, 0.03, 0);
+            }
+        }
+        if (sim.tLandF === null && params.compare) {
+            // 자유낙하 공은 연직 방향만 운동한다 (수평 운동과 무관)
+            let ax = 0, ay = -G;
+            if (params.drag) {
+                // 연직 운동만 하므로 수평 성분 없음
+                ay = -G - DRAG_K * Math.abs(sim.fvy) * sim.fvy / params.mass;
+            }
+            sim.fvy += ay * h;
+            sim.fy += sim.fvy * h;
+            if (sim.fy <= BALL_R && sim.fvy < 0) {
+                sim.fy = BALL_R; sim.fvy = 0;
+                sim.tLandF = sim.t;
+                ringFree.visible = true;
+                ringFree.position.set(sim.fx, 0.03, 0);
+            }
+        }
+        sim.t += h;
+        if (sim.tLand !== null && (sim.tLandF !== null || !params.compare)) break;
+    }
+
+    history.push({ t: sim.t, y: sim.y, fy: sim.fy });
+    if (history.length > 4000) history.shift();
+
+    // 잔상 기록
+    if (params.trail && sim.tLand === null) {
+        if (trailCount < TRAIL_MAX) {
+            trailPos[trailCount * 3] = sim.x;
+            trailPos[trailCount * 3 + 1] = sim.y;
+            trailPos[trailCount * 3 + 2] = 0;
+            trailCount++;
+            trailGeo.setDrawRange(0, trailCount);
+            trailGeo.attributes.position.needsUpdate = true;
+        }
+        ghostTimer += dt;
+        if (ghostTimer > 0.12) { ghostTimer = 0; spawnGhost(sim.x, sim.y, 0); }
+    }
+
+    if (sim.tLand !== null && (sim.tLandF !== null || !params.compare)) {
+        sim.done = true; sim.active = false;
+        playing = false;
+        showResult();
+        updatePlayUI();
+    }
+}
+
+function showResult() {
+    const badge = $('result-badge');
+    if (sim.tLand === null) { badge.classList.remove('show'); return; }
+    if (!params.compare) {
+        badge.textContent = '비행 시간 ' + sim.tLand.toFixed(2) + ' s · 수평 도달 거리 ' + (sim.x - LAUNCH_X).toFixed(1) + ' m';
+    } else {
+        const diff = Math.abs(sim.tLand - (sim.tLandF === null ? sim.tLand : sim.tLandF));
+        if (diff < 0.015) {
+            badge.textContent = '✅ 두 공이 같은 높이 · 동시에 지면 도달! (y = ½gt² 동기화)';
+        } else {
+            badge.textContent = '⚠️ 도달 시각 차이 ' + diff.toFixed(2) + ' s — 공기저항 때문에 연직 운동이 어긋났어요';
+        }
+    }
+    badge.classList.add('show');
+}
+
+/* ---------- 10. HUD ---------- */
+let hudTimer = 0;
+function updateHud() {
+    const speed = Math.hypot(sim.vx, sim.vy);
+    $('val-time').textContent = sim.t.toFixed(2) + ' s';
+    $('val-height').textContent = Math.max(0, sim.y).toFixed(1) + ' m';
+    $('val-range').textContent = Math.max(0, sim.x - LAUNCH_X).toFixed(1) + ' m';
+    $('val-speed').textContent = speed.toFixed(1) + ' m/s';
+
+    const th = params.angle * Math.PI / 180;
+    const vy0 = params.speed * Math.sin(th);
+    const T = (vy0 + Math.sqrt(vy0 * vy0 + 2 * G * LAUNCH_Y)) / G;
+    const R = params.speed * Math.cos(th) * T;
+    const peak = LAUNCH_Y + Math.max(0, vy0 * vy0 / (2 * G));
+    $('summary-box').innerHTML =
+        '이론값(공기저항 없음) · 비행 시간 <b>' + T.toFixed(2) + ' s</b><br>' +
+        '수평 도달 거리 <b>' + R.toFixed(1) + ' m</b> · 최고 높이 <b>' + peak.toFixed(1) + ' m</b><br>' +
+        '<span style="opacity:.8">자유낙하 공은 같은 시간 동안 ½gt² = ' + (0.5 * G * T * T).toFixed(1) + ' m 만큼 떨어져요.</span>';
+}
+
+/* ---------- 11. y-t 그래프 ---------- */
+const gCanvas = $('canvas-graph');
+const gCtx = gCanvas.getContext('2d');
+function drawGraph() {
+    const w = gCanvas.width, h = gCanvas.height;
+    gCtx.clearRect(0, 0, w, h);
+    const padL = 46, padR = 14, padT = 16, padB = 26;
+    const maxY = LAUNCH_Y;
+    const th = params.angle * Math.PI / 180;
+    const vy0 = params.speed * Math.sin(th);
+    const T = Math.max(1.2, (vy0 + Math.sqrt(vy0 * vy0 + 2 * G * LAUNCH_Y)) / G);
+    const maxT = T * 1.05;
+
+    gCtx.strokeStyle = 'rgba(130,145,165,0.35)';
+    gCtx.lineWidth = 1.4;
+    gCtx.beginPath();
+    gCtx.moveTo(padL, padT); gCtx.lineTo(padL, h - padB); gCtx.lineTo(w - padR, h - padB);
+    gCtx.stroke();
+    gCtx.fillStyle = 'rgba(120,132,150,0.9)';
+    gCtx.font = "600 22px 'SeoulNamsan', sans-serif";
+    gCtx.fillText('12', 8, padT + 16);
+    gCtx.fillText('0', 26, h - padB + 6);
+    gCtx.fillText(maxT.toFixed(1) + 's', w - padR - 46, h - padB + 6);
+
+    function px(t) { return padL + (t / maxT) * (w - padL - padR); }
+    function py(y) { return (h - padB) - (Math.max(0, Math.min(maxY, y)) / maxY) * (h - padT - padB); }
+
+    // 두 공의 높이 곡선
+    if (params.compare) {
+        gCtx.strokeStyle = '#0a84ff';
+        gCtx.lineWidth = 4;
+        gCtx.setLineDash([9, 7]);
+        gCtx.beginPath();
+        let started = false;
+        for (let i = 0; i < history.length; i += 2) {
+            const d = history[i];
+            if (!started) { gCtx.moveTo(px(d.t), py(d.fy)); started = true; }
+            else gCtx.lineTo(px(d.t), py(d.fy));
+        }
+        gCtx.stroke();
+        gCtx.setLineDash([]);
+    }
+    gCtx.strokeStyle = '#ff9f0a';
+    gCtx.lineWidth = 4;
+    gCtx.beginPath();
+    for (let i = 0; i < history.length; i += 2) {
+        const d = history[i];
+        if (i === 0) gCtx.moveTo(px(d.t), py(d.y));
+        else gCtx.lineTo(px(d.t), py(d.y));
+    }
+    gCtx.stroke();
+
+    if (sim.tLand !== null) {
+        gCtx.strokeStyle = 'rgba(255,159,10,0.55)';
+        gCtx.lineWidth = 2;
+        gCtx.setLineDash([5, 5]);
+        gCtx.beginPath(); gCtx.moveTo(px(sim.tLand), padT); gCtx.lineTo(px(sim.tLand), h - padB); gCtx.stroke();
+        gCtx.setLineDash([]);
+    }
+}
+
+/* ---------- 12. 재생 상태 ---------- */
+let playing = false;
+function updatePlayUI() {
+    $('icon-play').textContent = playing ? '⏸' : '▶';
+    $('lbl-play').textContent = playing ? '일시정지' : (sim.done ? '다시 발사' : '발사');
+    $('btn-play').classList.toggle('active', playing);
+}
+
+function togglePlay() {
+    if (sim.done) { resetRun(true); return; }
+    playing = !playing;
+    sim.active = playing;
+    updatePlayUI();
+}
+
+/* ---------- 13. 버튼 · 슬라이더 ---------- */
+$('btn-play').addEventListener('click', togglePlay);
+
+$('btn-settings').addEventListener('click', function () {
+    $('physics-panel').classList.toggle('show');
+    this.classList.toggle('active');
+});
+
+$('btn-reset').addEventListener('click', function () { resetRun(false); });
+
+$('btn-align').addEventListener('click', function () { homeCamera(); });
+
+$('btn-help').addEventListener('click', function () { $('help-modal').classList.add('show'); });
+$('modal-close').addEventListener('click', function () { $('help-modal').classList.remove('show'); });
+$('help-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+
+$('sld-angle').addEventListener('input', function () {
+    params.angle = parseInt(this.value, 10);
+    $('txt-angle').textContent = params.angle + '°';
+    setGunAngle(params.angle);
+    resetRun(true);
+});
+$('sld-speed').addEventListener('input', function () {
+    params.speed = parseInt(this.value, 10);
+    $('txt-speed').textContent = params.speed + ' m/s';
+    resetRun(true);
+});
+$('sld-mass').addEventListener('input', function () {
+    params.mass = parseFloat(this.value);
+    $('txt-mass').textContent = params.mass.toFixed(1) + ' kg';
+    resetRun(true);
+});
+$('chk-drag').addEventListener('change', function () { params.drag = this.checked; resetRun(true); });
+$('chk-trail').addEventListener('change', function () {
+    params.trail = this.checked;
+    if (!params.trail) clearTrail();
+});
+$('chk-compare').addEventListener('change', function () { params.compare = this.checked; resetRun(true); });
+$('chk-vectors').addEventListener('change', function () { params.vectors = this.checked; });
+
+$('btn-preset0').addEventListener('click', function () {
+    params.angle = 0; $('sld-angle').value = 0; $('txt-angle').textContent = '0°';
+    resetRun(true);
+});
+$('btn-fifty').addEventListener('click', function () {
+    params.angle = 45; $('sld-angle').value = 45; $('txt-angle').textContent = '45°';
+    resetRun(true);
+});
+$('btn-clear-trail').addEventListener('click', function () { clearTrail(); });
+
+/* 테마 */
+let isDark = false;
+$('theme-toggle').addEventListener('click', function () {
+    isDark = !isDark;
+    document.body.classList.toggle('dark-mode', isDark);
+    this.textContent = isDark ? '☀️' : '🌙';
+    const bg = isDark ? 0x111823 : 0xf2f2f7;
+    scene.background.setHex(bg);
+    scene.fog.color.setHex(bg);
+    floorMat.color.setHex(isDark ? 0x1a2330 : 0xe9edf3);
+    grid.material.color.setHex(isDark ? 0x2c3a4d : 0xb9c4d4);
+    grid.material.opacity = isDark ? 0.55 : 0.75;
+    hemi.intensity = isDark ? 0.42 : 0.85;
+    ambient.intensity = isDark ? 0.22 : 0.35;
+    sun.intensity = isDark ? 0.55 : 0.95;
+    drawGraph();
+});
+
+addEventListener('resize', function () {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ---------- 14. 메인 루프 ---------- */
+const clock = new THREE.Clock();
+let lastAngleSign = 0;
+
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.045);
+    stepPhysics(dt);
+
+    if (sim.active || sim.done) {
+        ball.position.set(sim.x, sim.y, 0);
+        freeBall.position.set(sim.fx, sim.fy, 0);
+    }
+
+    // 잔상 페이드
+    for (let i = ghosts.length - 1; i >= 0; i--) {
+        const g = ghosts[i];
+        g.life -= dt * 0.55;
+        g.mesh.material.opacity = Math.max(0, 0.30 * g.life);
+        const s = 1 + (1 - g.life) * 0.35;
+        g.mesh.scale.setScalar(s);
+        if (g.life <= 0) {
+            scene.remove(g.mesh); g.mesh.material.dispose(); ghosts.splice(i, 1);
+        }
+    }
+
+    // 두 공을 잇는 동기화 선 + 낙하선
+    if (params.compare && freeBall.visible && !sim.done && sim.t > 0.001) {
+        syncLine.visible = true;
+        const p = syncLine.geometry.attributes.position;
+        p.setXYZ(0, sim.x, sim.y, 0);
+        p.setXYZ(1, sim.fx, sim.fy, 0);
+        p.needsUpdate = true;
+        syncLine.computeLineDistances();
+    } else {
+        syncLine.visible = false;
+    }
+    if (!sim.done && sim.t > 0.001) {
+        dropLine.visible = true;
+        const p = dropLine.geometry.attributes.position;
+        p.setXYZ(0, sim.x, sim.y - BALL_R, 0);
+        p.setXYZ(1, sim.x, 0, 0);
+        p.needsUpdate = true;
+        dropLine.computeLineDistances();
+    } else {
+        dropLine.visible = false;
+    }
+
+    // 속도 벡터
+    const airborne = sim.active && !sim.done && sim.tLand === null;
+    const showVec = params.vectors && airborne;
+    arrVx.visible = showVec; arrVy.visible = showVec; arrV.visible = showVec;
+    labelVx.visible = showVec; labelVy.visible = showVec; labelV.visible = showVec;
+    if (showVec) {
+        const s = 0.32;
+        const origin = new THREE.Vector3(sim.x, sim.y, 0);
+        arrVx.position.copy(origin); arrVx.setDirection(new THREE.Vector3(1, 0, 0));
+        arrVx.setLength(Math.max(0.1, Math.abs(sim.vx) * s), 0.65, 0.34);
+        arrVy.position.copy(origin);
+        arrVy.setDirection(new THREE.Vector3(0, Math.sign(sim.vy) || 1, 0));
+        arrVy.setLength(Math.max(0.1, Math.abs(sim.vy) * s), 0.65, 0.34);
+        const vlen = Math.hypot(sim.vx, sim.vy);
+        arrV.position.copy(origin);
+        if (vlen > 0.05) arrV.setDirection(new THREE.Vector3(sim.vx / vlen, sim.vy / vlen, 0));
+        arrV.setLength(Math.max(0.1, vlen * s), 0.75, 0.38);
+
+        labelVx.position.set(sim.x + sim.vx * s * 0.55, sim.y - 0.75, 0);
+        labelVy.position.set(sim.x - 0.95, sim.y + sim.vy * s * 0.55, 0);
+        labelV.position.set(sim.x + sim.vx * s * 0.72 + 0.35, sim.y + sim.vy * s * 0.72 + 0.55, 0);
+    }
+
+    hudTimer += dt;
+    if (hudTimer > 0.06) { hudTimer = 0; updateHud(); drawGraph(); }
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+/* ---------- 15. 시작 ---------- */
+setGunAngle(0);
+homeCamera();
+setTimeout(homeCamera, 420);
+resetRun(false);
+$('val-height').textContent = '12.0 m';
+animate();
+
+/* ---------- 전체화면 ---------- */
+const fullscreenBtn = $('fullscreenBtn');
+const fullscreenIcon = $('fullscreenIcon');
+const fullscreenText = $('fullscreenText');
+function updateFullscreenUI() {
+    const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (fullscreenIcon) fullscreenIcon.innerText = isFS ? '🗗' : '⛶';
+    if (fullscreenText) fullscreenText.innerText = isFS ? '창모드' : '전체화면';
+}
+if (fullscreenBtn) {
+    fullscreenBtn.addEventListener('click', function () {
+        try {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                const req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                if (req) req.call(document.documentElement);
+            } else {
+                const exit = document.exitFullscreen || document.webkitExitFullscreen;
+                if (exit) exit.call(document);
+            }
+        } catch (err) { console.error('전체화면 모드를 전환할 수 없습니다:', err); }
+    });
+}
+document.addEventListener('fullscreenchange', updateFullscreenUI);
+document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+</script>
+
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+
+</body>
+</html>
