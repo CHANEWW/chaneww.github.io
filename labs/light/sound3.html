@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="1.05">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>소리의 3요소 3D</title>
+    <meta name="description" content="소리의 세기·높낮이·음색을 조절하며 실제 소리와 공기 입자의 종파를 3D로 확인하는 가상실험">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        :root {
+            --glass-bg: rgba(255, 255, 255, 0.78);
+            --glass-border: rgba(255, 255, 255, 0.55);
+            --glass-blur: blur(20px) saturate(180%);
+            --text-color: #1c1c1e;
+            --accent-color: #0a84ff;
+            --card-radius: 20px;
+            --soft: rgba(0, 0, 0, 0.06);
+        }
+
+        body.dark-mode {
+            --glass-bg: rgba(30, 30, 36, 0.78);
+            --glass-border: rgba(255, 255, 255, 0.14);
+            --text-color: #f2f2f7;
+            --soft: rgba(255, 255, 255, 0.12);
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #eef1f7;
+            color: var(--text-color);
+            transition: background-color 0.4s ease;
+            touch-action: none;
+        }
+
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--card-radius);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .top-left-bar {
+            position: absolute; top: 20px; left: 20px;
+            display: flex; align-items: center; gap: 12px; z-index: 10;
+        }
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 10px 18px; color: var(--text-color);
+            text-decoration: none; font-weight: bold; font-size: 14px; cursor: pointer;
+        }
+        .tag-badge {
+            padding: 10px 16px; font-size: 14px; font-weight: bold;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .tag-pill {
+            background: rgba(10, 132, 255, 0.15); color: #0a84ff;
+            padding: 2px 8px; border-radius: 10px; font-size: 11px;
+        }
+
+        .top-right-bar {
+            position: absolute; top: 20px; right: 20px;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 10px; z-index: 10;
+        }
+        .data-card {
+            padding: 12px 18px; display: flex; flex-direction: column; gap: 7px; min-width: 212px;
+        }
+        .data-item { display: flex; justify-content: space-between; align-items: center; gap: 14px; font-size: 13px; font-weight: 600; }
+        .data-label { opacity: 0.72; white-space: nowrap; }
+        .data-value { font-weight: bold; font-size: 14px; white-space: nowrap; }
+
+        .icon-btn {
+            width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+            font-size: 18px; cursor: pointer; border-radius: 50%; border: none;
+            background: var(--glass-bg); color: var(--text-color);
+        }
+
+        .center-tooltip {
+            position: absolute; top: 84px; left: 50%; transform: translateX(-50%);
+            padding: 10px 20px; font-size: 13px; font-weight: bold; pointer-events: none;
+            opacity: 1; z-index: 5; transition: opacity .5s ease; text-align: center;
+        }
+
+        .sub-panel {
+            position: absolute; bottom: 96px; left: 50%;
+            transform: translateX(-50%) translateY(18px);
+            opacity: 0; pointer-events: none;
+            padding: 18px 22px; display: flex; flex-direction: column; gap: 13px;
+            width: 92%; max-width: 460px; z-index: 10;
+        }
+        .sub-panel.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+
+        .panel-title { font-size: 12px; font-weight: bold; opacity: 0.6; letter-spacing: .3px; }
+
+        .control-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; font-weight: bold; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .toggle-btn {
+            padding: 8px 15px; border-radius: 12px; border: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.42); color: var(--text-color);
+            font-weight: bold; font-size: 13px; cursor: pointer; font-family: inherit;
+            transition: all 0.2s ease;
+        }
+        body.dark-mode .toggle-btn { background: rgba(255, 255, 255, 0.08); }
+        .toggle-btn.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+
+        .slider-row { display: flex; flex-direction: column; gap: 6px; }
+        .slider-header { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; }
+        .slider-header span:last-child { color: var(--accent-color); }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; width: 100%; height: 6px;
+            border-radius: 3px; background: rgba(0, 0, 0, 0.1); outline: none;
+        }
+        body.dark-mode input[type="range"] { background: rgba(255, 255, 255, 0.2); }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+            background: #fff; border: 2px solid var(--accent-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px; height: 20px; border-radius: 50%; background: #fff;
+            border: 2px solid var(--accent-color); cursor: pointer;
+        }
+
+        /* 음원 선택 카드 */
+        .source-grid { display: flex; gap: 8px; }
+        .source-card {
+            flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px;
+            padding: 10px 6px; border-radius: 14px; border: 1px solid var(--glass-border);
+            background: rgba(255, 255, 255, 0.42); cursor: pointer; font-family: inherit;
+            color: var(--text-color); font-size: 11.5px; font-weight: bold; transition: all .2s;
+        }
+        body.dark-mode .source-card { background: rgba(255, 255, 255, 0.08); }
+        .source-card span:first-child { font-size: 20px; line-height: 1.1; }
+        .source-card.active { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+
+        /* 하단 탭 바 */
+        .bottom-control-bar {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 30px; z-index: 10;
+        }
+        .control-tab-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 2px; padding: 7px 14px; min-width: 66px; border-radius: 18px; border: none;
+            background: transparent; color: var(--text-color); font-size: 11.5px; font-weight: bold;
+            font-family: inherit; cursor: pointer; transition: all .2s; line-height: 1.15; white-space: nowrap;
+        }
+        .control-tab-btn span:first-child { font-size: 16px; line-height: 1.1; }
+        .control-tab-btn.active { background: var(--accent-color); color: #fff; box-shadow: 0 4px 12px rgba(10, 132, 255, .3); }
+
+        .bottom-right-bar { position: absolute; bottom: 20px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+        button.back-btn, button.tag-badge { font-family: inherit; border: none; }
+
+        /* 원리 모달 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 16, 28, 0.42); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            display: none; align-items: center; justify-content: center; z-index: 60; padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-card {
+            width: min(560px, 92vw); max-height: 84vh; overflow-y: auto;
+            padding: 20px 22px; display: flex; flex-direction: column; gap: 13px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+        .modal-title { font-size: 16px; font-weight: bold; display: flex; flex-direction: column; gap: 4px; }
+        .modal-badge { font-size: 11px; color: #0a84ff; font-weight: bold; }
+        .modal-close-btn {
+            border: none; background: var(--soft); width: 30px; height: 30px; border-radius: 50%;
+            font-size: 14px; cursor: pointer; font-family: inherit; color: inherit; flex: 0 0 auto;
+        }
+        .modal-body { display: flex; flex-direction: column; gap: 9px; }
+        .example-item { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.82); border: 1px solid rgba(0, 0, 0, 0.06); }
+        body.dark-mode .example-item { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); }
+        .example-title { font-size: 12.5px; font-weight: bold; margin-bottom: 4px; }
+        .example-desc { font-size: 12.5px; line-height: 1.65; color: #404754; font-weight: bold; word-break: keep-all; }
+        body.dark-mode .example-desc { color: #c9d4e4; }
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+
+@media (max-width: 900px) and (min-height: 501px) {
+    #guide-tooltip { top: calc(max(8px, env(safe-area-inset-top)) + 126px) !important; }
+    .data-card { font-size: 11px !important; }
+    .toggle-btn { font-size: 10.5px !important; padding: 5px 8px !important; }
+}
+
+/* @@/MOBILE-BASE@@ */
+</style>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div class="top-left-bar">
+        <a href="/index.html" class="glass-panel back-btn"><span>⬅</span> 메인</a>
+        <div class="glass-panel tag-badge">
+            <span>소리의 3요소</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+    </div>
+
+    <div class="top-right-bar">
+        <div class="glass-panel data-card">
+            <div class="data-item">
+                <span class="data-label">세기 (진폭)</span>
+                <span class="data-value" id="val-volume" style="color:#0a84ff;">40 %</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">높낮이 (진동수)</span>
+                <span class="data-value" id="val-freq" style="color:#ff9500;">262 Hz</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">음이름</span>
+                <span class="data-value" id="val-note" style="color:#34c759;">도4 (C4)</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">음색 (파형)</span>
+                <span class="data-value" id="val-timbre">사인파</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="theme-toggle" aria-label="테마">🌙</button>
+    </div>
+
+    <div class="glass-panel center-tooltip" id="guide-tooltip">
+        🔊 스피커를 눌러 소리를 내고, 슬라이더로 세기·높낮이·음색을 바꿔 보세요!
+    </div>
+
+    <div class="glass-panel sub-panel" id="sound-panel">
+        <div class="panel-title">소리의 3요소 조절</div>
+
+        <div class="slider-row">
+            <div class="slider-header"><span>세기 (진폭)</span><span id="txt-volume">40 %</span></div>
+            <input type="range" id="sld-volume" min="0" max="100" step="1" value="40">
+        </div>
+
+        <div class="slider-row">
+            <div class="slider-header"><span>높낮이 (진동수)</span><span id="txt-freq">262 Hz</span></div>
+            <input type="range" id="sld-freq" min="110" max="1000" step="1" value="262">
+        </div>
+
+        <div class="control-row" style="margin-top:2px;">
+            <span>음색 (파형)</span>
+        </div>
+        <div class="btn-group">
+            <button class="toggle-btn active" id="btn-sine">사인파</button>
+            <button class="toggle-btn" id="btn-tri">삼각파</button>
+            <button class="toggle-btn" id="btn-square">사각파</button>
+            <button class="toggle-btn" id="btn-inst">악기 음색</button>
+        </div>
+
+        <div class="panel-title" style="margin-top:2px;">소리 발생원 (직접 눌러 보세요)</div>
+        <div class="source-grid">
+            <button class="source-card active" id="src-speaker"><span>🔊</span><span>파형 발생기</span></button>
+            <button class="source-card" id="src-fork"><span>🔔</span><span>소리쇠</span></button>
+            <button class="source-card" id="src-xylo"><span>🎹</span><span>실로폰</span></button>
+        </div>
+        <div style="font-size:11px;font-weight:bold;opacity:.62;line-height:1.5;">
+            소리는 공기가 <b>압축(빽빽)</b>과 <b>팽창(성김)</b>을 되풀이하며 퍼지는 <b>종파</b>예요. 주황색으로 빽빽한 곳이 압축입니다.
+        </div>
+    </div>
+
+    <div class="glass-panel bottom-control-bar">
+        <button class="control-tab-btn" id="btn-play"><span>▶️</span><span id="play-label">소리내기</span></button>
+        <button class="control-tab-btn" id="btn-toggle-panel"><span>🎚️</span><span>3요소</span></button>
+        <button class="control-tab-btn" id="btn-strike"><span>🔔</span><span>때리기</span></button>
+        <button class="control-tab-btn" id="btn-reset"><span>🔄</span><span>초기화</span></button>
+        <button class="control-tab-btn" id="btn-help"><span>📖</span><span>원리</span></button>
+    </div>
+
+    <div class="bottom-right-bar">
+        <button id="fullscreenBtn" class="glass-panel back-btn">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <!-- 원리 모달 -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="glass-panel modal-card">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>🔊 소리의 3요소</span>
+                    <span class="modal-badge">중학교 2학년 · 빛과 파동</span>
+                </div>
+                <button class="modal-close-btn" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="example-item">
+                    <div class="example-title">1. 소리는 종파예요</div>
+                    <div class="example-desc">소리는 물체의 진동이 공기 분자를 <b>밀고 당기며</b> 퍼져 나가는 파동이에요. 분자가 진행 방향과 나란히 움직이므로 <b>종파(세로파)</b>라고 해요. 분자가 빽빽한 곳을 <b>압축</b>, 성긴 곳을 <b>팽창</b>이라고 하고, 이 둘이 번갈아 지나가는 것이 소리입니다.</div>
+                </div>
+                <div class="example-item">
+                    <div class="example-title">2. 세기 (진폭)</div>
+                    <div class="example-desc">진동의 <b>폭(진폭)</b>이 클수록 소리가 세요. 진폭이 크면 공기의 압축·팽창 차이도 커져서 고막을 더 세게 밀어요. 세기는 보통 데시벨(dB)로 나타냅니다.</div>
+                </div>
+                <div class="example-item">
+                    <div class="example-title">3. 높낮이 (진동수)</div>
+                    <div class="example-desc">1초에 몇 번 진동하는지가 <b>진동수(Hz)</b>이고, 진동수가 클수록 <b>높은 소리</b>가 나요. 사람은 약 20 Hz ~ 20,000 Hz를 들을 수 있어요. 262 Hz는 ‘도4(C4)’, 440 Hz는 ‘라4(A4)’입니다.</div>
+                </div>
+                <div class="example-item">
+                    <div class="example-title">4. 음색 (파형)</div>
+                    <div class="example-desc">진동수와 세기가 같아도 <b>파형</b>이 다르면 다른 소리로 들려요. 사인파는 맑은 소리, 사각파는 단단한 전자음, 악기 소리는 여러 배음이 섞인 복잡한 파형이에요. 그래서 같은 ‘도’를 피아노와 바이올린이 다르게 들려줍니다.</div>
+                </div>
+                <div class="example-item">
+                    <div class="example-title">5. 오실로스코프로 보기</div>
+                    <div class="example-desc">화면 속 오실로스코프는 소리의 진동을 <b>파형</b>으로 보여 줘요. 위아래로 크게 그려질수록 세기가 크고, 좌우로 촘촘할수록 높은 소리입니다.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    /* ============================================================
+       소리의 3요소
+       - 세기(진폭) · 높낮이(진동수) · 음색(파형)
+       - Web Audio API 로 실제 소리 출력
+       - 공기 입자의 종파(압축·팽창) 3D 애니메이션
+       ============================================================ */
+
+    const state = {
+        volume: 40,
+        freq: 262,
+        timbre: 'sine',
+        source: 'speaker',
+        playing: false,
+        dark: false,
+        time: 0
+    };
+
+    /* ---------- 1. Three.js 기본 환경 ---------- */
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xeef1f7);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0.2, 2.7, 12.0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.set(0.1, 1.0, 0);
+    controls.minDistance = 3;
+    controls.maxDistance = 20;
+    controls.maxPolarAngle = Math.PI * 0.52;
+
+    // 화면 비율에 맞춘 시작 시점
+    function initialView() {
+        if (window.innerWidth <= 900) {
+            camera.position.set(0.2, 3.4, 16.5);
+            controls.target.set(0.1, 1.05, 0);
+        } else {
+            camera.position.set(0.2, 2.7, 12.0);
+            controls.target.set(0.1, 1.0, 0);
+        }
+        controls.update();
+    }
+    initialView();
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    dirLight.position.set(4, 8, 6);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 1024;
+    dirLight.shadow.mapSize.height = 1024;
+    scene.add(dirLight);
+    const rimLight = new THREE.DirectionalLight(0xa9c8ff, 0.35);
+    rimLight.position.set(-5, 3, -4);
+    scene.add(rimLight);
+
+    // 바닥
+    const floorMat = new THREE.ShadowMaterial({ opacity: 0.14 });
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(20, 72), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.62;
+    floor.receiveShadow = true;
+    floor.renderOrder = -1;
+    scene.add(floor);
+
+    /* ---------- 2. 공기 입자 종파 ---------- */
+    const TUBE_LEN = 8.2;
+    const TUBE_X0 = -4.1;
+    const PARTICLE_COUNT = 1050;
+
+    const baseX = new Float32Array(PARTICLE_COUNT);
+    const baseY = new Float32Array(PARTICLE_COUNT);
+    const baseZ = new Float32Array(PARTICLE_COUNT);
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        baseX[i] = TUBE_X0 + (i + Math.random() * 0.9) / PARTICLE_COUNT * TUBE_LEN;
+        const ang = Math.random() * Math.PI * 2;
+        const rad = Math.sqrt(Math.random()) * 0.38;
+        baseY[i] = 0.55 + Math.cos(ang) * rad;
+        baseZ[i] = Math.sin(ang) * rad;
+    }
+
+    const pGeo = new THREE.BufferGeometry();
+    const pPos = new Float32Array(PARTICLE_COUNT * 3);
+    const pCol = new Float32Array(PARTICLE_COUNT * 3);
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+    const pMat = new THREE.PointsMaterial({
+        size: 0.075, vertexColors: true, transparent: true, opacity: 0.95,
+        sizeAttenuation: true, depthWrite: false
+    });
+    const particles = new THREE.Points(pGeo, pMat);
+    scene.add(particles);
+
+    // 유리관
+    const tubeGeo = new THREE.CylinderGeometry(0.48, 0.48, TUBE_LEN, 40, 1, true);
+    const tubeMat = new THREE.MeshPhysicalMaterial({
+        color: 0xdce9ff, transparent: true, opacity: 0.14, roughness: 0.06,
+        metalness: 0, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.05,
+        depthWrite: false
+    });
+    const tube = new THREE.Mesh(tubeGeo, tubeMat);
+    tube.rotation.z = Math.PI / 2;
+    tube.position.set(0, 0.55, 0);
+    scene.add(tube);
+
+    // 관 양 끝 테두리
+    const ringGeo = new THREE.TorusGeometry(0.48, 0.012, 10, 48);
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0x9fb4d6, metalness: 0.5, roughness: 0.35 });
+    [-TUBE_LEN / 2, TUBE_LEN / 2].forEach(function (dx) {
+        const r = new THREE.Mesh(ringGeo, ringMat);
+        r.rotation.y = Math.PI / 2;
+        r.position.set(dx, 0.55, 0);
+        scene.add(r);
+    });
+
+    // 관 받침대
+    const standMat = new THREE.MeshStandardMaterial({ color: 0xb9c3d4, metalness: 0.3, roughness: 0.5 });
+    [-1.9, 1.9].forEach(function (x) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.1, 12), standMat);
+        leg.position.set(x, -0.07, 0);
+        leg.castShadow = true;
+        scene.add(leg);
+        const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.05, 20), standMat);
+        foot.position.set(x, -0.6, 0);
+        foot.castShadow = true;
+        scene.add(foot);
+    });
+
+    /* ---------- 3. 음원들 ---------- */
+    const speakerGroup = new THREE.Group();
+    const boxMat = new THREE.MeshStandardMaterial({ color: 0x2c3444, roughness: 0.55, metalness: 0.3 });
+    const speakerBox = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.15, 0.75), boxMat);
+    speakerBox.castShadow = true;
+    speakerGroup.add(speakerBox);
+
+    const coneMat = new THREE.MeshStandardMaterial({ color: 0x4a5568, roughness: 0.35, metalness: 0.45 });
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.16, 0.22, 32), coneMat);
+    cone.rotation.z = -Math.PI / 2;
+    cone.position.set(0.42, 0.05, 0);
+    speakerGroup.add(cone);
+
+    const dustMat = new THREE.MeshStandardMaterial({ color: 0x1b2230, roughness: 0.8 });
+    const dust = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), dustMat);
+    dust.position.set(0.52, 0.05, 0);
+    dust.scale.set(0.6, 1, 1);
+    speakerGroup.add(dust);
+
+    const ledMat = new THREE.MeshBasicMaterial({ color: 0x34c759 });
+    const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 12), ledMat);
+    led.position.set(0.3, -0.42, 0.38);
+    speakerGroup.add(led);
+
+    speakerGroup.position.set(-4.72, 0.0, 0.35);
+    speakerGroup.rotation.y = -0.12;
+    scene.add(speakerGroup);
+
+    // 소리쇠(소리굽쇠)
+    const forkGroup = new THREE.Group();
+    const forkMat = new THREE.MeshStandardMaterial({ color: 0xc7ccd6, metalness: 0.95, roughness: 0.18 });
+    const forkBase = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.16), forkMat);
+    forkBase.position.y = -0.5;
+    forkGroup.add(forkBase);
+    const forkStem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 14), forkMat);
+    forkStem.position.y = -0.2;
+    forkGroup.add(forkStem);
+    const tineL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.72, 0.1), forkMat);
+    tineL.position.set(-0.14, 0.4, 0);
+    forkGroup.add(tineL);
+    const tineR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.72, 0.1), forkMat);
+    tineR.position.set(0.14, 0.4, 0);
+    forkGroup.add(tineR);
+    const forkHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 12), forkMat);
+    forkHandle.position.y = -0.78;
+    forkGroup.add(forkHandle);
+
+    forkGroup.position.set(-5.25, 1.55, -0.85);
+    forkGroup.rotation.z = 0.06;
+    scene.add(forkGroup);
+
+    // 실로폰
+    const xyloGroup = new THREE.Group();
+    const xyloBase = new THREE.Mesh(
+        new THREE.BoxGeometry(1.85, 0.09, 0.85),
+        new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.8 })
+    );
+    xyloBase.position.y = -0.06;
+    xyloBase.castShadow = true;
+    xyloGroup.add(xyloBase);
+
+    const NOTE_FREQS = [523.25, 493.88, 440.0, 392.0, 349.23]; // 도5 시4 라4 솔4 파4
+    const NOTE_NAMES = ['도5', '시4', '라4', '솔4', '파4'];
+    const barMeshes = [];
+    const barColors = [0x0a84ff, 0x30b0c7, 0x34c759, 0xffcc00, 0xff9500];
+    for (let i = 0; i < 5; i++) {
+        const w = 0.3 - i * 0.018;
+        const bar = new THREE.Mesh(
+            new THREE.BoxGeometry(w, 0.07, 0.78 - i * 0.02),
+            new THREE.MeshStandardMaterial({ color: barColors[i], roughness: 0.35, metalness: 0.4 })
+        );
+        bar.position.set(-0.72 + i * 0.36, 0.02, 0);
+        bar.castShadow = true;
+        bar.userData.index = i;
+        barMeshes.push(bar);
+        xyloGroup.add(bar);
+
+        const pin = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.012, 0.012, 0.3, 8),
+            new THREE.MeshStandardMaterial({ color: 0xcfd6e2, metalness: 0.8, roughness: 0.3 })
+        );
+        pin.position.set(-0.72 + i * 0.36, 0.02, 0);
+        xyloGroup.add(pin);
+    }
+    xyloGroup.position.set(2.55, 0.55, -1.15);
+    xyloGroup.rotation.y = -0.35;
+    scene.add(xyloGroup);
+
+    // 음원 받침 테이블
+    const tableMat = new THREE.MeshStandardMaterial({ color: 0xe8ebf2, roughness: 0.75, metalness: 0.05 });
+    const tableLegMat = new THREE.MeshStandardMaterial({ color: 0xc3cad8, roughness: 0.6, metalness: 0.2 });
+    function makeTable(w, d) {
+        const g = new THREE.Group();
+        const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.07, d), tableMat);
+        top.position.y = 0.44;
+        top.castShadow = true; top.receiveShadow = true;
+        g.add(top);
+        [[-w / 2 + 0.09, -d / 2 + 0.09], [w / 2 - 0.09, -d / 2 + 0.09],
+         [-w / 2 + 0.09, d / 2 - 0.09], [w / 2 - 0.09, d / 2 - 0.09]].forEach(function (o) {
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.06, 10), tableLegMat);
+            leg.position.set(o[0], -0.09, o[1]);
+            leg.castShadow = true;
+            g.add(leg);
+        });
+        return g;
+    }
+    const forkTable = makeTable(1.3, 1.05);
+    forkTable.position.set(-5.25, 0, -0.85);
+    forkGroup.add ? scene.add(forkTable) : null;
+    scene.add(forkTable);
+    const xyloTable = makeTable(2.0, 1.15);
+    xyloTable.position.set(2.55, 0, -1.15);
+    scene.add(xyloTable);
+
+    const sourceGroups = { speaker: speakerGroup, fork: forkGroup, xylo: xyloGroup };
+    forkGroup.visible = false;
+    xyloGroup.visible = false;
+    forkTable.visible = false;
+    xyloTable.visible = false;
+
+    // 음원 라벨 (Canvas 스프라이트)
+    function makeLabel(text, color) {
+        const cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 128;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        const r = 26;
+        ctx.beginPath();
+        ctx.moveTo(r, 8); ctx.lineTo(512 - r, 8); ctx.quadraticCurveTo(504, 8, 504, 8 + r);
+        ctx.lineTo(504, 120 - r); ctx.quadraticCurveTo(504, 120, 512 - r, 120);
+        ctx.lineTo(r, 120); ctx.quadraticCurveTo(8, 120, 8, 120 - r);
+        ctx.lineTo(8, 8 + r); ctx.quadraticCurveTo(8, 8, r, 8);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = color || '#0a84ff';
+        ctx.font = 'bold 54px "SeoulNamsan", sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, 256, 66);
+        const tex = new THREE.CanvasTexture(cv);
+        const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+        spr.scale.set(1.5, 0.375, 1);
+        return spr;
+    }
+    const speakerLabel = makeLabel('파형 발생기', '#0a84ff');
+    speakerLabel.position.set(-4.85, 1.35, 0.45);
+    speakerLabel.scale.set(1.32, 0.33, 1);
+    scene.add(speakerLabel);
+    const forkLabel = makeLabel('소리쇠', '#ff9500');
+    forkLabel.position.set(-5.25, 3.0, -0.85);
+    scene.add(forkLabel);
+    forkLabel.visible = false;
+    const xyloLabel = makeLabel('실로폰', '#34c759');
+    xyloLabel.position.set(2.55, 1.55, -1.15);
+    scene.add(xyloLabel);
+    xyloLabel.visible = false;
+
+    /* ---------- 4. 오실로스코프 (3D 화면) ---------- */
+    const oscCanvas = document.createElement('canvas');
+    oscCanvas.width = 640;
+    oscCanvas.height = 360;
+    const oscCtx = oscCanvas.getContext('2d');
+    const oscTex = new THREE.CanvasTexture(oscCanvas);
+
+    const oscGroup = new THREE.Group();
+    const oscBody = new THREE.Mesh(
+        new THREE.BoxGeometry(3.0, 1.86, 0.14),
+        new THREE.MeshStandardMaterial({ color: 0x232a36, roughness: 0.5, metalness: 0.4 })
+    );
+    oscBody.castShadow = true;
+    oscGroup.add(oscBody);
+    const oscScreen = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.72, 1.53),
+        new THREE.MeshBasicMaterial({ map: oscTex, transparent: true })
+    );
+    oscScreen.position.z = 0.075;
+    oscGroup.add(oscScreen);
+    const oscStand = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.4, 0.4),
+        new THREE.MeshStandardMaterial({ color: 0x39414f, roughness: 0.6 })
+    );
+    oscStand.position.y = -1.1;
+    oscGroup.add(oscStand);
+
+    oscGroup.scale.setScalar(1.0);
+    oscGroup.position.set(1.35, 2.42, -2.1);
+    oscGroup.rotation.y = -0.14;
+    scene.add(oscGroup);
+
+    function waveShape(u, timbre) {
+        // u: 위상(rad)
+        if (timbre === 'sine') return Math.sin(u);
+        if (timbre === 'triangle') return (2 / Math.PI) * Math.asin(Math.sin(u));
+        if (timbre === 'square') return Math.sin(u) >= 0 ? 1 : -1;
+        // 악기 음색: 배음이 섞인 복합파
+        return 0.58 * Math.sin(u) + 0.3 * Math.sin(2 * u + 0.4) +
+               0.17 * Math.sin(3 * u + 0.9) + 0.1 * Math.sin(4 * u + 1.3) +
+               0.055 * Math.sin(5 * u + 1.9);
+    }
+
+    function drawOscilloscope() {
+        const w = oscCanvas.width, h = oscCanvas.height;
+        oscCtx.clearRect(0, 0, w, h);
+        // 배경
+        oscCtx.fillStyle = '#0b1018';
+        oscCtx.fillRect(0, 0, w, h);
+        // 격자
+        oscCtx.strokeStyle = 'rgba(70, 130, 130, 0.38)';
+        oscCtx.lineWidth = 1;
+        for (let x = 0; x <= w; x += w / 10) {
+            oscCtx.beginPath(); oscCtx.moveTo(x, 0); oscCtx.lineTo(x, h); oscCtx.stroke();
+        }
+        for (let y = 0; y <= h; y += h / 6) {
+            oscCtx.beginPath(); oscCtx.moveTo(0, y); oscCtx.lineTo(w, y); oscCtx.stroke();
+        }
+        // 중앙축
+        oscCtx.strokeStyle = 'rgba(120, 200, 200, 0.6)';
+        oscCtx.beginPath(); oscCtx.moveTo(0, h / 2); oscCtx.lineTo(w, h / 2); oscCtx.stroke();
+
+        // 파형 (2주기)
+        const amp = (state.volume / 100) * (h * 0.38) + 2;
+        const cycles = 2;
+        const phase = state.time * 2.0;
+        oscCtx.beginPath();
+        for (let px = 0; px <= w; px += 2) {
+            const u = (px / w) * cycles * Math.PI * 2 - phase;
+            const y = h / 2 - waveShape(u, state.timbre) * amp;
+            if (px === 0) oscCtx.moveTo(px, y); else oscCtx.lineTo(px, y);
+        }
+        oscCtx.strokeStyle = state.timbre === 'square' ? '#ffd60a' : '#63f0c0';
+        oscCtx.lineWidth = 4;
+        oscCtx.shadowColor = oscCtx.strokeStyle;
+        oscCtx.shadowBlur = 14;
+        oscCtx.stroke();
+        oscCtx.shadowBlur = 0;
+
+        // 텍스트
+        oscCtx.fillStyle = '#8ff3d4';
+        oscCtx.font = 'bold 22px "SeoulNamsan", sans-serif';
+        oscCtx.fillText(state.freq + ' Hz', 14, 30);
+        oscCtx.fillStyle = '#79b8ff';
+        oscCtx.fillText('진폭 ' + state.volume + '%', w - 168, 30);
+        oscCtx.fillStyle = 'rgba(140, 220, 220, 0.75)';
+        oscCtx.font = 'bold 18px "SeoulNamsan", sans-serif';
+        oscCtx.fillText('CH1  ' + timbreName(state.timbre), 14, h - 16);
+
+        oscTex.needsUpdate = true;
+    }
+
+    function timbreName(t) {
+        if (t === 'sine') return '사인파';
+        if (t === 'triangle') return '삼각파';
+        if (t === 'square') return '사각파';
+        return '악기 음색';
+    }
+
+    /* ---------- 5. Web Audio ---------- */
+    let audioCtx = null;
+    let masterGain = null;
+    let oscNode = null;
+    let instrumentWave = null;
+
+    function ensureAudio() {
+        if (audioCtx) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            return audioCtx;
+        }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        audioCtx = new AC();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.0001;
+        masterGain.connect(audioCtx.destination);
+
+        // 악기 음색용 주기 파형 (배음 합성)
+        const harmonics = [0, 1, 0.5, 0.3, 0.2, 0.12, 0.08, 0.05, 0.03];
+        const real = new Float32Array(harmonics.length);
+        const imag = new Float32Array(harmonics.length);
+        for (let i = 1; i < harmonics.length; i++) imag[i] = harmonics[i];
+        instrumentWave = audioCtx.createPeriodicWave(real, imag, { disableNormalization: false });
+        return audioCtx;
+    }
+
+    function gainForVolume() {
+        // 0~100% -> 0 ~ 0.22 (청력 보호)
+        return Math.pow(state.volume / 100, 1.6) * 0.22;
+    }
+
+    function startTone() {
+        const ctx = ensureAudio();
+        if (!ctx) return;
+        if (oscNode) {
+            // 이미 재생 중이면 파라미터만 갱신
+            updateTone();
+            return;
+        }
+        oscNode = ctx.createOscillator();
+        applyTimbre(oscNode);
+        oscNode.frequency.setValueAtTime(state.freq, ctx.currentTime);
+        oscNode.connect(masterGain);
+        masterGain.gain.cancelScheduledValues(ctx.currentTime);
+        masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        masterGain.gain.exponentialRampToValueAtTime(Math.max(gainForVolume(), 0.0002), ctx.currentTime + 0.08);
+        oscNode.start();
+        state.playing = true;
+        updatePlayUI();
+    }
+
+    function stopTone() {
+        if (!audioCtx || !oscNode) {
+            state.playing = false;
+            updatePlayUI();
+            return;
+        }
+        const t = audioCtx.currentTime;
+        const node = oscNode;
+        oscNode = null;
+        masterGain.gain.cancelScheduledValues(t);
+        masterGain.gain.setValueAtTime(Math.max(masterGain.gain.value, 0.0002), t);
+        masterGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        try { node.stop(t + 0.16); } catch (e) {}
+        state.playing = false;
+        updatePlayUI();
+    }
+
+    function applyTimbre(node) {
+        if (state.timbre === 'instrument' && instrumentWave) {
+            node.setPeriodicWave(instrumentWave);
+        } else if (state.timbre === 'sine') {
+            node.type = 'sine';
+        } else if (state.timbre === 'triangle') {
+            node.type = 'triangle';
+        } else {
+            node.type = 'square';
+        }
+    }
+
+    function updateTone() {
+        if (!audioCtx || !oscNode) return;
+        const t = audioCtx.currentTime;
+        oscNode.frequency.setTargetAtTime(state.freq, t, 0.02);
+        masterGain.gain.setTargetAtTime(Math.max(gainForVolume(), 0.0002), t, 0.03);
+    }
+
+    // 짧은 타격음 (소리쇠 / 실로폰)
+    function pluck(freq, strength) {
+        const ctx = ensureAudio();
+        if (!ctx) return;
+        const t0 = ctx.currentTime;
+        const node = ctx.createOscillator();
+        const g = ctx.createGain();
+        if (state.timbre === 'instrument' && instrumentWave) node.setPeriodicWave(instrumentWave);
+        else if (state.timbre === 'square') node.type = 'square';
+        else if (state.timbre === 'triangle') node.type = 'triangle';
+        else node.type = 'sine';
+        node.frequency.setValueAtTime(freq, t0);
+        const peak = Math.max(Math.pow(state.volume / 100, 1.5) * 0.26, 0.0005) * (strength || 1);
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(peak, t0 + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.5);
+        node.connect(g);
+        g.connect(ctx.destination);
+        node.start(t0);
+        node.stop(t0 + 1.6);
+    }
+
+    /* ---------- 6. UI ---------- */
+    const elVolume = document.getElementById('sld-volume');
+    const elFreq = document.getElementById('sld-freq');
+    const txtVolume = document.getElementById('txt-volume');
+    const txtFreq = document.getElementById('txt-freq');
+    const valVolume = document.getElementById('val-volume');
+    const valFreq = document.getElementById('val-freq');
+    const valNote = document.getElementById('val-note');
+    const valTimbre = document.getElementById('val-timbre');
+    const playLabel = document.getElementById('play-label');
+    const guide = document.getElementById('guide-tooltip');
+    let guideHidden = false;
+
+    function hideGuide() {
+        if (guideHidden || !guide) return;
+        guideHidden = true;
+        guide.style.opacity = '0';
+    }
+
+    const NOTE_TABLE = [
+        { ko: '도', en: 'C' }, { ko: '도#', en: 'C#' }, { ko: '레', en: 'D' },
+        { ko: '레#', en: 'D#' }, { ko: '미', en: 'E' }, { ko: '파', en: 'F' },
+        { ko: '파#', en: 'F#' }, { ko: '솔', en: 'G' }, { ko: '솔#', en: 'G#' },
+        { ko: '라', en: 'A' }, { ko: '라#', en: 'A#' }, { ko: '시', en: 'B' }
+    ];
+
+    function noteName(f) {
+        const n = Math.round(12 * Math.log2(f / 440));
+        const idx = ((n % 12) + 12 + 9) % 12;   // A4 = index 9
+        const octave = 4 + Math.floor((n + 9) / 12);
+        const nm = NOTE_TABLE[idx];
+        return nm.ko + octave + ' (' + nm.en + octave + ')';
+    }
+
+    function refreshHUD() {
+        valVolume.textContent = state.volume + ' %';
+        valFreq.textContent = state.freq + ' Hz';
+        valNote.textContent = noteName(state.freq);
+        valTimbre.textContent = timbreName(state.timbre);
+        txtVolume.textContent = state.volume + ' %';
+        txtFreq.textContent = state.freq + ' Hz';
+    }
+
+    function updatePlayUI() {
+        playLabel.textContent = state.playing ? '멈추기' : '소리내기';
+        document.getElementById('btn-play').classList.toggle('active', state.playing);
+        ledMat.color.setHex(state.playing ? 0x34c759 : 0x5a6472);
+    }
+
+    function setTimbre(t) {
+        state.timbre = t;
+        ['sine', 'tri', 'square', 'inst'].forEach(function (k) {
+            const map = { sine: 'btn-sine', tri: 'btn-tri', square: 'btn-square', inst: 'btn-inst' };
+            document.getElementById(map[k]).classList.toggle('active', k === t);
+        });
+        if (oscNode && audioCtx) {
+            applyTimbre(oscNode);
+        }
+        refreshHUD();
+    }
+
+    function setSource(src) {
+        state.source = src;
+        Object.keys(sourceGroups).forEach(function (k) {
+            sourceGroups[k].visible = (k === src);
+        });
+        speakerLabel.visible = (src === 'speaker');
+        forkLabel.visible = (src === 'fork');
+        xyloLabel.visible = (src === 'xylo');
+        forkTable.visible = (src === 'fork');
+        xyloTable.visible = (src === 'xylo');
+        document.getElementById('src-speaker').classList.toggle('active', src === 'speaker');
+        document.getElementById('src-fork').classList.toggle('active', src === 'fork');
+        document.getElementById('src-xylo').classList.toggle('active', src === 'xylo');
+        if (src !== 'speaker' && state.playing) stopTone();
+    }
+
+    elVolume.addEventListener('input', function (e) {
+        state.volume = parseInt(e.target.value, 10);
+        refreshHUD();
+        updateTone();
+        hideGuide();
+    });
+
+    elFreq.addEventListener('input', function (e) {
+        state.freq = parseInt(e.target.value, 10);
+        refreshHUD();
+        updateTone();
+        hideGuide();
+    });
+
+    document.getElementById('btn-sine').addEventListener('click', function () { setTimbre('sine'); });
+    document.getElementById('btn-tri').addEventListener('click', function () { setTimbre('triangle'); });
+    document.getElementById('btn-square').addEventListener('click', function () { setTimbre('square'); });
+    document.getElementById('btn-inst').addEventListener('click', function () { setTimbre('instrument'); });
+
+    document.getElementById('src-speaker').addEventListener('click', function () {
+        setSource('speaker');
+        if (!state.playing) startTone();
+    });
+    document.getElementById('src-fork').addEventListener('click', function () {
+        setSource('fork');
+        strikeFork();
+    });
+    document.getElementById('src-xylo').addEventListener('click', function () {
+        setSource('xylo');
+    });
+
+    function strikeFork() {
+        ensureAudio();
+        state.freq = 512;
+        elFreq.value = 512;
+        refreshHUD();
+        pluck(512, 1);
+        forkStrike = 0.001;
+        hideGuide();
+    }
+
+    function strikeBar(i) {
+        ensureAudio();
+        state.freq = Math.round(NOTE_FREQS[i]);
+        elFreq.value = Math.max(110, Math.min(1000, state.freq));
+        refreshHUD();
+        pluck(NOTE_FREQS[i], 1);
+        barMeshes[i].userData.hit = 0.001;
+        hideGuide();
+    }
+
+    const panel = document.getElementById('sound-panel');
+    const btnPanel = document.getElementById('btn-toggle-panel');
+    btnPanel.addEventListener('click', function () {
+        panel.classList.toggle('show');
+        btnPanel.classList.toggle('active');
+        hideGuide();
+    });
+
+    document.getElementById('btn-play').addEventListener('click', function () {
+        hideGuide();
+        if (state.source !== 'speaker') setSource('speaker');
+        if (state.playing) stopTone(); else startTone();
+    });
+
+    document.getElementById('btn-strike').addEventListener('click', function () {
+        if (state.source === 'xylo') strikeBar(2);
+        else if (state.source === 'fork') strikeFork();
+        else { ensureAudio(); pluck(state.freq, 1); }
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', function () {
+        state.volume = 40;
+        state.freq = 262;
+        elVolume.value = 40;
+        elFreq.value = 262;
+        setTimbre('sine');
+        setSource('speaker');
+        refreshHUD();
+        updateTone();
+        state.time = 0;
+    });
+
+    document.getElementById('btn-help').addEventListener('click', function () {
+        document.getElementById('modal-overlay').classList.add('show');
+        hideGuide();
+    });
+    document.getElementById('modal-close').addEventListener('click', function () {
+        document.getElementById('modal-overlay').classList.remove('show');
+    });
+    document.getElementById('modal-overlay').addEventListener('click', function (e) {
+        if (e.target === this) this.classList.remove('show');
+    });
+
+    document.getElementById('theme-toggle').addEventListener('click', function () {
+        state.dark = !state.dark;
+        document.body.classList.toggle('dark-mode', state.dark);
+        scene.background.setHex(state.dark ? 0x12151c : 0xeef1f7);
+        floorMat.opacity = state.dark ? 0.34 : 0.14;
+        this.textContent = state.dark ? '☀️' : '🌙';
+    });
+
+    /* ---------- 7. 3D 클릭 (음원 때리기) ---------- */
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let downPos = { x: 0, y: 0 };
+
+    renderer.domElement.addEventListener('pointerdown', function (e) {
+        downPos.x = e.clientX; downPos.y = e.clientY;
+    });
+
+    renderer.domElement.addEventListener('pointerup', function (e) {
+        if (Math.abs(e.clientX - downPos.x) > 8 || Math.abs(e.clientY - downPos.y) > 8) return;
+        pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+
+        if (state.source === 'speaker') {
+            const hits = raycaster.intersectObjects(speakerGroup.children, true);
+            if (hits.length) {
+                hideGuide();
+                if (state.playing) stopTone(); else startTone();
+            }
+        } else if (state.source === 'fork') {
+            const hits = raycaster.intersectObjects(forkGroup.children, true);
+            if (hits.length) strikeFork();
+        } else {
+            const hits = raycaster.intersectObjects(barMeshes, false);
+            if (hits.length) strikeBar(hits[0].object.userData.index);
+        }
+    });
+
+    // 첫 조작 시 안내창 자동 페이드아웃
+    window.addEventListener('pointerdown', hideGuide, { once: true });
+
+    /* ---------- 8. 애니메이션 ---------- */
+    const clock = new THREE.Clock();
+    let forkStrike = 0;
+    const tmpColor = new THREE.Color();
+
+    function updateParticles() {
+        const amp = state.volume / 100;
+        const A = 0.015 + amp * 0.2;
+        // 화면용 파동 (진동수를 시각적으로 압축)
+        const fDisp = 0.55 + (state.freq - 110) / 890 * 2.2;
+        const lambda = 2.3;
+        const K = 2 * Math.PI / lambda;
+        const pos = pGeo.attributes.position.array;
+        const col = pGeo.attributes.color.array;
+
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            const bx = baseX[i];
+            const ph = K * (bx - 0) - 2 * Math.PI * fDisp * state.time;
+            // 파동은 왼쪽(스피커)에서 오른쪽으로 퍼짐
+            const u = ph;
+            const disp = A * waveShape(u, state.timbre);
+            const e = 1e-3;
+            const dShape = (waveShape(u + e, state.timbre) - waveShape(u - e, state.timbre)) / (2 * e);
+            const strain = A * dShape * K;   // d(disp)/dx
+            // 음의 변형률 = 압축
+            let d = -strain * 4.2;
+            if (d > 1) d = 1;
+            if (d < -1) d = -1;
+
+            pos[i * 3] = bx + disp;
+            pos[i * 3 + 1] = baseY[i];
+            pos[i * 3 + 2] = baseZ[i];
+
+            // 압축: 주황(빽빽), 팽창: 파랑(성김)
+            const t = (d + 1) / 2;   // 0 = 팽창, 1 = 압축
+            tmpColor.setRGB(
+                0.22 + 0.78 * t,
+                0.5 + 0.12 * t,
+                1.0 - 0.84 * t
+            );
+            col[i * 3] = tmpColor.r;
+            col[i * 3 + 1] = tmpColor.g;
+            col[i * 3 + 2] = tmpColor.b;
+        }
+        pGeo.attributes.position.needsUpdate = true;
+        pGeo.attributes.color.needsUpdate = true;
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        state.time += dt;
+
+        updateParticles();
+
+        // 스피커 진동
+        if (state.playing) {
+            const amp = state.volume / 100;
+            const vib = Math.sin(state.time * 2 * Math.PI * (2 + state.freq / 220)) * amp * 0.05;
+            cone.position.x = 0.42 + vib;
+            dust.position.x = 0.52 + vib * 1.4;
+            speakerBox.scale.x = 1 + vib * 0.12;
+        } else {
+            cone.position.x += (0.42 - cone.position.x) * 0.15;
+            dust.position.x += (0.52 - dust.position.x) * 0.15;
+            speakerBox.scale.x += (1 - speakerBox.scale.x) * 0.15;
+        }
+
+        // 소리쇠 진동
+        if (forkStrike > 0) {
+            forkStrike += dt;
+            const k = Math.exp(-forkStrike * 3.2);
+            const w = Math.sin(forkStrike * 2 * Math.PI * 9) * k * 0.06;
+            tineL.position.x = -0.14 - Math.abs(w) * 0.5;
+            tineR.position.x = 0.14 + Math.abs(w) * 0.5;
+            if (forkStrike > 1.6) {
+                forkStrike = 0;
+                tineL.position.x = -0.14;
+                tineR.position.x = 0.14;
+            }
+        }
+
+        // 실로폰 건반 눌림
+        for (let i = 0; i < barMeshes.length; i++) {
+            const b = barMeshes[i];
+            if (b.userData.hit) {
+                b.userData.hit += dt;
+                const k = Math.exp(-b.userData.hit * 9);
+                b.position.y = 0.02 - 0.04 * k;
+                if (b.userData.hit > 0.6) { b.userData.hit = 0; b.position.y = 0.02; }
+            }
+        }
+
+        // 오실로스코프
+        drawOscilloscope();
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    let wasNarrow = window.innerWidth <= 900;
+    window.addEventListener('resize', function () {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        const narrow = window.innerWidth <= 900;
+        if (narrow !== wasNarrow) { wasNarrow = narrow; initialView(); }
+    });
+
+    refreshHUD();
+    updatePlayUI();
+    animate();
+
+    /* 피아노 음이름 표시 갱신용 (슬라이더 값 확정) */
+    window.addEventListener('beforeunload', function () {
+        if (audioCtx) { try { audioCtx.close(); } catch (e) {} }
+    });
+    </script>
+
+<!-- @@MOBILE-JS v1@@ -->
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<!-- @@/MOBILE-JS@@ -->
+</body>
+</html>
