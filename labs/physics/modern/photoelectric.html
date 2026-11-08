@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>광전 효과 3D</title>
+<meta name="description" content="진공관 속 금속판에 단색광을 비추어 광전자가 방출되는 조건과 최대 운동에너지, 저지전압을 확인하는 3D 가상실험입니다.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<style>
+@font-face{font-family:'SeoulNamsan';src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');font-weight:400;font-style:normal;font-display:swap}
+:root{
+  --glass-bg:rgba(255,255,255,.76);
+  --glass-border:rgba(255,255,255,.62);
+  --glass-blur:blur(22px) saturate(180%);
+  --txt:#1c1c1e;--sub:#6b7280;--accent:#007aff;--accent-2:#ff9500;
+  --panel-line:rgba(16,24,40,.08);
+  --card-r:18px;
+  --shadow:0 10px 30px rgba(15,23,42,.10);
+}
+body.dark-mode{
+  --glass-bg:rgba(26,28,34,.80);--glass-border:rgba(255,255,255,.13);
+  --txt:#f2f2f7;--sub:#9aa3b2;--accent:#0a84ff;--accent-2:#ffb340;
+  --panel-line:rgba(255,255,255,.10);
+  --shadow:0 12px 34px rgba(0,0,0,.48);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden}
+body{font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;color:var(--txt);background:#eef2f7;transition:background .4s ease,color .3s ease;user-select:none;-webkit-user-select:none}
+body.dark-mode{background:#0d1015}
+#canvas-container{position:absolute;inset:0;z-index:1}
+#canvas-container canvas{display:block;touch-action:none}
+.glass-panel{background:var(--glass-bg);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-border);border-radius:var(--card-r);box-shadow:var(--shadow);z-index:12;transition:background .35s ease,border-color .35s ease,box-shadow .35s ease}
+.top-left-bar{position:absolute;top:20px;left:20px;display:flex;gap:10px;z-index:14}
+.back-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;color:var(--txt);text-decoration:none;font-weight:800;font-size:13.5px;cursor:pointer;font-family:inherit;border:none;line-height:1}
+.tag-badge{padding:10px 16px;font-weight:800;font-size:13.5px;display:flex;align-items:center;gap:7px}
+.tag-pill{background:var(--accent);color:#fff;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.2px}
+.top-right-bar{position:absolute;top:20px;right:20px;display:flex;flex-direction:column;align-items:flex-end;gap:10px;z-index:14}
+.icon-btn{width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;border:none;border-radius:50%;color:var(--txt);padding:0;line-height:1}
+.data-card{padding:8px 15px;display:flex;align-items:center;gap:17px;min-height:54px}
+.data-item{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.data-label{font-size:10.5px;font-weight:800;color:var(--sub);white-space:nowrap}
+.data-value{font-size:16px;font-weight:800;white-space:nowrap;letter-spacing:-.2px}
+.data-value.accent{color:var(--accent)}
+.data-value.warm{color:var(--accent-2)}
+.center-tooltip{position:absolute;left:50%;top:18px;transform:translateX(-50%);padding:9px 18px;font-size:12.5px;font-weight:700;color:var(--txt);pointer-events:none;max-width:min(560px,44vw);text-align:center;line-height:1.45;z-index:11}
+.ctrl-panel{position:absolute;top:150px;right:20px;width:298px;max-height:calc(100vh - 235px);overflow-y:auto;padding:13px 15px;display:flex;flex-direction:column;gap:11px;z-index:15;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.ctrl-panel.collapsed{overflow:visible;max-height:none}
+.ctrl-panel.collapsed .ctrl-body{display:none}
+.ctrl-head{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:800;cursor:pointer}
+.ctrl-caret{font-size:11px;color:var(--sub);transition:transform .25s ease}
+.collapsed .ctrl-caret{transform:rotate(-90deg)}
+.ctrl-body{display:flex;flex-direction:column;gap:13px}
+.field{display:flex;flex-direction:column;gap:7px}
+.field-label{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;font-weight:800;gap:6px}
+.field-label b{font-size:12.5px;color:var(--accent);font-weight:800;white-space:nowrap}
+.field-note{font-size:10.5px;color:var(--sub);line-height:1.45}
+.seg{display:flex;gap:5px;flex-wrap:wrap}
+.seg button{flex:1 1 0;min-width:0;padding:7px 5px;border-radius:11px;border:1px solid var(--panel-line);background:rgba(127,140,160,.10);font-family:inherit;font-size:11.5px;font-weight:800;color:var(--txt);cursor:pointer;white-space:nowrap;transition:all .18s ease;line-height:1.2}
+.seg button.active{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(0,122,255,.26)}
+.seg.tint button.active{background:var(--accent-2);border-color:var(--accent-2);box-shadow:0 4px 12px rgba(255,149,0,.26)}
+.row-btns{display:flex;gap:6px}
+.row-btns button{flex:1;padding:9px 8px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;transition:transform .15s ease,filter .15s ease;line-height:1.2}
+.row-btns button.ghost{background:rgba(127,140,160,.16);color:var(--txt);border:1px solid var(--panel-line)}
+.row-btns button:active{transform:scale(.97)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:999px;background:linear-gradient(90deg,var(--accent) 0%,var(--accent) var(--p,50%),rgba(127,140,160,.28) var(--p,50%),rgba(127,140,160,.28) 100%);outline:none;cursor:pointer;margin:6px 0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;background:#fff;border:2.5px solid var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.22);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:2.5px solid var(--accent)}
+.graph-panel{position:absolute;left:20px;bottom:86px;width:304px;padding:11px 13px;z-index:13;display:flex;flex-direction:column;gap:8px}
+.graph-panel.collapsed .graph-body{display:none}
+.graph-head{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;font-weight:800;cursor:pointer;gap:8px}
+.graph-head .gh-r{display:flex;align-items:center;gap:7px;font-size:9.5px;color:var(--sub);font-weight:800}
+.graph-body{display:flex;flex-direction:column;gap:6px}
+.graph-body canvas{width:100%;height:134px;display:block;border-radius:10px;background:rgba(127,140,160,.07)}
+.graph-seg{display:flex;gap:4px}
+.graph-seg button{flex:1;padding:4px 6px;border-radius:8px;border:1px solid var(--panel-line);background:rgba(127,140,160,.10);font-family:inherit;font-size:9.5px;font-weight:800;color:var(--txt);cursor:pointer}
+.graph-seg button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.legend{display:flex;gap:9px;flex-wrap:wrap;font-size:10px;color:var(--sub);font-weight:800}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.bottom-control-bar{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:4px;padding:6px;border-radius:30px;z-index:14;align-items:center}
+.control-tab-btn{padding:9px 14px;border:none;background:transparent;color:var(--txt);font-family:inherit;font-size:12.5px;font-weight:800;border-radius:22px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:background .18s ease,color .18s ease;white-space:nowrap;line-height:1}
+.control-tab-btn:hover{background:rgba(127,140,160,.14)}
+.control-tab-btn.active{background:var(--accent);color:#fff}
+.bottom-control-bar .bar-sep{width:1px;height:20px;background:var(--panel-line);margin:0 3px}
+.bottom-right-bar{position:absolute;bottom:20px;right:20px;display:flex;gap:10px;z-index:14}
+.badge-soft{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;background:rgba(0,122,255,.12);color:var(--accent);white-space:nowrap}
+.badge-soft.warn{background:rgba(255,149,0,.14);color:#d97706}
+body.dark-mode .badge-soft.warn{color:#ffb340}
+@media (max-width:900px){
+  .ctrl-panel{top:auto !important;left:8px;right:8px;bottom:calc(70px + env(safe-area-inset-bottom));width:auto;max-height:44vh;z-index:30}
+  .graph-panel{left:8px;right:8px;bottom:calc(70px + env(safe-area-inset-bottom));width:auto;max-height:40vh;z-index:29;overflow-y:auto}
+  .center-tooltip{bottom:auto}
+  .top-right-bar{flex-direction:row !important;align-items:center !important;gap:8px !important}
+  .top-right-bar .data-card{flex:1 1 0% !important;min-width:0}
+  .top-right-bar #theme-toggle{order:2}
+  .data-card{gap:10px !important}
+  .ctrl-panel .ctrl-head{font-size:12px}
+  .field-label{font-size:11px}
+  .seg button{font-size:11px}
+  .graph-body canvas{height:120px}
+}
+@media (max-height:500px) and (orientation:landscape){
+  .top-right-bar{left:auto !important;right:8px !important;top:6px !important;flex-direction:row !important;align-items:center !important;gap:6px !important}
+  .top-right-bar .data-card{flex:0 0 auto !important;padding:4px 10px !important;gap:9px !important;min-height:0 !important}
+  .top-right-bar #theme-toggle{width:30px !important;height:30px !important;min-width:30px !important;font-size:14px !important}
+  .data-label{font-size:8.5px !important}
+  .data-value{font-size:11.5px !important}
+  .ctrl-panel{top:44px !important;right:8px !important;left:auto !important;bottom:auto !important;width:236px !important;max-height:calc(100vh - 76px) !important;font-size:11px !important;padding:9px 11px !important}
+  .ctrl-panel.collapsed{max-height:none !important}
+  .graph-panel{left:8px !important;right:auto !important;bottom:8px !important;width:206px !important;max-height:52vh}
+  .graph-body canvas{height:86px}
+  .center-tooltip{display:none !important}
+}
+
+
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 9px !important;
+        font-size: 10px !important;
+        gap: 3px !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+
+@media (max-width: 900px) and (min-height: 501px) {
+    #guide-tooltip { top: calc(max(8px, env(safe-area-inset-top)) + 130px) !important; }
+    .data-card { font-size: 11px !important; }
+    .data-label { font-size: 9px !important; }
+    .color-btn { font-size: 11px !important; padding: 5px 10px !important; }
+    .btn-group { gap: 4px !important; }
+}
+
+/* ==== 실험별 추가 스타일 ==== */
+#sld-lambda::-webkit-slider-thumb{border-color:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.3)}
+#sld-lambda::-moz-range-thumb{border-color:#fff}
+</style>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="/index.html" class="glass-panel back-btn">⬅ 메인</a>
+    <div class="glass-panel tag-badge">광전 효과 3D<span class="tag-pill">visionOS</span></div>
+</div>
+
+<div class="top-right-bar">
+    <button class="icon-btn glass-panel" id="theme-toggle" aria-label="야간 모드">🌙</button>
+    <div class="glass-panel data-card">
+<div class="data-item"><span class="data-label">광자 에너지 E</span><span class="data-value" id="v-eph">3.10 eV</span></div>
+<div class="data-item"><span class="data-label">최대 운동E</span><span class="data-value warm" id="v-ek">0.00 eV</span></div>
+<div class="data-item"><span class="data-label">광전류</span><span class="data-value accent" id="v-cur">0.0 µA</span></div>
+<div class="data-item"><span class="data-label">상태</span><span class="data-value" id="v-state" style="font-size:12.5px">방출 없음</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip glass-panel">💡 빛의 세기를 높여도 한계진동수보다 낮으면 전자가 나오지 않습니다. 파장을 짧게 해 보세요.</div>
+
+<div class="glass-panel ctrl-panel" id="ctrl-panel">
+    <div class="ctrl-head" id="ctrl-head"><span>🎛 실험 조절</span><span class="ctrl-caret">▾</span></div>
+    <div class="ctrl-body">
+<div class="field">
+  <div class="field-label"><span>금속판 (일함수 W)</span><b id="f-metal">세슘 2.14 eV</b></div>
+  <div class="seg" id="seg-metal">
+    <button type="button" data-m="cs" class="active">세슘 2.14</button>
+    <button type="button" data-m="na">나트륨 2.28</button>
+    <button type="button" data-m="zn">아연 4.30</button>
+    <button type="button" data-m="cu">구리 4.70</button>
+  </div>
+</div>
+<div class="field">
+  <div class="field-label"><span>빛의 파장 λ</span><b id="f-lambda">400 nm</b></div>
+  <input type="range" id="sld-lambda" min="200" max="700" step="1" value="400" style="background:linear-gradient(90deg,#5b2be0 0%,#2f6bff 22%,#00c6b0 40%,#4ade80 52%,#ffe14d 68%,#ff9a3c 84%,#ff3b30 100%)">
+  <div class="field-note" id="note-limit">한계 파장 λ₀ = 580 nm</div>
+</div>
+<div class="field">
+  <div class="field-label"><span>빛의 세기</span><b id="f-int">60 %</b></div>
+  <input type="range" id="sld-int" min="0" max="100" step="1" value="60">
+</div>
+<div class="field">
+  <div class="field-label"><span>전압 V (음전압 = 저지전압)</span><b id="f-volt">0.0 V</b></div>
+  <input type="range" id="sld-volt" min="-4" max="4" step="0.1" value="0">
+  <div class="row-btns">
+    <button type="button" class="ghost" id="btn-stop">저지전압 V₀ = <span id="btn-stop-val">0.0</span> V</button>
+  </div>
+  <div class="row-btns"><button type="button" class="ghost" id="btn-again">🔁 처음 상태로</button></div>
+</div>
+<div class="field">
+  <div class="field-label"><span>그래프 보기</span></div>
+  <div class="seg" id="seg-graph">
+    <button type="button" data-g="iv" class="active">I–V 특성 곡선</button>
+    <button type="button" data-g="ek">Eₖ–ν 그래프</button>
+  </div>
+</div>
+    </div>
+</div>
+
+<div class="glass-panel graph-panel" id="graph-panel">
+    <div class="graph-head" id="graph-head"><span>광전류–전압 특성 곡선</span><span class="ctrl-caret">▾</span></div>
+    <div class="graph-body">
+        <canvas id="graph"></canvas>
+        <div class="legend"><span><i style="background:#ff9500"></i>광전류</span><span><i style="background:#007aff"></i>현재 전압</span></div>
+    </div>
+</div>
+
+<div class="glass-panel bottom-control-bar">
+    <button class="control-tab-btn" id="btn-ctrl">🎛 <span>조절</span></button>
+    <button class="control-tab-btn" id="btn-graph">📈 <span>그래프</span></button>
+    <span class="bar-sep"></span>
+    <button class="control-tab-btn" id="btn-align">📷 <span>시점</span></button>
+    <button class="control-tab-btn" id="btn-reset">🔄 <span>초기화</span></button>
+</div>
+
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" class="glass-panel back-btn">
+        <span id="fullscreenIcon">⛶</span>
+        <span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<script>
+/* Science Virtual LAB — 새 가상실험 공통 UI (테마·패널·그래프 도우미) */
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var body = document.body;
+  var btnTheme = $('#theme-toggle');
+  var isDark = false;
+
+  /* ---------- 테마 ---------- */
+  function applyTheme(dark, save) {
+    isDark = !!dark;
+    body.classList.toggle('dark-mode', isDark);
+    if (btnTheme) btnTheme.textContent = isDark ? '☀️' : '🌙';
+    if (btnTheme) btnTheme.setAttribute('aria-label', isDark ? '주간 모드로 전환' : '야간 모드로 전환');
+    if (save) { try { localStorage.setItem('svlLabTheme', isDark ? 'dark' : 'light'); } catch (e) {} }
+    if (window.onThemeChange) { try { window.onThemeChange(isDark); } catch (e) { console.warn(e); } }
+  }
+  try { applyTheme(localStorage.getItem('svlLabTheme') === 'dark', false); } catch (e) { applyTheme(false, false); }
+  if (btnTheme) btnTheme.addEventListener('click', function () { applyTheme(!isDark, true); });
+
+  /* ---------- 접이식 패널 ---------- */
+  var cp = $('#ctrl-panel'), gp = $('#graph-panel');
+  var bCtrl = $('#btn-ctrl'), bGraph = $('#btn-graph');
+  function narrow() { return window.innerWidth <= 900; }
+  function syncBtns() {
+    if (bCtrl) bCtrl.classList.toggle('active', cp && !cp.classList.contains('collapsed'));
+    if (bGraph) bGraph.classList.toggle('active', gp && !gp.classList.contains('collapsed'));
+  }
+  function toggle(el, other) {
+    if (!el) return;
+    var willOpen = el.classList.contains('collapsed');
+    el.classList.toggle('collapsed', !willOpen);
+    if (willOpen && narrow() && other) other.classList.add('collapsed');
+    syncBtns();
+    if (window.onPanelToggle) { try { window.onPanelToggle(); } catch (e) {} }
+  }
+  if (bCtrl) bCtrl.addEventListener('click', function () { toggle(cp, gp); });
+  if (bGraph) bGraph.addEventListener('click', function () { toggle(gp, cp); });
+  var ch = $('#ctrl-head'); if (ch) ch.addEventListener('click', function () { toggle(cp, gp); });
+  var gh = $('#graph-head'); if (gh) gh.addEventListener('click', function () { toggle(gp, cp); });
+
+  /* ---------- 우측 패널 위치를 상단 카드 아래로 ---------- */
+  function layoutPanels() {
+    var bar = document.querySelector('.top-right-bar');
+    if (!cp || !bar) return;
+    if (narrow()) { cp.style.top = ''; return; }
+    var r = bar.getBoundingClientRect();
+    cp.style.top = Math.round(r.bottom + 12) + 'px';
+  }
+  layoutPanels();
+  window.addEventListener('resize', function () { layoutPanels(); });
+  window.addEventListener('orientationchange', function () { setTimeout(layoutPanels, 260); });
+  window.addEventListener('pageshow', function () { setTimeout(layoutPanels, 60); });
+
+  if (narrow()) { cp && cp.classList.add('collapsed'); gp && gp.classList.add('collapsed'); }
+  syncBtns();
+
+  /* ---------- 슬라이더 채움 표시 ---------- */
+  function fill(r) {
+    var min = parseFloat(r.min || 0), max = parseFloat(r.max || 100), v = parseFloat(r.value);
+    var p = max > min ? (v - min) / (max - min) * 100 : 0;
+    r.style.setProperty('--p', p + '%');
+  }
+  function fillAll() {
+    Array.prototype.forEach.call(document.querySelectorAll('input[type=range]'), fill);
+  }
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.type === 'range') fill(e.target);
+  });
+  fillAll();
+  window.__fillRanges = fillAll;
+
+  /* ---------- 하단 버튼 ---------- */
+  var bReset = $('#btn-reset'), bAlign = $('#btn-align');
+  if (bReset) bReset.addEventListener('click', function () { if (window.resetLab) window.resetLab(); });
+  if (bAlign) bAlign.addEventListener('click', function () { if (window.alignView) window.alignView(); });
+
+  /* ---------- 그래프 도우미 ---------- */
+  window.LabUI = {
+    dark: function () { return body.classList.contains('dark-mode'); },
+    themeColors: function () {
+      var d = body.classList.contains('dark-mode');
+      return {
+        dark: d,
+        text: d ? '#c7cdd8' : '#54606f',
+        faint: d ? 'rgba(255,255,255,.10)' : 'rgba(16,24,40,.10)',
+        grid: d ? 'rgba(255,255,255,.09)' : 'rgba(16,24,40,.09)',
+        panel: d ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.45)'
+      };
+    },
+    prep: function (canvas) {
+      if (!canvas) return null;
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var w = canvas.clientWidth || 280, h = canvas.clientHeight || 130;
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+      }
+      var ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      return { ctx: ctx, w: w, h: h };
+    },
+    text: function (ctx, s, x, y, color, size, align, baseline, weight) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.font = (weight || 800) + ' ' + (size || 9) + 'px "SeoulNamsan", -apple-system, sans-serif';
+      ctx.textAlign = align || 'left';
+      ctx.textBaseline = baseline || 'middle';
+      ctx.fillText(s, x, y);
+      ctx.restore();
+    },
+    line: function (ctx, pts, color, width, dash) {
+      if (!pts || pts.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = color; ctx.lineWidth = width || 1.6; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      if (dash) ctx.setLineDash(dash);
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.stroke();
+      ctx.restore();
+    },
+    dot: function (ctx, x, y, r, color, stroke) {
+      ctx.save();
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+      if (stroke) { ctx.lineWidth = 1.6; ctx.strokeStyle = stroke; ctx.stroke(); }
+      ctx.restore();
+    },
+    frame: function (ctx, x, y, w, h, colors) {
+      ctx.save();
+      ctx.fillStyle = colors.panel; ctx.fillRect(x, y, w, h);
+      ctx.restore();
+    }
+  };
+
+  /* 화면이 좁아지면 두 패널이 겹치지 않도록 하나만 열어 둔다 */
+  var lastNarrow = narrow();
+  window.addEventListener('resize', function () {
+    var n = narrow();
+    if (n && !lastNarrow) {
+      if (cp && !cp.classList.contains('collapsed') && gp && !gp.classList.contains('collapsed')) gp.classList.add('collapsed');
+    }
+    lastNarrow = n;
+    syncBtns();
+  });
+  /* ---------- 실험 공용 3D 도우미 ---------- */
+  window.LabUI.glowTexture = function () {
+    var c = document.createElement('canvas'); c.width = c.height = 128;
+    var g = c.getContext('2d');
+    var grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.25, 'rgba(255,255,255,.55)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  };
+
+  window.LabUI.makeLabel = function (text, size) {
+    var fs = 34, pad = 26;
+    var c = document.createElement('canvas');
+    var g0 = c.getContext('2d');
+    g0.font = '800 ' + fs + 'px "SeoulNamsan", sans-serif';
+    var w = Math.ceil(g0.measureText(text).width) + pad * 2;
+    c.width = w; c.height = 76;
+    var g = c.getContext('2d');
+    g.fillStyle = 'rgba(18,24,32,.78)';
+    var r = 22;
+    g.beginPath();
+    g.moveTo(r, 0); g.lineTo(w - r, 0); g.quadraticCurveTo(w, 0, w, r);
+    g.lineTo(w, 76 - r); g.quadraticCurveTo(w, 76, w - r, 76);
+    g.lineTo(r, 76); g.quadraticCurveTo(0, 76, 0, 76 - r);
+    g.lineTo(0, r); g.quadraticCurveTo(0, 0, r, 0); g.closePath(); g.fill();
+    g.fillStyle = '#fff';
+    g.font = '800 ' + fs + 'px "SeoulNamsan", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, w / 2, 40);
+    var t = new THREE.CanvasTexture(c);
+    t.minFilter = THREE.LinearFilter;
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false }));
+    var h = size || 0.115;
+    sp.scale.set(w / 76 * h, h, 1);
+    sp.renderOrder = 10;
+    return sp;
+  };
+
+  window.LabUI.wavelengthToRGB = function (nm) {
+    var r = 0, g = 0, b = 0;
+    if (nm >= 380 && nm < 440) { r = -(nm - 440) / 60; b = 1; }
+    else if (nm < 490) { g = (nm - 440) / 50; b = 1; }
+    else if (nm < 510) { g = 1; b = -(nm - 510) / 20; }
+    else if (nm < 580) { r = (nm - 510) / 70; g = 1; }
+    else if (nm < 645) { r = 1; g = -(nm - 645) / 65; }
+    else if (nm <= 780) { r = 1; }
+    var f = 1;
+    if (nm > 700) f = 0.3 + 0.7 * (780 - nm) / 80;
+    if (nm < 420) f = 0.3 + 0.7 * (nm - 380) / 40;
+    var q = function (v) { return Math.round(255 * Math.pow(Math.max(0, Math.min(1, v)) * f, 0.85)); };
+    return { r: q(r), g: q(g), b: q(b), css: 'rgb(' + q(r) + ',' + q(g) + ',' + q(b) + ')' };
+  };
+})();
+
+</script>
+
+<script>
+/* ===== 광전 효과 3D ===== */
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 2.0;
+controls.maxDistance = 18;
+controls.maxPolarAngle = Math.PI / 2 - 0.03;
+controls.target.set(0, 0.85, 0);
+
+const CAM_HOME = { pos: new THREE.Vector3(0.7, 2.5, 6.9), target: new THREE.Vector3(0, 0.9, 0) };
+function applyHome() {
+  camera.position.copy(CAM_HOME.pos);
+  controls.target.copy(CAM_HOME.target);
+  controls.update();
+}
+window.alignView = applyHome;
+
+let isDark = document.body.classList.contains('dark-mode');
+const FLOOR_LIGHT = 0xd9e2ee, FLOOR_DARK = 0x151a21;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa7b6, 0.66));
+const key = new THREE.DirectionalLight(0xffffff, 0.75);
+key.position.set(4, 10, 7);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.camera.left = -7; key.shadow.camera.right = 7;
+key.shadow.camera.top = 7; key.shadow.camera.bottom = -7;
+key.shadow.radius = 3;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xdfe9ff, 0.22);
+fill.position.set(-7, 5, -5);
+scene.add(fill);
+
+const floorMat = new THREE.MeshStandardMaterial({ color: isDark ? FLOOR_DARK : FLOOR_LIGHT, roughness: 0.94, metalness: 0.02 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+scene.add(floor);
+
+function setSceneTheme(dark) {
+  isDark = dark;
+  scene.background = new THREE.Color(dark ? 0x0d1015 : 0xeef2f7);
+  floorMat.color.setHex(dark ? FLOOR_DARK : FLOOR_LIGHT);
+  baseMat.color.setHex(dark ? 0x2b3440 : 0xb9c7d8);
+  drawGraph();
+}
+scene.background = new THREE.Color(isDark ? 0x0d1015 : 0xeef2f7);
+window.onThemeChange = setSceneTheme;
+
+const glowTex = window.LabUI.glowTexture();
+const W2RGB = (nm) => window.LabUI.wavelengthToRGB(nm);
+
+/* ---------- 무대 ---------- */
+const TUBE_Y = 0.95, TUBE_R = 0.62, TUBE_L = 3.5;
+
+const baseMat = new THREE.MeshStandardMaterial({ color: isDark ? 0x2b3440 : 0xb9c7d8, roughness: 0.55, metalness: 0.25 });
+const base = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.14, 1.5), baseMat);
+base.position.set(0, 0.07, 0);
+base.receiveShadow = true; base.castShadow = true;
+scene.add(base);
+[-1, 1].forEach((s) => {
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 1.2), baseMat);
+  foot.position.set(s * 1.9, 0.025, 0);
+  scene.add(foot);
+});
+
+// 진공관 유리
+const glassMat = new THREE.MeshPhongMaterial({
+  color: 0xbfe4ff, transparent: true, opacity: 0.15, shininess: 130, specular: 0xffffff,
+  side: THREE.DoubleSide, depthWrite: false
+});
+const tube = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R, TUBE_R, TUBE_L, 40, 1, true), glassMat);
+tube.rotation.z = Math.PI / 2;
+tube.position.set(0, TUBE_Y, 0);
+scene.add(tube);
+// 유리 양 끝 캡
+const capMat = new THREE.MeshStandardMaterial({ color: 0x8fa0b4, metalness: 0.6, roughness: 0.35 });
+[-1, 1].forEach((s) => {
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(TUBE_R * 0.96, TUBE_R * 0.8, 0.22, 32), capMat);
+  cap.rotation.z = Math.PI / 2;
+  cap.position.set(s * (TUBE_L / 2 - 0.05), TUBE_Y, 0);
+  cap.castShadow = true;
+  scene.add(cap);
+});
+// 지지대
+[-1, 1].forEach((s) => {
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 0.36, 14), capMat);
+  stand.position.set(s * 1.05, 0.32, 0);
+  scene.add(stand);
+});
+
+// 금속판(음극) / 전극(양극)
+const CATH_X = -1.28, ANODE_X = 1.28;
+const plateMat = new THREE.MeshStandardMaterial({ color: 0xd9c27a, metalness: 0.65, roughness: 0.35 });
+const plate = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.78, 0.78), plateMat);
+plate.position.set(CATH_X, TUBE_Y, 0);
+plate.castShadow = true;
+scene.add(plate);
+const plateGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+plateGlow.scale.set(1.1, 1.1, 1);
+plateGlow.position.set(CATH_X + 0.12, TUBE_Y, 0);
+scene.add(plateGlow);
+
+const anodeMat = new THREE.MeshStandardMaterial({ color: 0xaebccb, metalness: 0.7, roughness: 0.3 });
+const anode = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.055, 14, 40), anodeMat);
+anode.rotation.y = Math.PI / 2;
+anode.position.set(ANODE_X, TUBE_Y, 0);
+anode.castShadow = true;
+scene.add(anode);
+const anodeRod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 10), anodeMat);
+anodeRod.rotation.z = Math.PI / 2;
+anodeRod.position.set(ANODE_X + 0.28, TUBE_Y, 0);
+scene.add(anodeRod);
+
+// 광원(램프)
+const lampGroup = new THREE.Group();
+lampGroup.position.set(-3.35, TUBE_Y, 0);
+scene.add(lampGroup);
+const lampBody = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.5, 24), new THREE.MeshStandardMaterial({ color: 0x39434f, roughness: 0.4, metalness: 0.35 }));
+lampBody.rotation.z = Math.PI / 2;
+lampBody.castShadow = true;
+lampGroup.add(lampBody);
+const lampLens = new THREE.Mesh(new THREE.CircleGeometry(0.24, 28), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+lampLens.position.set(0.26, 0, 0);
+lampLens.rotation.y = Math.PI / 2;
+lampGroup.add(lampLens);
+const lampGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+lampGlow.scale.set(1.1, 1.1, 1);
+lampGlow.position.set(0.3, 0, 0);
+lampGroup.add(lampGlow);
+const lampStand = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.28, 12), capMat);
+lampStand.position.set(0, -0.55, 0);
+lampGroup.add(lampStand);
+
+// 빛줄기 (램프 → 금속판)
+const beamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });
+const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 1.7, 20, 1, true), beamMat);
+beam.rotation.z = Math.PI / 2;
+beam.position.set(-2.28, TUBE_Y, 0);
+scene.add(beam);
+
+// 전원 장치
+const psuMat = new THREE.MeshStandardMaterial({ color: 0x39434f, roughness: 0.42, metalness: 0.3 });
+const psu = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.5, 0.72), psuMat);
+psu.position.set(0, 0.34, 1.05);
+psu.castShadow = true;
+scene.add(psu);
+const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.1, 20), new THREE.MeshStandardMaterial({ color: 0xdfe7f1, roughness: 0.3, metalness: 0.2 }));
+knob.rotation.x = Math.PI / 2;
+knob.position.set(0.32, 0.34, 1.42);
+scene.add(knob);
+const psuScreenCanvas = document.createElement('canvas');
+psuScreenCanvas.width = 256; psuScreenCanvas.height = 128;
+const psuCtx = psuScreenCanvas.getContext('2d');
+const psuTex = new THREE.CanvasTexture(psuScreenCanvas);
+const psuScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.21), new THREE.MeshBasicMaterial({ map: psuTex }));
+psuScreen.position.set(-0.28, 0.36, 1.415);
+scene.add(psuScreen);
+
+function drawPsuScreen() {
+  const c = psuCtx;
+  c.fillStyle = '#0b1220'; c.fillRect(0, 0, 256, 128);
+  const ok = isEmitting();
+  c.fillStyle = ok ? '#4ade80' : '#64748b';
+  c.font = 'bold 54px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText((state.volt >= 0 ? '+' : '') + state.volt.toFixed(1) + ' V', 128, 62);
+  c.fillStyle = '#94a3b8'; c.font = 'bold 20px "SeoulNamsan", sans-serif';
+  c.fillText('전압 공급 장치', 128, 108);
+  psuTex.needsUpdate = true;
+}
+
+// 도선
+function wire(a, b, color) {
+  const mid = new THREE.Vector3((a.x + b.x) / 2, Math.max(a.y, b.y) + 0.25, (a.z + b.z) / 2);
+  const curve = new THREE.CatmullRomCurve3([a, mid, b]);
+  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.018, 8, false), new THREE.MeshStandardMaterial({ color, roughness: 0.5 }));
+  scene.add(m);
+}
+wire(new THREE.Vector3(CATH_X, TUBE_Y - 0.42, 0), new THREE.Vector3(-0.45, 0.2, 1.05), 0xff5b4d);
+wire(new THREE.Vector3(ANODE_X + 0.5, TUBE_Y, 0), new THREE.Vector3(0.45, 0.2, 1.05), 0x2b3440);
+
+/* ---------- 라벨 ---------- */
+const labelMetal = window.LabUI.makeLabel('금속판(음극)');
+labelMetal.position.set(CATH_X, TUBE_Y + 0.85, 0);
+scene.add(labelMetal);
+const labelAnode = window.LabUI.makeLabel('전극(양극)');
+labelAnode.position.set(ANODE_X, TUBE_Y + 0.85, 0);
+scene.add(labelAnode);
+const labelLamp = window.LabUI.makeLabel('단색광');
+labelLamp.position.set(-3.3, TUBE_Y + 0.68, 0);
+scene.add(labelLamp);
+const labelTube = window.LabUI.makeLabel('진공관');
+labelTube.position.set(0, TUBE_Y + 0.92, 0);
+scene.add(labelTube);
+
+/* ---------- 상태 ---------- */
+const METALS = {
+  cs: { name: '세슘', W: 2.14, color: 0xe3cd86 },
+  na: { name: '나트륨', W: 2.28, color: 0xd6d9dd },
+  zn: { name: '아연', W: 4.30, color: 0xa9b4be },
+  cu: { name: '구리', W: 4.70, color: 0xc07a44 }
+};
+const state = { metal: 'cs', lambda: 400, intensity: 60, volt: 0, graph: 'iv' };
+
+function photonE() { return 1240 / state.lambda; }
+function workF() { return METALS[state.metal].W; }
+function limitLambda() { return 1240 / workF(); }
+function isEmitting() { return photonE() > workF(); }
+function ekMax() { return Math.max(0, photonE() - workF()); }
+function stopVolt() { return ekMax(); }
+function satCurrent() { return isEmitting() ? 0.22 * state.intensity : 0; }   // µA
+function currentAt(v) {
+  if (!isEmitting()) return 0;
+  const V0 = ekMax();
+  if (v >= 0) return satCurrent();
+  if (V0 <= 0) return 0;
+  if (v <= -V0) return 0;
+  return satCurrent() * (1 + v / V0);
+}
+
+/* ---------- 전자 ---------- */
+const electrons = [];
+const eGeo = new THREE.SphereGeometry(0.045, 10, 10);
+const eMat = new THREE.MeshBasicMaterial({ color: 0x86dcff });
+const eGlowMat = new THREE.SpriteMaterial({ map: glowTex, color: 0x86dcff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+for (let i = 0; i < 70; i++) {
+  const g = new THREE.Group();
+  const s = new THREE.Mesh(eGeo, eMat);
+  g.add(s);
+  const gl = new THREE.Sprite(eGlowMat.clone());
+  gl.scale.set(0.16, 0.16, 1);
+  g.add(gl);
+  g.visible = false;
+  scene.add(g);
+  electrons.push({ obj: g, active: false, x: 0, y: 0, z: 0, E: 0, vy: 0, vz: 0 });
+}
+let spawnAcc = 0;
+function spawnElectron() {
+  const e = electrons.find((x) => !x.active);
+  if (!e) return;
+  e.active = true;
+  e.obj.visible = true;
+  e.x = CATH_X + 0.09;
+  e.y = TUBE_Y + (Math.random() - 0.5) * 0.66;
+  e.z = (Math.random() - 0.5) * 0.66;
+  const Ek = ekMax();
+  e.E = Ek * (0.35 + 0.65 * Math.pow(Math.random(), 0.5));
+  e.vy = (Math.random() - 0.5) * 0.9;
+  e.vz = (Math.random() - 0.5) * 0.9;
+  e.dir = 1;
+  e.obj.position.set(e.x, e.y, e.z);
+}
+
+/* ---------- 광자 ---------- */
+const photons = [];
+for (let i = 0; i < 26; i++) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  m.visible = false;
+  scene.add(m);
+  photons.push({ obj: m, active: false, t: 0, y: 0, z: 0 });
+}
+
+/* ---------- UI ---------- */
+const el = (id) => document.getElementById(id);
+function updateReadouts() {
+  el('v-eph').textContent = photonE().toFixed(2) + ' eV';
+  el('v-ek').textContent = ekMax().toFixed(2) + ' eV';
+  el('v-cur').textContent = currentAt(state.volt).toFixed(1) + ' µA';
+  const st = el('v-state');
+  if (!isEmitting()) { st.textContent = '방출 없음'; st.style.color = '#94a3b8'; }
+  else if (currentAt(state.volt) <= 0.001) { st.textContent = '전자 되돌아감'; st.style.color = '#ff9500'; }
+  else { st.textContent = '광전자 방출'; st.style.color = '#22c55e'; }
+  el('f-metal').textContent = METALS[state.metal].name + ' ' + workF().toFixed(2) + ' eV';
+  el('f-lambda').textContent = state.lambda + ' nm';
+  el('f-int').textContent = state.intensity + ' %';
+  el('f-volt').textContent = (state.volt >= 0 ? '+' : '') + state.volt.toFixed(1) + ' V';
+  el('btn-stop-val').textContent = stopVolt().toFixed(1);
+  el('note-limit').innerHTML = '한계 파장 λ₀ = <b>' + limitLambda().toFixed(0) + ' nm</b> · 지금 빛은 ' +
+    (isEmitting() ? '한계진동수보다 <b>큰</b> 진동수' : '한계진동수보다 <b>작은</b> 진동수');
+  drawPsuScreen();
+}
+
+function refreshAll() {
+  plateMat.color.setHex(METALS[state.metal].color);
+  const rgb = W2RGB(state.lambda);
+  const c = new THREE.Color(rgb.r / 255, rgb.g / 255, rgb.b / 255);
+  beamMat.color.copy(c);
+  lampGlow.material.color.copy(c);
+  lampLens.material.color.copy(c);
+  plateGlow.material.color.copy(c);
+  photons.forEach((p) => p.obj.material.color.copy(c));
+  // 빛의 세기 → 빛줄기 밝기
+  beamMat.opacity = 0.1 + 0.55 * (state.intensity / 100);
+  lampGlow.scale.setScalar(0.5 + 0.9 * (state.intensity / 100));
+  knob.rotation.z = -state.volt / 4 * Math.PI * 1.5;
+  updateReadouts();
+  drawGraph();
+}
+
+/* ---------- 입력 ---------- */
+el('sld-lambda').addEventListener('input', (e) => { state.lambda = +e.target.value; refreshAll(); });
+el('sld-int').addEventListener('input', (e) => { state.intensity = +e.target.value; refreshAll(); });
+el('sld-volt').addEventListener('input', (e) => { state.volt = +e.target.value; refreshAll(); });
+document.querySelectorAll('#seg-metal button').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.metal = b.dataset.m;
+    document.querySelectorAll('#seg-metal button').forEach((x) => x.classList.toggle('active', x === b));
+    refreshAll();
+  });
+});
+document.querySelectorAll('#seg-graph button').forEach((b) => {
+  b.addEventListener('click', () => {
+    state.graph = b.dataset.g;
+    document.querySelectorAll('#seg-graph button').forEach((x) => x.classList.toggle('active', x === b));
+    drawGraph();
+  });
+});
+el('btn-stop').addEventListener('click', () => {
+  if (!isEmitting()) return;
+  state.volt = -Math.round(stopVolt() * 10) / 10;
+  el('sld-volt').value = state.volt;
+  window.__fillRanges();
+  refreshAll();
+});
+el('btn-again').addEventListener('click', () => resetLab());
+
+/* ---------- 그래프 ---------- */
+const graphCanvas = document.getElementById('graph');
+function drawGraph() {
+  const g = window.LabUI.prep(graphCanvas);
+  if (!g) return;
+  const ctx = g.ctx, W = g.w, H = g.h;
+  const tc = window.LabUI.themeColors();
+  const ghEl = document.querySelector('.graph-head span');
+  const lgEl = document.querySelector('.legend');
+  if (ghEl) ghEl.textContent = state.graph === 'iv' ? '광전류–전압 특성 곡선' : '최대 운동E – 진동수 그래프';
+  if (lgEl) lgEl.innerHTML = state.graph === 'iv'
+    ? '<span><i style="background:#ff9500"></i>광전류</span><span><i style="background:#007aff"></i>현재 전압</span>'
+    : '<span><i style="background:#ff9500"></i>Eₖ = hν − W</span><span><i style="background:#ff3b30"></i>한계진동수 ν₀</span>';
+  const padL = 30, padR = 10, padT = 12, padB = 20;
+  const pw = W - padL - padR, ph = H - padT - padB;
+
+  if (state.graph === 'iv') {
+    const vMin = -4.2, vMax = 4.2;
+    const iMax = 24;
+    const X = (v) => padL + (v - vMin) / (vMax - vMin) * pw;
+    const Y = (i) => padT + (1 - i / iMax) * ph;
+    window.LabUI.frame(ctx, padL, padT, pw, ph, tc);
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (i / 4) * ph;
+      window.LabUI.line(ctx, [[padL, y], [padL + pw, y]], tc.grid, 1);
+    }
+    [-4, -2, 0, 2, 4].forEach((v) => {
+      window.LabUI.line(ctx, [[X(v), padT], [X(v), padT + ph]], tc.grid, 1);
+      window.LabUI.text(ctx, v + '', X(v), padT + ph + 9, tc.text, 8.5, 'center');
+    });
+    window.LabUI.text(ctx, 'V (V)', padL + pw, padT + ph + 9, tc.text, 8.5, 'right');
+    window.LabUI.text(ctx, 'I (µA)', padL - 4, padT + 4, tc.text, 8.5, 'right');
+
+    const V0 = ekMax();
+    const pts = [];
+    if (isEmitting()) {
+      for (let i = 0; i <= 160; i++) {
+        const v = vMin + (i / 160) * (vMax - vMin);
+        pts.push([X(v), Y(currentAt(v))]);
+      }
+    }
+    // 축
+    window.LabUI.line(ctx, [[X(0), padT], [X(0), padT + ph]], tc.faint, 1.2);
+    if (pts.length) {
+      const area = [[X(vMin), Y(0)]].concat(pts.map((p) => [p[0], p[1]]));
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(X(vMin), Y(0));
+      pts.forEach((p) => ctx.lineTo(p[0], p[1]));
+      ctx.lineTo(X(vMax), Y(0)); ctx.closePath();
+      ctx.fillStyle = 'rgba(255,149,0,.16)'; ctx.fill(); ctx.restore();
+      window.LabUI.line(ctx, pts, '#ff9500', 2);
+      if (V0 > 0.02) {
+        window.LabUI.line(ctx, [[X(-V0), padT + ph], [X(-V0), padT + 4]], 'rgba(255,59,48,.7)', 1.2, [3, 3]);
+        window.LabUI.text(ctx, '-V₀', X(-V0), padT + 6, '#ff3b30', 8.5, 'center');
+      }
+    } else {
+      window.LabUI.text(ctx, '빛의 진동수가 한계진동수보다 작아 전류가 흐르지 않습니다', W / 2, padT + ph / 2, tc.text, 9, 'center');
+    }
+    // 현재 전압 표시
+    window.LabUI.dot(ctx, X(state.volt), Y(currentAt(state.volt)), 4, '#007aff', '#fff');
+  } else {
+    const nuMin = 4.5, nuMax = 16;   // ×10^14 Hz
+    const eMax = 4.2;
+    const X = (nu) => padL + (nu - nuMin) / (nuMax - nuMin) * pw;
+    const Y = (e) => padT + (1 - e / eMax) * ph;
+    window.LabUI.frame(ctx, padL, padT, pw, ph, tc);
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (i / 4) * ph;
+      window.LabUI.line(ctx, [[padL, y], [padL + pw, y]], tc.grid, 1);
+    }
+    [6, 8, 10, 12, 14, 16].forEach((nu) => {
+      window.LabUI.line(ctx, [[X(nu), padT], [X(nu), padT + ph]], tc.grid, 1);
+      window.LabUI.text(ctx, nu + '', X(nu), padT + ph + 9, tc.text, 8.5, 'center');
+    });
+    window.LabUI.text(ctx, 'ν (×10¹⁴ Hz)', padL + pw, padT + ph + 9, tc.text, 8.5, 'right');
+    window.LabUI.text(ctx, 'Eₖ (eV)', padL - 4, padT + 4, tc.text, 8.5, 'right');
+
+    const W_ = workF();
+    const nu0 = W_ / 4.136;   // h = 4.136e-15 eV·s → ν in 1e14 Hz
+    const pts = [];
+    for (let i = 0; i <= 80; i++) {
+      const nu = nuMin + (i / 80) * (nuMax - nuMin);
+      const ek = 4.136 * nu / 10 - W_;    // hν(eV) = 4.136e-15 * ν = 4.136 * (ν/1e14)/10
+      if (ek >= 0) pts.push([X(nu), Y(Math.min(eMax, ek))]);
+    }
+    window.LabUI.line(ctx, [[X(nu0), padT + ph], [X(nuMax), Y(Math.min(eMax, 4.136 * nuMax / 10 - W_))]], '#ff9500', 2);
+    window.LabUI.text(ctx, '기울기 = h', X(11.5), Y(3.2), '#ff9500', 8.5, 'center');
+    window.LabUI.dot(ctx, X(nu0), Y(0), 3.5, '#ff3b30', '#fff');
+    window.LabUI.text(ctx, 'ν₀', X(nu0), Y(0) - 9, '#ff3b30', 8.5, 'center');
+    // 현재 빛
+    const nuNow = 3e8 / (state.lambda * 1e-9) / 1e14;
+    const ekNow = photonE() - W_;
+    if (nuNow > nuMin && nuNow < nuMax) {
+      window.LabUI.line(ctx, [[X(nuNow), padT + ph], [X(nuNow), padT]], 'rgba(0,122,255,.55)', 1.1, [3, 3]);
+      if (ekNow > 0) window.LabUI.dot(ctx, X(nuNow), Y(Math.min(eMax, ekNow)), 4, '#007aff', '#fff');
+    }
+  }
+}
+
+/* ---------- 애니메이션 ---------- */
+const clock = new THREE.Clock();
+let tAcc = 0;
+const TUBE_LEN = ANODE_X - CATH_X;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, clock.getDelta());
+  tAcc += dt;
+
+  // 광자 생성
+  if (state.intensity > 0) {
+    spawnAcc += dt * (state.intensity / 100) * 26;
+    while (spawnAcc > 1) {
+      spawnAcc -= 1;
+      const p = photons.find((q) => !q.active);
+      if (p) {
+        p.active = true; p.t = 0; p.y = (Math.random() - 0.5) * 0.4; p.z = (Math.random() - 0.5) * 0.4;
+        p.obj.visible = true;
+      }
+    }
+  } else spawnAcc = 0;
+  photons.forEach((p) => {
+    if (!p.active) return;
+    p.t += dt * 2.4;
+    if (p.t >= 1) { p.active = false; p.obj.visible = false; return; }
+    p.obj.position.set(-3.05 + p.t * 1.75, TUBE_Y + p.y, p.z);
+  });
+
+  // 전자 생성
+  if (isEmitting() && currentAt(state.volt) > 0.01) {
+    electronAcc += dt * (state.intensity / 100) * 12;
+    while (electronAcc > 1) { electronAcc -= 1; spawnElectron(); }
+  }
+  electrons.forEach((e) => {
+    if (!e.active) return;
+    const V = state.volt;
+    const frac = (e.x - CATH_X) / TUBE_LEN;
+    const KE = e.E + V * frac;
+    if (KE <= 0.001) {
+      e.dir = -1;
+    }
+    const speed = 0.85 * Math.sqrt(Math.max(0.02, Math.abs(KE))) * (e.dir > 0 ? 1 : 1.35);
+    e.x += e.dir * speed * dt;
+    e.y += e.vy * dt;
+    e.z += e.vz * dt;
+    e.y = Math.max(TUBE_Y - 0.5, Math.min(TUBE_Y + 0.5, e.y));
+    e.z = Math.max(-0.5, Math.min(0.5, e.z));
+    e.obj.position.set(e.x, e.y, e.z);
+    if (e.x >= ANODE_X - 0.05 || e.x <= CATH_X + 0.05) {
+      // 양극 도달 또는 되돌아와 음극에 흡수
+      e.active = false; e.obj.visible = false;
+    }
+  });
+
+  // 금속판 발광(빛을 받는 면)
+  plateGlow.material.opacity = 0.1 + 0.55 * (state.intensity / 100) * (isEmitting() ? 1 : 0.7);
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+let electronAcc = 0;
+
+function resetLab() {
+  state.metal = 'cs'; state.lambda = 400; state.intensity = 60; state.volt = 0;
+  el('sld-lambda').value = 400; el('sld-int').value = 60; el('sld-volt').value = 0;
+  document.querySelectorAll('#seg-metal button').forEach((b) => b.classList.toggle('active', b.dataset.m === 'cs'));
+  window.__fillRanges();
+  electrons.forEach((e) => { e.active = false; e.obj.visible = false; });
+  photons.forEach((p) => { p.active = false; p.obj.visible = false; });
+  refreshAll();
+  applyHome();
+}
+window.resetLab = resetLab;
+window.onPanelToggle = drawGraph;
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  drawGraph();
+});
+
+applyHome();
+refreshAll();
+animate();
+</script>
+
+<script>
+/* ============ 모바일 화면 재조정 + 전체화면 대체 동작 (자동 생성) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }          // 진짜 전체화면에서 나온 경우
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }  // 몰입 모드 해제
+                if (!realFs()) {                            // 전체화면 API가 동작하지 않는 환경
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 380);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓혀 전체가 들어오게 한다 */
+    function mobileFit() {
+        try {
+            if (typeof camera === 'undefined' || !camera || !camera.isPerspectiveCamera) return;
+            if (!camera.userData) camera.userData = {};
+            if (!camera.userData.baseFov) camera.userData.baseFov = camera.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = document.documentElement.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 500) f = 1 + k * 0.16;
+            camera.fov = Math.min(88, camera.userData.baseFov * f);
+            camera.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    /* 화면 회전·주소창 변화·전체화면 전환 후 렌더러 크기 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+</body>
+</html>
