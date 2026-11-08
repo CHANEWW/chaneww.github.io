@@ -660,7 +660,7 @@ body.dark-mode .fb-open-btn { color: #f2f2f7; }
     flex-direction: column;
     padding: 20px 22px 18px;
     border-radius: 26px;
-    background: rgba(255, 255, 255, .84);
+    background: rgba(255, 255, 255, .80);
     border: 1px solid rgba(255, 255, 255, .72);
     box-shadow: 0 26px 70px rgba(0, 0, 0, .24), 0 2px 8px rgba(0, 0, 0, .06);
     color: #1c1c1e;
@@ -710,6 +710,7 @@ body.dark-mode .fb-close { background: rgba(255, 255, 255, .14); color: #f2f2f7;
 }
 .fb-exp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fb-exp-en { font-size: 10px; font-weight: bold; opacity: .62; white-space: nowrap; }
+.fb-exp-en::before { content: "·"; margin-right: 4px; opacity: .8; }
 body.dark-mode .fb-exp { background: rgba(10, 132, 255, .18); border-color: rgba(10, 132, 255, .3); color: #64b0ff; }
 
 /* 스크롤 영역 */
@@ -966,7 +967,7 @@ body.dark-mode .fb-success-msg { color: #d1d1d6; }
 
     .fb-overlay { padding: 8px; }
     .fb-card {
-        width: min(560px, 96vw) !important;
+        width: min(620px, 96vw) !important;
         max-width: 96vw !important;
         max-height: calc(100vh - 16px) !important;
         padding: 12px 14px 10px;
@@ -975,7 +976,32 @@ body.dark-mode .fb-success-msg { color: #d1d1d6; }
     .fb-title { font-size: 14px; }
     .fb-subtitle { display: none; }
     .fb-exp { margin-top: 6px; font-size: 10px; padding: 4px 8px; }
-    .fb-body { gap: 8px; margin-top: 8px; }
+
+    /* 가로 모드: 세로 공간이 좁으므로 2단 배치로 한 화면에 담는다 */
+    .fb-body {
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
+        grid-template-areas:
+            "role    content"
+            "type    content"
+            "email   content"
+            "error   error"
+            "actions actions";
+        column-gap: 12px;
+        row-gap: 7px;
+        align-content: start;
+        align-items: start;
+        margin-top: 8px;
+        overflow-y: auto;
+        min-height: 0;
+    }
+    .fb-body > .fb-field:nth-child(1) { grid-area: role; }
+    .fb-body > .fb-field:nth-child(2) { grid-area: type; }
+    .fb-body > .fb-field:nth-child(3) { grid-area: content; align-self: stretch; }
+    .fb-body > .fb-field:nth-child(4) { grid-area: email; }
+    .fb-body > .fb-error { grid-area: error; }
+    .fb-body > .fb-actions { grid-area: actions; }
+    .fb-body > .fb-field:nth-child(3) .fb-textarea { flex: 1 1 auto; min-height: 76px; }
     .fb-label { font-size: 10px; }
     .fb-seg { padding: 3px; }
     .fb-seg-btn { font-size: 10.5px; padding: 5px 2px; }
@@ -983,6 +1009,7 @@ body.dark-mode .fb-success-msg { color: #d1d1d6; }
     .fb-chip { font-size: 10px; padding: 5px 8px; }
     .fb-textarea { font-size: 12px; min-height: 62px; padding: 8px 10px; }
     .fb-input { font-size: 12px; height: 34px; padding: 7px 10px; }
+    .fb-counter { font-size: 9.5px; }
     .fb-actions { gap: 6px; }
     .fb-btn-cancel, .fb-btn-submit { padding: 9px 14px; font-size: 12px; }
     .fb-success { padding: 12px 4px 8px; gap: 6px; }
@@ -1649,6 +1676,8 @@ html.pseudo-fs .top-right-bar #theme-toggle { display: none !important; }
         clearTimeout(closeTimer);
         overlay.classList.remove('show');
         overlay.setAttribute('aria-hidden', 'true');
+        overlay.style.height = '';
+        overlay.style.top = '';
         if (openBtn) openBtn.setAttribute('aria-expanded', 'false');
         if (lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (e) {} }
         setTimeout(resetForm, 220);
@@ -1721,6 +1750,19 @@ html.pseudo-fs .top-right-bar #theme-toggle { display: none !important; }
         if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
     });
 
+    /* 모바일 키보드가 올라와도 모달이 가려지지 않도록 가시 영역에 맞춰준다 */
+    if (window.visualViewport) {
+        var vv = window.visualViewport;
+        var syncViewport = function () {
+            if (!overlay.classList.contains('show')) return;
+            overlay.style.height = vv.height + 'px';
+            overlay.style.top = vv.offsetTop + 'px';
+        };
+        vv.addEventListener('resize', syncViewport);
+        vv.addEventListener('scroll', syncViewport);
+        overlay.addEventListener('transitionend', syncViewport);
+    }
+
     /* ---------- 제출 ---------- */
     form.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -1768,6 +1810,8 @@ html.pseudo-fs .top-right-bar #theme-toggle { display: none !important; }
         closeTimer = setTimeout(function () {
             overlay.classList.remove('show');
             overlay.setAttribute('aria-hidden', 'true');
+            overlay.style.height = '';
+            overlay.style.top = '';
             resetForm();
         }, 2400);
     });
