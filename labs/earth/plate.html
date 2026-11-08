@@ -945,6 +945,24 @@ const lattice = new THREE.Points(latticeGeo, latticeMat);
 lattice.renderOrder = 3;
 scene.add(lattice);
 
+/* ---------- 8-1. 지표면 파면 링 ---------- */
+function makeSurfaceRing(color) {
+    const pts = [];
+    for (let i = 0; i < 96; i++) {
+        const a = i / 96 * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)));
+    }
+    const g = new THREE.BufferGeometry().setFromPoints(pts);
+    const m = new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.95, depthTest: false }));
+    m.position.y = 0.06;
+    m.visible = false;
+    m.renderOrder = 18;
+    scene.add(m);
+    return m;
+}
+const pRing = makeSurfaceRing(0x18e0ff);
+const sRing = makeSurfaceRing(0xffa41a);
+
 /* ---------- 9. 상태 반영 ---------- */
 const focusPos = new THREE.Vector3(0, -6, 0);
 function updateFocus() {
@@ -1185,6 +1203,7 @@ function resetQuake() {
     arrivalP = false; arrivalS = false;
     hanging.position.set(0, 0, 0);
     resetWaves();
+    if (typeof pRing !== 'undefined') { pRing.visible = false; sRing.visible = false; }
     focusBall.scale.setScalar(1);
     focusMat.emissiveIntensity = 1.2;
     beacon.material.color.setHex(0x9aa5b5);
@@ -1332,6 +1351,16 @@ function animate() {
         epicenterRing.material.opacity = 0.25 + flash * 0.75;
         const tSNow = Math.hypot(state.dist, state.depth) / VS;
         beacon.material.color.setHex(state.t >= tSNow ? 0xff3b30 : 0x9aa5b5);
+
+        // 지표면에 도달한 파면을 원으로 표시
+        const depthW = state.depth * KM;
+        const rpW = VP * state.t * KM, rsW = VS * state.t * KM;
+        const pr = rpW > depthW ? Math.sqrt(rpW * rpW - depthW * depthW) : -1;
+        const sr = rsW > depthW ? Math.sqrt(rsW * rsW - depthW * depthW) : -1;
+        pRing.visible = pr > 0; if (pr > 0) pRing.scale.setScalar(pr);
+        sRing.visible = sr > 0; if (sr > 0) sRing.scale.setScalar(sr);
+        pRing.material.opacity = Math.max(0, 0.95 - state.t / 40);
+        sRing.material.opacity = Math.max(0, 0.95 - state.t / 40);
     }
 
     hudTimer += dt;
