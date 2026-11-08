@@ -734,9 +734,9 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                 <span class="data-value" id="val-lung" style="color:#5856d6;">2.20 L</span>
             </div>
             <div class="data-item">
-                <span class="data-label">흉강 내압</span>
+                <span class="data-label">흉강 내 압력</span>
                 <span class="data-value" id="val-press" style="color:#ff9500;">1013 hPa</span>
-                <span class="data-label" style="margin-top: 3px;">폐의 내압</span>
+                <span class="data-label" style="margin-top: 3px;">폐 내부 압력</span>
                 <span class="data-value" id="val-lung-press" style="color:#ff2d55;">1013 hPa</span>
             </div>
             <div class="data-item">
@@ -796,11 +796,11 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             <div class="bar-track"><div class="bar-fill lung" id="bar-lung"></div></div>
         </div>
         <div class="bar-row">
-            <div class="bar-head"><span>흉강 내압(대기압 기준)</span><span id="bar-press-val">0.0 hPa</span></div>
+            <div class="bar-head"><span>흉강 내 압력(대기압 기준)</span><span id="bar-press-val">0.0 hPa</span></div>
             <div class="bar-track"><div class="bar-fill press" id="bar-press"></div></div>
         </div>
         <div class="bar-row">
-            <div class="bar-head"><span>폐 내압(대기압 기준)</span><span id="bar-lung-press-val">0.0 hPa</span></div>
+            <div class="bar-head"><span>폐 내부 압력(대기압 기준)</span><span id="bar-lung-press-val">0.0 hPa</span></div>
             <div class="bar-track"><div class="bar-fill press" id="bar-lung-press"></div></div>
         </div>
     </div>
@@ -1408,6 +1408,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         let dragStartBreath = 0;
         let prevBreath = 0;
         let flowDir = 0;
+        let smoothedLungDelta = 0;
 
         const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
         const raycaster = new THREE.Raycaster();
@@ -1458,9 +1459,10 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             const pressDelta = -3.4 * t;
             const pressure = 1013 + pressDelta;
 
-            // 폐 내압: 공기가 흐를 때 압력차 발생 (들숨 시 음압 대기압 미만, 날숨 시 양압 대기압 초과, 정지 시 1013 hPa)
-            const lungDelta = -flowDir * 2.4;
-            const lungPressure = 1013 + lungDelta;
+            // 폐 내부 압력: 가로막 조작 속도에 따른 감압/가압을 가시적으로 선명하게 표현 (최대 ±4.2 hPa)
+            // 조작을 멈추었을 때 급격히 사라지지 않고 서서히 대기압(1013 hPa)으로 평형 복귀하도록 완화
+            const lungDelta = -smoothedLungDelta;
+            const lungPressure = 1013.0 + lungDelta;
 
             document.getElementById('val-thorax').innerText = thoraxPct.toFixed(1) + '%';
             const elLung = document.getElementById('val-lung');
@@ -1479,7 +1481,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             document.getElementById('bar-lung').style.width = Math.min(100, t * 100) + '%';
             document.getElementById('bar-press').style.width = Math.min(100, Math.abs(pressDelta) / 3.4 * 100) + '%';
             const barLungPress = document.getElementById('bar-lung-press');
-            if (barLungPress) barLungPress.style.width = Math.min(100, Math.abs(lungDelta) / 2.4 * 100) + '%';
+            if (barLungPress) barLungPress.style.width = Math.min(100, Math.abs(lungDelta) / 4.2 * 100) + '%';
 
             document.getElementById('bar-thorax-val').innerText = thoraxPct.toFixed(0) + '%';
             document.getElementById('bar-lung-val').innerText = lungLiters.toFixed(2) + ' L';
@@ -1656,6 +1658,14 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             flowDir = (breath - prevBreath) / Math.max(dt, 0.0001) * 0.25;
             prevBreath = breath;
             flowDir = Math.max(-1, Math.min(1, flowDir));
+
+            // 폐 내부 압력 동적 감압/가압 계산 (가시적인 변화 폭 확대 + 조작 멈춤 시 자연스러운 대기압 평형 복귀)
+            const rawLungDelta = flowDir * 4.2;
+            if (Math.abs(rawLungDelta) >= Math.abs(smoothedLungDelta) - 0.02) {
+                smoothedLungDelta = rawLungDelta;
+            } else {
+                smoothedLungDelta += (rawLungDelta - smoothedLungDelta) * Math.min(1, dt * 2.0);
+            }
 
             applyBreath(breath);
             updateReadouts();

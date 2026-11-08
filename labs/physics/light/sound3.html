@@ -997,8 +997,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         oscCtx.strokeStyle = 'rgba(120, 200, 200, 0.6)';
         oscCtx.beginPath(); oscCtx.moveTo(0, h / 2); oscCtx.lineTo(w, h / 2); oscCtx.stroke();
 
-        // 파형: 진동수가 높을수록 한 화면에 더 많은 주기수가 들어간다
-        const amp = (state.volume / 100) * (h * 0.38) + 2;
+        // 파형: 소리 재생 중일 때만 진폭 활성화 (미재생/정지 시에는 평평한 기준선 유지)
+        const amp = soundActivity * ((state.volume / 100) * (h * 0.38) + 2);
         const cycles = scopeCycles();
         const phase = state.time * 2.0;
 
@@ -1367,11 +1367,13 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     /* ---------- 8. 애니메이션 ---------- */
     const clock = new THREE.Clock();
     let forkStrike = 0;
+    let soundActivity = 0; // 소리 재생 활성도 (0: 정지 평형, 1: 정상 재생)
     const tmpColor = new THREE.Color();
 
     function updateParticles() {
-        const amp = state.volume / 100;
-        const A = 0.015 + amp * 0.2;
+        // 소리가 재생 중일 때만 입자가 진동하고 압축·팽창 종파 생성 (미재생 시 평형 위치 정지)
+        const amp = (state.volume / 100) * soundActivity;
+        const A = amp * 0.22;
         // 화면용 파동 (진동수를 시각적으로 압축)
         const fDisp = 0.55 + (state.freq - 110) / 890 * 2.2;
         // 파장은 진동수에 반비례: 높은 소리일수록 압축·팽창 영역이 촘촘해진다
@@ -1420,6 +1422,29 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         requestAnimationFrame(animate);
         const dt = Math.min(clock.getDelta(), 0.05);
         state.time += dt;
+
+        // 현재 음원 상태에 따른 소리 활성도 판별
+        let targetActivity = 0;
+        if (state.source === 'speaker') {
+            targetActivity = state.playing ? 1.0 : 0.0;
+        } else if (state.source === 'fork') {
+            targetActivity = forkStrike > 0 ? Math.exp(-forkStrike * 2.2) : 0.0;
+        } else if (state.source === 'xylo') {
+            let maxHit = 0;
+            for (let i = 0; i < barMeshes.length; i++) {
+                if (barMeshes[i].userData.hit > 0) {
+                    maxHit = Math.max(maxHit, Math.exp(-barMeshes[i].userData.hit * 4.0));
+                }
+            }
+            targetActivity = maxHit;
+        }
+
+        if (targetActivity > soundActivity) {
+            soundActivity += (targetActivity - soundActivity) * Math.min(1, dt * 14.0);
+        } else {
+            soundActivity += (targetActivity - soundActivity) * Math.min(1, dt * 7.0);
+        }
+        if (soundActivity < 0.001) soundActivity = 0;
 
         updateParticles();
 
