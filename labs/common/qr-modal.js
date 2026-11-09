@@ -1,7 +1,7 @@
 /* ============================================================
    Science Virtual LAB — 대형 QR 코드 모달 (labs/common/qr-modal.js)
    ------------------------------------------------------------
-   사용법: 페이지마다 아래 두 줄 + 헤더의 [📱 QRcode] 버튼 하나면 끝.
+   사용법: 페이지마다 아래 두 줄 + 헤더의 [📱 QR code] 버튼 하나면 끝.
      <link rel="stylesheet" href="…/common/qr-modal.css">
      <script src="…/common/lib/qrcode.min.js" defer></script>
      <script src="…/common/qr-modal.js" defer></script>
