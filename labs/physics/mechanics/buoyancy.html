@@ -720,6 +720,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
+        controls.minPolarAngle = 0.08;
         controls.maxPolarAngle = Math.PI / 2 + 0.05;
 
         // --- 2. 조명 설정 ---
@@ -743,18 +744,22 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         floor.receiveShadow = true;
         scene.add(floor);
 
-        // 3D 수조 (Glass Tank) : 바닥 Y위치 = -1.5
+        // 3D 수조 (Glass Tank) : 상단이 열린 오픈형 투명 유리 수조
         const tankGeo = new THREE.BoxGeometry(3.2, 2.2, 2.2);
         const tankMat = new THREE.MeshPhysicalMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.25,
-            roughness: 0.1,
-            transmission: 0.9,
-            thickness: 0.5
+            opacity: 0.20,
+            roughness: 0.08,
+            metalness: 0.05,
+            depthWrite: false
         });
-        const tank = new THREE.Mesh(tankGeo, tankMat);
+        // 윗면(+Y)은 뚫려 있도록 보이지 않는 투명 재질 적용
+        const tankTopMat = new THREE.MeshBasicMaterial({ visible: false });
+        const tankMaterials = [tankMat, tankMat, tankTopMat, tankMat, tankMat, tankMat];
+        const tank = new THREE.Mesh(tankGeo, tankMaterials);
         tank.position.set(0, -0.4, 0);
+        tank.renderOrder = 3;
         scene.add(tank);
 
         // 수조 테두리
@@ -765,17 +770,21 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         tankEdges.position.copy(tank.position);
         scene.add(tankEdges);
 
-        // 물 (Water Body)
+        // 물 (Water Body) - 맑고 투명한 바닷물 연출 및 깊이 정렬 최적화
         const waterLevelY = -0.4;
         const waterGeo = new THREE.BoxGeometry(3.16, 1.1, 2.16);
         const waterMat = new THREE.MeshStandardMaterial({
-            color: 0x006994,
+            color: 0x0099dd,
             transparent: true,
-            opacity: 0.65,
-            roughness: 0.1
+            opacity: 0.45,
+            roughness: 0.1,
+            metalness: 0.05,
+            depthWrite: false,
+            side: THREE.DoubleSide
         });
         const water = new THREE.Mesh(waterGeo, waterMat);
         water.position.set(0, waterLevelY - 0.55, 0);
+        water.renderOrder = 2;
         scene.add(water);
 
         // --- 4. 3D 배(Boat) 메쉬 생성 ---
@@ -809,9 +818,79 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         boatGroup.position.set(0, waterLevelY, 0);
         scene.add(boatGroup);
 
-        // --- 5. 3D 힘 벡터 화살표 (ArrowHelpers) ---
-        const arrowGravity = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), boatGroup.position, 1, 0xe53935, 0.15, 0.1);
-        const arrowBuoyancy = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), boatGroup.position, 1, 0x1e88e5, 0.15, 0.1);
+        // --- 5. 3D 힘 벡터 화살표 (3D Cylinder + Cone 볼륨 화살표) ---
+        function createForceArrow(colorHex, isDown) {
+            const group = new THREE.Group();
+            
+            // 기둥 (Cylinder)
+            const shaftGeo = new THREE.CylinderGeometry(0.032, 0.032, 1, 16);
+            shaftGeo.translate(0, 0.5, 0);
+            const shaftMat = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                roughness: 0.3,
+                metalness: 0.2,
+                depthTest: false
+            });
+            const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+            shaft.renderOrder = 999;
+            group.add(shaft);
+
+            // 화살표 머리 (Cone)
+            const headGeo = new THREE.ConeGeometry(0.085, 0.22, 16);
+            headGeo.translate(0, 0.11, 0);
+            const headMat = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                roughness: 0.3,
+                metalness: 0.2,
+                depthTest: false
+            });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.renderOrder = 999;
+            group.add(head);
+
+            // 라벨 스프라이트 (중력 Fg / 부력 Fb)
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            const tex = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(0.85, 0.22, 1);
+            sprite.renderOrder = 1000;
+            group.add(sprite);
+
+            group.userData = { shaft, head, canvas, ctx, tex, sprite, colorHex, isDown };
+
+            if (isDown) {
+                group.rotation.x = Math.PI; // 아래쪽으로 향하도록 회전
+            }
+
+            group.setLengthAndLabel = function(len, labelText) {
+                const headLen = 0.22;
+                const shaftLen = Math.max(0.02, len - headLen);
+                shaft.scale.set(1, shaftLen, 1);
+                head.position.y = shaftLen;
+                
+                sprite.position.set(isDown ? -0.36 : 0.36, shaftLen + headLen + 0.14, 0);
+                
+                ctx.clearRect(0, 0, 256, 64);
+                ctx.fillStyle = isDown ? 'rgba(229, 57, 53, 0.92)' : 'rgba(30, 136, 229, 0.92)';
+                ctx.beginPath();
+                ctx.roundRect(10, 10, 236, 44, 12);
+                ctx.fill();
+                ctx.font = 'bold 22px sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(labelText, 128, 32);
+                tex.needsUpdate = true;
+            };
+
+            return group;
+        }
+
+        const arrowGravity = createForceArrow(0xe53935, true);  // 🔴 중력 (아래)
+        const arrowBuoyancy = createForceArrow(0x1e88e5, false); // 🔵 부력 (위)
         scene.add(arrowGravity);
         scene.add(arrowBuoyancy);
 
@@ -914,12 +993,15 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             arrowGravity.position.copy(boatGroup.position);
             arrowBuoyancy.position.copy(boatGroup.position);
 
-            const arrowScaleFactor = 0.04;
-            arrowGravity.setLength(Math.max(0.01, Fg * arrowScaleFactor), 0.12, 0.08);
-            arrowBuoyancy.setLength(Math.max(0.01, Fb * arrowScaleFactor), 0.12, 0.08);
+            const arrowScaleFactor = 0.085;
+            const gravityLen = Math.max(0.24, Fg * arrowScaleFactor);
+            const buoyancyLen = Math.max(0.02, Fb * arrowScaleFactor);
+
+            arrowGravity.setLengthAndLabel(gravityLen, `중력 ${Fg.toFixed(1)} N`);
+            arrowBuoyancy.setLengthAndLabel(buoyancyLen, `부력 ${Fb.toFixed(1)} N`);
 
             arrowGravity.visible = document.getElementById('chk-gravity').checked;
-            arrowBuoyancy.visible = document.getElementById('chk-buoyancy').checked;
+            arrowBuoyancy.visible = document.getElementById('chk-buoyancy').checked && (Fb > 0.1);
 
             document.getElementById('val-g').innerText = currentG.toFixed(1) + ' m/s²';
             document.getElementById('val-fg').innerText = Fg.toFixed(1) + ' N';
@@ -949,9 +1031,10 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
-            // 시점정렬 클릭 시에도 동일하게 줌아웃된 위치로 복구
+            // 시점정렬 클릭 시 수조와 배 중심이 화면에 오도록 복원
             camera.position.set(0, 1.8, 6.5);
-            controls.target.set(0, 0, 0);
+            controls.target.set(0, -0.4, 0);
+            controls.update();
         });
 
         document.getElementById('theme-toggle').addEventListener('click', () => {
