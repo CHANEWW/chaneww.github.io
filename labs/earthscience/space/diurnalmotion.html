@@ -556,7 +556,14 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     <div class="glass-panel sub-panel" id="panel-time">
         <div class="panel-title">지구의 자전 · 시간</div>
         <div class="control-row">
-            <span>자동 자전</span>
+            <span>회전 기준</span>
+            <div class="btn-group">
+                <button class="toggle-btn on" data-mode="earth" id="btn-mode-earth">🌍 지구 자전 (우주)</button>
+                <button class="toggle-btn" data-mode="sky" id="btn-mode-sky">🌌 천구 회전 (관측자)</button>
+            </div>
+        </div>
+        <div class="control-row">
+            <span>자동 회전</span>
             <button class="toggle-btn on" id="btn-play">⏸ 멈춤</button>
         </div>
         <div>
@@ -582,7 +589,14 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
     <!-- 시점 패널 -->
     <div class="glass-panel sub-panel" id="panel-view">
-        <div class="panel-title">시점</div>
+        <div class="panel-title">시점 · 관측 기준</div>
+        <div class="control-row">
+            <span>회전 기준</span>
+            <div class="btn-group">
+                <button class="toggle-btn on" data-mode="earth" id="btn-mode-earth-2">🌍 지구 자전 (우주)</button>
+                <button class="toggle-btn" data-mode="sky" id="btn-mode-sky-2">🌌 천구 회전 (관측자)</button>
+            </div>
+        </div>
         <div class="btn-group">
             <button class="toggle-btn on" id="btn-view-oblique">비스듬히</button>
             <button class="toggle-btn" id="btn-view-top">북극 위에서</button>
@@ -669,6 +683,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         speed: 30,
         dir: 'north',
         preset: 'oblique',
+        rotateMode: 'earth', // 'earth': 지구 자전(우주 시점), 'sky': 천구 회전(관측자 시점)
+        refHour: 21,
         dark: true,
         showCircles: true,
         showNames: true,
@@ -1134,7 +1150,9 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     })();
 
     // 자전 방향 화살표
+    let spinArrowGroup = null;
     (function buildSpinArrow() {
+        spinArrowGroup = new THREE.Group();
         const R = 2.0, H = R_E + 0.55;
         const pts = [];
         for (let i = 0; i <= 26; i++) {
@@ -1146,16 +1164,49 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         }
         const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
             new THREE.LineBasicMaterial({ color: 0x6fe3a8, transparent: true, opacity: 0.75 }));
-        earthGroup.add(line);
+        spinArrowGroup.add(line);
         const aEnd = 110 * DEG;
         const tangent = new THREE.Vector3().addScaledVector(P, -Math.sin(aEnd)).addScaledVector(Q, Math.cos(aEnd)).normalize();
         const cone = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.16, 10), new THREE.MeshBasicMaterial({ color: 0x6fe3a8 }));
         cone.position.copy(pts[pts.length - 1]);
         cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
-        earthGroup.add(cone);
+        spinArrowGroup.add(cone);
         const lb = makeLabel('자전 (서→동)', '#6fe3a8', 0.44, 'rgba(8,12,22,0.5)');
         lb.position.copy(new THREE.Vector3().addScaledVector(AXIS, H + 0.18).addScaledVector(P, 1.05).addScaledVector(Q, 1.2));
-        earthGroup.add(lb);
+        spinArrowGroup.add(lb);
+        earthGroup.add(spinArrowGroup);
+    })();
+
+    // 천구 겉보기 회전 방향 화살표 (관측자 시점용)
+    let celestialSpinArrowGroup = null;
+    (function buildCelestialSpinArrow() {
+        celestialSpinArrowGroup = new THREE.Group();
+        const R = 5.2, H = 0.3;
+        const pts = [];
+        for (let i = 0; i <= 26; i++) {
+            const a = - i / 26 * 110 * DEG;
+            pts.push(new THREE.Vector3()
+                .addScaledVector(AXIS, H)
+                .addScaledVector(P, Math.cos(a) * R)
+                .addScaledVector(Q, Math.sin(a) * R));
+        }
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineBasicMaterial({ color: 0x4fc3f7, transparent: true, opacity: 0.85, linewidth: 2 }));
+        celestialSpinArrowGroup.add(line);
+
+        const aEnd = -110 * DEG;
+        const tangent = new THREE.Vector3().addScaledVector(P, Math.sin(aEnd)).addScaledVector(Q, -Math.cos(aEnd)).normalize();
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 12), new THREE.MeshBasicMaterial({ color: 0x4fc3f7 }));
+        cone.position.copy(pts[pts.length - 1]);
+        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
+        celestialSpinArrowGroup.add(cone);
+
+        const lb = makeLabel('천구 겉보기 회전 (동→서)', '#4fc3f7', 0.44, 'rgba(8,12,22,0.6)');
+        lb.position.copy(new THREE.Vector3().addScaledVector(AXIS, H + 0.25).addScaledVector(P, 2.5).addScaledVector(Q, -2.5));
+        celestialSpinArrowGroup.add(lb);
+
+        celestialSpinArrowGroup.visible = false;
+        scene.add(celestialSpinArrowGroup);
     })();
 
     /* ---------- 관측자 ---------- */
@@ -1280,8 +1331,24 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     }
 
     function updateFrame() {
-        earthSpin.rotation.y = hourToTheta(state.hour);
-        const th = earthSpin.rotation.y;
+        if (state.rotateMode === 'sky') {
+            earthSpin.rotation.y = hourToTheta(state.refHour);
+            const dTheta = hourToTheta(state.hour) - hourToTheta(state.refHour);
+            skyGroup.setRotationFromAxisAngle(AXIS, -dTheta);
+            skyGrid.setRotationFromAxisAngle(AXIS, -dTheta);
+            if (typeof diurnalGroup !== 'undefined' && diurnalGroup) {
+                diurnalGroup.setRotationFromAxisAngle(AXIS, -dTheta);
+            }
+        } else {
+            earthSpin.rotation.y = hourToTheta(state.hour);
+            skyGroup.setRotationFromAxisAngle(AXIS, 0);
+            skyGrid.setRotationFromAxisAngle(AXIS, 0);
+            if (typeof diurnalGroup !== 'undefined' && diurnalGroup) {
+                diurnalGroup.setRotationFromAxisAngle(AXIS, 0);
+            }
+        }
+
+        const th = hourToTheta(state.hour);
         uVec.copy(P).multiplyScalar(Math.cos(LAT) * Math.cos(th))
             .addScaledVector(Q, Math.cos(LAT) * Math.sin(th))
             .addScaledVector(AXIS, Math.sin(LAT)).normalize();
@@ -1742,14 +1809,54 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             camera.lookAt(eye.clone().addScaledVector(dir, 20));
         }
         const tip = document.getElementById('guide-tooltip');
-        if (tip) tip.textContent = VIEW_TIPS[name];
+        if (tip) {
+            if (state.rotateMode === 'sky') {
+                tip.textContent = '지구에 있는 관측자 입장에서는 지구가 정지하고, 천구(별자리)가 동→서로 회전하는 것처럼 보여요';
+            } else {
+                tip.textContent = VIEW_TIPS[name];
+            }
+        }
         document.querySelectorAll('[id^="btn-view-"]').forEach(b => b.classList.toggle('on', b.id === 'btn-view-' + name));
     }
     document.getElementById('btn-view-oblique').addEventListener('click', () => applyPreset('oblique'));
     document.getElementById('btn-view-top').addEventListener('click', () => applyPreset('top'));
     document.getElementById('btn-view-earth').addEventListener('click', () => applyPreset('earth'));
 
+    function updateRotateMode(mode) {
+        state.rotateMode = mode;
+        const isSky = (mode === 'sky');
+        if (isSky) {
+            state.refHour = state.hour;
+        }
+        if (spinArrowGroup) spinArrowGroup.visible = !isSky;
+        if (celestialSpinArrowGroup) celestialSpinArrowGroup.visible = isSky;
+        
+        document.querySelectorAll('[data-mode]').forEach(b => {
+            b.classList.toggle('on', b.dataset.mode === mode);
+        });
+
+        const tip = document.getElementById('guide-tooltip');
+        if (tip) {
+            if (isSky) {
+                tip.textContent = '지구에 있는 관측자 입장에서는 지구가 정지하고, 천구(별자리)가 동→서로 회전하는 것처럼 보여요';
+            } else {
+                tip.textContent = VIEW_TIPS[state.preset] || '지구가 서→동으로 자전하기 때문에 별은 동→서로 움직여 보여요';
+            }
+        }
+        updateFrame();
+        if (state.showObs) drawObservation();
+    }
+
+    document.querySelectorAll('[data-mode]').forEach(b => {
+        b.addEventListener('click', (e) => {
+            const mode = e.currentTarget.dataset.mode;
+            updateRotateMode(mode);
+        });
+    });
+
     document.getElementById('btn-reset').addEventListener('click', () => {
+        state.rotateMode = 'earth';
+        updateRotateMode('earth');
         state.hour = 21;
         state.playing = true;
         state.speed = 30;
