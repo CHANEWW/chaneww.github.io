@@ -1098,6 +1098,19 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             </div>
         </div>
         <div class="control-row">
+            <span>대전체 상호작용</span>
+            <div class="btn-group">
+                <button class="toggle-btn" id="btn-sub-contact">⚡ 접촉하기</button>
+                <button class="toggle-btn" id="btn-sub-separate">↔ 분리하기</button>
+            </div>
+        </div>
+        <div class="control-row">
+            <span>손가락 접지 (방전)</span>
+            <div class="btn-group">
+                <button class="toggle-btn" id="btn-sub-ground">🖐️ 접지 터치</button>
+            </div>
+        </div>
+        <div class="control-row">
             <span>전하 입자 시각화</span>
             <div class="btn-group">
                 <button class="toggle-btn active-pos" id="btn-toggle-particles">표시함</button>
@@ -1109,10 +1122,18 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     <div class="glass-panel side-ctrl-panel">
         <div class="panel-title">🎛 실험 조절</div>
         <div class="ctrl-grid">
-        <button class="control-tab-btn" id="btn-toggle-physics">
-            <span>⚙️</span>
-            <span>물리 조절</span>
-        </button>
+            <button class="control-tab-btn" id="btn-toggle-physics">
+                <span>⚙️</span>
+                <span>물리 조절</span>
+            </button>
+            <button class="control-tab-btn" id="btn-contact-rod">
+                <span>⚡</span>
+                <span>대전체 접촉</span>
+            </button>
+            <button class="control-tab-btn" id="btn-ground-hand">
+                <span>🖐️</span>
+                <span>손가락 접지</span>
+            </button>
         </div>
     </div>
 
@@ -1178,26 +1199,47 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         floor.receiveShadow = true;
         scene.add(floor);
 
-        // --- 4. 사진 모양의 3D 검전기(Flask Jar Electroscope) 메쉬 생성 ---
+        // --- 4. 입체감과 사실감을 극대화한 3D 검전기(Flask Jar Electroscope) 메쉬 생성 ---
         const electroscopeGroup = new THREE.Group();
 
-        // 약간 투명한 회색 금속 재질
-        const transMetalMat = new THREE.MeshStandardMaterial({
-            color: 0x8a8a93,
-            metalness: 0.8,
-            roughness: 0.2,
-            transparent: true,
-            opacity: 0.55
+        // 고광택 금속 재질 (황동/크롬 금속 원판 및 중심 막대)
+        const shinyMetalMat = new THREE.MeshStandardMaterial({
+            color: 0xdfdfeb,
+            metalness: 0.88,
+            roughness: 0.22
+        });
+        // 금박(Gold Leaf) 특화 골드 메탈릭 재질
+        const goldLeafMat = new THREE.MeshStandardMaterial({
+            color: 0xf5b041,
+            metalness: 0.85,
+            roughness: 0.28
+        });
+        // 안정적인 원형 받침대 재질 (다크 슬레이트)
+        const standBaseMat = new THREE.MeshStandardMaterial({
+            color: 0x24292e,
+            roughness: 0.65,
+            metalness: 0.25
         });
 
-        // (1) 상단 평평한 금속 원판
-        const discMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.015, 32), transMetalMat);
+        // (0) 하단 원형 안정 받침대
+        const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.52, 0.04, 36), standBaseMat);
+        baseMesh.position.y = -0.44;
+        baseMesh.receiveShadow = true;
+        electroscopeGroup.add(baseMesh);
+
+        // (1) 상단 평평한 금속 원판 및 테두리 베벨링 링 (입체감 부여)
+        const discMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.02, 36), shinyMetalMat);
         discMesh.position.y = 0.65;
         discMesh.castShadow = true;
         electroscopeGroup.add(discMesh);
 
+        const discRim = new THREE.Mesh(new THREE.TorusGeometry(0.30, 0.012, 12, 36), shinyMetalMat);
+        discRim.rotation.x = Math.PI / 2;
+        discRim.position.y = 0.65;
+        electroscopeGroup.add(discRim);
+
         // (2) 중앙 금속 막대
-        const rodMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.95, 16), transMetalMat);
+        const rodMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.95, 20), shinyMetalMat);
         rodMesh.position.y = 0.15;
         rodMesh.castShadow = true;
         electroscopeGroup.add(rodMesh);
@@ -1209,7 +1251,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         corkMesh.castShadow = true;
         electroscopeGroup.add(corkMesh);
 
-        // (4) 사진과 같은 모양의 유리병 LatheGeometry
+        // (4) 입체 플라스크 모양 유리병 LatheGeometry
         const flaskPoints = [];
         flaskPoints.push(new THREE.Vector2(0.12, 0.48));
         flaskPoints.push(new THREE.Vector2(0.13, 0.40));
@@ -1224,36 +1266,78 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         const glassMat = new THREE.MeshPhysicalMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.22,
-            roughness: 0.05,
-            transmission: 0.95,
-            thickness: 0.15
+            opacity: 0.28,
+            roughness: 0.06,
+            transmission: 0.92,
+            thickness: 0.18
         });
         const glassMesh = new THREE.Mesh(glassGeo, glassMat);
         glassMesh.castShadow = true;
         electroscopeGroup.add(glassMesh);
 
+        // 유리 주둥이 상단 입체 림
+        const glassRim = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.012, 12, 36), glassMat);
+        glassRim.rotation.x = Math.PI / 2;
+        glassRim.position.y = 0.48;
+        electroscopeGroup.add(glassRim);
+
         // (5) 금속박
         const leafGroupLeft = new THREE.Group();
         const leafGroupRight = new THREE.Group();
 
-        const leafGeo = new THREE.BoxGeometry(0.06, 0.26, 0.003);
+        const leafGeo = new THREE.BoxGeometry(0.065, 0.26, 0.0035);
         leafGeo.translate(0, -0.13, 0);
 
-        const leafLeft = new THREE.Mesh(leafGeo, transMetalMat);
-        const leafRight = new THREE.Mesh(leafGeo, transMetalMat);
+        const leafLeft = new THREE.Mesh(leafGeo, goldLeafMat);
+        const leafRight = new THREE.Mesh(leafGeo, goldLeafMat);
 
         leafGroupLeft.add(leafLeft);
         leafGroupRight.add(leafRight);
 
-        leafGroupLeft.position.set(-0.015, -0.22, 0);
-        leafGroupRight.position.set(0.015, -0.22, 0);
+        leafGroupLeft.position.set(-0.016, -0.22, 0);
+        leafGroupRight.position.set(0.016, -0.22, 0);
 
         electroscopeGroup.add(leafGroupLeft);
         electroscopeGroup.add(leafGroupRight);
 
         electroscopeGroup.position.set(0, -0.1, 0);
         scene.add(electroscopeGroup);
+
+        // --- 4.5 사람의 손 모형 (손가락 접지 장치) 생성 ---
+        const handGroup = new THREE.Group();
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffd1b3, roughness: 0.5, metalness: 0.08 });
+        const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.7 });
+
+        // 소매 (팔목)
+        const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.28, 16), sleeveMat);
+        sleeve.rotation.z = Math.PI / 2;
+        sleeve.position.set(-0.24, 0, 0);
+        handGroup.add(sleeve);
+
+        // 손바닥
+        const palm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.10, 0.08), skinMat);
+        palm.position.set(-0.08, 0, 0);
+        handGroup.add(palm);
+
+        // 검지 손가락 (금속판 터치용)
+        const indexFinger = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.015, 0.16, 12), skinMat);
+        indexFinger.rotation.z = Math.PI / 2;
+        indexFinger.position.set(0.08, 0.02, 0);
+        handGroup.add(indexFinger);
+
+        // 접힌 손가락들
+        const foldedFingers = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.08, 0.07), skinMat);
+        foldedFingers.position.set(-0.02, -0.02, 0);
+        handGroup.add(foldedFingers);
+
+        // 방전/접지 스파크 파티클 효과
+        const sparkMat = new THREE.MeshBasicMaterial({ color: 0x00f2fe, transparent: true, opacity: 0 });
+        const sparkMesh = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 12), sparkMat);
+        sparkMesh.position.set(0.16, 0.02, 0);
+        handGroup.add(sparkMesh);
+
+        handGroup.position.set(-0.88, 0.55, 0);
+        scene.add(handGroup);
 
         // --- 5. 3D 대전체(Charged Rod) 생성 ---
         const chargedRodGroup = new THREE.Group();
@@ -1443,21 +1527,99 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         // --- 8. 물리 시뮬레이션 & 전하 통로 내 이동 연산 루프 ---
         let targetLeafAngle = 0;
         let currentLeafAngle = 0;
+        let netCharge = 0;          // 잔류 전하량 (0: 중성, -14: 음전하 잔류 대전, +14: 양전하 잔류 대전)
+        let isHandGrounded = false;  // 손가락 접지 상태
+        let isRodContact = false;   // 대전체 접촉 상태
+
+        function showTooltip(msg) {
+            const tip = document.getElementById('guide-tooltip');
+            if (tip) {
+                tip.innerText = msg;
+                tip.style.opacity = '1';
+            }
+        }
+
+        function applyContactCharging() {
+            if (isRodContact) return;
+            isRodContact = true;
+            if (currentPolarity === 'neg') {
+                netCharge = -14;
+                showTooltip('⚡ 대전체 접촉: 음전하(-)가 금속판으로 유입되어 검전기가 전체적으로 음전하로 대전되었습니다!');
+            } else {
+                netCharge = 14;
+                showTooltip('⚡ 대전체 접촉: 전자가 양대전체로 이동하여 검전기가 전체적으로 양전하로 대전되었습니다!');
+            }
+            sparkMat.opacity = 0.9;
+        }
+
+        function triggerContactRod() {
+            chargedRodGroup.position.set(0.32, 0.68, 0);
+            applyContactCharging();
+        }
+
+        function triggerSeparateRod() {
+            isRodContact = false;
+            chargedRodGroup.position.set(1.10, 0.68, 0);
+            showTooltip('↔ 대전체 분리: 대전체를 치워도 검전기에 전하가 남아 금속박이 벌어져 있습니다.');
+        }
+
+        function triggerGroundHand() {
+            isHandGrounded = !isHandGrounded;
+            const btnGround = document.getElementById('btn-ground-hand');
+            const btnSubGround = document.getElementById('btn-sub-ground');
+            if (btnGround) btnGround.classList.toggle('active', isHandGrounded);
+            if (btnSubGround) btnSubGround.classList.toggle('active', isHandGrounded);
+
+            if (isHandGrounded) {
+                sparkMat.opacity = 1.0;
+                netCharge = 0;
+                showTooltip('🖐️ 손가락 접지: 여분의 전자가 손을 통해 대지로 방전되어 검전기가 중성(30:30)으로 복원되었습니다!');
+            } else {
+                showTooltip('🖐️ 손가락 접지 해제: 중성 상태를 유지합니다.');
+            }
+        }
 
         function updatePhysics() {
-            const discWorldPos = new THREE.Vector3(0, 0.55, 0);
-            const distance = chargedRodGroup.position.distanceTo(discWorldPos);
+            const discTopPos = new THREE.Vector3(0, 0.65, 0);
+            const distance = chargedRodGroup.position.distanceTo(discTopPos);
+
+            // 대전체가 금속판에 근접/접촉 시 (0.35m 이하) 자동 접촉 대전 감지 지원
+            if (distance < 0.35 && !isRodContact) {
+                applyContactCharging();
+            } else if (distance >= 0.40 && isRodContact) {
+                isRodContact = false;
+            }
 
             let inductionFactor = Math.max(0, Math.min(1, (1.3 - distance) / 1.1));
             inductionFactor = Math.pow(inductionFactor, 1.8);
 
-            targetLeafAngle = inductionFactor * (Math.PI / 4.0);
+            // 금속박 각도 계산: 잔류 전하량과 정전기 유도 효과의 물리적 중첩
+            const residualFactor = Math.abs(netCharge) / 14.0;
+            let totalSpread = residualFactor * (Math.PI / 4.2);
+            if (netCharge !== 0) {
+                const samePolarity = (netCharge < 0 && currentPolarity === 'neg') || (netCharge > 0 && currentPolarity === 'pos');
+                if (samePolarity) {
+                    totalSpread += inductionFactor * (Math.PI / 5.0);
+                } else {
+                    totalSpread = Math.max(0.02, totalSpread - inductionFactor * (Math.PI / 5.2));
+                }
+            } else {
+                totalSpread += inductionFactor * (Math.PI / 4.0);
+            }
+
+            targetLeafAngle = Math.min(Math.PI / 3.2, totalSpread);
             currentLeafAngle += (targetLeafAngle - currentLeafAngle) * 0.1;
 
             leafGroupLeft.rotation.z = -currentLeafAngle;
             leafGroupRight.rotation.z = currentLeafAngle;
 
+            // 전하 이동 편향 (migrationShift)
             const migrationShift = (currentPolarity === 'neg' ? -1 : 1) * inductionFactor * 0.52;
+
+            // 손가락 접지 애니메이션 보간
+            const targetHandX = isHandGrounded ? -0.44 : -0.88;
+            handGroup.position.x += (targetHandX - handGroup.position.x) * 0.15;
+            if (sparkMat.opacity > 0) sparkMat.opacity = Math.max(0, sparkMat.opacity - 0.04);
 
             negParticles.forEach((np) => {
                 np.vx += (Math.random() - 0.5) * 0.0004;
@@ -1499,6 +1661,21 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
             document.getElementById('val-distance').innerText = distance.toFixed(2) + ' m';
             document.getElementById('val-leaf-angle').innerText = (currentLeafAngle * (180 / Math.PI)).toFixed(1) + '°';
+
+            // 전하 비율 표시 업데이트
+            const valRatio = document.getElementById('val-ratio');
+            if (valRatio) {
+                if (netCharge < 0) {
+                    valRatio.innerText = `30 : ${30 - netCharge} (음전하 대전)`;
+                    valRatio.style.color = '#007aff';
+                } else if (netCharge > 0) {
+                    valRatio.innerText = `30 : ${30 - netCharge} (양전하 대전)`;
+                    valRatio.style.color = '#ff3b30';
+                } else {
+                    valRatio.innerText = '30 : 30 (중성)';
+                    valRatio.style.color = '#34c759';
+                }
+            }
         }
 
         // --- 9. 버튼 조작 이벤트 ---
@@ -1545,8 +1722,30 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
         document.getElementById('btn-reset').addEventListener('click', () => {
             chargedRodGroup.position.set(1.0, 0.68, 0);
+            handGroup.position.set(-0.88, 0.55, 0);
+            netCharge = 0;
+            isHandGrounded = false;
+            isRodContact = false;
+            sparkMat.opacity = 0;
+            const btnGround = document.getElementById('btn-ground-hand');
+            const btnSubGround = document.getElementById('btn-sub-ground');
+            if (btnGround) btnGround.classList.remove('active');
+            if (btnSubGround) btnSubGround.classList.remove('active');
             setPolarity('neg');
+            showTooltip('🔄 검전기 및 대전체 상태가 초기화되었습니다.');
         });
+
+        // 대전체 접촉 및 손가락 접지 버튼 연결
+        const btnContactRod = document.getElementById('btn-contact-rod');
+        if (btnContactRod) btnContactRod.addEventListener('click', triggerContactRod);
+        const btnGroundHand = document.getElementById('btn-ground-hand');
+        if (btnGroundHand) btnGroundHand.addEventListener('click', triggerGroundHand);
+        const btnSubContact = document.getElementById('btn-sub-contact');
+        if (btnSubContact) btnSubContact.addEventListener('click', triggerContactRod);
+        const btnSubSeparate = document.getElementById('btn-sub-separate');
+        if (btnSubSeparate) btnSubSeparate.addEventListener('click', triggerSeparateRod);
+        const btnSubGround = document.getElementById('btn-sub-ground');
+        if (btnSubGround) btnSubGround.addEventListener('click', triggerGroundHand);
 
         document.getElementById('btn-align').addEventListener('click', () => {
             camera.position.set(0, 0.2, 3.2);

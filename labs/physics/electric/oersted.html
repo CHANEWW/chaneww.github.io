@@ -1576,33 +1576,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         }
 
         /* ---------- 자기장선 ---------- */
-        if (m === 'straight') {
-            const radii = [0.62, 1.1, 1.7, 2.45, 3.3];
-            const heights = [0.55, 1.9, 3.25, 4.6];
-            radii.forEach(r => heights.forEach(hh => {
-                addFieldLine(new THREE.Vector3(r, hh, 0), { steps: 340, h: 0.09, radius: 0.014, arrows: 3 });
-            }));
-        } else if (m === 'loop') {
-            const R = 1.7;
-            const seeds = [0.78, 1.02, 1.26];
-            for (let rot = 0; rot < 3; rot++) {
-                const a = rot * Math.PI / 3;
-                seeds.forEach(r => addLoopOval(a, r, R, center.y, center.z));
-            }
-            const bcL = fieldVec(center.x, center.y, center.z, 1);
-            buildAxisArrow(center, bcL.z >= 0 ? 1 : -1, 2.6);
-        } else {
-            const R = 0.95, halfL = 2.5;
-            const seeds = [0.14, 0.5, 0.82];
-            for (let rot = 0; rot < 4; rot++) {
-                const a = rot * Math.PI / 4;
-                seeds.forEach(r => addSolenoidLoop(a, r, R, halfL, center.y, center.z));
-            }
-            const bcC = fieldVec(center.x, center.y, center.z, 1);
-            buildAxisArrow(center, bcC.z >= 0 ? 1 : -1, 3.0);
-        }
-
-        orientArrows();
+        buildFieldLines();
 
         /* ---------- N/S 극 라벨 ---------- */
         if (m !== 'straight') {
@@ -1995,6 +1969,58 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         if (axisArrow) axisArrow.scale.z = -axisArrow.scale.z;
     });
 
+    /* ---------- 자기장선 생성 (전류 세기 I에 따른 밀도/간격 연동) ---------- */
+    function buildFieldLines() {
+        clearGroup(fieldGroup);
+        arrows = [];
+        axisArrow = null;
+
+        const m = state.mode;
+        const center = CENTER[m];
+        const I = Math.max(0.5, state.current);
+
+        if (m === 'straight') {
+            // 비오-사바르/앙페르 법칙 B = k * (I / r): 전류 세기가 강해질수록 자기력선 밀도 증가(간격 좁아짐)
+            const numRings = Math.round(2 + I * 1.2); // 0.5A: 3개 -> 2.0A: 5개 -> 5.0A: 8개
+            const rMin = 0.52;
+            const rMax = 3.35;
+            const radii = [];
+            for (let i = 0; i < numRings; i++) {
+                const t = i / (numRings - 1);
+                radii.push(rMin + Math.pow(t, 1.25) * (rMax - rMin));
+            }
+            const heights = [0.7, 2.0, 3.3, 4.6];
+            radii.forEach(r => heights.forEach(hh => {
+                addFieldLine(new THREE.Vector3(r, hh, 0), { steps: 340, h: 0.09, radius: 0.012 + I * 0.0012, arrows: 3 });
+            }));
+        } else if (m === 'loop') {
+            const R = 1.7;
+            const baseSeeds = [0.72, 0.94, 1.16, 1.38];
+            const activeSeeds = I < 1.5 ? [0.80, 1.20] : (I < 3.2 ? [0.75, 1.02, 1.28] : baseSeeds);
+            const rotCount = I > 3.0 ? 4 : 3;
+            for (let rot = 0; rot < rotCount; rot++) {
+                const a = rot * Math.PI / rotCount;
+                activeSeeds.forEach(r => addLoopOval(a, r, R, center.y, center.z));
+            }
+            const bcL = fieldVec(center.x, center.y, center.z, 1);
+            buildAxisArrow(center, bcL.z >= 0 ? 1 : -1, 2.6);
+        } else {
+            const R = 0.95, halfL = 2.5;
+            const baseSeeds = [0.12, 0.35, 0.58, 0.82];
+            const activeSeeds = I < 1.5 ? [0.2, 0.65] : (I < 3.2 ? [0.14, 0.5, 0.82] : baseSeeds);
+            const rotCount = I > 3.0 ? 5 : 4;
+            for (let rot = 0; rot < rotCount; rot++) {
+                const a = rot * Math.PI / rotCount;
+                activeSeeds.forEach(r => addSolenoidLoop(a, r, R, halfL, center.y, center.z));
+            }
+            const bcC = fieldVec(center.x, center.y, center.z, 1);
+            buildAxisArrow(center, bcC.z >= 0 ? 1 : -1, 3.0);
+        }
+
+        orientArrows();
+        updateFieldVisibility();
+    }
+
     function rebuildPoles() {
         if (state.mode === 'straight' || poleLabels.length !== 2) return;
         const c = CENTER[state.mode];
@@ -2007,7 +2033,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
     document.getElementById('rng-current').addEventListener('input', e => {
         state.current = parseFloat(e.target.value);
-        orientArrows();
+        buildFieldLines();
         updateReadouts();
     });
 
