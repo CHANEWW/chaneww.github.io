@@ -1077,6 +1077,10 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 <span class="data-value" id="val-leaf-angle" style="color:#007aff;">0.0°</span>
             </div>
             <div class="data-item">
+                <span class="data-label">대전체 전하</span>
+                <span class="data-value" id="val-rod-charge" style="color:#ff3b30;">22개 (보유)</span>
+            </div>
+            <div class="data-item">
                 <span class="data-label">전하 비율 (+:-)</span>
                 <span class="data-value" id="val-ratio" style="color:#34c759;">30 : 30 (중성)</span>
             </div>
@@ -1443,28 +1447,160 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         const rodChargeGroup = new THREE.Group();
         chargedRodGroup.add(rodChargeGroup);
 
-        function updateRodParticles(polarity) {
+        let rodRemainingRatio = 1.0;
+
+        function updateRodParticles(polarity, remainingRatio = 1.0) {
+            rodRemainingRatio = Math.max(0, Math.min(1.0, remainingRatio));
             while (rodChargeGroup.children.length > 0) rodChargeGroup.remove(rodChargeGroup.children[0]);
             const mat = new THREE.MeshBasicMaterial({ color: polarity === 'neg' ? 0x007aff : 0xff2d55 });
             const geo = new THREE.SphereGeometry(0.012, 8, 8);
             const signText = polarity === 'neg' ? '-' : '+';
 
-            for (let i = -0.3; i <= 0.3; i += 0.06) {
-                const p1Group = new THREE.Group();
-                p1Group.add(new THREE.Mesh(geo, mat));
-                p1Group.add(createTextSprite(signText, 0.03));
-                p1Group.position.set(i, 0.04, 0);
+            const totalCols = 11;
+            // 남아있는 전하는 접촉 부위(팁: x = -0.3) 반대편인 오른쪽(x = +0.3)부터 남김
+            const keepCols = Math.max(0, Math.min(totalCols, Math.round(totalCols * rodRemainingRatio)));
 
-                const p2Group = new THREE.Group();
-                p2Group.add(new THREE.Mesh(geo, mat));
-                p2Group.add(createTextSprite(signText, 0.03));
-                p2Group.position.set(i, -0.04, 0);
+            let colIndex = 0;
+            let activeCount = 0;
+            for (let i = 0.3; i >= -0.301; i -= 0.06) {
+                if (colIndex < keepCols) {
+                    const p1Group = new THREE.Group();
+                    p1Group.add(new THREE.Mesh(geo, mat));
+                    p1Group.add(createTextSprite(signText, 0.03));
+                    p1Group.position.set(i, 0.04, 0);
 
-                rodChargeGroup.add(p1Group);
-                rodChargeGroup.add(p2Group);
+                    const p2Group = new THREE.Group();
+                    p2Group.add(new THREE.Mesh(geo, mat));
+                    p2Group.add(createTextSprite(signText, 0.03));
+                    p2Group.position.set(i, -0.04, 0);
+
+                    rodChargeGroup.add(p1Group);
+                    rodChargeGroup.add(p2Group);
+                    activeCount += 2;
+                }
+                colIndex++;
+            }
+
+            const valRodCharge = document.getElementById('val-rod-charge');
+            if (valRodCharge) {
+                if (activeCount === 22) {
+                    valRodCharge.innerText = `22개 (보유)`;
+                    valRodCharge.style.color = polarity === 'neg' ? '#ff3b30' : '#007aff';
+                } else {
+                    valRodCharge.innerText = `${activeCount}개 (이동 후 잔여)`;
+                    valRodCharge.style.color = '#ff9500';
+                }
             }
         }
-        updateRodParticles('neg');
+        updateRodParticles('neg', 1.0);
+
+        // --- 6-1. 전하 실시간 이동 파티클 스트림 시스템 ---
+        const transferParticlesGroup = new THREE.Group();
+        scene.add(transferParticlesGroup);
+
+        let activeTransferParticles = [];
+        let isTransferring = false;
+        let rodDischarged = false; // 접촉 후 대전체 방전 상태
+
+        function startElectronTransferAnimation(direction) {
+            // direction: 'rod-to-disc' (음전하 대전체 접촉) 또는 'disc-to-rod' (양전하 대전체 접촉)
+            while (transferParticlesGroup.children.length > 0) transferParticlesGroup.remove(transferParticlesGroup.children[0]);
+            activeTransferParticles = [];
+            isTransferring = true;
+
+            const count = 12; // 12개 전자가 순차적으로 이동 (대전체에는 10개 잔여)
+            const geo = new THREE.SphereGeometry(0.018, 12, 12);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x007aff }); // 전자는 항상 선명한 파란색 (-)
+            const glowGeo = new THREE.SphereGeometry(0.026, 8, 8);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0x64d2ff, transparent: true, opacity: 0.55 });
+
+            const rodTipLocal = new THREE.Vector3(-0.35, 0, 0);
+            const rodTipWorld = rodTipLocal.applyMatrix4(chargedRodGroup.matrixWorld);
+            const discWorld = new THREE.Vector3(0, 0.65, 0);
+
+            for (let i = 0; i < count; i++) {
+                const pGroup = new THREE.Group();
+                pGroup.add(new THREE.Mesh(geo, mat));
+                pGroup.add(new THREE.Mesh(glowGeo, glowMat));
+                pGroup.add(createTextSprite('-', 0.038));
+
+                transferParticlesGroup.add(pGroup);
+
+                const delay = i * 0.08; // 80ms 간격 순차 출발 (~1.0초 연속 스트림)
+                const duration = 0.55;  // 비행 시간
+
+                activeTransferParticles.push({
+                    group: pGroup,
+                    from: direction === 'rod-to-disc' ? rodTipWorld.clone() : discWorld.clone(),
+                    to: direction === 'rod-to-disc' ? discWorld.clone() : rodTipWorld.clone(),
+                    delay: delay,
+                    duration: duration,
+                    elapsed: 0,
+                    arcHeight: 0.06 + Math.random() * 0.07,
+                    arcZ: (Math.random() - 0.5) * 0.05,
+                    chargeDeducted: false,
+                    done: false,
+                    index: i
+                });
+            }
+        }
+
+        function updateTransferParticles(dt) {
+            if (activeTransferParticles.length === 0) return;
+            let allDone = true;
+
+            const rodTipLocal = new THREE.Vector3(-0.35, 0, 0);
+            const curRodTipWorld = rodTipLocal.applyMatrix4(chargedRodGroup.matrixWorld);
+            const discWorld = new THREE.Vector3(0, 0.65, 0);
+
+            for (let i = 0; i < activeTransferParticles.length; i++) {
+                const tp = activeTransferParticles[i];
+                if (tp.done) continue;
+                allDone = false;
+                tp.elapsed += dt;
+
+                if (tp.elapsed < tp.delay) {
+                    tp.group.visible = false;
+                    continue;
+                }
+
+                tp.group.visible = true;
+                const progress = Math.min(1.0, (tp.elapsed - tp.delay) / tp.duration);
+
+                // 대전체 위치가 실시간으로 변해도 경로 끝점 자동 추적
+                if (tp.from.x > discWorld.x) tp.from.copy(curRodTipWorld);
+                else tp.to.copy(curRodTipWorld);
+
+                const curX = THREE.MathUtils.lerp(tp.from.x, tp.to.x, progress);
+                const curY = THREE.MathUtils.lerp(tp.from.y, tp.to.y, progress) + Math.sin(progress * Math.PI) * tp.arcHeight;
+                const curZ = THREE.MathUtils.lerp(tp.from.z, tp.to.z, progress) + Math.sin(progress * Math.PI) * tp.arcZ;
+
+                tp.group.position.set(curX, curY, curZ);
+
+                // 이동 중 크기 펄스 효과
+                const scale = 0.9 + Math.sin(progress * Math.PI) * 0.45;
+                tp.group.scale.set(scale, scale, scale);
+
+                // 비행 중간 지점에서 대전체 전하 감소 차감 반영 (대전체에서 전자가 사라지는 연출)
+                if (progress >= 0.45 && !tp.chargeDeducted) {
+                    tp.chargeDeducted = true;
+                    sparkMat.opacity = 1.0;
+                    const remainingRatio = 1.0 - (0.55 * ((tp.index + 1) / activeTransferParticles.length));
+                    updateRodParticles(currentPolarity, remainingRatio);
+                }
+
+                if (progress >= 1.0) {
+                    tp.done = true;
+                    tp.group.visible = false;
+                }
+            }
+
+            if (allDone) {
+                isTransferring = false;
+                while (transferParticlesGroup.children.length > 0) transferParticlesGroup.remove(transferParticlesGroup.children[0]);
+                activeTransferParticles = [];
+            }
+        }
 
         // --- 7. 표준 Pointer Event 기반 드래그 인터랙션 ---
         let currentPolarity = 'neg';
@@ -1585,16 +1721,20 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         }
 
         function applyContactCharging() {
-            if (isRodContact) return;
+            if (isRodContact || rodDischarged) return;
             isRodContact = true;
+            rodDischarged = true;
+            sparkMat.opacity = 1.0;
+
             if (currentPolarity === 'neg') {
                 netCharge = -14;
-                showTooltip('⚡ 대전체 접촉: 음전하(-)가 금속판으로 유입되어 검전기가 전체적으로 음전하로 대전되었습니다!');
+                showTooltip('⚡ 대전체 접촉: 대전체 표면의 전자(-)들이 금속판으로 실시간 이동합니다! (대전체 전하 감소 22개 ➔ 10개, 검전기 음전하 대전)');
+                startElectronTransferAnimation('rod-to-disc');
             } else {
                 netCharge = 14;
-                showTooltip('⚡ 대전체 접촉: 전자가 양대전체로 이동하여 검전기가 전체적으로 양전하로 대전되었습니다!');
+                showTooltip('⚡ 대전체 접촉: 금속판의 전자(-)들이 대전체로 이동하여 대전체의 양전하를 일부 중화시키고, 검전기는 양전하로 대전되었습니다!');
+                startElectronTransferAnimation('disc-to-rod');
             }
-            sparkMat.opacity = 0.9;
         }
 
         function triggerContactRod() {
@@ -1605,7 +1745,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         function triggerSeparateRod() {
             isRodContact = false;
             chargedRodGroup.position.set(1.10, 0.68, 0);
-            showTooltip('↔ 대전체 분리: 대전체를 치워도 검전기에 전하가 남아 금속박이 벌어져 있습니다.');
+            showTooltip('↔ 대전체 분리: 대전체를 멀리 치워도 이미 이동한 전하 때문에 검전기는 대전 상태를 유지하여 금속박이 벌어져 있습니다.');
         }
 
         function triggerGroundHand() {
@@ -1739,6 +1879,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
         function setPolarity(pol) {
             currentPolarity = pol;
+            rodDischarged = false;
             if (pol === 'neg') {
                 btnNeg.className = 'toggle-btn active-neg';
                 btnPos.className = 'toggle-btn';
@@ -1752,7 +1893,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 txtRodType.style.color = '#007aff';
                 rodMat.color.setHex(0x007aff);
             }
-            updateRodParticles(pol);
+            updateRodParticles(pol, 1.0);
         }
 
         btnNeg.addEventListener('click', () => setPolarity('neg'));
@@ -1773,13 +1914,16 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             netCharge = 0;
             isHandGrounded = false;
             isRodContact = false;
+            rodDischarged = false;
             sparkMat.opacity = 0;
             const btnGround = document.getElementById('btn-ground-hand');
             const btnSubGround = document.getElementById('btn-sub-ground');
             if (btnGround) btnGround.classList.remove('active');
             if (btnSubGround) btnSubGround.classList.remove('active');
+            while (transferParticlesGroup.children.length > 0) transferParticlesGroup.remove(transferParticlesGroup.children[0]);
+            activeTransferParticles = [];
             setPolarity('neg');
-            showTooltip('🔄 검전기 및 대전체 상태가 초기화되었습니다.');
+            showTooltip('🔄 검전기 및 대전체 상태가 초기화되었습니다. (대전체 전하 22개 완전 복원)');
         });
 
         // 대전체 접촉 및 손가락 접지 버튼 연결
@@ -1813,9 +1957,15 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         });
 
         // --- 10. 메인 애니메이션 루프 ---
+        let lastTime = performance.now();
         function animate() {
             requestAnimationFrame(animate);
+            const now = performance.now();
+            const dt = Math.min(0.05, (now - lastTime) / 1000);
+            lastTime = now;
+
             updatePhysics();
+            updateTransferParticles(dt);
             controls.update();
             renderer.render(scene, camera);
         }
