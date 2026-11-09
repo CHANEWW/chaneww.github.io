@@ -156,7 +156,7 @@
         /* 중앙 안내 툴팁 */
         .center-tooltip {
             position: absolute;
-            top: 12%;
+            top: 96px;
             left: 50%;
             transform: translateX(-50%);
             padding: 8px 18px;
@@ -166,6 +166,9 @@
             pointer-events: none;
             z-index: 5;
             transition: opacity 0.5s ease;
+            white-space: normal;
+            text-align: center;
+            max-width: min(520px, calc(100vw - 32px));
         }
 
         /* 서브 조절 패널 */
@@ -1206,11 +1209,11 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         // --- 4. 입체감과 사실감을 극대화한 3D 검전기(Flask Jar Electroscope) 메쉬 생성 ---
         const electroscopeGroup = new THREE.Group();
 
-        // 고광택 금속 재질 (황동/크롬 금속 원판 및 중심 막대)
+        // 고광택 밝은 백금/은 메탈 재질 (금속판 내부 전하 식별력 극대화)
         const shinyMetalMat = new THREE.MeshStandardMaterial({
-            color: 0xdfdfeb,
-            metalness: 0.88,
-            roughness: 0.22
+            color: 0xf5f7fb,
+            metalness: 0.65,
+            roughness: 0.28
         });
         // 금박(Gold Leaf) 특화 골드 메탈릭 재질
         const goldLeafMat = new THREE.MeshStandardMaterial({
@@ -1357,15 +1360,15 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         scene.add(chargedRodGroup);
 
         // --- 텍스트 텍스처 생성 함수 (검은색 +, - 텍스처) ---
-        function createTextSprite(text, scale = 0.035) {
+        function createTextSprite(text, scale = 0.042) {
             const canvas = document.createElement('canvas');
             canvas.width = 64;
             canvas.height = 64;
             const ctx = canvas.getContext('2d');
 
             ctx.clearRect(0, 0, 64, 64);
-            ctx.fillStyle = '#000000';
-            ctx.font = 'bold 52px sans-serif';
+            ctx.fillStyle = '#111827';
+            ctx.font = '900 56px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(text, 32, 34);
@@ -1407,13 +1410,13 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             posLocations.push(new THREE.Vector3(x, y, z));
         }
 
-        const posGeo = new THREE.SphereGeometry(0.014, 12, 12);
-        const posMat = new THREE.MeshBasicMaterial({ color: 0xff2d55 });
+        const posGeo = new THREE.SphereGeometry(0.016, 12, 12);
+        const posMat = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
 
         posLocations.forEach(loc => {
             const pGroup = new THREE.Group();
             const sphere = new THREE.Mesh(posGeo, posMat);
-            const label = createTextSprite('+');
+            const label = createTextSprite('+', 0.036);
             pGroup.add(sphere);
             pGroup.add(label);
 
@@ -1422,13 +1425,13 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             posParticles.push(pGroup);
         });
 
-        const negGeo = new THREE.SphereGeometry(0.014, 12, 12);
+        const negGeo = new THREE.SphereGeometry(0.016, 12, 12);
         const negMat = new THREE.MeshBasicMaterial({ color: 0x007aff });
 
         for (let i = 0; i < TOTAL_PAIRS; i++) {
             const nGroup = new THREE.Group();
             const sphere = new THREE.Mesh(negGeo, negMat);
-            const label = createTextSprite('-');
+            const label = createTextSprite('-', 0.036);
             nGroup.add(sphere);
             nGroup.add(label);
 
@@ -1498,9 +1501,88 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         const transferParticlesGroup = new THREE.Group();
         scene.add(transferParticlesGroup);
 
-        let activeTransferParticles = [];
         let isTransferring = false;
         let rodDischarged = false; // 접촉 후 대전체 방전 상태
+        let activeGroundParticles = [];
+        const groundParticlesGroup = new THREE.Group();
+        scene.add(groundParticlesGroup);
+
+        function startGroundDischargeAnimation() {
+            while (groundParticlesGroup.children.length > 0) groundParticlesGroup.remove(groundParticlesGroup.children[0]);
+            activeGroundParticles = [];
+
+            const count = 10;
+            const geo = new THREE.SphereGeometry(0.016, 12, 12);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x007aff });
+            const glowGeo = new THREE.SphereGeometry(0.024, 8, 8);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0x64d2ff, transparent: true, opacity: 0.6 });
+
+            const discContactPos = new THREE.Vector3(-0.30, 0.65, 0);
+
+            for (let i = 0; i < count; i++) {
+                const pGroup = new THREE.Group();
+                pGroup.add(new THREE.Mesh(geo, mat));
+                pGroup.add(new THREE.Mesh(glowGeo, glowMat));
+                pGroup.add(createTextSprite('-', 0.036));
+                groundParticlesGroup.add(pGroup);
+
+                activeGroundParticles.push({
+                    group: pGroup,
+                    from: discContactPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.04, 0, (Math.random() - 0.5) * 0.04)),
+                    delay: i * 0.06,
+                    duration: 0.65,
+                    elapsed: 0,
+                    done: false
+                });
+            }
+        }
+
+        function updateGroundParticles(dt) {
+            if (activeGroundParticles.length === 0) return;
+            let allDone = true;
+            const handPos = handGroup.position;
+            const handBase = new THREE.Vector3(handPos.x - 0.35, handPos.y + 0.12, handPos.z);
+
+            for (let i = 0; i < activeGroundParticles.length; i++) {
+                const gp = activeGroundParticles[i];
+                if (gp.done) continue;
+                allDone = false;
+                gp.elapsed += dt;
+
+                if (gp.elapsed < gp.delay) {
+                    gp.group.visible = false;
+                    continue;
+                }
+                gp.group.visible = true;
+                const progress = Math.min(1.0, (gp.elapsed - gp.delay) / gp.duration);
+
+                // 금속판(-0.3, 0.65) -> 손가락 끝(handPos.x+0.16) -> 손목/소매(handBase)로 타고 흘러 빠져나감
+                const fingerTip = new THREE.Vector3(handGroup.position.x + 0.16, handGroup.position.y + 0.02, 0);
+                let curPos;
+                if (progress < 0.35) {
+                    const p1 = progress / 0.35;
+                    curPos = new THREE.Vector3().lerpVectors(gp.from, fingerTip, p1);
+                } else {
+                    const p2 = (progress - 0.35) / 0.65;
+                    curPos = new THREE.Vector3().lerpVectors(fingerTip, handBase, p2);
+                }
+                curPos.y += Math.sin(progress * Math.PI) * 0.04;
+                gp.group.position.copy(curPos);
+
+                const scale = 1.0 - progress * 0.45;
+                gp.group.scale.set(scale, scale, scale);
+
+                if (progress >= 1.0) {
+                    gp.done = true;
+                    gp.group.visible = false;
+                }
+            }
+
+            if (allDone) {
+                while (groundParticlesGroup.children.length > 0) groundParticlesGroup.remove(groundParticlesGroup.children[0]);
+                activeGroundParticles = [];
+            }
+        }
 
         function startElectronTransferAnimation(direction) {
             // direction: 'rod-to-disc' (음전하 대전체 접촉) 또는 'disc-to-rod' (양전하 대전체 접촉)
@@ -1516,7 +1598,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
             const rodTipLocal = new THREE.Vector3(-0.35, 0, 0);
             const rodTipWorld = rodTipLocal.applyMatrix4(chargedRodGroup.matrixWorld);
-            const discWorld = new THREE.Vector3(0, 0.65, 0);
+            const angleToTip = Math.atan2(rodTipWorld.z, rodTipWorld.x);
+            const discContactR = Math.min(0.28, Math.hypot(rodTipWorld.x, rodTipWorld.z));
+            const discWorld = new THREE.Vector3(Math.cos(angleToTip) * discContactR, 0.65, Math.sin(angleToTip) * discContactR);
 
             for (let i = 0; i < count; i++) {
                 const pGroup = new THREE.Group();
@@ -1551,7 +1635,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
             const rodTipLocal = new THREE.Vector3(-0.35, 0, 0);
             const curRodTipWorld = rodTipLocal.applyMatrix4(chargedRodGroup.matrixWorld);
-            const discWorld = new THREE.Vector3(0, 0.65, 0);
+            const curAngleToTip = Math.atan2(curRodTipWorld.z, curRodTipWorld.x);
+            const curDiscContactR = Math.min(0.28, Math.hypot(curRodTipWorld.x, curRodTipWorld.z));
+            const discWorld = new THREE.Vector3(Math.cos(curAngleToTip) * curDiscContactR, 0.65, Math.sin(curAngleToTip) * curDiscContactR);
 
             for (let i = 0; i < activeTransferParticles.length; i++) {
                 const tp = activeTransferParticles[i];
@@ -1758,6 +1844,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             if (isHandGrounded) {
                 sparkMat.opacity = 1.0;
                 netCharge = 0;
+                startGroundDischargeAnimation();
                 showTooltip('🖐️ 손가락 접지: 여분의 전자가 손을 통해 대지로 방전되어 검전기가 중성(30:30)으로 복원되었습니다!');
             } else {
                 showTooltip('🖐️ 손가락 접지 해제: 중성 상태를 유지합니다.');
@@ -1765,15 +1852,22 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         }
 
         function updatePhysics() {
-            const discTopPos = new THREE.Vector3(0, 0.65, 0);
-            const distance = chargedRodGroup.position.distanceTo(discTopPos);
+            const rodTipLocal = new THREE.Vector3(-0.35, 0, 0);
+            const rodTipWorld = rodTipLocal.applyMatrix4(chargedRodGroup.matrixWorld);
+            const r_tip = Math.hypot(rodTipWorld.x, rodTipWorld.z);
+            const dy_tip = Math.abs(rodTipWorld.y - 0.65);
+            // 금속판 원판(반지름 0.30, y=0.65) 가장자리 포함 접촉 거리 계산
+            const distToDiscRim = Math.hypot(Math.max(0, r_tip - 0.30), Math.max(0, dy_tip - 0.05));
 
-            // 대전체가 금속판에 근접/접촉 시 (0.35m 이하) 자동 접촉 대전 감지 지원
-            if (distance < 0.35 && !isRodContact) {
+            // 대전체가 금속판 가장자리든 어디든 닿으면 즉시 접촉 대전 감지
+            if (distToDiscRim < 0.12 && !isRodContact) {
                 applyContactCharging();
-            } else if (distance >= 0.40 && isRodContact) {
+            } else if (distToDiscRim >= 0.25 && isRodContact) {
                 isRodContact = false;
             }
+
+            const discTopPos = new THREE.Vector3(0, 0.65, 0);
+            const distance = Math.min(chargedRodGroup.position.distanceTo(discTopPos), rodTipWorld.distanceTo(discTopPos));
 
             let inductionFactor = Math.max(0, Math.min(1, (1.3 - distance) / 1.1));
             inductionFactor = Math.pow(inductionFactor, 1.8);
@@ -1966,6 +2060,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
             updatePhysics();
             updateTransferParticles(dt);
+            updateGroundParticles(dt);
             controls.update();
             renderer.render(scene, camera);
         }
