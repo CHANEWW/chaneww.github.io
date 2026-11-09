@@ -1475,6 +1475,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         const planeIntersect = new THREE.Vector3();
         let dragOffset = new THREE.Vector3();
 
+        let isDraggingRod = false;
+        let isDraggingHand = false;
+
         function updateMousePos(e) {
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -1484,38 +1487,80 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             updateMousePos(e);
             raycaster.setFromCamera(mouse, camera);
             
-            const intersects = raycaster.intersectObjects(chargedRodGroup.children, true);
-
-            if (intersects.length > 0) {
-                isDragging = true;
+            const handIntersects = raycaster.intersectObjects(handGroup.children, true);
+            if (handIntersects.length > 0) {
+                isDraggingHand = true;
                 controls.enabled = false;
-                
+                if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                    dragOffset.copy(handGroup.position).sub(planeIntersect);
+                }
+                showTooltip('🖐️ 손가락 모형을 드래그하여 검전기 금속판에 직접 접촉시켜 보세요.');
+                return;
+            }
+
+            const rodIntersects = raycaster.intersectObjects(chargedRodGroup.children, true);
+            if (rodIntersects.length > 0) {
+                isDraggingRod = true;
+                controls.enabled = false;
                 if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                     dragOffset.copy(chargedRodGroup.position).sub(planeIntersect);
                 }
-
                 const tooltip = document.getElementById('guide-tooltip');
                 if (tooltip) tooltip.style.opacity = '0';
             }
         }
 
         function onPointerMove(e) {
-            if (!isDragging) return;
+            if (!isDraggingRod && !isDraggingHand) return;
             updateMousePos(e);
             raycaster.setFromCamera(mouse, camera);
             
             if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
                 let targetPos = planeIntersect.add(dragOffset);
-                targetPos.x = Math.max(-1.6, Math.min(1.6, targetPos.x));
-                targetPos.y = Math.max(-0.3, Math.min(1.1, targetPos.y));
                 targetPos.z = 0;
-                chargedRodGroup.position.copy(targetPos);
+
+                if (isDraggingHand) {
+                    targetPos.x = Math.max(-1.4, Math.min(-0.25, targetPos.x));
+                    targetPos.y = Math.max(0.2, Math.min(0.9, targetPos.y));
+                    handGroup.position.copy(targetPos);
+
+                    // 손가락 끝 위치와 금속판(-0.30, 0.65) 거리 판정
+                    const fingerTipX = handGroup.position.x + 0.16;
+                    const fingerTipY = handGroup.position.y + 0.02;
+                    const distToDisc = Math.hypot(fingerTipX - (-0.30), fingerTipY - 0.65);
+
+                    if (distToDisc < 0.20 || fingerTipX >= -0.32) {
+                        if (!isHandGrounded) {
+                            isHandGrounded = true;
+                            sparkMat.opacity = 1.0;
+                            netCharge = 0;
+                            showTooltip('🖐️ 손가락 직접 접지: 손가락이 금속판에 닿아 여분의 전자가 방전되었습니다! (30:30 중성)');
+                            const btnGround = document.getElementById('btn-ground-hand');
+                            if (btnGround) btnGround.classList.add('active');
+                            const btnSubGround = document.getElementById('btn-sub-ground');
+                            if (btnSubGround) btnSubGround.classList.add('active');
+                        }
+                    } else {
+                        if (isHandGrounded) {
+                            isHandGrounded = false;
+                            const btnGround = document.getElementById('btn-ground-hand');
+                            if (btnGround) btnGround.classList.remove('active');
+                            const btnSubGround = document.getElementById('btn-sub-ground');
+                            if (btnSubGround) btnSubGround.classList.remove('active');
+                        }
+                    }
+                } else if (isDraggingRod) {
+                    targetPos.x = Math.max(-1.6, Math.min(1.6, targetPos.x));
+                    targetPos.y = Math.max(-0.3, Math.min(1.1, targetPos.y));
+                    chargedRodGroup.position.copy(targetPos);
+                }
             }
         }
 
         function onPointerUp() {
-            if (isDragging) {
-                isDragging = false;
+            if (isDraggingRod || isDraggingHand) {
+                isDraggingRod = false;
+                isDraggingHand = false;
                 controls.enabled = true;
             }
         }
@@ -1616,9 +1661,11 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             // 전하 이동 편향 (migrationShift)
             const migrationShift = (currentPolarity === 'neg' ? -1 : 1) * inductionFactor * 0.52;
 
-            // 손가락 접지 애니메이션 보간
-            const targetHandX = isHandGrounded ? -0.44 : -0.88;
-            handGroup.position.x += (targetHandX - handGroup.position.x) * 0.15;
+            // 손가락 접지 애니메이션 보간 (직접 마우스/터치 드래그 중이 아닐 때만 자동 이동)
+            if (!isDraggingHand) {
+                const targetHandX = isHandGrounded ? -0.44 : -0.88;
+                handGroup.position.x += (targetHandX - handGroup.position.x) * 0.15;
+            }
             if (sparkMat.opacity > 0) sparkMat.opacity = Math.max(0, sparkMat.opacity - 0.04);
 
             negParticles.forEach((np) => {
