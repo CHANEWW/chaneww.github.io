@@ -80,7 +80,7 @@
 
 			this.mouseButtons = {
 				LEFT: THREE.MOUSE.ROTATE,
-				MIDDLE: THREE.MOUSE.DOLLY,
+				MIDDLE: THREE.MOUSE.PAN,
 				RIGHT: THREE.MOUSE.PAN
 			}; // Touch fingers
 
@@ -201,15 +201,9 @@
 
 					spherical.radius = Math.max( scope.minDistance, Math.min( scope.maxDistance, spherical.radius ) ); // move target to panned location
 
-					if ( scope.enableDamping === true ) {
-
-						scope.target.addScaledVector( panOffset, scope.dampingFactor );
-
-					} else {
-
-						scope.target.add( panOffset );
-
-					}
+					// Direct 1:1 pan tracking for responsive touch and mouse dragging
+					scope.target.add( panOffset );
+					panOffset.set( 0, 0, 0 );
 
 					offset.setFromSpherical( spherical ); // rotate offset back to "camera-up-vector-is-up" space
 
@@ -221,12 +215,10 @@
 
 						sphericalDelta.theta *= 1 - scope.dampingFactor;
 						sphericalDelta.phi *= 1 - scope.dampingFactor;
-						panOffset.multiplyScalar( 1 - scope.dampingFactor );
 
 					} else {
 
 						sphericalDelta.set( 0, 0, 0 );
-						panOffset.set( 0, 0, 0 );
 
 					}
 
@@ -984,8 +976,34 @@
 
 				if ( scope.enabled === false ) return;
 				handleTouchEnd( event );
-				scope.dispatchEvent( _endEvent );
-				state = STATE.NONE;
+
+				if ( event.touches.length === 1 ) {
+
+					switch ( scope.touches.ONE ) {
+
+						case THREE.TOUCH.ROTATE:
+							if ( scope.enableRotate === false ) return;
+							handleTouchStartRotate( event );
+							state = STATE.TOUCH_ROTATE;
+							break;
+
+						case THREE.TOUCH.PAN:
+							if ( scope.enablePan === false ) return;
+							handleTouchStartPan( event );
+							state = STATE.TOUCH_PAN;
+							break;
+
+						default:
+							state = STATE.NONE;
+
+					}
+
+				} else {
+
+					scope.dispatchEvent( _endEvent );
+					state = STATE.NONE;
+
+				}
 
 			}
 

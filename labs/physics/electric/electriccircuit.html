@@ -889,10 +889,15 @@ const cv=renderer.domElement;
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(38,1,.1,100);
 let yaw=0,pitch=.82,dist=15;
+const camTarget=new THREE.Vector3(0,0,0);
 
 function updateCam(){
-  camera.position.set(dist*Math.sin(yaw)*Math.cos(pitch),dist*Math.sin(pitch),dist*Math.cos(yaw)*Math.cos(pitch)+.3);
-  camera.lookAt(0,0,0);
+  const cx = camTarget.x + dist*Math.sin(yaw)*Math.cos(pitch);
+  const cy = camTarget.y + dist*Math.sin(pitch);
+  const cz = camTarget.z + dist*Math.cos(yaw)*Math.cos(pitch)+.3;
+  camera.position.set(cx, cy, cz);
+  camera.lookAt(camTarget);
+  camera.updateMatrixWorld();
 }
 function resize(){
   renderer.setSize(innerWidth,innerHeight);
@@ -1572,8 +1577,13 @@ function segDist(px,pz,p){
 
 let drag=null,orbit=false,moved=false,down={x:0,y:0},activePointer=null;
 
-/* 화면 줌 제어 */
+/* 화면 줌 및 화면 이동 (Pan) 제어 */
 let isPinching = false;
+let isTwoFinger = false;
+let pinchDist = 0;
+let pinchStartCamDist = 15;
+let twoFingerStart = { x: 0, y: 0 };
+let camTargetStart = new THREE.Vector3();
 
 cv.addEventListener('wheel', e => {
   e.preventDefault();
@@ -1581,31 +1591,53 @@ cv.addEventListener('wheel', e => {
   updateCam();
 }, { passive: false });
 
-let pinchDist = 0;
-let pinchStartCamDist = 15;
 cv.addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
+    isTwoFinger = true;
     isPinching = true;
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     pinchDist = Math.hypot(dx, dy);
     pinchStartCamDist = dist;
+    twoFingerStart.x = 0.5 * (e.touches[0].clientX + e.touches[1].clientX);
+    twoFingerStart.y = 0.5 * (e.touches[0].clientY + e.touches[1].clientY);
+    camTargetStart.copy(camTarget);
   }
 }, { passive: false });
 
 cv.addEventListener('touchmove', e => {
-  if (e.touches.length === 2 && pinchDist > 0) {
+  if (e.touches.length === 2 && isTwoFinger) {
     e.preventDefault();
     const dx = e.touches[0].clientX - e.touches[1].clientX;
     const dy = e.touches[0].clientY - e.touches[1].clientY;
     const currentDist = Math.hypot(dx, dy);
-    dist = Math.max(5, Math.min(40, pinchStartCamDist * (pinchDist / currentDist)));
+    if (pinchDist > 0 && currentDist > 0) {
+      dist = Math.max(5, Math.min(40, pinchStartCamDist * (pinchDist / currentDist)));
+    }
+
+    const midX = 0.5 * (e.touches[0].clientX + e.touches[1].clientX);
+    const midY = 0.5 * (e.touches[0].clientY + e.touches[1].clientY);
+    const deltaX = midX - twoFingerStart.x;
+    const deltaY = midY - twoFingerStart.y;
+
+    const targetDist = dist * Math.tan((38 / 2) * Math.PI / 180);
+    const factor = (2 * targetDist) / innerHeight;
+
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const up = new THREE.Vector3(-Math.sin(yaw) * Math.sin(pitch), Math.cos(pitch), -Math.cos(yaw) * Math.sin(pitch));
+
+    const moveVector = new THREE.Vector3()
+      .addScaledVector(right, -deltaX * factor)
+      .addScaledVector(up, deltaY * factor);
+
+    camTarget.copy(camTargetStart).add(moveVector);
     updateCam();
   }
 }, { passive: false });
 
 cv.addEventListener('touchend', e => {
   if (e.touches.length < 2) {
+    isTwoFinger = false;
     isPinching = false;
     pinchDist = 0;
   }
@@ -1613,11 +1645,23 @@ cv.addEventListener('touchend', e => {
 
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+
 cv.addEventListener('pointerdown',e=>{
   if(e.target!==cv || draggingType) return;
   activePointer=e.pointerId;
   cv.setPointerCapture?.(e.pointerId);
   moved=false;down={x:e.clientX,y:e.clientY};
+
+  // PC 화면 이동(Pan): 마우스 우클릭(2), 휠 클릭(1), 또는 Shift + 좌클릭(0)
+  if(e.button === 2 || e.button === 1 || (e.button === 0 && e.shiftKey)) {
+    isPanning = true;
+    panStart = { x: e.clientX, y: e.clientY };
+    camTargetStart.copy(camTarget);
+    return;
+  }
+
   const w=wp(e);
   if(!w){orbit=true;return;}
 
@@ -1646,9 +1690,28 @@ cv.addEventListener('pointerdown',e=>{
 });
 
 cv.addEventListener('pointermove',e=>{
-  if (isPinching) return;
+  if (isTwoFinger) return;
   if(activePointer!==null && e.pointerId!==activePointer)return;
   if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>5)moved=true;
+
+  if(isPanning){
+    const deltaX = e.clientX - panStart.x;
+    const deltaY = e.clientY - panStart.y;
+    const targetDist = dist * Math.tan((38 / 2) * Math.PI / 180);
+    const factor = (2 * targetDist) / innerHeight;
+
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const up = new THREE.Vector3(-Math.sin(yaw) * Math.sin(pitch), Math.cos(pitch), -Math.cos(yaw) * Math.sin(pitch));
+
+    const moveVector = new THREE.Vector3()
+      .addScaledVector(right, -deltaX * factor)
+      .addScaledVector(up, deltaY * factor);
+
+    camTarget.copy(camTargetStart).add(moveVector);
+    updateCam();
+    return;
+  }
+
   if(orbit){
     yaw-=(e.movementX||0)*.005;
     pitch=Math.max(.25,Math.min(1.42,pitch+(e.movementY||0)*.005));
@@ -1702,7 +1765,7 @@ function finishCanvasPointer(e){
       else if(!drag)select(null);
     }
   }
-  drag=null;orbit=false;activePointer=null;
+  drag=null;orbit=false;isPanning=false;activePointer=null;
 }
 cv.addEventListener('pointerup',finishCanvasPointer);
 cv.addEventListener('pointercancel',finishCanvasPointer);
@@ -1847,8 +1910,8 @@ window.addEventListener('pointercancel',()=>{
   draggingType=null;dragPointerId=null;ghost.style.display='none';
 });
 
-$('#bRst').onclick=()=>{while(parts.length)removePart(parts[0]);select(null)};
-$('#bCam').onclick=()=>{yaw=0;pitch=.85;dist=14;updateCam()};
+$('#bRst').onclick=()=>{while(parts.length)removePart(parts[0]);select(null);camTarget.set(0,0,0);updateCam()};
+$('#bCam').onclick=()=>{yaw=0;pitch=.85;dist=14;camTarget.set(0,0,0);updateCam()};
 
 $('#bEx').onclick=()=>{
   $('#bRst').click();
