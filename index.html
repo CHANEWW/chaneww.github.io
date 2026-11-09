@@ -1112,6 +1112,71 @@ try{ const s=localStorage.getItem('svlLang'); if(s && s!=='ko') setLang(s); else
 })();
 </script>
 <!-- @@/MOBILE-JS@@ -->
+
+<!-- 메인 인덱스 스크롤 위치·탭 기억/복원 (2026-11-09) -->
+<script>
+(function () {
+    var KEY = 'svl_scroll_top', AKEY = 'svl_area', SKEY = 'svl_sub';
+    var ready = false;
+
+    try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) {}
+
+    function store() {
+        if (!ready) return;
+        try {
+            sessionStorage.setItem(KEY, String(Math.round(window.scrollY || window.pageYOffset || 0)));
+            if (typeof currentArea !== 'undefined') sessionStorage.setItem(AKEY, currentArea);
+            if (typeof currentSub !== 'undefined') sessionStorage.setItem(SKEY, currentSub);
+        } catch (e) {}
+    }
+
+    var last = 0;
+    window.addEventListener('scroll', function () {
+        var now = Date.now();
+        if (now - last < 120) return;
+        last = now;
+        store();
+    }, { passive: true });
+
+    /* 실험실 카드를 누르는 순간 위치를 확실하게 저장 */
+    document.addEventListener('click', function (e) {
+        var el = e.target;
+        while (el && el !== document && !(el.classList && el.classList.contains('lab-card'))) el = el.parentElement;
+        if (el && el !== document) store();
+    }, true);
+    window.addEventListener('pagehide', store);
+
+    function restore() {
+        var raw = null, area = null, sub = null;
+        try {
+            raw = sessionStorage.getItem(KEY);
+            area = sessionStorage.getItem(AKEY);
+            sub = sessionStorage.getItem(SKEY);
+        } catch (e) { return; }
+        try {
+            if (area && area !== currentArea) { currentArea = area; currentSub = sub || 'all'; filterLabs(); }
+            else if (sub && sub !== currentSub) { currentSub = sub; filterLabs(); }
+        } catch (e) {}
+        ready = true;
+        if (raw === null) return;
+        var pos = parseInt(raw, 10) || 0;
+        function jump() {
+            var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+            var y = Math.min(pos, h);
+            try { window.scrollTo({ top: y, behavior: 'instant' }); }
+            catch (e) { window.scrollTo(0, y); }
+        }
+        jump();
+        requestAnimationFrame(jump);
+        setTimeout(jump, 90);
+        setTimeout(jump, 300);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(jump).catch(function () {});
+    }
+
+    window.addEventListener('load', function () { setTimeout(restore, 0); });
+    window.addEventListener('pageshow', function (e) { if (e.persisted) ready = true; });
+})();
+</script>
 <script src="labs/common/lib/qrcode.min.js" defer></script>
 <script src="labs/common/qr-modal.js" defer></script>
 </body>

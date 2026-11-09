@@ -52,10 +52,39 @@
     btn.title = '제안하기';
     btn.innerHTML = '<span class="fb-open-icon">💡</span><span class="fb-open-label">제안하기</span>';
 
+    function themeBtn() {
+        return document.getElementById('theme-toggle')
+            || document.getElementById('bTheme')
+            || document.getElementById('themeBtn');
+    }
+
+    /* 우측 상단 유틸 행(.tr-util)에 인라인으로 끼워 넣는다.
+       자리가 없으면 예전처럼 떠 있는(fixed) 버튼으로 배치한다. */
+    function mountInline() {
+        var bar = document.querySelector('.top-right-bar');
+        if (!bar) return false;
+        var row = bar.querySelector('.tr-util');
+        if (!row) {
+            // 예전 구조: 야간 모드 버튼이 바의 바로 아래 자식인 경우
+            var theme = themeBtn();
+            row = document.createElement('div');
+            row.className = 'tr-util';
+            if (theme && theme.parentElement === bar) {
+                bar.insertBefore(row, theme);
+                row.appendChild(theme);
+            } else if (theme && bar.contains(theme)) {
+                theme.parentElement.insertBefore(row, theme);
+            } else {
+                bar.insertBefore(row, bar.firstChild);
+            }
+        }
+        row.insertBefore(btn, row.firstChild);
+        btn.classList.add('svl-fb-inline');
+        return true;
+    }
+
     function placeBtn() {
-        var theme = document.getElementById('theme-toggle')
-                 || document.getElementById('bTheme')
-                 || document.getElementById('themeBtn');
+        var theme = themeBtn();
         var r = null;
         try { r = theme ? theme.getBoundingClientRect() : null; } catch (e) { r = null; }
         if (r && r.width > 0 && r.height > 0) {
@@ -86,10 +115,16 @@
         }
     }
     document.body.appendChild(btn);
-    placeBtn();
-    window.addEventListener('resize', placeBtn);
-    window.addEventListener('orientationchange', placeBtn);
-    window.addEventListener('pageshow', placeBtn);
+    if (mountInline()) {
+        btn.style.top = '';
+        btn.style.right = '';
+        btn.style.transform = '';
+    } else {
+        placeBtn();
+        window.addEventListener('resize', placeBtn);
+        window.addEventListener('orientationchange', placeBtn);
+        window.addEventListener('pageshow', placeBtn);
+    }
 
     /* ---------- 모달 DOM ---------- */
     var overlay = document.createElement('div');
