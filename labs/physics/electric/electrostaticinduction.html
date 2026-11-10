@@ -1517,7 +1517,41 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         }
         updateRodParticles('neg', 1.0);
 
-        // --- 6-1. 전하 실시간 이동 파티클 스트림 시스템 ---
+        // --- 6-1. 전하 실시간 이동 파티클 스트림 및 검전기 내부 전하 증감 시스템 ---
+        let extraNegParticles = [];
+
+        function createNegParticle(basePos) {
+            const nGroup = new THREE.Group();
+            const sphere = new THREE.Mesh(negGeo, negMat);
+            const label = createTextSprite('-', 0.036);
+            nGroup.add(sphere);
+            nGroup.add(label);
+
+            nGroup.position.copy(basePos);
+            particlesGroup.add(nGroup);
+            const pObj = {
+                group: nGroup,
+                basePos: basePos.clone(),
+                currentPos: basePos.clone(),
+                vx: (Math.random() - 0.5) * 0.002,
+                vy: (Math.random() - 0.5) * 0.002,
+                vz: (Math.random() - 0.5) * 0.002,
+                isExtra: true
+            };
+            negParticles.push(pObj);
+            extraNegParticles.push(pObj);
+            return pObj;
+        }
+
+        function clearExtraNegParticles() {
+            for (let i = 0; i < extraNegParticles.length; i++) {
+                particlesGroup.remove(extraNegParticles[i].group);
+                const idx = negParticles.indexOf(extraNegParticles[i]);
+                if (idx !== -1) negParticles.splice(idx, 1);
+            }
+            extraNegParticles = [];
+        }
+
         const transferParticlesGroup = new THREE.Group();
         scene.add(transferParticlesGroup);
 
@@ -1532,28 +1566,41 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             while (groundParticlesGroup.children.length > 0) groundParticlesGroup.remove(groundParticlesGroup.children[0]);
             activeGroundParticles = [];
 
-            const count = 10;
-            const geo = new THREE.SphereGeometry(0.016, 12, 12);
+            const count = (extraNegParticles.length > 0) ? extraNegParticles.length : (netCharge < 0 ? 14 : 4);
+            const geo = new THREE.SphereGeometry(0.018, 12, 12);
             const mat = new THREE.MeshBasicMaterial({ color: 0x007aff });
-            const glowGeo = new THREE.SphereGeometry(0.024, 8, 8);
+            const glowGeo = new THREE.SphereGeometry(0.026, 8, 8);
             const glowMat = new THREE.MeshBasicMaterial({ color: 0x64d2ff, transparent: true, opacity: 0.6 });
 
-            const discContactPos = new THREE.Vector3(-0.30, 0.65, 0);
-
+            // 검전기 하단에 대전되어 있던 여분의 음전하(-)들을 순차적으로 대지로 방전
             for (let i = 0; i < count; i++) {
                 const pGroup = new THREE.Group();
                 pGroup.add(new THREE.Mesh(geo, mat));
                 pGroup.add(new THREE.Mesh(glowGeo, glowMat));
-                pGroup.add(createTextSprite('-', 0.036));
+                pGroup.add(createTextSprite('-', 0.038));
                 groundParticlesGroup.add(pGroup);
+
+                // 출발점: 검전기 하단 금속박 위치에서 시작
+                let startPos;
+                if (extraNegParticles[i]) {
+                    startPos = extraNegParticles[i].group.position.clone();
+                    extraNegParticles[i].group.visible = false; // 방전 파티클로 인계
+                } else {
+                    const side = (i % 2 === 0) ? -1 : 1;
+                    const y = -0.25 - ((i % 7) / 6.0) * 0.13;
+                    const leafHeightRatio = (-0.22 - y) / 0.2;
+                    const spreadX = side * (0.015 + Math.sin(currentLeafAngle) * leafHeightRatio * 0.18);
+                    startPos = new THREE.Vector3(spreadX, y, 0);
+                }
 
                 activeGroundParticles.push({
                     group: pGroup,
-                    from: discContactPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.04, 0, (Math.random() - 0.5) * 0.04)),
-                    delay: i * 0.06,
-                    duration: 0.65,
+                    from: startPos,
+                    delay: i * 0.055,
+                    duration: 1.30,
                     elapsed: 0,
-                    done: false
+                    done: false,
+                    index: i
                 });
             }
         }
@@ -1561,8 +1608,12 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         function updateGroundParticles(dt) {
             if (activeGroundParticles.length === 0) return;
             let allDone = true;
-            const handPos = handGroup.position;
-            const handBase = new THREE.Vector3(handPos.x - 0.35, handPos.y + 0.12, handPos.z);
+
+            const rodBottomWorld = new THREE.Vector3(0, -0.22, 0);
+            const discCenterWorld = new THREE.Vector3(0, 0.55, 0);
+            const fingerTip = new THREE.Vector3(handGroup.position.x + 0.16, handGroup.position.y + 0.02, 0);
+            const handPalm = new THREE.Vector3(handGroup.position.x - 0.08, handGroup.position.y, 0);
+            const handSleeve = new THREE.Vector3(handGroup.position.x - 0.35, handGroup.position.y + 0.12, 0);
 
             for (let i = 0; i < activeGroundParticles.length; i++) {
                 const gp = activeGroundParticles[i];
@@ -1577,21 +1628,51 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 gp.group.visible = true;
                 const progress = Math.min(1.0, (gp.elapsed - gp.delay) / gp.duration);
 
-                // 금속판(-0.3, 0.65) -> 손가락 끝(handPos.x+0.16) -> 손목/소매(handBase)로 타고 흘러 빠져나감
-                const fingerTip = new THREE.Vector3(handGroup.position.x + 0.16, handGroup.position.y + 0.02, 0);
+                // 4단계 방전 경로:
+                // 1) p < 0.25: 검전기 하단 금속박 -> 중앙 막대 하단 분기점(0, -0.22, 0)으로 모여듦
+                // 2) 0.25 <= p < 0.55: 중심 금속 막대를 타고 거슬러 올라감 (-0.22 -> 0.55)
+                // 3) 0.55 <= p < 0.75: 금속판 표면을 타고 손가락 끝(fingerTip)으로 이동
+                // 4) 0.75 <= p <= 1.0: 손가락 끝 -> 손등(handPalm) -> 손목/소매 바깥 대지(handSleeve)로 방전 소멸
                 let curPos;
-                if (progress < 0.35) {
-                    const p1 = progress / 0.35;
-                    curPos = new THREE.Vector3().lerpVectors(gp.from, fingerTip, p1);
+                if (progress < 0.25) {
+                    const s = progress / 0.25;
+                    curPos = new THREE.Vector3().lerpVectors(gp.from, rodBottomWorld, s);
+                } else if (progress < 0.55) {
+                    const s = (progress - 0.25) / 0.30;
+                    curPos = new THREE.Vector3(
+                        Math.sin(s * 10 + gp.index * 1.5) * 0.006,
+                        THREE.MathUtils.lerp(rodBottomWorld.y, discCenterWorld.y, s),
+                        Math.cos(s * 10 + gp.index * 1.5) * 0.006
+                    );
+                } else if (progress < 0.75) {
+                    const s = (progress - 0.55) / 0.20;
+                    curPos = new THREE.Vector3().lerpVectors(discCenterWorld, fingerTip, s);
+                    curPos.y += Math.sin(s * Math.PI) * 0.02;
+                    if (s >= 0.85) sparkMat.opacity = 0.8;
                 } else {
-                    const p2 = (progress - 0.35) / 0.65;
-                    curPos = new THREE.Vector3().lerpVectors(fingerTip, handBase, p2);
+                    const s = (progress - 0.75) / 0.25;
+                    if (s < 0.5) {
+                        curPos = new THREE.Vector3().lerpVectors(fingerTip, handPalm, s / 0.5);
+                    } else {
+                        curPos = new THREE.Vector3().lerpVectors(handPalm, handSleeve, (s - 0.5) / 0.5);
+                    }
+                    curPos.y += Math.sin(s * Math.PI) * 0.03;
                 }
-                curPos.y += Math.sin(progress * Math.PI) * 0.04;
+
                 gp.group.position.copy(curPos);
 
-                const scale = 1.0 - progress * 0.45;
-                gp.group.scale.set(scale, scale, scale);
+                // 손을 타고 빠져나갈 때 스케일 감소 및 소멸
+                if (progress >= 0.75) {
+                    const s = (progress - 0.75) / 0.25;
+                    const scale = Math.max(0.1, (1.0 - s * 0.85));
+                    gp.group.scale.set(scale, scale, scale);
+                }
+
+                // 방전 진행에 따라 잔류 전하량 점진 감소 (금속박이 서서히 닫힘)
+                if (progress >= 0.45 && netCharge < 0) {
+                    const remainingExtra = Math.max(0, Math.round(14 * (1.0 - (gp.index + 1) / activeGroundParticles.length)));
+                    netCharge = -remainingExtra;
+                }
 
                 if (progress >= 1.0) {
                     gp.done = true;
@@ -1602,6 +1683,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             if (allDone) {
                 while (groundParticlesGroup.children.length > 0) groundParticlesGroup.remove(groundParticlesGroup.children[0]);
                 activeGroundParticles = [];
+                clearExtraNegParticles();
+                netCharge = 0;
             }
         }
 
@@ -1611,9 +1694,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             activeTransferParticles = [];
             isTransferring = true;
 
-            const count = 12; // 12개 전자가 순차적으로 이동 (대전체에는 10개 잔여)
+            const count = 14; // 14개 전자가 대전체에서 금속판 표면 -> 중앙 금속막대 -> 하단 금속박으로 연속 유입 (30:44 일치)
             const geo = new THREE.SphereGeometry(0.018, 12, 12);
-            const mat = new THREE.MeshBasicMaterial({ color: 0x007aff }); // 전자는 항상 선명한 파란색 (-)
+            const mat = new THREE.MeshBasicMaterial({ color: 0x007aff }); // 전자는 선명한 파란색 (-)
             const glowGeo = new THREE.SphereGeometry(0.026, 8, 8);
             const glowMat = new THREE.MeshBasicMaterial({ color: 0x64d2ff, transparent: true, opacity: 0.55 });
 
@@ -1621,7 +1704,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             const rodTipWorld = rodTipLocal.applyMatrix4(chargedRodGroup.matrixWorld);
             const angleToTip = Math.atan2(rodTipWorld.z, rodTipWorld.x);
             const discContactR = Math.min(0.28, Math.hypot(rodTipWorld.x, rodTipWorld.z));
-            const discWorld = new THREE.Vector3(Math.cos(angleToTip) * discContactR, 0.65, Math.sin(angleToTip) * discContactR);
+            const discContactWorld = new THREE.Vector3(Math.cos(angleToTip) * discContactR, 0.55, Math.sin(angleToTip) * discContactR);
 
             for (let i = 0; i < count; i++) {
                 const pGroup = new THREE.Group();
@@ -1631,19 +1714,28 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
                 transferParticlesGroup.add(pGroup);
 
-                const delay = i * 0.08; // 80ms 간격 순차 출발 (~1.0초 연속 스트림)
-                const duration = 0.55;  // 비행 시간
+                const delay = i * 0.075; // 75ms 간격 순차 출발 (~1.05초 연속 스트림)
+                const duration = 1.25;   // 전체 이동 시간 (대전체 -> 금속판 표면 -> 금속막대 하강 -> 금속박 안착)
+
+                // 금속박 안착 목표 위치: 좌우 금속박에 교대로 균등 배치
+                const side = (i % 2 === 0) ? -1 : 1;
+                const targetY = -0.25 - (Math.floor(i / 2) / 6.0) * 0.13; // -0.25 ~ -0.38
+                const targetZ = ((i % 3) - 1) * 0.008;
+                const targetX = side * (0.022 + (i / 14) * 0.018);
 
                 activeTransferParticles.push({
                     group: pGroup,
-                    from: direction === 'rod-to-disc' ? rodTipWorld.clone() : discWorld.clone(),
-                    to: direction === 'rod-to-disc' ? discWorld.clone() : rodTipWorld.clone(),
+                    rodTipPos: rodTipWorld.clone(),
+                    discContactPos: discContactWorld.clone(),
+                    leafTargetPos: new THREE.Vector3(targetX, targetY, targetZ),
+                    side: side,
                     delay: delay,
                     duration: duration,
                     elapsed: 0,
-                    arcHeight: 0.06 + Math.random() * 0.07,
-                    arcZ: (Math.random() - 0.5) * 0.05,
+                    arcHeight: 0.06 + Math.random() * 0.06,
+                    arcZ: (Math.random() - 0.5) * 0.04,
                     chargeDeducted: false,
+                    landed: false,
                     done: false,
                     index: i
                 });
@@ -1658,7 +1750,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             const curRodTipWorld = rodTipLocal.applyMatrix4(chargedRodGroup.matrixWorld);
             const curAngleToTip = Math.atan2(curRodTipWorld.z, curRodTipWorld.x);
             const curDiscContactR = Math.min(0.28, Math.hypot(curRodTipWorld.x, curRodTipWorld.z));
-            const discWorld = new THREE.Vector3(Math.cos(curAngleToTip) * curDiscContactR, 0.65, Math.sin(curAngleToTip) * curDiscContactR);
+            const discContactWorld = new THREE.Vector3(Math.cos(curAngleToTip) * curDiscContactR, 0.55, Math.sin(curAngleToTip) * curDiscContactR);
+            const discCenterWorld = new THREE.Vector3(0, 0.55, 0);
+            const rodBottomWorld = new THREE.Vector3(0, -0.22, 0);
 
             for (let i = 0; i < activeTransferParticles.length; i++) {
                 const tp = activeTransferParticles[i];
@@ -1674,31 +1768,59 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 tp.group.visible = true;
                 const progress = Math.min(1.0, (tp.elapsed - tp.delay) / tp.duration);
 
-                // 대전체 위치가 실시간으로 변해도 경로 끝점 자동 추적
-                if (tp.from.x > discWorld.x) tp.from.copy(curRodTipWorld);
-                else tp.to.copy(curRodTipWorld);
+                // 4단계 연속 이동 경로:
+                // 1) p < 0.28: 대전체 팁 -> 금속판 가장자리 접촉점 (포물선 비행 아크)
+                // 2) 0.28 <= p < 0.48: 금속판 표면을 타고 중심축(0, 0.55, 0)으로 이동
+                // 3) 0.48 <= p < 0.78: 중심 금속 막대 내부를 따라 하강 (0.55 -> -0.22)
+                // 4) 0.78 <= p <= 1.0: 금속박 분기점을 지나 좌우 금속박으로 퍼져 안착
+                let curX, curY, curZ;
 
-                const curX = THREE.MathUtils.lerp(tp.from.x, tp.to.x, progress);
-                const curY = THREE.MathUtils.lerp(tp.from.y, tp.to.y, progress) + Math.sin(progress * Math.PI) * tp.arcHeight;
-                const curZ = THREE.MathUtils.lerp(tp.from.z, tp.to.z, progress) + Math.sin(progress * Math.PI) * tp.arcZ;
+                if (progress < 0.28) {
+                    const s = progress / 0.28;
+                    curX = THREE.MathUtils.lerp(curRodTipWorld.x, discContactWorld.x, s);
+                    curY = THREE.MathUtils.lerp(curRodTipWorld.y, discContactWorld.y, s) + Math.sin(s * Math.PI) * tp.arcHeight;
+                    curZ = THREE.MathUtils.lerp(curRodTipWorld.z, discContactWorld.z, s) + Math.sin(s * Math.PI) * tp.arcZ;
+
+                    // 비행 중 대전체 전하 차감 반영 (대전체에서 전자가 점진적으로 사라짐)
+                    if (s >= 0.45 && !tp.chargeDeducted) {
+                        tp.chargeDeducted = true;
+                        sparkMat.opacity = 1.0;
+                        const remainingRatio = 1.0 - ((14 / 22) * ((tp.index + 1) / activeTransferParticles.length));
+                        updateRodParticles(currentPolarity, remainingRatio);
+                    }
+                } else if (progress < 0.48) {
+                    const s = (progress - 0.28) / 0.20;
+                    curX = THREE.MathUtils.lerp(discContactWorld.x, discCenterWorld.x, s);
+                    curZ = THREE.MathUtils.lerp(discContactWorld.z, discCenterWorld.z, s);
+                    curY = 0.55 + Math.sin(s * Math.PI) * 0.015;
+                } else if (progress < 0.78) {
+                    const s = (progress - 0.48) / 0.30;
+                    curX = Math.sin(s * 10 + tp.index * 1.5) * 0.006;
+                    curZ = Math.cos(s * 10 + tp.index * 1.5) * 0.006;
+                    curY = THREE.MathUtils.lerp(discCenterWorld.y, rodBottomWorld.y, s);
+                } else {
+                    const s = (progress - 0.78) / 0.22;
+                    curY = THREE.MathUtils.lerp(rodBottomWorld.y, tp.leafTargetPos.y, s);
+                    const leafHeightRatio = (-0.22 - curY) / 0.2;
+                    const spreadX = tp.side * (0.015 + Math.sin(currentLeafAngle) * leafHeightRatio * 0.18);
+                    curX = THREE.MathUtils.lerp(0, spreadX, s);
+                    curZ = THREE.MathUtils.lerp(0, tp.leafTargetPos.z, s);
+                }
 
                 tp.group.position.set(curX, curY, curZ);
 
                 // 이동 중 크기 펄스 효과
-                const scale = 0.9 + Math.sin(progress * Math.PI) * 0.45;
+                const scale = 0.95 + Math.sin(progress * Math.PI) * 0.35;
                 tp.group.scale.set(scale, scale, scale);
 
-                // 비행 중간 지점에서 대전체 전하 감소 차감 반영 (대전체에서 전자가 사라지는 연출)
-                if (progress >= 0.45 && !tp.chargeDeducted) {
-                    tp.chargeDeducted = true;
-                    sparkMat.opacity = 1.0;
-                    const remainingRatio = 1.0 - (0.55 * ((tp.index + 1) / activeTransferParticles.length));
-                    updateRodParticles(currentPolarity, remainingRatio);
-                }
-
-                if (progress >= 1.0) {
+                if (progress >= 1.0 && !tp.landed) {
+                    tp.landed = true;
                     tp.done = true;
                     tp.group.visible = false;
+
+                    // 검전기 내부 실제 음전하(-) 파티클로 전환 안착
+                    createNegParticle(tp.leafTargetPos);
+                    netCharge = -extraNegParticles.length;
                 }
             }
 
@@ -1706,6 +1828,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 isTransferring = false;
                 while (transferParticlesGroup.children.length > 0) transferParticlesGroup.remove(transferParticlesGroup.children[0]);
                 activeTransferParticles = [];
+                netCharge = -14;
             }
         }
 
@@ -1776,8 +1899,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                         if (!isHandGrounded) {
                             isHandGrounded = true;
                             sparkMat.opacity = 1.0;
-                            netCharge = 0;
-                            showTooltip('🖐️ 손가락 직접 접지: 손가락이 금속판에 닿아 여분의 전자가 방전되었습니다! (30:30 중성)');
+                            startGroundDischargeAnimation();
+                            showTooltip('🖐️ 손가락 직접 접지: 손가락이 금속판에 닿아 여분의 전자가 금속 막대를 타고 올라와 손을 통해 대지로 방전됩니다! (30:30 중성 복원)');
                             const btnGround = document.getElementById('btn-ground-hand');
                             if (btnGround) btnGround.classList.add('active');
                             const btnSubGround = document.getElementById('btn-sub-ground');
@@ -1834,8 +1957,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             sparkMat.opacity = 1.0;
 
             if (currentPolarity === 'neg') {
-                netCharge = -14;
-                showTooltip('⚡ 대전체 접촉: 대전체 표면의 전자(-)들이 금속판으로 실시간 이동합니다! (대전체 전하 감소 22개 ➔ 10개, 검전기 음전하 대전)');
+                showTooltip('⚡ 대전체 접촉: 대전체 표면의 전자(-)들이 금속 막대를 타고 검전기 내부로 연속 유입됩니다! (대전체 전하 22개 ➔ 8개, 검전기 30:44 음전하 대전)');
                 startElectronTransferAnimation('rod-to-disc');
             } else {
                 netCharge = 14;
@@ -1852,7 +1974,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         function triggerSeparateRod() {
             isRodContact = false;
             chargedRodGroup.position.set(1.10, 0.68, 0);
-            showTooltip('↔ 대전체 분리: 대전체를 멀리 치워도 이미 이동한 전하 때문에 검전기는 대전 상태를 유지하여 금속박이 벌어져 있습니다.');
+            showTooltip('↔ 대전체 분리: 대전체를 멀리 치워도 이미 이동한 전하 때문에 검전기는 대전 상태(30:44)를 유지하여 금속박이 벌어져 있습니다.');
         }
 
         function triggerGroundHand() {
@@ -1864,9 +1986,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
             if (isHandGrounded) {
                 sparkMat.opacity = 1.0;
-                netCharge = 0;
                 startGroundDischargeAnimation();
-                showTooltip('🖐️ 손가락 접지: 여분의 전자가 손을 통해 대지로 방전되어 검전기가 중성(30:30)으로 복원되었습니다!');
+                showTooltip('🖐️ 손가락 접지: 여분의 전자가 금속 막대를 타고 올라와 손을 통해 대지로 방전됩니다! (30:30 중성 복원)');
             } else {
                 showTooltip('🖐️ 손가락 접지 해제: 중성 상태를 유지합니다.');
             }
@@ -1995,6 +2116,12 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         function setPolarity(pol) {
             currentPolarity = pol;
             rodDischarged = false;
+            clearExtraNegParticles();
+            while (transferParticlesGroup.children.length > 0) transferParticlesGroup.remove(transferParticlesGroup.children[0]);
+            activeTransferParticles = [];
+            while (groundParticlesGroup.children.length > 0) groundParticlesGroup.remove(groundParticlesGroup.children[0]);
+            activeGroundParticles = [];
+            netCharge = 0;
             if (pol === 'neg') {
                 btnNeg.className = 'toggle-btn active-neg';
                 btnPos.className = 'toggle-btn';
@@ -2026,6 +2153,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         document.getElementById('btn-reset').addEventListener('click', () => {
             chargedRodGroup.position.set(1.0, 0.68, 0);
             handGroup.position.set(-0.88, 0.55, 0);
+            clearExtraNegParticles();
             netCharge = 0;
             isHandGrounded = false;
             isRodContact = false;
@@ -2037,6 +2165,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             if (btnSubGround) btnSubGround.classList.remove('active');
             while (transferParticlesGroup.children.length > 0) transferParticlesGroup.remove(transferParticlesGroup.children[0]);
             activeTransferParticles = [];
+            while (groundParticlesGroup.children.length > 0) groundParticlesGroup.remove(groundParticlesGroup.children[0]);
+            activeGroundParticles = [];
             setPolarity('neg');
             showTooltip('🔄 검전기 및 대전체 상태가 초기화되었습니다. (대전체 전하 22개 완전 복원)');
         });
