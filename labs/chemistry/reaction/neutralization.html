@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.62">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>산·염기 중화반응 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <!-- Three.js 및 OrbitControls 로컬 라이브러리 -->
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+            background-color: #f4f6fa;
+            color: #1c1c1e;
+            transition: background-color 0.35s ease, color 0.35s ease;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.78);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+            border-radius: 18px;
+            transition: all 0.3s ease;
+        }
+
+        /* 상단 좌측 바 */
+        .top-left-bar {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 15px;
+            border-radius: 999px;
+            text-decoration: none;
+            color: #1c1c1e;
+            font-weight: bold;
+            font-size: 13.5px;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .back-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .tag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 16px;
+            border-radius: 999px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .tag-pill {
+            background: rgba(16, 185, 129, 0.15);
+            color: #059669;
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+        }
+
+        /* 상단 우측 바 */
+        .top-right-bar {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 40px;
+            padding: 0 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            border: none;
+            color: #1c1c1e;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+        .icon-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        /* 데이터 카드 */
+        .data-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 7px 16px;
+            border-radius: 16px;
+        }
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.15;
+        }
+        .data-label {
+            font-size: 9.5px;
+            color: #64748b;
+            font-weight: bold;
+            letter-spacing: -0.2px;
+        }
+        .data-value {
+            font-size: 13px;
+            font-weight: 900;
+            color: #059669;
+            margin-top: 1px;
+        }
+        .data-sep {
+            width: 1px;
+            height: 22px;
+            background: rgba(0, 0, 0, 0.08);
+        }
+
+        /* 안내 툴팁 */
+        .center-tooltip {
+            position: absolute;
+            top: 74px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #334155;
+            pointer-events: none;
+            z-index: 10;
+            white-space: nowrap;
+            letter-spacing: -0.2px;
+        }
+
+        /* 하단 중앙 컨트롤 바 */
+        .bottom-ctrl-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            z-index: 10;
+        }
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            border: none;
+            background: rgba(255, 255, 255, 0.85);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .action-btn:hover {
+            background: #ffffff;
+            transform: translateY(-1px);
+        }
+
+        /* 우측 하단 전체화면 버튼 */
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        .fullscreen-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: none;
+            background: rgba(255, 255, 255, 0.85);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .fullscreen-btn:hover {
+            background: #ffffff;
+            transform: translateY(-1px);
+        }
+
+        /* 우측 조절 패널 */
+        .side-ctrl-panel {
+            position: fixed;
+            right: 20px;
+            bottom: 72px;
+            width: 220px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 50;
+            border-radius: 18px;
+        }
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+        .panel-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #334155;
+            letter-spacing: -0.2px;
+        }
+        .ctrl-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .ctrl-tab-btn {
+            padding: 8px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.82);
+            font-family: inherit;
+            font-size: 11.5px;
+            font-weight: bold;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .ctrl-tab-btn.active {
+            background: linear-gradient(135deg, #10b981, #059669) !important;
+            border-color: #059669 !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.32);
+        }
+
+        /* 도킹 서브패널 */
+        .sub-panel {
+            position: fixed;
+            right: 250px;
+            bottom: 72px;
+            width: 280px;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            padding: 14px 16px !important;
+            z-index: 55;
+            border-radius: 18px;
+        }
+        .sub-panel.show { display: flex; }
+        .sub-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+        .sub-panel-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #1e293b;
+        }
+        .sub-close {
+            background: rgba(0,0,0,0.06);
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            color: #64748b;
+        }
+
+        .drop-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px;
+            border-radius: 14px;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+            color: #065f46;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .drop-action-btn:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+        }
+
+        /* 이온 수 막대그래프 */
+        .ion-graph {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 4px;
+        }
+        .ion-bar-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .ion-name { width: 34px; color: #475569; }
+        .ion-track {
+            flex: 1;
+            height: 12px;
+            background: rgba(0,0,0,0.06);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .ion-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.3s ease;
+        }
+        .fill-h { background: #f97316; }
+        .fill-cl { background: #10b981; }
+        .fill-na { background: #8b5cf6; }
+        .fill-oh { background: #0284c7; }
+        .fill-h2o { background: #38bdf8; }
+        .ion-cnt { width: 24px; text-align: right; color: #1e293b; }
+
+        /* 원리 설명 모달 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-card {
+            width: 100%;
+            max-width: 520px;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 22px;
+            border-radius: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(0,0,0,0.08);
+            padding-bottom: 10px;
+        }
+        .modal-title { font-size: 16px; font-weight: 800; color: #0f172a; }
+        .modal-close {
+            background: rgba(0,0,0,0.06);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .info-card {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.7);
+            border: 1px solid rgba(0,0,0,0.05);
+            font-size: 12.5px;
+            line-height: 1.6;
+            color: #334155;
+            word-break: keep-all;
+        }
+        .info-card h4 {
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #059669;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* 다크모드 스타일 */
+        body.dark-mode { background-color: #0f172a; color: #f8fafc; }
+        body.dark-mode .glass-panel {
+            background: rgba(30, 41, 59, 0.82);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #f8fafc;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+        }
+        body.dark-mode .back-btn, body.dark-mode .tag-badge, body.dark-mode .icon-btn,
+        body.dark-mode .action-btn, body.dark-mode .fullscreen-btn, body.dark-mode .panel-title,
+        body.dark-mode .sub-panel-title, body.dark-mode .modal-title { color: #f8fafc; }
+        body.dark-mode .action-btn, body.dark-mode .fullscreen-btn { background: rgba(51, 65, 85, 0.85); color: #f8fafc; }
+        body.dark-mode .ctrl-tab-btn { background: rgba(51, 65, 85, 0.7); color: #cbd5e1; border-color: rgba(255,255,255,0.08); }
+        body.dark-mode .drop-action-btn { background: linear-gradient(135deg, #064e3b, #047857); color: #a7f3d0; border-color: rgba(16, 185, 129, 0.4); }
+        body.dark-mode .ion-name, body.dark-mode .ion-cnt { color: #cbd5e1; }
+        body.dark-mode .ion-track { background: rgba(255,255,255,0.1); }
+        body.dark-mode .info-card { background: rgba(51, 65, 85, 0.6); border-color: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
+        body.dark-mode .info-card h4 { color: #34d399; }
+
+        @media (max-width: 900px) {
+            .top-left-bar { top: max(8px, env(safe-area-inset-top)); left: 8px; gap: 6px; }
+            .back-btn { padding: 6px 12px; font-size: 12px; }
+            .tag-badge { padding: 6px 12px; font-size: 12px; }
+            .tag-pill { font-size: 9px; }
+            .top-right-bar { top: max(8px, env(safe-area-inset-top)); right: 8px; gap: 6px; }
+            .data-card { display: none; }
+            .center-tooltip { display: none; }
+            .side-ctrl-panel { right: 12px; bottom: 68px; width: 180px; padding: 10px; }
+            .sub-panel { right: 12px; bottom: 240px; width: calc(100vw - 24px); max-height: 45vh; }
+            .bottom-ctrl-bar { bottom: 12px; padding: 5px 10px; }
+            .action-btn { padding: 6px 12px; font-size: 11.5px; }
+            .bottom-right-bar { bottom: 12px; right: 12px; }
+            .fullscreen-btn { padding: 8px 12px; font-size: 11.5px; }
+        }
+    </style>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- 상단 좌측 바: 뒤로가기 & 타이틀 & QR -->
+    <div class="top-left-bar">
+        <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동">← 메인</a>
+        <div class="tag-badge glass-panel">
+            <span>산·염기 중화반응 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+        <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+            <span class="qr-btn-icon" aria-hidden="true">📱</span>
+            <span class="qr-btn-label">QR code</span>
+        </button>
+    </div>
+
+    <!-- 상단 우측 바: 유틸리티 & 데이터 표시 -->
+    <div class="top-right-bar">
+        <div class="data-card glass-panel" id="dataCard">
+            <div class="data-item">
+                <span class="data-label">용액 액성</span>
+                <span class="data-value" id="valAcidity" style="color:#eab308;">산성 (노란색)</span>
+            </div>
+            <div class="data-sep"></div>
+            <div class="data-item">
+                <span class="data-label">NaOH 투입량</span>
+                <span class="data-value" id="valNaoh">0 mL</span>
+            </div>
+            <div class="data-sep"></div>
+            <div class="data-item">
+                <span class="data-label">용액 온도</span>
+                <span class="data-value" id="valTemp">20.0 °C</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="btnHelp" title="원리 설명 보기">📖 탐구 원리</button>
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" title="야간 모드 전환">🌙 야간 모드</button>
+    </div>
+
+    <!-- 중앙 힌트 툴팁 -->
+    <div class="center-tooltip glass-panel" id="centerTooltip">
+        💡 뷰렛에서 NaOH 수용액을 떨어뜨려 수소 이온과 수산화 이온의 중화반응을 관찰해 보세요.
+    </div>
+
+    <!-- 하단 중앙 컨트롤 바 -->
+    <div class="bottom-ctrl-bar glass-panel">
+        <button class="action-btn" id="btnReset" title="초기 상태로 되돌리기">🔄 초기화</button>
+        <button class="action-btn" id="btnAlign" title="정면 수평 뷰로 정렬">🎥 시점정렬</button>
+    </div>
+
+    <!-- 우측 하단 전체화면 버튼 -->
+    <div class="bottom-right-bar">
+        <button class="fullscreen-btn glass-panel" id="fullscreenBtn" aria-label="전체화면으로 전환">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <!-- 우측 조절 패널 -->
+    <div class="side-ctrl-panel glass-panel">
+        <div class="panel-header">
+            <span class="panel-title">⚙️ 중화반응 조절</span>
+        </div>
+        <button class="drop-action-btn" id="btnDrop1">💧 NaOH 1방울 투입</button>
+        <button class="drop-action-btn" id="btnDrop5" style="background:linear-gradient(135deg, #e0f2fe, #bae6fd); color:#0369a1; border-color:rgba(2,132,199,0.3);">💧💧 5방울 일괄 투입</button>
+        <div class="ctrl-grid">
+            <button class="ctrl-tab-btn active" id="tabSubIon">📊 이온 그래프</button>
+            <button class="ctrl-tab-btn" id="tabSubIndicator">🎨 지시약 선택</button>
+        </div>
+    </div>
+
+    <!-- 도킹 서브패널: 실시간 이온 수 그래프 -->
+    <div class="sub-panel glass-panel show" id="panelIon">
+        <div class="sub-head">
+            <span class="sub-panel-title">📊 용액 속 이온 수 변화</span>
+            <button class="sub-close" id="closeIon">✕</button>
+        </div>
+        <div class="ion-graph">
+            <div class="ion-bar-row">
+                <span class="ion-name">H⁺</span>
+                <div class="ion-track"><div class="ion-fill fill-h" id="barH" style="width: 100%;"></div></div>
+                <span class="ion-cnt" id="cntH">10</span>
+            </div>
+            <div class="ion-bar-row">
+                <span class="ion-name">Cl⁻</span>
+                <div class="ion-track"><div class="ion-fill fill-cl" id="barCl" style="width: 100%;"></div></div>
+                <span class="ion-cnt" id="cntCl">10</span>
+            </div>
+            <div class="ion-bar-row">
+                <span class="ion-name">Na⁺</span>
+                <div class="ion-track"><div class="ion-fill fill-na" id="barNa" style="width: 0%;"></div></div>
+                <span class="ion-cnt" id="cntNa">0</span>
+            </div>
+            <div class="ion-bar-row">
+                <span class="ion-name">OH⁻</span>
+                <div class="ion-track"><div class="ion-fill fill-oh" id="barOh" style="width: 0%;"></div></div>
+                <span class="ion-cnt" id="cntOh">0</span>
+            </div>
+            <div class="ion-bar-row" style="margin-top:4px; padding-top:4px; border-top:1px dashed rgba(0,0,0,0.1);">
+                <span class="ion-name">H₂O</span>
+                <div class="ion-track"><div class="ion-fill fill-h2o" id="barH2o" style="width: 0%;"></div></div>
+                <span class="ion-cnt" id="cntH2o">0</span>
+            </div>
+        </div>
+        <div style="font-size:11px; color:#64748b; line-height:1.4; margin-top:4px;">
+            * Cl⁻, Na⁺은 구경꾼 이온이며, H⁺와 OH⁻가 1:1로 결합해 H₂O가 됩니다.
+        </div>
+    </div>
+
+    <!-- 도킹 서브패널: 지시약 선택 -->
+    <div class="sub-panel glass-panel" id="panelIndicator">
+        <div class="sub-head">
+            <span class="sub-panel-title">🎨 지시약 종류 선택</span>
+            <button class="sub-close" id="closeIndicator">✕</button>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+            <button class="ctrl-tab-btn active" id="btnBtb" style="text-align:left; padding:10px;">
+                <b>BTB 용액</b><br>
+                <span style="font-size:10px; color:#64748b;">산성(노랑) ➔ 중성(초록) ➔ 염기성(파랑)</span>
+            </button>
+            <button class="ctrl-tab-btn" id="btnPhenol" style="text-align:left; padding:10px;">
+                <b>페놀프탈레인 용액</b><br>
+                <span style="font-size:10px; color:#64748b;">산성·중성(무색) ➔ 염기성(붉은색)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 탐구 원리 모달 -->
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal-card glass-panel">
+            <div class="modal-header">
+                <span class="modal-title">📖 산·염기 중화반응 탐구 원리</span>
+                <button class="modal-close" id="btnModalClose">✕</button>
+            </div>
+            <div class="info-card">
+                <h4>🧪 1. 중화 반응이란?</h4>
+                산의 수소 이온($H^+$)과 염기의 수산화 이온($OH^-$)이 1:1의 개수비로 결합하여 <b>물($H_2O$)</b>과 <b>염</b>을 생성하고 열을 발생하는 반응입니다.<br>
+                <div style="background:rgba(16,185,129,0.12); padding:8px 12px; border-radius:8px; margin-top:6px; font-weight:bold; color:#065f46; text-align:center;">
+                    알짜 이온 반응식: H⁺ + OH⁻ ➔ H₂O + 중화열
+                </div>
+            </div>
+            <div class="info-card">
+                <h4>🎯 2. 중화점(Neutralization Point)의 3대 특징</h4>
+                <b>① 이온의 소멸</b>: 산의 $H^+$와 염기의 $OH^-$가 모두 반응하여 용액 속에 $H^+$와 $OH^-$가 전혀 남아있지 않은 지점입니다.<br>
+                <b>② 최고 온도</b>: 반응할 때마다 '중화열'이 방출되므로, 중화 반응이 완전히 끝나는 <b>중화점에서 용액의 온도가 가장 높습니다</b>.<br>
+                <b>③ 지시약 색 변화</b>: BTB 용액을 넣었을 때 노란색(산성)에서 완벽한 <b>초록색(중성)</b>을 띱니다.
+            </div>
+            <div class="info-card">
+                <h4>📈 3. 용액 속 이온 수 변화 규칙</h4>
+                - <b>구경꾼 이온</b>: $Cl^-$는 처음부터 끝까지 개수 일정, $Na^+$는 투입하는 족족 비례 증가.<br>
+                - <b>알짜 이온</b>: $H^+$는 $OH^-$와 반응하며 점차 감소하여 중화점에서 0이 됨. $OH^-$는 중화점 이후부터 투입되는 대로 축적됨.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+
+        /* ---------- 전역 시뮬레이션 상태 ---------- */
+        const state = {
+            naohDrops: 0,       // 0 ~ 20 방울 (10방울이 중화점)
+            indicator: 'btb',   // 'btb' | 'phenol'
+            temp: 20.0,
+            acidity: 'acid',
+            darkMode: false
+        };
+
+        /* ---------- Three.js 초기화 ---------- */
+        const container = $('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf4f6fa);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 24);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 6;
+        controls.maxDistance = 60;
+        controls.target.set(0, 0, 0);
+
+        /* ---------- 조명 ---------- */
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.95);
+        dirLight.position.set(12, 20, 15);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0xbae6fd, 0.4);
+        fillLight.position.set(-12, -8, -12);
+        scene.add(fillLight);
+
+        /* ============================================================
+           3D 실험 도구 (비커, 뷰렛, 온도계)
+           ============================================================ */
+        const labGroup = new THREE.Group();
+        scene.add(labGroup);
+
+        // (1) 비커 (Beaker) - 투명 유리 실린더
+        const beakerGeo = new THREE.CylinderGeometry(4.2, 4.0, 8.5, 36, 1, true);
+        const beakerMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.35,
+            roughness: 0.1,
+            transmission: 0.9,
+            thickness: 0.8,
+            side: THREE.DoubleSide
+        });
+        const beaker = new THREE.Mesh(beakerGeo, beakerMat);
+        beaker.position.set(0, -1.0, 0);
+        labGroup.add(beaker);
+
+        // 비커 바닥
+        const bottomGeo = new THREE.CylinderGeometry(4.0, 4.0, 0.3, 36);
+        const bottomMesh = new THREE.Mesh(bottomGeo, beakerMat);
+        bottomMesh.position.set(0, -5.2, 0);
+        labGroup.add(bottomMesh);
+
+        // (2) 비커 안의 수용액 (Solution)
+        const solGeo = new THREE.CylinderGeometry(3.9, 3.8, 5.5, 32);
+        const solMat = new THREE.MeshPhysicalMaterial({
+            color: 0xfacc15, // 초기 BTB 산성 노란색
+            transparent: true,
+            opacity: 0.62,
+            roughness: 0.15,
+            transmission: 0.5
+        });
+        const solMesh = new THREE.Mesh(solGeo, solMat);
+        solMesh.position.set(0, -2.4, 0);
+        labGroup.add(solMesh);
+
+        // (3) 뷰렛 (Burette) - 상단에서 액체를 떨어뜨리는 튜브
+        const buretteTubeGeo = new THREE.CylinderGeometry(0.55, 0.55, 7.0, 24);
+        const buretteTipGeo = new THREE.ConeGeometry(0.55, 1.8, 24);
+        const buretteMat = new THREE.MeshPhysicalMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.5,
+            roughness: 0.1,
+            transmission: 0.85
+        });
+        const buretteTube = new THREE.Mesh(buretteTubeGeo, buretteMat);
+        buretteTube.position.set(0, 9.5, 0);
+        labGroup.add(buretteTube);
+
+        const buretteTip = new THREE.Mesh(buretteTipGeo, buretteMat);
+        buretteTip.position.set(0, 5.1, 0);
+        buretteTip.rotation.x = Math.PI;
+        labGroup.add(buretteTip);
+
+        // 뷰렛 안의 NaOH 용액 (파란빛)
+        const buretteFluidGeo = new THREE.CylinderGeometry(0.42, 0.42, 6.2, 20);
+        const buretteFluidMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 });
+        const buretteFluid = new THREE.Mesh(buretteFluidGeo, buretteFluidMat);
+        buretteFluid.position.set(0, 9.5, 0);
+        labGroup.add(buretteFluid);
+
+        // (4) 3D 온도계 (Thermometer)
+        const thermoGroup = new THREE.Group();
+        thermoGroup.position.set(3.2, 0, 0);
+        labGroup.add(thermoGroup);
+
+        const thermoTubeGeo = new THREE.CylinderGeometry(0.2, 0.2, 10.0, 16);
+        const thermoTubeMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, transmission: 0.8 });
+        const thermoTube = new THREE.Mesh(thermoTubeGeo, thermoTubeMat);
+        thermoGroup.add(thermoTube);
+
+        // 온도계 붉은 액주
+        const thermoFluidGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.0, 16);
+        const thermoFluidMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+        const thermoFluid = new THREE.Mesh(thermoFluidGeo, thermoFluidMat);
+        thermoFluid.position.set(0, -3.5, 0);
+        thermoGroup.add(thermoFluid);
+
+        // 온도계 하단 구
+        const thermoBulbGeo = new THREE.SphereGeometry(0.38, 16, 16);
+        const thermoBulb = new THREE.Mesh(thermoBulbGeo, thermoFluidMat);
+        thermoBulb.position.set(0, -4.8, 0);
+        thermoGroup.add(thermoBulb);
+
+        /* ============================================================
+           이온 및 물 분자 3D 파티클 시스템
+           ============================================================ */
+        const ionGroup = new THREE.Group();
+        labGroup.add(ionGroup);
+
+        // 이온 메쉬 캐시
+        const ionMeshes = [];
+        const ionGeo = new THREE.SphereGeometry(0.28, 16, 16);
+        const hMat = new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xea580c, emissiveIntensity: 0.6 });
+        const clMat = new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x059669, emissiveIntensity: 0.4 });
+        const naMat = new THREE.MeshStandardMaterial({ color: 0x8b5cf6, emissive: 0x7c3aed, emissiveIntensity: 0.4 });
+        const ohMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, emissive: 0x0369a1, emissiveIntensity: 0.6 });
+
+        // 낙하하는 물방울 메쉬
+        const dropGeo = new THREE.SphereGeometry(0.22, 12, 12);
+        const dropMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 });
+        const fallingDrop = new THREE.Mesh(dropGeo, dropMat);
+        fallingDrop.visible = false;
+        labGroup.add(fallingDrop);
+
+        let dropAnim = null; // 방울 애니메이션 타이머
+
+        function rebuildIons() {
+            // 기존 이온 메쉬 제거
+            while (ionGroup.children.length > 0) {
+                ionGroup.remove(ionGroup.children[0]);
+            }
+            ionMeshes.length = 0;
+
+            const n = state.naohDrops;
+            const hCount = Math.max(0, 10 - n);
+            const clCount = 10;
+            const naCount = n;
+            const ohCount = Math.max(0, n - 10);
+            const h2oCount = Math.min(n, 10);
+
+            function addIon(mat, label) {
+                const mesh = new THREE.Mesh(ionGeo, mat);
+                // 비커 원통 내부 랜덤 위치
+                const r = Math.random() * 2.8;
+                const theta = Math.random() * Math.PI * 2;
+                const y = -4.5 + Math.random() * 4.2;
+                mesh.position.set(r * Math.cos(theta), y, r * Math.sin(theta));
+                mesh.userData = {
+                    vx: (Math.random() - 0.5) * 0.015,
+                    vy: (Math.random() - 0.5) * 0.015,
+                    vz: (Math.random() - 0.5) * 0.015,
+                    baseY: y
+                };
+                ionGroup.add(mesh);
+                ionMeshes.push(mesh);
+            }
+
+            for (let i = 0; i < hCount; i++) addIon(hMat, 'H+');
+            for (let i = 0; i < clCount; i++) addIon(clMat, 'Cl-');
+            for (let i = 0; i < naCount; i++) addIon(naMat, 'Na+');
+            for (let i = 0; i < ohCount; i++) addIon(ohMat, 'OH-');
+
+            // UI 텍스트 & 바 업데이트
+            $('cntH').textContent = hCount;
+            $('cntCl').textContent = clCount;
+            $('cntNa').textContent = naCount;
+            $('cntOh').textContent = ohCount;
+            $('cntH2o').textContent = h2oCount;
+
+            $('barH').style.width = (hCount * 10) + '%';
+            $('barCl').style.width = (clCount * 10) + '%';
+            $('barNa').style.width = (naCount * 5) + '%';
+            $('barOh').style.width = (ohCount * 10) + '%';
+            $('barH2o').style.width = (h2oCount * 10) + '%';
+
+            // 온도 계산: 초기 20도 -> 중화점(10방울)에서 32도 최고점 -> 20방울에서 28도
+            if (n <= 10) {
+                state.temp = 20.0 + (n / 10) * 12.0;
+            } else {
+                state.temp = 32.0 - ((n - 10) / 10) * 4.0;
+            }
+            $('valTemp').textContent = state.temp.toFixed(1) + ' °C';
+            $('valNaoh').textContent = (n * 1.0) + ' mL';
+
+            // 온도계 높이 업데이트
+            const fluidHeight = 1.0 + (state.temp - 20) * 0.35;
+            thermoFluid.scale.y = fluidHeight;
+            thermoFluid.position.y = -4.5 + (fluidHeight / 2);
+
+            // 액성 및 지시약 색상 업데이트
+            updateIndicatorColor();
+        }
+
+        function updateIndicatorColor() {
+            const n = state.naohDrops;
+            let col = 0xfacc15; // 기본 BTB 산성 노랑
+
+            if (state.indicator === 'btb') {
+                if (n < 10) {
+                    state.acidity = '산성';
+                    col = 0xfacc15; // 노랑
+                    $('valAcidity').textContent = '산성 (노란색)';
+                    $('valAcidity').style.color = '#eab308';
+                } else if (n === 10) {
+                    state.acidity = '중성';
+                    col = 0x22c55e; // 초록
+                    $('valAcidity').textContent = '중성 (초록색 - 중화점!)';
+                    $('valAcidity').style.color = '#10b981';
+                } else {
+                    state.acidity = '염기성';
+                    col = 0x3b82f6; // 파랑
+                    $('valAcidity').textContent = '염기성 (파란색)';
+                    $('valAcidity').style.color = '#3b82f6';
+                }
+            } else {
+                // 페놀프탈레인
+                if (n <= 10) {
+                    state.acidity = (n === 10) ? '중성' : '산성';
+                    col = 0xf1f5f9; // 무색
+                    $('valAcidity').textContent = (n === 10) ? '중성 (무색)' : '산성 (무색)';
+                    $('valAcidity').style.color = '#64748b';
+                } else {
+                    state.acidity = '염기성';
+                    col = 0xf43f5e; // 붉은색
+                    $('valAcidity').textContent = '염기성 (붉은색)';
+                    $('valAcidity').style.color = '#f43f5e';
+                }
+            }
+            solMat.color.setHex(col);
+        }
+
+        /* ---------- 방울 투입 애니메이션 ---------- */
+        function dropNaoh(count = 1) {
+            if (state.naohDrops >= 20) {
+                $('centerTooltip').textContent = '⚠️ 뷰렛의 NaOH를 최대치(20mL)까지 모두 투입했습니다. 초기화 후 다시 탐구해 보세요.';
+                return;
+            }
+
+            fallingDrop.position.set(0, 4.0, 0);
+            fallingDrop.visible = true;
+
+            let startTime = performance.now();
+            function animateDrop(now) {
+                const elapsed = (now - startTime) / 1000;
+                if (elapsed < 0.28) {
+                    fallingDrop.position.y = 4.0 - elapsed * 24.0;
+                    requestAnimationFrame(animateDrop);
+                } else {
+                    fallingDrop.visible = false;
+                    state.naohDrops = Math.min(20, state.naohDrops + count);
+                    rebuildIons();
+
+                    if (state.naohDrops === 10) {
+                        $('centerTooltip').textContent = '🎉 중화점 도달! H⁺와 OH⁻가 완전히 반응하여 물이 되었고 온도가 최고점에 도달했습니다!';
+                    } else if (state.naohDrops < 10) {
+                        $('centerTooltip').textContent = `💧 NaOH 투입 중: 남은 H⁺ (${10 - state.naohDrops}개). 용액은 여전히 산성입니다.`;
+                    } else {
+                        $('centerTooltip').textContent = `💧 NaOH 과량 투입: OH⁻ (${state.naohDrops - 10}개) 잔류로 용액이 염기성으로 변했습니다.`;
+                    }
+                }
+            }
+            requestAnimationFrame(animateDrop);
+        }
+
+        $('btnDrop1').addEventListener('click', () => dropNaoh(1));
+        $('btnDrop5').addEventListener('click', () => dropNaoh(5));
+
+        /* ---------- 렌더 루프 (이온 브라운 운동) ---------- */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 비커 내 이온들 부유 모션
+            ionMeshes.forEach(mesh => {
+                mesh.position.x += mesh.userData.vx;
+                mesh.position.y += mesh.userData.vy;
+                mesh.position.z += mesh.userData.vz;
+
+                const dist = Math.sqrt(mesh.position.x ** 2 + mesh.position.z ** 2);
+                if (dist > 3.2) {
+                    mesh.userData.vx *= -1;
+                    mesh.userData.vz *= -1;
+                }
+                if (mesh.position.y > 0.1 || mesh.position.y < -4.8) {
+                    mesh.userData.vy *= -1;
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        rebuildIons();
+        animate();
+
+        /* ---------- 서브패널 토글 ---------- */
+        const panelIon = $('panelIon');
+        const panelIndicator = $('panelIndicator');
+
+        function togglePanel(panel) {
+            const isShow = panel.classList.contains('show');
+            panelIon.classList.remove('show');
+            panelIndicator.classList.remove('show');
+            $('tabSubIon').classList.remove('active');
+            $('tabSubIndicator').classList.remove('active');
+            if (!isShow) {
+                panel.classList.add('show');
+                if (panel === panelIon) $('tabSubIon').classList.add('active');
+                if (panel === panelIndicator) $('tabSubIndicator').classList.add('active');
+            }
+        }
+
+        $('tabSubIon').addEventListener('click', () => togglePanel(panelIon));
+        $('tabSubIndicator').addEventListener('click', () => togglePanel(panelIndicator));
+        $('closeIon').addEventListener('click', () => togglePanel(panelIon));
+        $('closeIndicator').addEventListener('click', () => togglePanel(panelIndicator));
+
+        /* ---------- 지시약 선택 ---------- */
+        $('btnBtb').addEventListener('click', () => {
+            state.indicator = 'btb';
+            $('btnBtb').classList.add('active');
+            $('btnPhenol').classList.remove('active');
+            updateIndicatorColor();
+        });
+
+        $('btnPhenol').addEventListener('click', () => {
+            state.indicator = 'phenol';
+            $('btnPhenol').classList.add('active');
+            $('btnBtb').classList.remove('active');
+            updateIndicatorColor();
+        });
+
+        /* ---------- 초기화 & 시점정렬 ---------- */
+        $('btnReset').addEventListener('click', () => {
+            state.naohDrops = 0;
+            state.indicator = 'btb';
+            $('btnBtb').classList.add('active');
+            $('btnPhenol').classList.remove('active');
+            rebuildIons();
+            camera.position.set(0, 5, 24);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            $('centerTooltip').textContent = '💡 뷰렛에서 NaOH 수용액을 떨어뜨려 수소 이온과 수산화 이온의 중화반응을 관찰해 보세요.';
+        });
+
+        $('btnAlign').addEventListener('click', () => {
+            camera.position.set(0, 1, 22);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        });
+
+        /* ---------- 다크 모드 토글 ---------- */
+        $('themeBtn').addEventListener('click', () => {
+            state.darkMode = !state.darkMode;
+            document.body.classList.toggle('dark-mode', state.darkMode);
+            scene.background = new THREE.Color(state.darkMode ? 0x0f172a : 0xf4f6fa);
+            $('themeBtn').textContent = state.darkMode ? '☀️ 주간 모드' : '🌙 야간 모드';
+        });
+
+        /* ---------- 탐구 원리 모달 ---------- */
+        const helpModal = $('helpModal');
+        $('btnHelp').addEventListener('click', () => helpModal.classList.add('show'));
+        $('btnModalClose').addEventListener('click', () => helpModal.classList.remove('show'));
+        helpModal.addEventListener('click', e => { if (e.target === helpModal) helpModal.classList.remove('show'); });
+
+        /* ---------- 리사이즈 처리 ---------- */
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        /* ---------- 모바일 및 전체화면 핸들러 ---------- */
+        (function () {
+            const docEl = document.documentElement;
+            const btn = document.getElementById('fullscreenBtn');
+            const icon = document.getElementById('fullscreenIcon');
+            const text = document.getElementById('fullscreenText');
+
+            function realFs() {
+                return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+            }
+            function pseudo() {
+                return docEl.classList.contains('pseudo-fs');
+            }
+            function setUI() {
+                const on = realFs() || pseudo();
+                if (icon) icon.textContent = on ? '🗗' : '⛶';
+                if (text) text.textContent = on ? '창모드' : '전체화면';
+                if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+                document.body.classList.toggle('is-fullscreen', on);
+            }
+
+            if (btn) {
+                btn.addEventListener('click', function () {
+                    const wasReal = realFs(), wasPseudo = pseudo();
+                    if (wasReal) {
+                        if (document.exitFullscreen) document.exitFullscreen();
+                        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                        setUI();
+                        return;
+                    }
+                    if (wasPseudo) {
+                        docEl.classList.remove('pseudo-fs');
+                        setUI();
+                        return;
+                    }
+                    if (docEl.requestFullscreen) {
+                        docEl.requestFullscreen().catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                    } else if (docEl.webkitRequestFullscreen) {
+                        docEl.webkitRequestFullscreen();
+                    } else {
+                        docEl.classList.add('pseudo-fs');
+                    }
+                    setUI();
+                }, false);
+            }
+
+            ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+                document.addEventListener(ev, function () { setUI(); setTimeout(() => renderer.setSize(window.innerWidth, window.innerHeight), 120); });
+            });
+            setUI();
+        })();
+    </script>
+    <script src="../../common/feedback.js" defer></script>
+    <script src="../../common/ui-layout.js" defer></script>
+    <script src="../../common/lib/qrcode.min.js" defer></script>
+    <script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>

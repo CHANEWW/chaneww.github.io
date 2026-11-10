@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.62">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>지진파와 지구 내부 구조 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <!-- Three.js 및 OrbitControls 로컬 라이브러리 -->
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+            background-color: #0b0f19;
+            color: #f8fafc;
+            transition: background-color 0.35s ease, color 0.35s ease;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Apple visionOS Glassmorphic UI */
+        .glass-panel {
+            background: rgba(22, 30, 49, 0.82);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+            border-radius: 18px;
+            transition: all 0.3s ease;
+        }
+
+        /* 상단 좌측 바 */
+        .top-left-bar {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 15px;
+            border-radius: 999px;
+            text-decoration: none;
+            color: #f8fafc;
+            font-weight: bold;
+            font-size: 13.5px;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .back-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .tag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 16px;
+            border-radius: 999px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .tag-pill {
+            background: rgba(245, 158, 11, 0.22);
+            color: #fbbf24;
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+        }
+
+        /* 상단 우측 바 */
+        .top-right-bar {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 40px;
+            padding: 0 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            border: none;
+            color: #f8fafc;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+        .icon-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        /* 데이터 카드 */
+        .data-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 7px 16px;
+            border-radius: 16px;
+        }
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.15;
+        }
+        .data-label {
+            font-size: 9.5px;
+            color: #94a3b8;
+            font-weight: bold;
+            letter-spacing: -0.2px;
+        }
+        .data-value {
+            font-size: 13px;
+            font-weight: 900;
+            color: #38bdf8;
+            margin-top: 1px;
+        }
+        .data-sep {
+            width: 1px;
+            height: 22px;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        /* 안내 툴팁 */
+        .center-tooltip {
+            position: absolute;
+            top: 74px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #e2e8f0;
+            pointer-events: none;
+            z-index: 10;
+            white-space: nowrap;
+            letter-spacing: -0.2px;
+        }
+
+        /* 하단 중앙 컨트롤 바 */
+        .bottom-ctrl-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            z-index: 10;
+        }
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(30, 41, 59, 0.85);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            color: #f8fafc;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .action-btn:hover {
+            background: rgba(51, 65, 85, 0.95);
+            transform: translateY(-1px);
+        }
+
+        /* 우측 하단 전체화면 버튼 */
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        .fullscreen-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(30, 41, 59, 0.85);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: bold;
+            color: #f8fafc;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .fullscreen-btn:hover {
+            background: rgba(51, 65, 85, 0.95);
+            transform: translateY(-1px);
+        }
+
+        /* 우측 조절 패널 */
+        .side-ctrl-panel {
+            position: fixed;
+            right: 20px;
+            bottom: 72px;
+            width: 220px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 50;
+            border-radius: 18px;
+        }
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .panel-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #f8fafc;
+            letter-spacing: -0.2px;
+        }
+
+        .quake-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 11px;
+            border-radius: 14px;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            background: linear-gradient(135deg, #b91c1c, #dc2626);
+            color: #fff;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(220, 38, 38, 0.38);
+            transition: all 0.2s ease;
+        }
+        .quake-action-btn:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(135deg, #dc2626, #ef4444);
+        }
+
+        .ctrl-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .ctrl-tab-btn {
+            padding: 8px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(30, 41, 59, 0.7);
+            font-family: inherit;
+            font-size: 11.5px;
+            font-weight: bold;
+            color: #cbd5e1;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+        .ctrl-tab-btn.active {
+            background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+            border-color: #f59e0b !important;
+            color: #fff !important;
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+        }
+
+        /* 도킹 서브패널 */
+        .sub-panel {
+            position: fixed;
+            right: 250px;
+            bottom: 72px;
+            width: 290px;
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            padding: 14px 16px !important;
+            z-index: 55;
+            border-radius: 18px;
+        }
+        .sub-panel.show { display: flex; }
+        .sub-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sub-panel-title {
+            font-size: 13px;
+            font-weight: 800;
+            color: #f8fafc;
+        }
+        .sub-close {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            color: #cbd5e1;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.6);
+            font-size: 11.5px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        /* 지진계 미리보기 카드 */
+        .seismo-box {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 8px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .seismo-title {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: bold;
+            color: #94a3b8;
+        }
+        .seismo-canvas {
+            width: 100%;
+            height: 38px;
+            background: #020617;
+            border-radius: 6px;
+        }
+
+        /* 원리 설명 모달 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-card {
+            width: 100%;
+            max-width: 520px;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 22px;
+            border-radius: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+        .modal-title { font-size: 16px; font-weight: 800; color: #f8fafc; }
+        .modal-close {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            color: #f8fafc;
+        }
+        .info-card {
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-size: 12.5px;
+            line-height: 1.6;
+            color: #cbd5e1;
+            word-break: keep-all;
+        }
+        .info-card h4 {
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #fbbf24;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .comp-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11.5px;
+            margin-top: 6px;
+            text-align: center;
+        }
+        .comp-table th, .comp-table td {
+            border: 1px solid rgba(255,255,255,0.12);
+            padding: 6px 4px;
+        }
+        .comp-table th { background: rgba(245, 158, 11, 0.2); color: #fde68a; font-weight: 800; }
+
+        @media (max-width: 900px) {
+            .top-left-bar { top: max(8px, env(safe-area-inset-top)); left: 8px; gap: 6px; }
+            .back-btn { padding: 6px 12px; font-size: 12px; }
+            .tag-badge { padding: 6px 12px; font-size: 12px; }
+            .tag-pill { font-size: 9px; }
+            .top-right-bar { top: max(8px, env(safe-area-inset-top)); right: 8px; gap: 6px; }
+            .data-card { display: none; }
+            .center-tooltip { display: none; }
+            .side-ctrl-panel { right: 12px; bottom: 68px; width: 180px; padding: 10px; }
+            .sub-panel { right: 12px; bottom: 250px; width: calc(100vw - 24px); max-height: 45vh; }
+            .bottom-ctrl-bar { bottom: 12px; padding: 5px 10px; }
+            .action-btn { padding: 6px 12px; font-size: 11.5px; }
+            .bottom-right-bar { bottom: 12px; right: 12px; }
+            .fullscreen-btn { padding: 8px 12px; font-size: 11.5px; }
+        }
+    </style>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- 상단 좌측 바: 뒤로가기 & 타이틀 & QR -->
+    <div class="top-left-bar">
+        <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동">← 메인</a>
+        <div class="tag-badge glass-panel">
+            <span>지진파와 지구 내부 구조 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+        <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+            <span class="qr-btn-icon" aria-hidden="true">📱</span>
+            <span class="qr-btn-label">QR code</span>
+        </button>
+    </div>
+
+    <!-- 상단 우측 바: 유틸리티 & 데이터 표시 -->
+    <div class="top-right-bar">
+        <div class="data-card glass-panel" id="dataCard">
+            <div class="data-item">
+                <span class="data-label">지진 상태</span>
+                <span class="data-value" id="valQuake" style="color:#ef4444;">대기 중 (준비)</span>
+            </div>
+            <div class="data-sep"></div>
+            <div class="data-item">
+                <span class="data-label">암영대 (Shadow Zone)</span>
+                <span class="data-value" id="valShadow">103° ~ 142° (P·S파 없음)</span>
+            </div>
+            <div class="data-sep"></div>
+            <div class="data-item">
+                <span class="data-label">외핵의 상태</span>
+                <span class="data-value" id="valOuterCore" style="color:#fbbf24;">액체 (S파 차단)</span>
+            </div>
+        </div>
+        <button class="icon-btn glass-panel" id="btnHelp" title="원리 설명 보기">📖 탐구 원리</button>
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" title="배경 테마 전환">🌌 우주 뷰</button>
+    </div>
+
+    <!-- 중앙 힌트 툴팁 -->
+    <div class="center-tooltip glass-panel" id="centerTooltip">
+        💡 '지진 발생' 버튼을 눌러 P파(종파)와 S파(횡파)가 지구 내부를 통과하는 모습을 관찰해 보세요.
+    </div>
+
+    <!-- 하단 중앙 컨트롤 바 -->
+    <div class="bottom-ctrl-bar glass-panel">
+        <button class="action-btn" id="btnReset" title="초기 상태로 되돌리기">🔄 초기화</button>
+        <button class="action-btn" id="btnAlign" title="정면 수평 뷰로 정렬">🎥 시점정렬</button>
+    </div>
+
+    <!-- 우측 하단 전체화면 버튼 -->
+    <div class="bottom-right-bar">
+        <button class="fullscreen-btn glass-panel" id="fullscreenBtn" aria-label="전체화면으로 전환">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <!-- 우측 조절 패널 -->
+    <div class="side-ctrl-panel glass-panel">
+        <div class="panel-header">
+            <span class="panel-title">⚙️ 지진파 탐구 조절</span>
+        </div>
+        <button class="quake-action-btn" id="btnQuake">⚡ 지진 발생 (진원 생성)</button>
+        <div class="ctrl-grid">
+            <button class="ctrl-tab-btn active" id="tabSubWave">🌊 파동 선택</button>
+            <button class="ctrl-tab-btn" id="tabSubSeismo">📈 지진계 관측</button>
+        </div>
+    </div>
+
+    <!-- 도킹 서브패널: 파동 선택 모드 -->
+    <div class="sub-panel glass-panel" id="panelWave">
+        <div class="sub-head">
+            <span class="sub-panel-title">🌊 지진파 관측 모드</span>
+            <button class="sub-close" id="closeWave">✕</button>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+            <button class="ctrl-tab-btn active" id="btnWaveAll" style="text-align:left; padding:10px;">
+                <b>P파 + S파 동시 전파</b><br>
+                <span style="font-size:10px; color:#94a3b8;">파란색(P파)과 주황색(S파) 동시 비교</span>
+            </button>
+            <button class="ctrl-tab-btn" id="btnWaveP" style="text-align:left; padding:10px;">
+                <b>P파만 관측 (종파)</b><br>
+                <span style="font-size:10px; color:#38bdf8;">고체·액체 모두 통과, 외핵에서 굴절</span>
+            </button>
+            <button class="ctrl-tab-btn" id="btnWaveS" style="text-align:left; padding:10px;">
+                <b>S파만 관측 (횡파)</b><br>
+                <span style="font-size:10px; color:#f97316;">오직 고체만 통과! (액체 외핵 경계에서 소멸)</span>
+            </button>
+        </div>
+        <div style="margin-top:6px; display:flex; flex-direction:column; gap:6px;">
+            <div class="legend-row">
+                <span><span class="legend-color" style="background:#38bdf8;"></span> P파 (Primary, 종파)</span>
+                <span style="color:#38bdf8; font-weight:800;">7~8 km/s (빠름)</span>
+            </div>
+            <div class="legend-row">
+                <span><span class="legend-color" style="background:#f97316;"></span> S파 (Secondary, 횡파)</span>
+                <span style="color:#f97316; font-weight:800;">3~4 km/s (느림)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 도킹 서브패널: 지진계 관측소 -->
+    <div class="sub-panel glass-panel show" id="panelSeismo">
+        <div class="sub-head">
+            <span class="sub-panel-title">📈 각거리별 지진계 실시간 기록</span>
+            <button class="sub-close" id="closeSeismo">✕</button>
+        </div>
+        <!-- 관측소 A: 60도 (P파, S파 모두 도달) -->
+        <div class="seismo-box">
+            <div class="seismo-title">
+                <span>관측소 A (각거리 60°)</span>
+                <span style="color:#38bdf8;">P파 ➔ S파 연속 도달</span>
+            </div>
+            <canvas class="seismo-canvas" id="cvsA"></canvas>
+        </div>
+        <!-- 관측소 B: 120도 (암영대: 미도달) -->
+        <div class="seismo-box">
+            <div class="seismo-title">
+                <span>관측소 B (각거리 120° - 암영대)</span>
+                <span style="color:#ef4444;">파동 미도달 (Shadow Zone)</span>
+            </div>
+            <canvas class="seismo-canvas" id="cvsB"></canvas>
+        </div>
+        <!-- 관측소 C: 160도 (P파만 도달) -->
+        <div class="seismo-box">
+            <div class="seismo-title">
+                <span>관측소 C (각거리 160° - 반대편)</span>
+                <span style="color:#fbbf24;">P파만 도달 (S파 차단)</span>
+            </div>
+            <canvas class="seismo-canvas" id="cvsC"></canvas>
+        </div>
+    </div>
+
+    <!-- 탐구 원리 모달 -->
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal-card glass-panel">
+            <div class="modal-header">
+                <span class="modal-title">📖 지진파와 지구 내부 구조 탐구 원리</span>
+                <button class="modal-close" id="btnModalClose">✕</button>
+            </div>
+            <div class="info-card">
+                <h4>🌍 1. 지구 내부의 층상 구조</h4>
+                시추로는 수 킬로미터밖에 파고 들어가지 못하므로, 과학자들은 <b>지진파의 속도 변화와 굴절</b>을 이용하여 지구 내부를 간접적으로 탐사했습니다.<br>
+                - <b>지각</b>: 가장 겉면의 얇은 고체 암석층<br>
+                - <b>맨틀</b>: 지하 약 2,900km까지의 거대한 고체 암석층 (지구 전체 부피의 약 80%)<br>
+                - <b>외핵</b>: 깊이 2,900~5,100km의 <b>액체 상태(철·니켈)</b> 층<br>
+                - <b>내핵</b>: 깊이 5,100~6,400km 중심부의 고체 층
+            </div>
+            <div class="info-card">
+                <h4>🌊 2. P파와 S파의 특성 비교</h4>
+                <table class="comp-table">
+                    <thead>
+                        <tr>
+                            <th>구분</th>
+                            <th>P파 (Primary wave)</th>
+                            <th>S파 (Secondary wave)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><b>파동 형태</b></td>
+                            <td>종파 (나란하게 진동)</td>
+                            <td>횡파 (수직으로 진동)</td>
+                        </tr>
+                        <tr>
+                            <td><b>전파 속도</b></td>
+                            <td>약 7 ~ 8 km/s (빠름)</td>
+                            <td>약 3 ~ 4 km/s (느림)</td>
+                        </tr>
+                        <tr>
+                            <td><b>통과 물질</b></td>
+                            <td><b>고체, 액체, 기체 모두 통과</b></td>
+                            <td><b>오직 고체만 통과!</b></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="info-card">
+                <h4>🌑 3. 암영대(Shadow Zone)와 외핵이 액체인 증거</h4>
+                <b>① S파의 소멸</b>: 진앙 각거리 103° 이후부터는 S파가 전혀 관측되지 않습니다. 이는 지하 2,900km 경계(구텐베르크 불연속면) 아래의 <b>외핵이 액체 상태</b>이기 때문에 횡파인 S파가 통과하지 못하고 가로막히기 때문입니다.<br><br>
+                <b>② P파의 굴절과 103°~142° 암영대</b>: P파는 외핵을 통과하지만, 밀도가 다른 액체 층으로 들어가면서 크게 굴절되어 103°~142° 사이에는 P파조차 도달하지 못하는 '암영대'가 형성됩니다.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+
+        /* ---------- 전역 상태 ---------- */
+        const state = {
+            waveMode: 'all', // 'all' | 'p' | 's'
+            isQuake: false,
+            quakeTime: 0,
+            epicenterAngle: Math.PI * 0.5 // 북극(y축 상단) 부근 진원
+        };
+
+        /* ---------- Three.js 초기화 ---------- */
+        const container = $('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0f19);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 4, 26);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 8;
+        controls.maxDistance = 70;
+        controls.target.set(0, 0, 0);
+
+        /* ---------- 조명 ---------- */
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(15, 20, 15);
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.4);
+        fillLight.position.set(-15, -10, -15);
+        scene.add(fillLight);
+
+        /* ============================================================
+           지구 층상 구조 3D 모델 (1/4 절개 단면 뷰)
+           반지름: 내핵 1.8 -> 외핵 4.2 -> 맨틀 8.0 -> 지각 8.2
+           ============================================================ */
+        const earthGroup = new THREE.Group();
+        scene.add(earthGroup);
+
+        // 절개 구체 생성 헬퍼 (0 ~ 1.5 PI로 1/4 절개)
+        function makeLayer(r, color, opacity = 1.0, emissive = 0x000000) {
+            const geo = new THREE.SphereGeometry(r, 48, 36, 0, Math.PI * 1.5, 0, Math.PI);
+            const mat = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.45,
+                metalness: 0.1,
+                side: THREE.DoubleSide,
+                transparent: opacity < 1.0,
+                opacity: opacity,
+                emissive: emissive,
+                emissiveIntensity: emissive ? 0.35 : 0
+            });
+            return new THREE.Mesh(geo, mat);
+        }
+
+        // 1. 내핵 (고체, 고온)
+        const innerCore = makeLayer(1.8, 0xfef08a, 1.0, 0xeab308);
+        earthGroup.add(innerCore);
+
+        // 2. 외핵 (액체 철·니켈)
+        const outerCore = makeLayer(4.2, 0xf97316, 0.88, 0xc2410c);
+        earthGroup.add(outerCore);
+
+        // 3. 맨틀 (고체 암석)
+        const mantle = makeLayer(8.0, 0xb45309, 0.82);
+        earthGroup.add(mantle);
+
+        // 4. 지각 (바다/대륙 표면)
+        const crust = makeLayer(8.2, 0x1d4ed8, 0.92);
+        earthGroup.add(crust);
+
+        /* ---------- 3D 텍스트 라벨 빌더 ---------- */
+        function makeTextSprite(text, color = '#f8fafc', bgColor = 'rgba(15,23,42,0.85)') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 72;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgColor;
+            ctx.roundRect(4, 4, 248, 64, 18);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.font = 'bold 24px SeoulNamsan, sans-serif';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 128, 36);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(3.4, 0.95, 1);
+            return sprite;
+        }
+
+        const lblCrust = makeTextSprite('지각 (고체)', '#38bdf8');
+        lblCrust.position.set(7.5, 5.5, 2.5);
+        earthGroup.add(lblCrust);
+
+        const lblMantle = makeTextSprite('맨틀 (고체)', '#f59e0b');
+        lblMantle.position.set(5.5, 2.5, 2.0);
+        earthGroup.add(lblMantle);
+
+        const lblOuterCore = makeTextSprite('외핵 (액체!)', '#f97316');
+        lblOuterCore.position.set(2.8, 0.5, 1.5);
+        earthGroup.add(lblOuterCore);
+
+        const lblInnerCore = makeTextSprite('내핵 (고체)', '#fef08a');
+        lblInnerCore.position.set(0.0, -0.2, 1.2);
+        earthGroup.add(lblInnerCore);
+
+        // 진원(Focus) 마커 (북극 부근)
+        const focusGeo = new THREE.SphereGeometry(0.42, 16, 16);
+        const focusMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+        const focusMesh = new THREE.Mesh(focusGeo, focusMat);
+        focusMesh.position.set(0, 8.2, 0);
+        earthGroup.add(focusMesh);
+
+        const lblFocus = makeTextSprite('⚡ 진원 (발생지)', '#ef4444');
+        lblFocus.position.set(0, 9.6, 0);
+        earthGroup.add(lblFocus);
+
+        /* ============================================================
+           지진파 전파 파티클 및 파면(Wavefront) 시뮬레이션
+           ============================================================ */
+        const waveRays = [];
+        const RAY_COUNT = 36;
+
+        for (let i = 0; i < RAY_COUNT; i++) {
+            // 진원에서 지구 내부로 발사되는 각도 (0 ~ PI)
+            const angle = (i / (RAY_COUNT - 1)) * Math.PI * 0.92 + 0.04;
+
+            // P파 파티클 (파란색)
+            const pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+            earthGroup.add(pMesh);
+
+            // S파 파티클 (주황색)
+            const sMesh = new THREE.Mesh(new THREE.SphereGeometry(0.20, 10, 10), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+            earthGroup.add(sMesh);
+
+            waveRays.push({
+                angle: angle,
+                pMesh: pMesh,
+                sMesh: sMesh,
+                hitsOuterCore: (angle > Math.PI * 0.28 && angle < Math.PI * 0.72) // 외핵 입사 여부
+            });
+        }
+
+        function updateWaveRays(progress) {
+            const R_EARTH = 8.2;
+            const R_OUTER_CORE = 4.2;
+
+            waveRays.forEach(ray => {
+                // P파 모드
+                const showP = (state.waveMode === 'all' || state.waveMode === 'p');
+                const showS = (state.waveMode === 'all' || state.waveMode === 's');
+
+                ray.pMesh.visible = showP && state.isQuake;
+                ray.sMesh.visible = showS && state.isQuake;
+
+                if (!state.isQuake) return;
+
+                // P파 전파: 빠름 (속도 1.0)
+                const pProgress = Math.min(1.0, progress * 1.35);
+                const curRP = R_EARTH * (1 - pProgress * 0.82);
+                const curThetaP = Math.PI / 2 - (ray.angle * pProgress);
+
+                // 외핵 진입 시 굴절 연출
+                let effThetaP = curThetaP;
+                if (ray.hitsOuterCore && pProgress > 0.45) {
+                    effThetaP += (ray.angle - Math.PI / 2) * 0.22; // 굴절로 인한 각도 변위
+                }
+                ray.pMesh.position.set(
+                    curRP * Math.cos(effThetaP),
+                    curRP * Math.sin(effThetaP),
+                    0.2
+                );
+
+                // S파 전파: 느림 (속도 0.65), 외핵 경계(R = 4.2) 진입 시 소멸!
+                const sProgress = Math.min(1.0, progress * 0.85);
+                const curRS = R_EARTH * (1 - sProgress * 0.82);
+                const curThetaS = Math.PI / 2 - (ray.angle * sProgress);
+
+                if (ray.hitsOuterCore && curRS < R_OUTER_CORE) {
+                    // 액체 외핵 경계에서 차단/소멸!
+                    ray.sMesh.visible = false;
+                } else {
+                    ray.sMesh.position.set(
+                        curRS * Math.cos(curThetaS),
+                        curRS * Math.sin(curThetaS),
+                        0.2
+                    );
+                }
+            });
+        }
+
+        /* ============================================================
+           지진계 캔버스 파형 그리기 (관측소 A, B, C)
+           ============================================================ */
+        const cvsA = $('cvsA');
+        const cvsB = $('cvsB');
+        const cvsC = $('cvsC');
+
+        function setupCanvas(cvs) {
+            cvs.width = cvs.clientWidth * window.devicePixelRatio || 240;
+            cvs.height = cvs.clientHeight * window.devicePixelRatio || 38;
+        }
+        setupCanvas(cvsA);
+        setupCanvas(cvsB);
+        setupCanvas(cvsC);
+
+        function drawSeismo(cvs, pTime, sTime, isShadow = false) {
+            const ctx = cvs.getContext('2d');
+            const w = cvs.width;
+            const h = cvs.height;
+            const mid = h / 2;
+
+            ctx.clearRect(0, 0, w, h);
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, mid);
+            ctx.lineTo(w, mid);
+            ctx.stroke();
+
+            if (!state.isQuake) return;
+
+            const t = state.quakeTime;
+            ctx.beginPath();
+            ctx.moveTo(0, mid);
+
+            for (let x = 0; x < w; x++) {
+                const normX = x / w;
+                let amp = 0;
+
+                if (isShadow) {
+                    // 암영대: 파동 없음
+                    amp = (Math.random() - 0.5) * 1.5;
+                } else {
+                    // P파 도달
+                    if (t > pTime && normX > 0.25 && normX < 0.55) {
+                        amp += Math.sin((normX - 0.25) * 45) * (h * 0.25);
+                    }
+                    // S파 도달
+                    if (sTime && t > sTime && normX >= 0.55) {
+                        amp += Math.sin((normX - 0.55) * 25) * (h * 0.42);
+                    }
+                }
+                ctx.lineTo(x, mid + amp);
+            }
+            ctx.strokeStyle = isShadow ? '#ef4444' : '#38bdf8';
+            ctx.lineWidth = 1.8;
+            ctx.stroke();
+        }
+
+        /* ---------- 지진 발생 트리거 ---------- */
+        function triggerQuake() {
+            state.isQuake = true;
+            state.quakeTime = 0;
+            $('valQuake').textContent = '파동 전파 중! (지진파 방출)';
+            $('valQuake').style.color = '#ef4444';
+            $('centerTooltip').textContent = '⚡ 진원에서 방출된 P파(파랑)와 S파(주황)의 전파 속도와 외핵 경계 도달을 비교해 보세요!';
+        }
+
+        $('btnQuake').addEventListener('click', triggerQuake);
+
+        /* ---------- 렌더 루프 ---------- */
+        let lastTime = performance.now();
+        function animate(now) {
+            requestAnimationFrame(animate);
+
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            if (state.isQuake) {
+                state.quakeTime += dt * 0.35;
+                if (state.quakeTime > 1.0) {
+                    state.quakeTime = 1.0;
+                    $('valQuake').textContent = '전파 완료 (관측 종료)';
+                    $('valQuake').style.color = '#10b981';
+                }
+                updateWaveRays(state.quakeTime);
+
+                // 지진계 파형 갱신
+                drawSeismo(cvsA, 0.3, 0.6, false); // 관측소 A: P파 + S파
+                drawSeismo(cvsB, 0, 0, true);       // 관측소 B: 암영대 (기록 없음)
+                drawSeismo(cvsC, 0.55, null, false); // 관측소 C: P파만 (S파 없음)
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate(performance.now());
+
+        /* ---------- 서브패널 토글 ---------- */
+        const panelWave = $('panelWave');
+        const panelSeismo = $('panelSeismo');
+
+        function togglePanel(panel) {
+            const isShow = panel.classList.contains('show');
+            panelWave.classList.remove('show');
+            panelSeismo.classList.remove('show');
+            $('tabSubWave').classList.remove('active');
+            $('tabSubSeismo').classList.remove('active');
+            if (!isShow) {
+                panel.classList.add('show');
+                if (panel === panelWave) $('tabSubWave').classList.add('active');
+                if (panel === panelSeismo) $('tabSubSeismo').classList.add('active');
+            }
+        }
+
+        $('tabSubWave').addEventListener('click', () => togglePanel(panelWave));
+        $('tabSubSeismo').addEventListener('click', () => togglePanel(panelSeismo));
+        $('closeWave').addEventListener('click', () => togglePanel(panelWave));
+        $('closeSeismo').addEventListener('click', () => togglePanel(panelSeismo));
+
+        /* ---------- 파동 선택 버튼 ---------- */
+        $('btnWaveAll').addEventListener('click', () => {
+            state.waveMode = 'all';
+            $('btnWaveAll').classList.add('active');
+            $('btnWaveP').classList.remove('active');
+            $('btnWaveS').classList.remove('active');
+            updateWaveRays(state.quakeTime);
+        });
+
+        $('btnWaveP').addEventListener('click', () => {
+            state.waveMode = 'p';
+            $('btnWaveP').classList.add('active');
+            $('btnWaveAll').classList.remove('active');
+            $('btnWaveS').classList.remove('active');
+            updateWaveRays(state.quakeTime);
+        });
+
+        $('btnWaveS').addEventListener('click', () => {
+            state.waveMode = 's';
+            $('btnWaveS').classList.add('active');
+            $('btnWaveAll').classList.remove('active');
+            $('btnWaveP').classList.remove('active');
+            updateWaveRays(state.quakeTime);
+        });
+
+        /* ---------- 초기화 & 시점정렬 ---------- */
+        $('btnReset').addEventListener('click', () => {
+            state.isQuake = false;
+            state.quakeTime = 0;
+            state.waveMode = 'all';
+            $('valQuake').textContent = '대기 중 (준비)';
+            $('valQuake').style.color = '#ef4444';
+            $('btnWaveAll').classList.add('active');
+            $('btnWaveP').classList.remove('active');
+            $('btnWaveS').classList.remove('active');
+            updateWaveRays(0);
+            drawSeismo(cvsA, 0, 0, false);
+            drawSeismo(cvsB, 0, 0, true);
+            drawSeismo(cvsC, 0, 0, false);
+            camera.position.set(0, 4, 26);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            $('centerTooltip').textContent = '💡 \'지진 발생\' 버튼을 눌러 P파(종파)와 S파(횡파)가 지구 내부를 통과하는 모습을 관찰해 보세요.';
+        });
+
+        $('btnAlign').addEventListener('click', () => {
+            camera.position.set(0, 0, 24);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        });
+
+        /* ---------- 탐구 원리 모달 ---------- */
+        const helpModal = $('helpModal');
+        $('btnHelp').addEventListener('click', () => helpModal.classList.add('show'));
+        $('btnModalClose').addEventListener('click', () => helpModal.classList.remove('show'));
+        helpModal.addEventListener('click', e => { if (e.target === helpModal) helpModal.classList.remove('show'); });
+
+        /* ---------- 리사이즈 처리 ---------- */
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            setupCanvas(cvsA);
+            setupCanvas(cvsB);
+            setupCanvas(cvsC);
+        });
+
+        /* ---------- 모바일 및 전체화면 핸들러 ---------- */
+        (function () {
+            const docEl = document.documentElement;
+            const btn = document.getElementById('fullscreenBtn');
+            const icon = document.getElementById('fullscreenIcon');
+            const text = document.getElementById('fullscreenText');
+
+            function realFs() {
+                return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+            }
+            function pseudo() {
+                return docEl.classList.contains('pseudo-fs');
+            }
+            function setUI() {
+                const on = realFs() || pseudo();
+                if (icon) icon.textContent = on ? '🗗' : '⛶';
+                if (text) text.textContent = on ? '창모드' : '전체화면';
+                if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+                document.body.classList.toggle('is-fullscreen', on);
+            }
+
+            if (btn) {
+                btn.addEventListener('click', function () {
+                    const wasReal = realFs(), wasPseudo = pseudo();
+                    if (wasReal) {
+                        if (document.exitFullscreen) document.exitFullscreen();
+                        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                        setUI();
+                        return;
+                    }
+                    if (wasPseudo) {
+                        docEl.classList.remove('pseudo-fs');
+                        setUI();
+                        return;
+                    }
+                    if (docEl.requestFullscreen) {
+                        docEl.requestFullscreen().catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                    } else if (docEl.webkitRequestFullscreen) {
+                        docEl.webkitRequestFullscreen();
+                    } else {
+                        docEl.classList.add('pseudo-fs');
+                    }
+                    setUI();
+                }, false);
+            }
+
+            ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+                document.addEventListener(ev, function () { setUI(); setTimeout(() => renderer.setSize(window.innerWidth, window.innerHeight), 120); });
+            });
+            setUI();
+        })();
+    </script>
+    <script src="../../common/feedback.js" defer></script>
+    <script src="../../common/ui-layout.js" defer></script>
+    <script src="../../common/lib/qrcode.min.js" defer></script>
+    <script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
