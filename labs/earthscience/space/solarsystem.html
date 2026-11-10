@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>태양계 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #030612;
+            color: #f2f5fa;
+            touch-action: none;
+            transition: background-color .3s ease, color .3s ease;
+        }
+        body.light-mode { background-color: #eef3f9; color: #1c1c1e; }
+
+        #canvas-container {
+            width: 100%; height: 100%;
+            position: absolute; top: 0; left: 0;
+            z-index: 1; touch-action: none;
+        }
+
+        .glass-panel {
+            background: rgba(13, 20, 36, 0.76);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+            z-index: 10;
+        }
+        body.light-mode .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            border-color: rgba(255, 255, 255, 0.7);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            color: #1c1c1e;
+        }
+
+        /* ---------- 상단 좌측 바 ---------- */
+        .top-left-bar {
+            position: absolute; top: 18px; left: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; font-size: 14px; font-weight: bold;
+            color: #eaf1ff; text-decoration: none; cursor: pointer;
+            transition: all .2s ease;
+        }
+        body.light-mode .back-btn { color: #1c1c1e; }
+        .back-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.15); }
+        body.light-mode .back-btn:hover { background: rgba(0,0,0,0.06); }
+
+        .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 14px; font-weight: bold; }
+        .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; }
+        .vision-badge {
+            background: rgba(10, 132, 255, 0.28); color: #7cc0ff;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; letter-spacing: .2px;
+        }
+        body.light-mode .vision-badge { background: rgba(0, 122, 255, 0.14); color: #007aff; }
+
+        /* ---------- 상단 우측 바 ---------- */
+        .top-right-bar {
+            position: absolute; top: 18px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+        .icon-btn {
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; border: none;
+            background: rgba(30, 40, 60, 0.75); color: #eaf1ff;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            transition: all .2s; font-size: 16px; font-family: inherit;
+        }
+        body.light-mode .icon-btn { background: rgba(255,255,255,.8); color: #1c1c1e; }
+        .icon-btn:hover { transform: scale(1.05); }
+
+        /* ---------- 행성 퀵 네비게이터 (상단 중앙) ---------- */
+        .planet-nav-bar {
+            position: absolute; top: 72px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 10px; z-index: 10;
+            overflow-x: auto; max-width: calc(100vw - 32px);
+            scrollbar-width: none; -ms-overflow-style: none;
+            white-space: nowrap;
+        }
+        .planet-nav-bar::-webkit-scrollbar { display: none; }
+        .p-nav-btn {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 6px 12px; border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: rgba(255, 255, 255, 0.06);
+            color: #dbe4f3; font-size: 12.5px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s ease;
+        }
+        body.light-mode .p-nav-btn {
+            background: rgba(0, 0, 0, 0.04);
+            border-color: rgba(0, 0, 0, 0.08);
+            color: #333;
+        }
+        .p-nav-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            transform: translateY(-1px);
+        }
+        body.light-mode .p-nav-btn:hover { background: rgba(0, 0, 0, 0.08); }
+        .p-nav-btn.active {
+            background: #0a84ff; border-color: #0a84ff; color: #fff;
+            box-shadow: 0 4px 14px rgba(10, 132, 255, 0.45);
+        }
+
+        /* ---------- 상단 안내 힌트 ---------- */
+        .center-tooltip {
+            position: absolute; top: 122px; left: 50%; transform: translateX(-50%);
+            padding: 6px 16px; font-size: 12.5px; font-weight: bold;
+            color: #9db1cf; border-radius: 30px;
+            pointer-events: none; z-index: 5;
+            transition: opacity .5s ease; white-space: nowrap;
+            background: rgba(10, 16, 28, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        body.light-mode .center-tooltip {
+            color: #555; background: rgba(255, 255, 255, 0.7);
+            border-color: rgba(0, 0, 0, 0.06);
+        }
+
+        /* ---------- 하단 중앙 글래스 캡슐 바 ---------- */
+        .bottom-control-bar {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 12px; z-index: 10;
+        }
+        .control-capsule-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: 999px; border: none;
+            background: transparent; color: #e6edf9;
+            font-size: 13px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        body.light-mode .control-capsule-btn { color: #1c1c1e; }
+        .control-capsule-btn:hover { background: rgba(255, 255, 255, 0.15); }
+        body.light-mode .control-capsule-btn:hover { background: rgba(0, 0, 0, 0.06); }
+        .control-capsule-btn.primary {
+            background: #0a84ff; color: #fff;
+            box-shadow: 0 4px 12px rgba(10, 132, 255, 0.35);
+        }
+        .control-capsule-btn.primary:hover { background: #0077ed; }
+
+        /* ---------- 우측 하단 실험 조절 패널 ---------- */
+        .side-ctrl-panel {
+            position: fixed; right: 20px; bottom: 74px;
+            width: 280px; padding: 14px 16px;
+            display: flex; flex-direction: column; gap: 10px; z-index: 12;
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
+        }
+        .panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        body.light-mode .panel-header { border-bottom-color: rgba(0, 0, 0, 0.08); }
+        .panel-title { font-size: 12px; font-weight: bold; color: #7cc0ff; letter-spacing: .3px; }
+        body.light-mode .panel-title { color: #007aff; }
+
+        .ctrl-group { display: flex; flex-direction: column; gap: 6px; }
+        .ctrl-label { font-size: 11.5px; font-weight: bold; color: #9aa8bd; }
+        body.light-mode .ctrl-label { color: #666; }
+        .btn-tab-group { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .btn-tab-group.three { grid-template-columns: 1fr 1fr 1fr; }
+        .tile-btn {
+            padding: 7px 8px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
+            color: #dbe4f3; font-size: 11.5px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; text-align: center; white-space: nowrap;
+        }
+        body.light-mode .tile-btn { background: #fff; color: #1c1c1e; border-color: #d0d4dc; }
+        .tile-btn:hover { background: rgba(255,255,255,0.14); }
+        .tile-btn.active { background: #0a84ff; color: #fff; border-color: #0a84ff; box-shadow: 0 2px 8px rgba(10,132,255,.3); }
+
+        .slider-row { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; font-weight: bold; color: #9aa8bd; }
+        body.light-mode .slider-row { color: #555; }
+        input[type="range"] { width: 100%; height: 20px; accent-color: #0a84ff; cursor: pointer; margin: 2px 0 0; }
+
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; font-weight: bold; color: #c4d2e8; }
+        body.light-mode .toggle-row { color: #333; }
+        .mini-toggle {
+            padding: 4px 10px; border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08);
+            color: #adbcd4; font-size: 11px; font-weight: bold; cursor: pointer;
+            font-family: inherit; transition: all .2s;
+        }
+        .mini-toggle.on { background: #0a84ff; color: #fff; border-color: #0a84ff; }
+
+        /* ---------- 행성 상세 정보 모달 카드 ---------- */
+        #planet-detail-card {
+            position: fixed; left: 20px; bottom: 74px;
+            width: 320px; padding: 18px 20px;
+            display: none; flex-direction: column; gap: 12px; z-index: 100;
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
+            animation: slideUp .25s ease-out;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        #planet-detail-card.show { display: flex; }
+        .detail-top { display: flex; align-items: center; justify-content: space-between; }
+        .detail-title-wrap { display: flex; align-items: center; gap: 8px; }
+        .planet-icon-lg { font-size: 26px; line-height: 1; }
+        .detail-name { font-size: 18px; font-weight: 900; letter-spacing: -0.5px; }
+        .detail-en { font-size: 12px; color: #8fa0ba; font-weight: bold; margin-left: 2px; }
+        .detail-badge {
+            font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 999px;
+            background: rgba(10, 132, 255, 0.25); color: #7cc0ff; border: 1px solid rgba(10, 132, 255, 0.4);
+        }
+        .detail-badge.terrestrial { background: rgba(245, 166, 35, 0.25); color: #ffbe53; border-color: rgba(245, 166, 35, 0.45); }
+        .detail-badge.jovian { background: rgba(10, 132, 255, 0.25); color: #7cc0ff; border-color: rgba(10, 132, 255, 0.4); }
+        .detail-close-btn {
+            background: none; border: none; color: #8fa0ba; font-size: 18px;
+            cursor: pointer; padding: 4px; line-height: 1; font-family: inherit;
+        }
+        .detail-close-btn:hover { color: #fff; }
+
+        .metrics-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        body.light-mode .metrics-grid {
+            background: rgba(0, 0, 0, 0.03); border-color: rgba(0, 0, 0, 0.06);
+        }
+        .metric-box { display: flex; flex-direction: column; gap: 2px; }
+        .metric-label { font-size: 10px; color: #8fa0ba; font-weight: bold; }
+        body.light-mode .metric-label { color: #6b7280; }
+        .metric-val { font-size: 12px; font-weight: bold; color: #f2f5fa; }
+        body.light-mode .metric-val { color: #1c1c1e; }
+
+        .features-wrap { display: flex; flex-direction: column; gap: 6px; }
+        .features-title { font-size: 11.5px; font-weight: bold; color: #7cc0ff; }
+        body.light-mode .features-title { color: #007aff; }
+        .feature-item {
+            font-size: 11.5px; line-height: 1.5; color: #cfdcf0;
+            padding-left: 12px; position: relative; word-break: keep-all;
+        }
+        body.light-mode .feature-item { color: #374151; }
+        .feature-item::before {
+            content: '•'; position: absolute; left: 2px; top: 0; color: #0a84ff; font-weight: bold;
+        }
+
+        .detail-nav-row { display: flex; gap: 6px; margin-top: 4px; }
+        .detail-action-btn {
+            flex: 1; padding: 7px 0; border-radius: 10px; border: none;
+            background: rgba(255, 255, 255, 0.1); color: #e6edf9;
+            font-size: 11.5px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; text-align: center;
+        }
+        body.light-mode .detail-action-btn { background: #e2e8f0; color: #1c1c1e; }
+        .detail-action-btn:hover { background: #0a84ff; color: #fff; }
+
+        /* ---------- 우측 하단 전체화면 바 ---------- */
+        .bottom-right-bar {
+            position: absolute; bottom: 24px; right: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 10;
+        }
+
+        /* 반응형 모바일 최적화 */
+        @media (max-width: 768px) {
+            .top-left-bar { top: 12px; left: 12px; gap: 6px; }
+            .back-btn { padding: 6px 12px; font-size: 12px; }
+            .tag-badge { padding: 6px 12px; font-size: 12px; }
+            .top-right-bar { top: 12px; right: 12px; gap: 6px; }
+            .planet-nav-bar { top: 58px; padding: 4px 8px; gap: 4px; }
+            .p-nav-btn { padding: 4px 8px; font-size: 11px; }
+            .center-tooltip { display: none; }
+            
+            .side-ctrl-panel {
+                right: 12px; bottom: 76px; width: 230px; padding: 12px;
+            }
+            #planet-detail-card {
+                left: 12px; right: 12px; bottom: 76px; width: auto; max-height: 48vh; padding: 14px;
+            }
+            .bottom-control-bar { bottom: 16px; }
+            .control-capsule-btn { padding: 6px 12px; font-size: 11.5px; }
+            .bottom-right-bar { bottom: 16px; right: 12px; }
+        }
+    </style>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<!-- 상단 좌측 바: 뒤로가기 & 타이틀 -->
+<div class="top-left-bar">
+    <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동">← 메인</a>
+    <div class="tag-badge glass-panel">
+        <span class="title-text">태양계 3D</span>
+        <span class="vision-badge">지구과학</span>
+    </div>
+</div>
+
+<!-- 상단 우측 바: 테마 토글 등 -->
+<div class="top-right-bar">
+    <button class="icon-btn glass-panel" id="bTheme" title="야간 / 라이트 모드 전환" aria-label="테마 전환">🌙</button>
+</div>
+
+<!-- 행성 퀵 네비게이터 바 -->
+<div class="planet-nav-bar glass-panel" id="planet-nav">
+    <button class="p-nav-btn active" data-id="all">🌌 전체</button>
+    <button class="p-nav-btn" data-id="sun">☀️ 태양</button>
+    <button class="p-nav-btn" data-id="mercury">☿ 수성</button>
+    <button class="p-nav-btn" data-id="venus">♀ 금성</button>
+    <button class="p-nav-btn" data-id="earth">♁ 지구</button>
+    <button class="p-nav-btn" data-id="mars">♂ 화성</button>
+    <button class="p-nav-btn" data-id="jupiter">♃ 목성</button>
+    <button class="p-nav-btn" data-id="saturn">♄ 토성</button>
+    <button class="p-nav-btn" data-id="uranus">♅ 천왕성</button>
+    <button class="p-nav-btn" data-id="neptune">♆ 해왕성</button>
+</div>
+
+<div class="center-tooltip" id="hint-tip">💡 행성이나 이름표를 클릭하면 확대되어 상세한 특징을 살펴볼 수 있습니다.</div>
+
+<!-- 행성 상세 정보 모달 카드 -->
+<div class="glass-panel" id="planet-detail-card">
+    <div class="detail-top">
+        <div class="detail-title-wrap">
+            <span class="planet-icon-lg" id="detail-icon">🪐</span>
+            <div>
+                <span class="detail-name" id="detail-name">목성</span>
+                <span class="detail-en" id="detail-en">Jupiter</span>
+            </div>
+            <span class="detail-badge" id="detail-badge">목성형 행성</span>
+        </div>
+        <button class="detail-close-btn" id="detail-close" title="닫기 (전체보기)">✕</button>
+    </div>
+
+    <div class="metrics-grid">
+        <div class="metric-box">
+            <span class="metric-label">반지름 (크기)</span>
+            <span class="metric-val" id="val-radius">69,911 km (지구 11.2배)</span>
+        </div>
+        <div class="metric-box">
+            <span class="metric-label">태양과의 거리</span>
+            <span class="metric-val" id="val-dist">5.20 AU (약 7.8억 km)</span>
+        </div>
+        <div class="metric-box">
+            <span class="metric-label">공전 주기</span>
+            <span class="metric-val" id="val-orbit">11.86년</span>
+        </div>
+        <div class="metric-box">
+            <span class="metric-label">자전 주기 (기울기)</span>
+            <span class="metric-val" id="val-rot">9시간 56분 (3.1°)</span>
+        </div>
+        <div class="metric-box">
+            <span class="metric-label">평균 표면 온도</span>
+            <span class="metric-val" id="val-temp">-110°C</span>
+        </div>
+        <div class="metric-box">
+            <span class="metric-label">위성 수</span>
+            <span class="metric-val" id="val-moons">95개</span>
+        </div>
+    </div>
+
+    <div class="features-wrap">
+        <span class="features-title">📖 교과서 핵심 탐구 특징</span>
+        <div id="features-list">
+            <!-- 동적 삽입 -->
+        </div>
+    </div>
+
+    <div class="detail-nav-row">
+        <button class="detail-action-btn" id="btn-prev-p">◀ 이전 행성</button>
+        <button class="detail-action-btn" id="btn-next-p">다음 행성 ▶</button>
+    </div>
+</div>
+
+<!-- 우측 하단 실험 조절 패널 -->
+<div class="side-ctrl-panel glass-panel" id="side-ctrl">
+    <div class="panel-header">
+        <span class="panel-title">🪐 태양계 탐구 조절</span>
+    </div>
+
+    <!-- 보기 모드 전환 -->
+    <div class="ctrl-group">
+        <span class="ctrl-label">보기 모드</span>
+        <div class="btn-tab-group">
+            <button class="tile-btn active" id="btn-mode-orbit">🌌 공전 궤도</button>
+            <button class="tile-btn" id="btn-mode-scale">📏 크기 비교</button>
+        </div>
+    </div>
+
+    <!-- 행성 분류 필터 -->
+    <div class="ctrl-group">
+        <span class="ctrl-label">행성 분류 하이라이트</span>
+        <div class="btn-tab-group three">
+            <button class="tile-btn active" id="btn-filt-all">전체</button>
+            <button class="tile-btn" id="btn-filt-terrestrial">지구형</button>
+            <button class="tile-btn" id="btn-filt-jovian">목성형</button>
+        </div>
+    </div>
+
+    <!-- 공전 속도 -->
+    <div class="ctrl-group">
+        <div class="slider-row">
+            <span>공전 속도</span>
+            <span id="speed-val">1.0x</span>
+        </div>
+        <input type="range" id="speed-slider" min="0" max="5" step="0.5" value="1.0">
+    </div>
+
+    <!-- 표시 토글 -->
+    <div class="ctrl-group" style="gap:8px;">
+        <div class="toggle-row">
+            <span>궤도선 표시</span>
+            <button class="mini-toggle on" id="tog-orbits">ON</button>
+        </div>
+        <div class="toggle-row">
+            <span>행성 이름표</span>
+            <button class="mini-toggle on" id="tog-labels">ON</button>
+        </div>
+        <div class="toggle-row">
+            <span>자전축 표시</span>
+            <button class="mini-toggle on" id="tog-axes">ON</button>
+        </div>
+    </div>
+</div>
+
+<!-- 하단 중앙 글래스 캡슐 바 -->
+<div class="bottom-control-bar glass-panel" id="bar">
+    <button class="control-capsule-btn" id="btn-reset" title="원래 시점 및 설정으로 초기화">🔄 초기화</button>
+    <button class="control-capsule-btn primary" id="btn-overview" title="전체 궤도 시점으로 돌아가기">🎥 전체 시점</button>
+    <button class="control-capsule-btn" id="btn-pause" title="공전 일시정지 및 재생">⏸️ 정지</button>
+</div>
+
+<!-- 우측 하단 전체화면 버튼 -->
+<div class="bottom-right-bar">
+    <button class="icon-btn glass-panel" id="btn-fullscreen" title="전체화면 전환" aria-label="전체화면">⛶</button>
+</div>
+
+<script>
+/* ==========================================================================
+   태양계 3D 가상실험실 (Science Virtual LAB)
+   - 8개 행성 + 태양 + 달 3D 모델링 및 자전축·궤도 물리 연동
+   - 행성 클릭 시 카메라 줌인 & 교과서 특징 배열 카드 연동
+   - 공전 궤도 뷰 & 상대 크기 직관적 비교 뷰
+   ========================================================================== */
+(function() {
+    'use strict';
+
+    // 1. 행성 데이터베이스 (중학교 2학년 과학 태양계 기준)
+    const SUN_DATA = {
+        id: 'sun',
+        name: '태양',
+        enName: 'Sun',
+        symbol: '☀️',
+        hanja: '太陽',
+        type: '항성 (중심별)',
+        badgeClass: 'jovian',
+        color: '#ffc107',
+        meshR: 5.6,
+        sizeScaleR: 24.0, // 크기 비교 뷰에서 상징적 거대 곡면 반경
+        realR: '약 696,340 km (지구의 약 109배)',
+        realDist: '0 AU (태양계 중심)',
+        orbitPeriod: '은하 중심 공전 (약 2.3억 년)',
+        rotPeriod: '약 25일(적도)~35일(극) [차등 자전]',
+        temp: '표면 약 6,000°C / 중심부 약 1,500만°C',
+        moons: '8개 행성 거느림',
+        features: [
+            '스스로 빛과 열을 방출하는 태양계의 중심 항성으로, 태양계 전체 질량의 약 99.86%를 차지합니다.',
+            '표면(광구)에는 주변보다 온도가 약 2,000°C 낮아 검게 보이는 흑점과 대류 운동인 쌀알 무늬가 나타납니다.',
+            '태양 대기층인 채층과 고온 가스층인 코로나가 있으며, 거대한 불꽃인 홍염과 폭발 현상인 플레어가 발생합니다.'
+        ]
+    };
+
+    const PLANET_DATA = [
+        {
+            id: 'mercury',
+            name: '수성',
+            enName: 'Mercury',
+            symbol: '☿',
+            hanja: '水星',
+            type: '지구형 행성',
+            badgeClass: 'terrestrial',
+            color: '#b0b3b8',
+            orbitR: 16,
+            meshR: 0.95,
+            sizeScaleR: 0.76, // 0.38x
+            realR: '2,440 km (지구의 0.38배)',
+            realDist: '0.39 AU (약 5,790만 km)',
+            orbitPeriod: '88일 (0.24년)',
+            orbitSpeed: 3.8,
+            rotPeriod: '58.6일 (느린 자전)',
+            rotSpeed: 0.005,
+            tilt: 0.03,
+            temp: '-180°C ~ 430°C (일교차 극심)',
+            moons: '0개',
+            features: [
+                '태양에 가장 가까운 행성으로 크기가 가장 작습니다.',
+                '대기와 물이 없어 풍화·침식이 일어나지 않으므로 달처럼 수많은 운석 구덩이(크레이터)가 그대로 보존되어 있습니다.',
+                '대기가 열을 보존하지 못해 낮(약 430°C)과 밤(약 -180°C)의 일교차가 태양계에서 가장 큽니다.'
+            ]
+        },
+        {
+            id: 'venus',
+            name: '금성',
+            enName: 'Venus',
+            symbol: '♀',
+            hanja: '金星',
+            type: '지구형 행성',
+            badgeClass: 'terrestrial',
+            color: '#e6c875',
+            orbitR: 26,
+            meshR: 1.55,
+            sizeScaleR: 1.9, // 0.95x
+            realR: '6,052 km (지구의 0.95배)',
+            realDist: '0.72 AU (약 1억 800만 km)',
+            orbitPeriod: '225일 (0.62년)',
+            orbitSpeed: 1.62,
+            rotPeriod: '243일 (동→서 역자전)',
+            rotSpeed: -0.003,
+            tilt: 177.3,
+            temp: '약 470°C (태양계 최고 기온)',
+            moons: '0개',
+            features: [
+                '지구와 크기·질량이 가장 비슷한 행성이며, 밤하늘에서 태양·달 다음으로 가장 밝게 보입니다(샛별).',
+                '두꺼운 이산화탄소 대기(약 90기압)와 황산 구름층의 극심한 온실효과로 표면 온도가 약 470°C에 달해 수성보다 더 뜨겁습니다.',
+                '대부분의 행성과 반대로 동쪽에서 서쪽으로 자전하는 역자전을 합니다(자전축 177.3°).'
+            ]
+        },
+        {
+            id: 'earth',
+            name: '지구',
+            enName: 'Earth',
+            symbol: '♁',
+            hanja: '地球',
+            type: '지구형 행성',
+            badgeClass: 'terrestrial',
+            color: '#3b82f6',
+            orbitR: 38,
+            meshR: 1.65,
+            sizeScaleR: 2.0, // 1.0x
+            realR: '6,378 km (1.00 R⊕)',
+            realDist: '1.00 AU (약 1억 5,000만 km)',
+            orbitPeriod: '365.26일 (1년)',
+            orbitSpeed: 1.0,
+            rotPeriod: '23시간 56분 (1일)',
+            rotSpeed: 0.02,
+            tilt: 23.44,
+            temp: '평균 약 15°C',
+            moons: '1개 (달)',
+            features: [
+                '태양계에서 유일하게 액체 상태의 물(바다)과 산소 대기, 다양한 생명체가 존재하는 행성입니다.',
+                '적절한 대기와 자기장이 태양풍과 우주 방사선, 유해 자외선을 차단하여 생명체를 보호합니다.',
+                '자전축이 약 23.5° 기울어진 채 공전하여 계절의 변화가 뚜렷하게 나타납니다.'
+            ]
+        },
+        {
+            id: 'mars',
+            name: '화성',
+            enName: 'Mars',
+            symbol: '♂',
+            hanja: '火星',
+            type: '지구형 행성',
+            badgeClass: 'terrestrial',
+            color: '#e2583e',
+            orbitR: 50,
+            meshR: 1.2,
+            sizeScaleR: 1.06, // 0.53x
+            realR: '3,390 km (지구의 0.53배)',
+            realDist: '1.52 AU (약 2억 2,800만 km)',
+            orbitPeriod: '687일 (약 1.9년)',
+            orbitSpeed: 0.53,
+            rotPeriod: '24시간 37분 (지구와 유사)',
+            rotSpeed: 0.019,
+            tilt: 25.19,
+            temp: '-140°C ~ 20°C (평균 -63°C)',
+            moons: '2개 (포보스, 데이모스)',
+            features: [
+                '표면에 산화철(녹슨 철) 성분이 많아 붉은색을 띠며, 희박한 이산화탄소 대기를 가지고 있습니다.',
+                '자전축 기울기(25.2°)와 자전 주기가 지구와 비슷하여 지구처럼 계절 변화가 나타납니다.',
+                '양 극에 얼음과 드라이아이스로 된 흰색 극관이 있으며, 계절에 따라 크기가 변합니다(여름에 축소, 겨울에 확대).',
+                '과거 물이 흐른 강줄기 자국과 태양계 최대 화산인 올림포스산이 있습니다.'
+            ]
+        },
+        {
+            id: 'jupiter',
+            name: '목성',
+            enName: 'Jupiter',
+            symbol: '♃',
+            hanja: '木星',
+            type: '목성형 행성',
+            badgeClass: 'jovian',
+            color: '#d49b6a',
+            orbitR: 68,
+            meshR: 3.6,
+            sizeScaleR: 6.8, // 11.2x (압축 스케일링)
+            realR: '69,911 km (지구의 11.2배, 최대 크기)',
+            realDist: '5.20 AU (약 7억 7,800만 km)',
+            orbitPeriod: '11.86년 (약 4,333일)',
+            orbitSpeed: 0.18,
+            rotPeriod: '9시간 56분 (태양계 최속 자전)',
+            rotSpeed: 0.045,
+            tilt: 3.13,
+            temp: '평균 약 -110°C',
+            moons: '95개 (갈릴레이 4대 위성 등)',
+            features: [
+                '태양계에서 가장 큰 거대 가스 행성으로, 수소와 헬륨이 주성분입니다.',
+                '자전 주기가 약 10시간으로 매우 빨라 표면에 뚜렷한 가로 줄무늬와 거대한 대기 소용돌이인 대적점(Great Red Spot)이 나타납니다.',
+                '희미한 고리가 있으며 이오, 유로파, 가니메데, 칼리스토 등 수많은 위성을 거느리고 있습니다.'
+            ]
+        },
+        {
+            id: 'saturn',
+            name: '토성',
+            enName: 'Saturn',
+            symbol: '♄',
+            hanja: '土星',
+            type: '목성형 행성',
+            badgeClass: 'jovian',
+            color: '#dfcf85',
+            orbitR: 88,
+            meshR: 3.1,
+            sizeScaleR: 5.8, // 9.45x
+            realR: '58,232 km (지구의 9.4배)',
+            realDist: '9.58 AU (약 14억 3,000만 km)',
+            orbitPeriod: '29.46년 (약 10,759일)',
+            orbitSpeed: 0.09,
+            rotPeriod: '10시간 33분 (매우 빠름)',
+            rotSpeed: 0.042,
+            tilt: 26.73,
+            temp: '평균 약 -140°C',
+            moons: '146개 (타이탄 등)',
+            hasRings: true,
+            features: [
+                '얼음과 암석 파편으로 이루어진 화려하고 뚜렷한 거대 고리(A·B고리, 카시니 간극)를 가지고 있습니다.',
+                '평균 밀도가 약 0.69 g/cm³로 물(1 g/cm³)보다 작아서, 거대한 물에 띄운다면 물에 뜰 수 있는 유일한 행성입니다.',
+                '빠른 자전과 낮은 밀도로 인해 행성 중 가장 납작한 타원체 형태를 보입니다.'
+            ]
+        },
+        {
+            id: 'uranus',
+            name: '천왕성',
+            enName: 'Uranus',
+            symbol: '♅',
+            hanja: '天王星',
+            type: '목성형 행성',
+            badgeClass: 'jovian',
+            color: '#65d5db',
+            orbitR: 108,
+            meshR: 2.3,
+            sizeScaleR: 3.6, // 4.0x
+            realR: '25,362 km (지구의 4.0배)',
+            realDist: '19.22 AU (약 28억 7,000만 km)',
+            orbitPeriod: '84.01년 (약 30,687일)',
+            orbitSpeed: 0.04,
+            rotPeriod: '17시간 14분 (역자전)',
+            rotSpeed: -0.025,
+            tilt: 97.77,
+            temp: '평균 약 -195°C (최저 -224°C)',
+            moons: '28개',
+            hasRings: true,
+            features: [
+                '대기 중 메테인(CH₄) 가스가 붉은빛을 흡수하여 영롱한 청록색으로 관찰됩니다.',
+                '자전축이 약 98° 기울어져 있어 공전 궤도면에 거의 나란히 누운 채 굴러가듯이 자전합니다.',
+                '태양계 행성 중 가장 차가운 대기를 가진 얼음 거인(Ice Giant)이며, 얇고 어두운 고리가 있습니다.'
+            ]
+        },
+        {
+            id: 'neptune',
+            name: '해왕성',
+            enName: 'Neptune',
+            symbol: '♆',
+            hanja: '海王星',
+            type: '목성형 행성',
+            badgeClass: 'jovian',
+            color: '#3e6fd9',
+            orbitR: 128,
+            meshR: 2.2,
+            sizeScaleR: 3.5, // 3.9x
+            realR: '24,622 km (지구의 3.9배)',
+            realDist: '30.05 AU (약 45억 km)',
+            orbitPeriod: '164.79년 (약 60,190일)',
+            orbitSpeed: 0.02,
+            rotPeriod: '16시간 6분',
+            rotSpeed: 0.026,
+            tilt: 28.32,
+            temp: '평균 약 -200°C',
+            moons: '16개 (트리톤 등)',
+            hasRings: true,
+            features: [
+                '태양계 가장 바깥쪽 행성으로, 메테인 성분에 의해 짙고 영롱한 코발트 파란색을 띱니다.',
+                '대기 상층부에 시속 2,000 km가 넘는 태양계에서 가장 빠른 초음속 강풍이 몰아칩니다.',
+                '대기 중에 거대한 폭풍 소용돌이인 대흑점(Great Dark Spot)과 흰색 메테인 구름이 나타납니다.'
+            ]
+        }
+    ];
+
+    // 2. 텍스처 절차적 생성 함수군 (고화질 2D 캔버스 기반)
+    function createSunTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0, '#ff9015');
+        g.addColorStop(0.5, '#ffd242');
+        g.addColorStop(1, '#ff7c05');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 512, 256);
+
+        // 쌀알 무늬 및 흑점
+        for (let i = 0; i < 400; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.18)' : 'rgba(220,100,0,0.18)';
+            ctx.beginPath();
+            ctx.arc(Math.random() * 512, Math.random() * 256, 1 + Math.random() * 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // 대표 흑점 군집
+        const spots = [[180, 110, 8], [195, 115, 5], [320, 140, 10], [335, 138, 6]];
+        spots.forEach(s => {
+            ctx.fillStyle = 'rgba(100, 30, 0, 0.85)';
+            ctx.beginPath();
+            ctx.arc(s[0], s[1], s[2], 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'rgba(40, 10, 0, 0.95)';
+            ctx.beginPath();
+            ctx.arc(s[0], s[1], s[2] * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createCoronaGlowTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createRadialGradient(128, 128, 10, 128, 128, 128);
+        g.addColorStop(0, 'rgba(255, 250, 210, 1)');
+        g.addColorStop(0.2, 'rgba(255, 200, 70, 0.7)');
+        g.addColorStop(0.55, 'rgba(255, 140, 30, 0.22)');
+        g.addColorStop(1, 'rgba(255, 100, 20, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 256, 256);
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createMercuryTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#8a8c92';
+        ctx.fillRect(0, 0, 512, 256);
+        // 암석 노이즈 & 크레이터
+        for (let i = 0; i < 200; i++) {
+            const x = Math.random() * 512, y = Math.random() * 256;
+            const r = 2 + Math.random() * 10;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(60,62,68,' + (0.3 + Math.random() * 0.4) + ')';
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.35, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(210,214,220,0.5)';
+            ctx.fill();
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createVenusTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0, '#e8cd80');
+        g.addColorStop(0.5, '#edd99a');
+        g.addColorStop(1, '#dfbf6b');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 512, 256);
+        // 황산 구름 띠
+        for (let i = 0; i < 40; i++) {
+            const y = Math.random() * 256;
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,230,0.2)' : 'rgba(180,140,50,0.18)';
+            ctx.fillRect(0, y, 512, 4 + Math.random() * 12);
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createEarthTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        // 대양
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0, '#1a58a6');
+        g.addColorStop(0.5, '#206ecc');
+        g.addColorStop(1, '#154a8e');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 512, 256);
+
+        // 유라시아, 아프리카, 아메리카 등 주요 대륙 개략
+        ctx.fillStyle = '#42934b';
+        // 아시아/유라시아
+        ctx.beginPath();
+        ctx.ellipse(320, 90, 75, 45, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        // 아프리카
+        ctx.fillStyle = '#b08a48';
+        ctx.beginPath();
+        ctx.ellipse(260, 140, 36, 45, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        // 아메리카
+        ctx.fillStyle = '#499a53';
+        ctx.beginPath();
+        ctx.ellipse(140, 95, 42, 40, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(170, 170, 30, 48, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        // 한반도 위치 강조 점
+        ctx.fillStyle = '#ffcc00';
+        ctx.beginPath();
+        ctx.arc(385, 96, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 양 극지방 빙하
+        ctx.fillStyle = '#f0f6ff';
+        ctx.fillRect(0, 0, 512, 14);
+        ctx.fillRect(0, 242, 512, 14);
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createEarthCloudTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, 512, 256);
+        for (let i = 0; i < 45; i++) {
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.15 + Math.random() * 0.3) + ')';
+            ctx.beginPath();
+            ctx.ellipse(Math.random() * 512, 30 + Math.random() * 196, 25 + Math.random() * 45, 8 + Math.random() * 16, Math.random() * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createMoonTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 128;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#b8bac0';
+        ctx.fillRect(0, 0, 256, 128);
+        for (let i = 0; i < 80; i++) {
+            ctx.fillStyle = 'rgba(100,102,110,' + (0.3 + Math.random() * 0.4) + ')';
+            ctx.beginPath();
+            ctx.arc(Math.random() * 256, Math.random() * 128, 1 + Math.random() * 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createMarsTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#d65134';
+        ctx.fillRect(0, 0, 512, 256);
+        // 어두운 현무암 저지대 (Syrtis Major 등)
+        ctx.fillStyle = '#8f2f1c';
+        for (let i = 0; i < 35; i++) {
+            ctx.beginPath();
+            ctx.ellipse(Math.random() * 512, 70 + Math.random() * 120, 20 + Math.random() * 50, 10 + Math.random() * 25, Math.random() * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // 양 극관 (흰색 얼음과 드라이아이스)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 512, 12);
+        ctx.fillRect(0, 244, 512, 12);
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createJupiterTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        // 가로 줄무늬
+        const bands = [
+            '#cca87a', '#edd9ba', '#ba8655', '#d6b896', '#ba814d',
+            '#dfc7a6', '#ad7547', '#edd4b4', '#ba8252', '#cca478'
+        ];
+        const step = 256 / bands.length;
+        bands.forEach((b, idx) => {
+            ctx.fillStyle = b;
+            ctx.fillRect(0, idx * step, 512, step + 1);
+        });
+        // 대기의 파동 요동
+        for (let i = 0; i < 25; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.22)' : 'rgba(90,40,10,0.22)';
+            ctx.fillRect(0, Math.random() * 256, 512, 2 + Math.random() * 6);
+        }
+        // 대적점 (Great Red Spot)
+        ctx.fillStyle = '#b83b23';
+        ctx.beginPath();
+        ctx.ellipse(320, 160, 28, 16, -0.08, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#8f2613';
+        ctx.beginPath();
+        ctx.ellipse(320, 160, 16, 9, -0.08, 0, Math.PI * 2);
+        ctx.fill();
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createSaturnTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const bands = [
+            '#d9c585', '#ede3b4', '#d1bc75', '#e8dfb5', '#c7af61',
+            '#ede3b4', '#c9b167', '#ded29b', '#baa054'
+        ];
+        const step = 256 / bands.length;
+        bands.forEach((b, idx) => {
+            ctx.fillStyle = b;
+            ctx.fillRect(0, idx * step, 512, step + 1);
+        });
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createSaturnRingTexture() {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = 32;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 256, 0);
+        g.addColorStop(0, 'rgba(160, 140, 90, 0)');
+        g.addColorStop(0.12, 'rgba(195, 175, 120, 0.5)'); // C 고리
+        g.addColorStop(0.28, 'rgba(235, 215, 150, 0.95)'); // B 고리 (가장 밝음)
+        g.addColorStop(0.60, 'rgba(220, 200, 140, 0.85)');
+        g.addColorStop(0.65, 'rgba(20, 15, 10, 0.05)'); // 카시니 간극 (어두운 틈)
+        g.addColorStop(0.70, 'rgba(210, 190, 130, 0.85)'); // A 고리
+        g.addColorStop(0.95, 'rgba(180, 160, 110, 0.4)');
+        g.addColorStop(1, 'rgba(150, 130, 90, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 256, 32);
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createUranusTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0, '#75e2e8');
+        g.addColorStop(0.5, '#62d1d7');
+        g.addColorStop(1, '#50c2c8');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 512, 256);
+        // 은은한 메테인 띠
+        for (let i = 0; i < 15; i++) {
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.fillRect(0, Math.random() * 256, 512, 6 + Math.random() * 12);
+        }
+        return new THREE.CanvasTexture(c);
+    }
+
+    function createNeptuneTexture() {
+        const c = document.createElement('canvas');
+        c.width = 512; c.height = 256;
+        const ctx = c.getContext('2d');
+        const g = ctx.createLinearGradient(0, 0, 0, 256);
+        g.addColorStop(0, '#3267d6');
+        g.addColorStop(0.5, '#2558c4');
+        g.addColorStop(1, '#1b4cb3');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 512, 256);
+        // 대흑점 (Great Dark Spot)
+        ctx.fillStyle = '#102d75';
+        ctx.beginPath();
+        ctx.ellipse(300, 140, 24, 14, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        // 상층 흰색 메테인 권운 스트릭
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillRect(260, 126, 48, 3);
+        ctx.fillRect(310, 158, 38, 2.5);
+        return new THREE.CanvasTexture(c);
+    }
+
+    // 3. 스프라이트 텍스트 라벨 제작
+    function makeLabel(text, color, scale, bg) {
+        const fs = 56;
+        const cv = document.createElement('canvas');
+        const ctx = cv.getContext('2d');
+        const font = "bold " + fs + "px 'SeoulNamsan', 'Apple SD Gothic Neo', sans-serif";
+        ctx.font = font;
+        const tm = ctx.measureText(text);
+        const padX = 32, padY = 16;
+        cv.width = Math.ceil(tm.width + padX * 2);
+        cv.height = Math.ceil(fs + padY * 2);
+
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (bg) {
+            ctx.fillStyle = bg;
+            const r = 18;
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(cv.width - r, 0); ctx.quadraticCurveTo(cv.width, 0, cv.width, r);
+            ctx.lineTo(cv.width, cv.height - r); ctx.quadraticCurveTo(cv.width, cv.height, cv.width - r, cv.height);
+            ctx.lineTo(r, cv.height); ctx.quadraticCurveTo(0, cv.height, 0, cv.height - r);
+            ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.fillStyle = color || '#ffffff';
+        ctx.fillText(text, cv.width / 2, cv.height / 2 + 2);
+
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+        const sp = new THREE.Sprite(mat);
+        const wpp = 0.006 * (scale || 1);
+        sp.scale.set(cv.width * wpp, cv.height * wpp, 1);
+        sp.userData = { text: text, cv: cv };
+        return sp;
+    }
+
+    // 4. Three.js 씬 초기화
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x030612);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const CAM_OVERVIEW = { pos: new THREE.Vector3(0, 95, 125), target: new THREE.Vector3(0, 0, 0) };
+    camera.position.copy(CAM_OVERVIEW.pos);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 3.5;
+    controls.maxDistance = 450;
+    controls.target.copy(CAM_OVERVIEW.target);
+
+    // 5. 조명 & 우주 배경 (별 무리)
+    const sunLight = new THREE.PointLight(0xfff8ea, 2.4, 500, 0.6);
+    scene.add(sunLight);
+    const ambientLight = new THREE.AmbientLight(0x28354d, 0.45);
+    scene.add(ambientLight);
+
+    // 우주 배경 성운/별 파티클
+    (function createStarfield() {
+        const starGeo = new THREE.BufferGeometry();
+        const cnt = 2500;
+        const pos = new Float32Array(cnt * 3);
+        const colors = new Float32Array(cnt * 3);
+        for (let i = 0; i < cnt; i++) {
+            const rad = 280 + Math.random() * 200;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            pos[i * 3] = rad * Math.sin(phi) * Math.cos(theta);
+            pos[i * 3 + 1] = rad * Math.sin(phi) * Math.sin(theta);
+            pos[i * 3 + 2] = rad * Math.cos(phi);
+
+            // 별 색상 약간의 베리에이션 (청백색, 황백색, 백색)
+            const rnd = Math.random();
+            if (rnd > 0.8) { colors[i * 3] = 0.8; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 1.0; }
+            else if (rnd > 0.6) { colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 0.7; }
+            else { colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0; }
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const starMat = new THREE.PointsMaterial({ size: 1.3, vertexColors: true, transparent: true, opacity: 0.85 });
+        scene.add(new THREE.Points(starGeo, starMat));
+    })();
+
+    // 6. 태양 생성
+    const sunGroup = new THREE.Group();
+    scene.add(sunGroup);
+
+    const sunMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(SUN_DATA.meshR, 48, 36),
+        new THREE.MeshBasicMaterial({ map: createSunTexture() })
+    );
+    sunGroup.add(sunMesh);
+
+    const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: createCoronaGlowTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    sunGlow.scale.set(SUN_DATA.meshR * 3.8, SUN_DATA.meshR * 3.8, 1);
+    sunGroup.add(sunGlow);
+
+    const sunLabel = makeLabel('태양 ☀️', '#ffd873', 0.85, 'rgba(10, 16, 28, 0.75)');
+    sunLabel.position.set(0, SUN_DATA.meshR + 2.0, 0);
+    sunGroup.add(sunLabel);
+
+    // 7. 8개 행성 객체 생성 및 궤도선 구성
+    const planetObjects = [];
+    const orbitLines = [];
+    const interactiveMeshes = [sunMesh];
+    sunMesh.userData = { id: 'sun', isPlanet: true };
+
+    PLANET_DATA.forEach(data => {
+        const pObj = {
+            data: data,
+            angle: Math.random() * Math.PI * 2,
+            orbitGroup: new THREE.Group(),
+            planetPivot: new THREE.Group(),
+            tiltGroup: new THREE.Group(),
+            mesh: null,
+            cloudMesh: null,
+            ringMesh: null,
+            label: null,
+            axisLine: null
+        };
+
+        scene.add(pObj.orbitGroup);
+        pObj.orbitGroup.add(pObj.planetPivot);
+        pObj.planetPivot.add(pObj.tiltGroup);
+
+        // 궤도선 (Circle / LineLoop)
+        const curvePts = [];
+        const segs = 128;
+        for (let i = 0; i <= segs; i++) {
+            const th = (i / segs) * Math.PI * 2;
+            curvePts.push(new THREE.Vector3(Math.cos(th) * data.orbitR, 0, Math.sin(th) * data.orbitR));
+        }
+        const orbitGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+        const orbitMat = new THREE.LineBasicMaterial({
+            color: new THREE.Color(data.color), transparent: true, opacity: 0.32
+        });
+        const orbitLine = new THREE.LineLoop(orbitGeo, orbitMat);
+        scene.add(orbitLine);
+        orbitLines.push(orbitLine);
+        pObj.orbitLine = orbitLine;
+
+        // 텍스처 선택
+        let tex = null;
+        if (data.id === 'mercury') tex = createMercuryTexture();
+        else if (data.id === 'venus') tex = createVenusTexture();
+        else if (data.id === 'earth') tex = createEarthTexture();
+        else if (data.id === 'mars') tex = createMarsTexture();
+        else if (data.id === 'jupiter') tex = createJupiterTexture();
+        else if (data.id === 'saturn') tex = createSaturnTexture();
+        else if (data.id === 'uranus') tex = createUranusTexture();
+        else if (data.id === 'neptune') tex = createNeptuneTexture();
+
+        const pMat = new THREE.MeshStandardMaterial({
+            map: tex, roughness: 0.8, metalness: 0.08
+        });
+        const pMesh = new THREE.Mesh(new THREE.SphereGeometry(data.meshR, 48, 36), pMat);
+        pMesh.userData = { id: data.id, isPlanet: true };
+        pObj.mesh = pMesh;
+        interactiveMeshes.push(pMesh);
+
+        // 자전축 기울기 적용
+        pObj.tiltGroup.rotation.z = (data.tilt * Math.PI) / 180;
+        pObj.tiltGroup.add(pMesh);
+
+        // 지구 특화: 구름 레이어 & 달
+        if (data.id === 'earth') {
+            const cMat = new THREE.MeshStandardMaterial({
+                map: createEarthCloudTexture(), transparent: true, opacity: 0.4, depthWrite: false
+            });
+            const cMesh = new THREE.Mesh(new THREE.SphereGeometry(data.meshR * 1.025, 48, 36), cMat);
+            pObj.cloudMesh = cMesh;
+            pObj.tiltGroup.add(cMesh);
+
+            // 달 (Moon)
+            const moonPivot = new THREE.Group();
+            const moonMat = new THREE.MeshStandardMaterial({ map: createMoonTexture(), roughness: 0.9 });
+            const moonMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 32, 24), moonMat);
+            moonMesh.position.set(3.4, 0, 0);
+            moonPivot.add(moonMesh);
+            pObj.planetPivot.add(moonPivot);
+            pObj.moonPivot = moonPivot;
+        }
+
+        // 토성 고리
+        if (data.id === 'saturn') {
+            const innerR = data.meshR * 1.35;
+            const outerR = data.meshR * 2.45;
+            const ringGeo = new THREE.RingGeometry(innerR, outerR, 64);
+            // Ring UV 매핑
+            const pos = ringGeo.attributes.position;
+            const v3 = new THREE.Vector3();
+            for (let i = 0; i < pos.count; i++) {
+                v3.fromBufferAttribute(pos, i);
+                ringGeo.attributes.uv.setXY(i, (v3.length() - innerR) / (outerR - innerR), 0.5);
+            }
+            const ringMat = new THREE.MeshStandardMaterial({
+                map: createSaturnRingTexture(), side: THREE.DoubleSide, transparent: true, opacity: 0.95, roughness: 0.7
+            });
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.rotation.x = Math.PI / 2;
+            pObj.tiltGroup.add(ringMesh);
+            pObj.ringMesh = ringMesh;
+        }
+
+        // 천왕성 고리
+        if (data.id === 'uranus') {
+            const ringGeo = new THREE.RingGeometry(data.meshR * 1.4, data.meshR * 1.65, 48);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xa4e8ec, side: THREE.DoubleSide, transparent: true, opacity: 0.45
+            });
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.rotation.x = Math.PI / 2;
+            pObj.tiltGroup.add(ringMesh);
+        }
+
+        // 자전축 벡터 표시선
+        const axisGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, -data.meshR * 1.7, 0),
+            new THREE.Vector3(0, data.meshR * 1.7, 0)
+        ]);
+        const axisMat = new THREE.LineBasicMaterial({
+            color: new THREE.Color(data.color), transparent: true, opacity: 0.65
+        });
+        const axisLine = new THREE.Line(axisGeo, axisMat);
+        pObj.tiltGroup.add(axisLine);
+        pObj.axisLine = axisLine;
+
+        // 3D 이름표 라벨
+        const label = makeLabel(data.symbol + ' ' + data.name, data.color, 0.75, 'rgba(10, 16, 28, 0.75)');
+        label.position.set(0, data.meshR + 1.4, 0);
+        pObj.planetPivot.add(label);
+        pObj.label = label;
+
+        planetObjects.push(pObj);
+    });
+
+    // 8. 상태 변수군
+    let currentMode = 'orbit'; // 'orbit' | 'scale'
+    let currentFilter = 'all'; // 'all' | 'terrestrial' | 'jovian'
+    let orbitSpeedMult = 1.0;
+    let isPaused = false;
+    let showOrbits = true;
+    let showLabels = true;
+    let showAxes = true;
+
+    // 포커스 & 카메라 트윈
+    let focusedPlanetId = null; // null: overview, 'sun' or planet id
+    let camTargetPos = new THREE.Vector3();
+    let camTargetLook = new THREE.Vector3();
+    let isTransitioning = false;
+    let transitionProgress = 0;
+    const startCamPos = new THREE.Vector3();
+    const startCamLook = new THREE.Vector3();
+
+    // 9. 위치 갱신 및 시뮬레이션 루프
+    const clock = new THREE.Clock();
+
+    function updatePlanets(delta) {
+        // 태양 자전
+        sunMesh.rotation.y += 0.004;
+
+        planetObjects.forEach(pObj => {
+            const d = pObj.data;
+
+            if (currentMode === 'orbit') {
+                // 공전 각도 갱신
+                if (!isPaused) {
+                    pObj.angle += delta * 0.35 * d.orbitSpeed * orbitSpeedMult;
+                }
+                const px = Math.cos(pObj.angle) * d.orbitR;
+                const pz = Math.sin(pObj.angle) * d.orbitR;
+                pObj.planetPivot.position.set(px, 0, pz);
+
+                // 스케일 복원
+                pObj.mesh.scale.set(1, 1, 1);
+            } else if (currentMode === 'scale') {
+                // 크기 비교 모드: X축으로 나란히 정렬 & 상대 크기 반영
+                const idx = PLANET_DATA.findIndex(p => p.id === d.id);
+                // 수성부터 해왕성까지 간격 배치
+                const spacingX = -32 + idx * 9.2;
+                pObj.planetPivot.position.set(spacingX, 0, 0);
+
+                const sc = d.sizeScaleR / d.meshR;
+                pObj.mesh.scale.set(sc, sc, sc);
+            }
+
+            // 행성 자전
+            if (!isPaused) {
+                pObj.mesh.rotation.y += d.rotSpeed * (1 + orbitSpeedMult * 0.2);
+                if (pObj.cloudMesh) pObj.cloudMesh.rotation.y += d.rotSpeed * 1.25;
+                if (pObj.moonPivot) pObj.moonPivot.rotation.y += delta * 1.5;
+            }
+
+            // 라벨 위치 동기화
+            if (pObj.label) {
+                pObj.label.visible = showLabels && (currentFilter === 'all' || (currentFilter === 'terrestrial' && d.type === '지구형 행성') || (currentFilter === 'jovian' && d.type === '목성형 행성'));
+            }
+            if (pObj.axisLine) {
+                pObj.axisLine.visible = showAxes;
+            }
+
+            // 필터링에 따른 투명도/하이라이트 처리
+            let targetOpacity = 1.0;
+            if (currentFilter === 'terrestrial') {
+                targetOpacity = (d.type === '지구형 행성') ? 1.0 : 0.15;
+            } else if (currentFilter === 'jovian') {
+                targetOpacity = (d.type === '목성형 행성') ? 1.0 : 0.15;
+            }
+            pObj.mesh.material.opacity = targetOpacity;
+            pObj.mesh.material.transparent = targetOpacity < 1.0;
+            if (pObj.orbitLine) {
+                pObj.orbitLine.visible = showOrbits && (currentMode === 'orbit') && (targetOpacity > 0.5);
+            }
+        });
+
+        // 태양 위치
+        if (currentMode === 'scale') {
+            sunGroup.position.set(-68, 0, 0);
+            sunMesh.scale.set(SUN_DATA.sizeScaleR / SUN_DATA.meshR, SUN_DATA.sizeScaleR / SUN_DATA.meshR, SUN_DATA.sizeScaleR / SUN_DATA.meshR);
+            sunGlow.scale.set(SUN_DATA.sizeScaleR * 3.5, SUN_DATA.sizeScaleR * 3.5, 1);
+            sunLabel.position.set(0, SUN_DATA.sizeScaleR + 2, 0);
+        } else {
+            sunGroup.position.set(0, 0, 0);
+            sunMesh.scale.set(1, 1, 1);
+            sunGlow.scale.set(SUN_DATA.meshR * 3.8, SUN_DATA.meshR * 3.8, 1);
+            sunLabel.position.set(0, SUN_DATA.meshR + 2, 0);
+        }
+    }
+
+    // 10. 부드러운 카메라 트랜지션 (Lerp)
+    function updateCamera(delta) {
+        if (isTransitioning) {
+            transitionProgress += delta * 1.8;
+            if (transitionProgress >= 1) {
+                transitionProgress = 1;
+                isTransitioning = false;
+            }
+            // easeInOutCubic
+            const t = transitionProgress < 0.5 ? 4 * transitionProgress * transitionProgress * transitionProgress : 1 - Math.pow(-2 * transitionProgress + 2, 3) / 2;
+            camera.position.lerpVectors(startCamPos, camTargetPos, t);
+            controls.target.lerpVectors(startCamLook, camTargetLook, t);
+        } else if (focusedPlanetId && currentMode === 'orbit') {
+            // 포커스 중인 행성이 공전함에 따라 카메라 타깃도 부드럽게 추종
+            if (focusedPlanetId === 'sun') {
+                controls.target.set(0, 0, 0);
+            } else {
+                const targetObj = planetObjects.find(p => p.data.id === focusedPlanetId);
+                if (targetObj) {
+                    const worldPos = new THREE.Vector3();
+                    targetObj.planetPivot.getWorldPosition(worldPos);
+                    const diff = new THREE.Vector3().subVectors(worldPos, controls.target);
+                    controls.target.copy(worldPos);
+                    camera.position.add(diff);
+                }
+            }
+        }
+        controls.update();
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const delta = Math.min(clock.getDelta(), 0.1);
+        updatePlanets(delta);
+        updateCamera(delta);
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    // 11. 행성 포커스 & 모달 카드 연동
+    const detailCard = document.getElementById('planet-detail-card');
+    const detailIcon = document.getElementById('detail-icon');
+    const detailName = document.getElementById('detail-name');
+    const detailEn = document.getElementById('detail-en');
+    const detailBadge = document.getElementById('detail-badge');
+    const valRadius = document.getElementById('val-radius');
+    const valDist = document.getElementById('val-dist');
+    const valOrbit = document.getElementById('val-orbit');
+    const valRot = document.getElementById('val-rot');
+    const valTemp = document.getElementById('val-temp');
+    const valMoons = document.getElementById('val-moons');
+    const featuresList = document.getElementById('features-list');
+
+    function focusOnObject(id) {
+        focusedPlanetId = id;
+
+        // 퀵 네브 바 버튼 활성화
+        document.querySelectorAll('.p-nav-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-id') === id);
+        });
+
+        if (id === 'all' || !id) {
+            focusedPlanetId = null;
+            detailCard.classList.remove('show');
+            startTransition(CAM_OVERVIEW.pos, CAM_OVERVIEW.target);
+            return;
+        }
+
+        let targetData = null;
+        let targetWorldPos = new THREE.Vector3();
+        let targetMeshR = 2.0;
+
+        if (id === 'sun') {
+            targetData = SUN_DATA;
+            sunGroup.getWorldPosition(targetWorldPos);
+            targetMeshR = SUN_DATA.meshR;
+        } else {
+            const pObj = planetObjects.find(p => p.data.id === id);
+            if (!pObj) return;
+            targetData = pObj.data;
+            pObj.planetPivot.getWorldPosition(targetWorldPos);
+            targetMeshR = (currentMode === 'scale') ? targetData.sizeScaleR : targetData.meshR;
+        }
+
+        // 상세 모달 카드 채우기
+        detailIcon.textContent = targetData.symbol;
+        detailName.textContent = targetData.name;
+        detailEn.textContent = targetData.enName + (targetData.hanja ? ' · ' + targetData.hanja : '');
+        detailBadge.textContent = targetData.type;
+        detailBadge.className = 'detail-badge ' + targetData.badgeClass;
+
+        valRadius.textContent = targetData.realR;
+        valDist.textContent = targetData.realDist;
+        valOrbit.textContent = targetData.orbitPeriod;
+        valRot.textContent = targetData.rotPeriod;
+        valTemp.textContent = targetData.temp;
+        valMoons.textContent = targetData.moons;
+
+        featuresList.innerHTML = '';
+        targetData.features.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'feature-item';
+            item.textContent = f;
+            featuresList.appendChild(item);
+        });
+        detailCard.classList.add('show');
+
+        // 카메라 줌인 타깃 위치 계산 (행성 바로 앞 비스듬한 뷰)
+        const zoomDist = targetMeshR * (targetData.hasRings ? 4.2 : 3.4);
+        const camPos = new THREE.Vector3(
+            targetWorldPos.x + zoomDist * 0.7,
+            targetWorldPos.y + zoomDist * 0.45,
+            targetWorldPos.z + zoomDist * 0.7
+        );
+        startTransition(camPos, targetWorldPos);
+    }
+
+    function startTransition(toPos, toLook) {
+        startCamPos.copy(camera.position);
+        startCamLook.copy(controls.target);
+        camTargetPos.copy(toPos);
+        camTargetLook.copy(toLook);
+        transitionProgress = 0;
+        isTransitioning = true;
+    }
+
+    // 12. 3D 클릭 & 레이캐스팅 (마우스 / 터치)
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let downPos = { x: 0, y: 0 };
+
+    window.addEventListener('pointerdown', e => {
+        downPos.x = e.clientX;
+        downPos.y = e.clientY;
+    });
+
+    window.addEventListener('pointerup', e => {
+        const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+        if (dist > 6) return; // 드래그 회전인 경우 클릭 무시
+
+        // UI 요소 클릭은 무시
+        if (e.target.closest('.glass-panel') || e.target.closest('button') || e.target.closest('input')) return;
+
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersects = raycaster.intersectObjects(interactiveMeshes);
+        if (intersects.length > 0) {
+            const hitMesh = intersects[0].object;
+            if (hitMesh.userData && hitMesh.userData.id) {
+                focusOnObject(hitMesh.userData.id);
+            }
+        }
+    });
+
+    // 13. UI 이벤트 바인딩
+    // 상단 퀵 네브 바
+    document.getElementById('planet-nav').addEventListener('click', e => {
+        const btn = e.target.closest('.p-nav-btn');
+        if (!btn) return;
+        const id = btn.getAttribute('data-id');
+        focusOnObject(id);
+    });
+
+    // 모달 닫기
+    document.getElementById('detail-close').addEventListener('click', () => {
+        focusOnObject('all');
+    });
+
+    // 이전/다음 행성 버튼
+    const allPlanetIds = ['sun', 'mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+    document.getElementById('btn-prev-p').addEventListener('click', () => {
+        let curIdx = allPlanetIds.indexOf(focusedPlanetId);
+        if (curIdx <= 0) curIdx = allPlanetIds.length - 1;
+        else curIdx--;
+        focusOnObject(allPlanetIds[curIdx]);
+    });
+    document.getElementById('btn-next-p').addEventListener('click', () => {
+        let curIdx = allPlanetIds.indexOf(focusedPlanetId);
+        if (curIdx === -1 || curIdx >= allPlanetIds.length - 1) curIdx = 0;
+        else curIdx++;
+        focusOnObject(allPlanetIds[curIdx]);
+    });
+
+    // 보기 모드 전환 (공전 궤도 vs 크기 비교)
+    const btnModeOrbit = document.getElementById('btn-mode-orbit');
+    const btnModeScale = document.getElementById('btn-mode-scale');
+
+    btnModeOrbit.addEventListener('click', () => {
+        currentMode = 'orbit';
+        btnModeOrbit.classList.add('active');
+        btnModeScale.classList.remove('active');
+        focusOnObject('all');
+    });
+
+    btnModeScale.addEventListener('click', () => {
+        currentMode = 'scale';
+        btnModeScale.classList.add('active');
+        btnModeOrbit.classList.remove('active');
+        focusedPlanetId = null;
+        detailCard.classList.remove('show');
+        // 크기 비교 전용 카메라 뷰
+        startTransition(new THREE.Vector3(0, 8, 55), new THREE.Vector3(0, 0, 0));
+    });
+
+    // 행성 분류 필터 (전체 / 지구형 / 목성형)
+    const btnFiltAll = document.getElementById('btn-filt-all');
+    const btnFiltTerr = document.getElementById('btn-filt-terrestrial');
+    const btnFiltJov = document.getElementById('btn-filt-jovian');
+
+    function setFilter(filt) {
+        currentFilter = filt;
+        btnFiltAll.classList.toggle('active', filt === 'all');
+        btnFiltTerr.classList.toggle('active', filt === 'terrestrial');
+        btnFiltJov.classList.toggle('active', filt === 'jovian');
+    }
+    btnFiltAll.addEventListener('click', () => setFilter('all'));
+    btnFiltTerr.addEventListener('click', () => setFilter('terrestrial'));
+    btnFiltJov.addEventListener('click', () => setFilter('jovian'));
+
+    // 공전 속도 슬라이더
+    const speedSlider = document.getElementById('speed-slider');
+    const speedVal = document.getElementById('speed-val');
+    speedSlider.addEventListener('input', e => {
+        orbitSpeedMult = parseFloat(e.target.value);
+        speedVal.textContent = orbitSpeedMult.toFixed(1) + 'x';
+    });
+
+    // 토글 버튼들
+    const togOrbits = document.getElementById('tog-orbits');
+    togOrbits.addEventListener('click', () => {
+        showOrbits = !showOrbits;
+        togOrbits.classList.toggle('on', showOrbits);
+        togOrbits.textContent = showOrbits ? 'ON' : 'OFF';
+    });
+
+    const togLabels = document.getElementById('tog-labels');
+    togLabels.addEventListener('click', () => {
+        showLabels = !showLabels;
+        togLabels.classList.toggle('on', showLabels);
+        togLabels.textContent = showLabels ? 'ON' : 'OFF';
+        sunLabel.visible = showLabels;
+    });
+
+    const togAxes = document.getElementById('tog-axes');
+    togAxes.addEventListener('click', () => {
+        showAxes = !showAxes;
+        togAxes.classList.toggle('on', showAxes);
+        togAxes.textContent = showAxes ? 'ON' : 'OFF';
+    });
+
+    // 하단 캡슐 바: 초기화 / 전체 시점 / 일시정지
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        currentMode = 'orbit';
+        btnModeOrbit.classList.add('active');
+        btnModeScale.classList.remove('active');
+        setFilter('all');
+        orbitSpeedMult = 1.0;
+        speedSlider.value = 1.0;
+        speedVal.textContent = '1.0x';
+        isPaused = false;
+        document.getElementById('btn-pause').textContent = '⏸️ 정지';
+        focusOnObject('all');
+    });
+
+    document.getElementById('btn-overview').addEventListener('click', () => {
+        focusOnObject('all');
+    });
+
+    const btnPause = document.getElementById('btn-pause');
+    btnPause.addEventListener('click', () => {
+        isPaused = !isPaused;
+        btnPause.textContent = isPaused ? '▶ 재생' : '⏸️ 정지';
+    });
+
+    // 야간/라이트 테마 전환
+    const themeBtn = document.getElementById('bTheme');
+    themeBtn.addEventListener('click', () => {
+        document.body.classList.toggle('light-mode');
+        const isLight = document.body.classList.contains('light-mode');
+        themeBtn.textContent = isLight ? '☀️' : '🌙';
+        scene.background.setHex(isLight ? 0xeef3f9 : 0x030612);
+        ambientLight.intensity = isLight ? 0.75 : 0.45;
+    });
+
+    // 14. 전체화면 제어
+    const fsBtn = document.getElementById('btn-fullscreen');
+    if (fsBtn) {
+        fsBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        });
+    }
+
+    // 15. 리사이즈 핸들러
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+})();
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
