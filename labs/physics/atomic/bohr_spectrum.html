@@ -895,11 +895,11 @@ for (let i = 0; i < 10; i++) {
   gl.scale.set(1.0, 1.0, 1);
   m.add(gl);
   scene.add(m);
-  photons.push({ obj: m, active: false, t: 0, from: new THREE.Vector3(), to: new THREE.Vector3(), nm: 0 });
+  photons.push({ obj: m, active: false, t: 0, from: new THREE.Vector3(), to: new THREE.Vector3(), nm: 0, mode: 'emit', onComplete: null });
 }
 
 /* ---------- 상태 ---------- */
-const state = { n: 2, targetN: 2, moving: false, moveT: 0, fromR: 0, angle: 0, lastNm: 656, lastE: 1.89, auto: false };
+const state = { n: 2, targetN: 2, moving: false, absorbing: false, moveT: 0, fromR: 0, angle: 0, lastNm: 656, lastE: 1.89, auto: false };
 const lines = [];
 let electronR = orbitRadius(2);
 const E1 = -13.6;
@@ -960,12 +960,36 @@ function drawSpectrum() {
 
 /* ---------- 전이 ---------- */
 function goTo(n) {
-  if (n === state.n || state.moving) return;
+  if (n === state.n || state.moving || state.absorbing) return;
   state.targetN = n;
-  state.moving = true;
-  state.moveT = 0;
-  state.fromR = electronR;
   document.querySelectorAll('#seg-orbit button').forEach((b) => b.classList.toggle('active', +b.dataset.n === n));
+
+  const fromN = state.n, toN = n;
+  const nHi = Math.max(fromN, toN), nLo = Math.min(fromN, toN);
+  const E = transitionE(nHi, nLo);
+  const nm = 1240 / E;
+  state.lastNm = nm; state.lastE = E;
+  state.lastHi = nHi; state.lastLo = nLo;
+  state.fromR = electronR;
+
+  if (toN > fromN) {
+    // 흡수(들뜸): 외부 광자가 먼저 입사되어 원자에 도달한 뒤 전자가 상위 궤도로 도약
+    state.absorbing = true;
+    updateReadouts(fromN, toN);
+    drawGraph();
+    spawnPhoton(nm, new THREE.Vector3(0, 0.35, 0), 'absorb', () => {
+      state.absorbing = false;
+      state.moving = true;
+      state.moveT = 0;
+      state.fromR = electronR;
+    });
+  } else {
+    // 방출: 전자가 먼저 하위 궤도로 이동 후 분광기로 광자 방출
+    state.moving = true;
+    state.moveT = 0;
+    updateReadouts(fromN, toN);
+    drawGraph();
+  }
 }
 function completeTransition(fromN, toN) {
   const nHi = Math.max(fromN, toN), nLo = Math.min(fromN, toN);
@@ -973,27 +997,25 @@ function completeTransition(fromN, toN) {
   const nm = 1240 / E;
   state.lastNm = nm; state.lastE = E;
   if (toN < fromN) {
-    // 방출: 원자 → 분광기
+    // 방출: 하위 궤도 도달 시 원자 → 분광기로 광자 방출
     spawnPhoton(nm, new THREE.Vector3(SPEC_X, 1.55, 1.05), 'emit');
     if (nm >= 380 && nm <= 750) {
       lines.push({ nm });
       drawSpectrum();
     }
-  } else {
-    // 흡수: 바깥 → 원자
-    spawnPhoton(nm, new THREE.Vector3(0, 0.35, 0), 'absorb');
   }
   updateReadouts(fromN, toN);
   drawGraph();
 }
 
-function spawnPhoton(nm, to, mode) {
+function spawnPhoton(nm, to, mode, onComplete) {
   const p = photons.find((q) => !q.active);
   if (!p) return;
   p.active = true;
   p.t = 0;
   p.nm = nm;
   p.mode = mode;
+  p.onComplete = onComplete || null;
   const rgb = W2RGB(Math.max(380, Math.min(780, nm)));
   p.obj.material.color.setRGB(rgb.r / 255, rgb.g / 255, rgb.b / 255);
   p.obj.children[0].material.color.copy(p.obj.material.color);
@@ -1134,14 +1156,23 @@ function animate() {
   // 광자 이동
   photons.forEach((p) => {
     if (!p.active) return;
-    p.t += dt / 1.5;
-    if (p.t >= 1) { p.active = false; p.obj.visible = false; return; }
+    p.t += dt / (p.mode === 'absorb' ? 0.95 : 1.4);
+    if (p.t >= 1) {
+      p.active = false;
+      p.obj.visible = false;
+      if (typeof p.onComplete === 'function') {
+        const cb = p.onComplete;
+        p.onComplete = null;
+        cb();
+      }
+      return;
+    }
     p.obj.position.lerpVectors(p.from, p.to, p.t);
     p.obj.position.y += Math.sin(p.t * Math.PI) * 0.8;
   });
 
   // 자동 전이
-  if (state.auto && !state.moving) {
+  if (state.auto && !state.moving && !state.absorbing) {
     autoTimer += dt;
     if (autoTimer > 1.4) {
       autoTimer = 0;
@@ -1159,10 +1190,11 @@ function animate() {
 
 /* ---------- 초기화 ---------- */
 function resetLab() {
-  state.n = 2; state.targetN = 2; state.moving = false; state.auto = false; state.lastNm = 656; state.lastE = 1.89;
+  state.n = 2; state.targetN = 2; state.moving = false; state.absorbing = false; state.auto = false; state.lastNm = 656; state.lastE = 1.89;
   state.lastHi = 3; state.lastLo = 2;
   electronR = orbitRadius(2);
   lines.length = 0;
+  photons.forEach((p) => { p.active = false; p.obj.visible = false; p.onComplete = null; });
   el('btn-auto').textContent = '⚡ 자동 전이';
   document.querySelectorAll('#seg-orbit button').forEach((b) => b.classList.toggle('active', +b.dataset.n === 2));
   drawSpectrum();

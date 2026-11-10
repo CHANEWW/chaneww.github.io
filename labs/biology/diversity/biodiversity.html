@@ -13,7 +13,10 @@
 <style>
 @font-face{font-family:'SeoulNamsan';src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');font-weight:400;font-style:normal;font-display:swap}
 *{box-sizing:border-box;user-select:none;-webkit-user-select:none}
-body,html{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:'SeoulNamsan',-apple-system,sans-serif;background:#bfe0f2;color:#f2f2f7;touch-action:none}
+body,html{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:'SeoulNamsan',-apple-system,sans-serif;background:#bfe0f2;color:#f2f2f7;touch-action:none;transition:background .35s ease,color .3s ease}
+body.dark-mode{background:#0a131f;color:#f2f2f7}
+body.dark-mode .glass-panel{background:rgba(10,19,31,.76);border-color:rgba(255,255,255,.14);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+body.dark-mode .center-tooltip{color:rgba(242,242,247,.95)}
 #canvas-container{width:100%;height:100%;position:absolute;top:0;left:0;z-index:1}
 .glass-panel{background:rgba(15,28,45,.5);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid rgba(255,255,255,.25);border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.3);z-index:10}
 .top-left-bar{position:absolute;top:20px;left:20px;display:flex;align-items:center;gap:10px;z-index:10}
@@ -381,7 +384,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
 <div class="top-right-bar">
     <div class="tr-util">
-        <button class="icon-btn glass-panel" id="btn-focus-reset">🌐</button>
+        <button class="icon-btn glass-panel" id="theme-toggle" aria-label="야간 모드">🌙</button>
     </div>
     <div class="glass-panel data-card">
     <div class="data-item"><span class="data-label">숲 생물</span><span class="data-value" id="val-forest-cnt">0 종</span></div>
@@ -433,13 +436,59 @@ controls.enableDamping = true; controls.dampingFactor = 0.06;
 controls.maxPolarAngle = Math.PI / 2 - 0.03; controls.minDistance = 2; controls.maxDistance = 45;
 controls.target.set(0, 1, 0);
 
-scene.add(new THREE.HemisphereLight(0xcfe8ff, 0x5a7a4a, 0.65));
-scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x5a7a4a, 0.65);
+scene.add(hemi);
+const amb = new THREE.AmbientLight(0xffffff, 0.3);
+scene.add(amb);
 const sun = new THREE.DirectionalLight(0xfff3dd, 1.0);
 sun.position.set(12, 22, 10); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
 Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 70 });
 scene.add(sun);
+
+/* ---------- 테마 (야간모드) ---------- */
+let isDark = false;
+const btnTheme = document.getElementById('theme-toggle');
+function applyTheme(dark, save) {
+  isDark = !!dark;
+  document.body.classList.toggle('dark-mode', isDark);
+  if (btnTheme) {
+    btnTheme.textContent = isDark ? '☀️' : '🌙';
+    btnTheme.setAttribute('aria-label', isDark ? '주간 모드로 전환' : '야간 모드로 전환');
+  }
+  if (isDark) {
+    scene.background.set(0x0a131f);
+    scene.fog.color.set(0x0a131f);
+    sun.color.set(0x8fa8d0);
+    sun.intensity = 0.40;
+    amb.color.set(0x3a4860);
+    amb.intensity = 0.28;
+    hemi.color.set(0x30425c);
+    hemi.groundColor.set(0x0a1510);
+    hemi.intensity = 0.45;
+  } else {
+    scene.background.set(0xbfe0f2);
+    scene.fog.color.set(0xbfe0f2);
+    sun.color.set(0xfff3dd);
+    sun.intensity = 1.0;
+    amb.color.set(0xffffff);
+    amb.intensity = 0.3;
+    hemi.color.set(0xcfe8ff);
+    hemi.groundColor.set(0x5a7a4a);
+    hemi.intensity = 0.65;
+  }
+  if (save) {
+    try { localStorage.setItem('svlLabTheme', isDark ? 'dark' : 'light'); } catch (e) {}
+  }
+}
+if (btnTheme) {
+  btnTheme.addEventListener('click', () => applyTheme(!isDark, true));
+}
+try {
+  applyTheme(localStorage.getItem('svlLabTheme') === 'dark', false);
+} catch (e) {
+  applyTheme(false, false);
+}
 
 /* ---------- 도우미 ---------- */
 const R = (a, b) => a + Math.random() * (b - a);
@@ -809,7 +858,8 @@ const view = (tx, ty, tz, cx, cy, cz) => { closeCard(); controls.target.set(tx, 
 document.getElementById('btn-cam-forest').addEventListener('click', () => view(-6.5, 1, 0, -6.5, 8, 13));
 document.getElementById('btn-cam-river').addEventListener('click', () => view(5.5, 0, 0, 5.5, 7, 12));
 document.getElementById('btn-cam-all').addEventListener('click', () => view(0, 1, 0, 0, 10, 18));
-document.getElementById('btn-focus-reset').addEventListener('click', () => view(0, 1, 0, 0, 10, 18));
+const bFocusReset = document.getElementById('btn-focus-reset');
+if (bFocusReset) bFocusReset.addEventListener('click', () => view(0, 1, 0, 0, 10, 18));
 
 const fullscreenBtn = document.getElementById('fullscreenBtn');
 const fullscreenIcon = document.getElementById('fullscreenIcon');
