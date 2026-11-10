@@ -24,14 +24,18 @@
     };
     var STORAGE_KEY = 'svl_pending_feedbacks';
 
-    /* ---------- 실험명 ---------- */
-    var EXPERIMENT = (document.title || '가상실험').trim()
-        .replace(/\s*[-|–]\s*Science Virtual LAB\s*$/i, '');
-    var EXPERIMENT_ID = (location.pathname || '')
-        .replace(/^\/*labs\//, '').replace(/\.html$/, '') || 'unknown';
+    /* ---------- 실험명 / 페이지 구분 ---------- */
+    var isIndex = /index(_3d)?\.html$/i.test(location.pathname) || location.pathname === '/' || location.pathname.endsWith('/') || !location.pathname.includes('/labs/');
+    var EXPERIMENT = isIndex
+        ? '홈페이지 전체 / 가상실험 제안'
+        : (document.title || '가상실험').trim().replace(/\s*[-|–]\s*Science Virtual LAB\s*$/i, '');
+    var EXPERIMENT_ID = isIndex
+        ? 'main/index'
+        : (location.pathname || '').replace(/^\/*labs\//, '').replace(/\.html$/, '') || 'unknown';
 
     /* ---------- CSS 로드 (스크립트 경로 기준) ---------- */
     (function loadCss() {
+        if (document.querySelector('link[href*="feedback.css"]')) return;
         var src = (document.currentScript && document.currentScript.src) || '';
         var href = src ? src.replace(/feedback\.js([?#].*)?$/, 'feedback.css') : '';
         if (!href) return;
@@ -42,15 +46,18 @@
     })();
 
     /* ---------- 버튼 ---------- */
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'svl-fb-btn';
-    btn.id = 'feedback-btn';
-    btn.setAttribute('aria-haspopup', 'dialog');
-    btn.setAttribute('aria-controls', 'feedback-overlay');
-    btn.setAttribute('aria-label', '제안하기');
-    btn.title = '제안하기';
-    btn.innerHTML = '<span class="fb-open-icon">💡</span><span class="fb-open-label">제안하기</span>';
+    var existingBtn = document.getElementById('feedback-btn');
+    var btn = existingBtn || document.createElement('button');
+    if (!existingBtn) {
+        btn.type = 'button';
+        btn.className = 'svl-fb-btn';
+        btn.id = 'feedback-btn';
+        btn.setAttribute('aria-haspopup', 'dialog');
+        btn.setAttribute('aria-controls', 'feedback-overlay');
+        btn.setAttribute('aria-label', '제안하기');
+        btn.title = '제안하기';
+        btn.innerHTML = '<span class="fb-open-icon">💡</span><span class="fb-open-label">제안하기</span>';
+    }
 
     function themeBtn() {
         return document.getElementById('theme-toggle')
@@ -80,6 +87,17 @@
         }
         row.insertBefore(btn, row.firstChild);
         btn.classList.add('svl-fb-inline');
+        return true;
+    }
+
+    /* 메인 인덱스 페이지(nav-tabs)에서 QR 버튼과 문의 버튼 사이에 배치 */
+    function mountIndex() {
+        var qrBtn = document.getElementById('qrNavBtn');
+        if (!qrBtn || !qrBtn.parentElement) return false;
+        if (!btn.parentElement) {
+            qrBtn.parentElement.insertBefore(btn, qrBtn.nextSibling);
+            btn.className = 'feedback-nav-btn';
+        }
         return true;
     }
 
@@ -114,16 +132,18 @@
             btn.style.transform = '';
         }
     }
-    document.body.appendChild(btn);
-    if (mountInline()) {
-        btn.style.top = '';
-        btn.style.right = '';
-        btn.style.transform = '';
-    } else {
-        placeBtn();
-        window.addEventListener('resize', placeBtn);
-        window.addEventListener('orientationchange', placeBtn);
-        window.addEventListener('pageshow', placeBtn);
+    if (!btn.parentElement) {
+        if (mountInline() || mountIndex()) {
+            btn.style.top = '';
+            btn.style.right = '';
+            btn.style.transform = '';
+        } else {
+            document.body.appendChild(btn);
+            placeBtn();
+            window.addEventListener('resize', placeBtn);
+            window.addEventListener('orientationchange', placeBtn);
+            window.addEventListener('pageshow', placeBtn);
+        }
     }
 
     /* ---------- 모달 DOM ---------- */
@@ -207,6 +227,15 @@
     var expNameEl = document.getElementById('fb-exp-name');
     var submitBtn = document.getElementById('feedback-submit');
     expNameEl.textContent = EXPERIMENT;
+
+    if (isIndex) {
+        var subEl = overlay.querySelector('.fb-subtitle');
+        if (subEl) subEl.textContent = '홈페이지나 가상실험에 바라는 점, 새로운 실험 아이디어를 들려주세요.';
+        var expIcon = overlay.querySelector('.fb-exp span:first-child');
+        if (expIcon) expIcon.textContent = '⚡';
+        var ta = overlay.querySelector('#fb-content');
+        if (ta) ta.placeholder = '홈페이지 기능이나 디자인, 새로 추가되었으면 하는 가상실험 아이디어, 혹은 이용 중 불편한 점을 자유롭게 적어주세요.';
+    }
 
     /* ---------- 테마 동기화 (실험실마다 다크모드 구현이 다르므로 자동 판별) ---------- */
     function isDarkTheme() {
@@ -336,6 +365,10 @@
         if (card) card.classList.remove('done');
         if (form) form.style.display = '';
     }
+
+    /* 전역 접근 헬퍼 (푸터 등 다른 트리거에서 호출 가능) */
+    window.openFeedbackModal = openModal;
+    window.closeFeedbackModal = closeModal;
 
     /* ---------- 이벤트 ---------- */
     btn.addEventListener('click', openModal);
