@@ -119,6 +119,23 @@
         }
         body.light-mode .obs-head { color: #007aff; }
         .obs-head span.zoom { font-size: 10.5px; font-weight: bold; color: #7f8ea6; }
+        /* 지평선 뷰 확대 도구 */
+        .obs-zoom-row { display: flex; align-items: center; gap: 5px; }
+        .obs-zoom-row .zoom-label { font-size: 10.5px; font-weight: bold; color: #7f8ea6; }
+        body.light-mode .obs-zoom-row .zoom-label { color: #6b7280; }
+        .zoom-btn {
+            width: 23px; height: 23px; flex: 0 0 auto; padding: 0;
+            border-radius: 7px; border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.08); color: #dbe6f7;
+            font-family: inherit; font-size: 14px; font-weight: bold; line-height: 1;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background .15s, border-color .15s;
+        }
+        body.light-mode .zoom-btn { background: #fff; color: #1c1c1e; border-color: #d6d9de; }
+        .zoom-btn:active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+        .zoom-slider { flex: 1 1 auto; width: auto; min-width: 40px; height: 18px; accent-color: #0a84ff; cursor: pointer; margin: 0; }
+        .zoom-val { font-size: 10.5px; font-weight: bold; color: #9ec5ff; min-width: 30px; text-align: right; }
+        body.light-mode .zoom-val { color: #007aff; }
         .dir-tabs { display: flex; gap: 5px; }
         .dir-btn {
             flex: 1 1 0; padding: 5px 0; border-radius: 9px;
@@ -132,6 +149,7 @@
             width: 100%; height: 234px; display: block;
             border-radius: 12px; background: #04060d;
             border: 1px solid rgba(120, 160, 220, 0.25);
+            touch-action: none; cursor: zoom-in;
         }
         .obs-foot { font-size: 10.5px; color: #8fa0ba; font-weight: bold; line-height: 1.45; }
         body.light-mode .obs-foot { color: #6b7280; }
@@ -905,6 +923,13 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             <button class="dir-btn" data-dir="west">서쪽</button>
         </div>
         <canvas id="obsCanvas"></canvas>
+        <div class="obs-zoom-row">
+            <span class="zoom-label">확대</span>
+            <button class="zoom-btn" type="button" id="obs-zoom-out" aria-label="지평선 뷰 축소" title="축소">−</button>
+            <input type="range" class="zoom-slider" id="obs-zoom-range" min="1" max="3.4" step="0.05" value="1" aria-label="지평선 뷰 배율">
+            <button class="zoom-btn" type="button" id="obs-zoom-in" aria-label="지평선 뷰 확대" title="확대">＋</button>
+            <span class="zoom-val" id="obs-zoom-val">1.0×</span>
+        </div>
         <div class="obs-foot" id="obs-foot">북쪽 하늘의 별은 북극성을 중심으로 반시계 방향으로 돌아요.</div>
     </div>
 
@@ -1052,7 +1077,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         showNames: true,
         showGrid: true,
         showHorizon: true,
-        showObs: true
+        showObs: true,
+        obsZoom: 1
     };
 
     const DIRS = {
@@ -1747,11 +1773,17 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         octx.clearRect(0, 0, W, H);
 
         const az0 = DIRS[state.dir].az * DEG;
+        const zoom = state.obsZoom || 1;
+        const fovH = HFOV / zoom;
+        const zk = 1 + (zoom - 1) * 0.16;
+        // 확대해도 지평선이 화면 아래쪽에 계속 보이도록 시선 상향각을 함께 조정
+        const vHalf = Math.atan(Math.tan(fovH / 2) * (H / W));
+        const pitchEff = Math.atan(Math.tan(vHalf) * 0.62);
         const fh = new THREE.Vector3().addScaledVector(nVec, Math.cos(az0)).addScaledVector(eVec, Math.sin(az0)).normalize();
-        const f = new THREE.Vector3().addScaledVector(fh, Math.cos(PITCH)).addScaledVector(uVec, Math.sin(PITCH)).normalize();
+        const f = new THREE.Vector3().addScaledVector(fh, Math.cos(pitchEff)).addScaledVector(uVec, Math.sin(pitchEff)).normalize();
         const right = new THREE.Vector3().crossVectors(fh, uVec).normalize();
         const upv = new THREE.Vector3().crossVectors(right, f).normalize();
-        const k = (W / 2) / Math.tan(HFOV / 2);
+        const k = (W / 2) / Math.tan(fovH / 2);
 
         const projV = (s) => {
             const z = s.x * f.x + s.y * f.y + s.z * f.z;
@@ -1875,7 +1907,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             if (!p) continue;
             if (p.x < -8 || p.x > W + 8 || p.y < -8 || p.y > H + 8) continue;
             const m = starMag[i];
-            const r = m < 1 ? 2.3 : m < 2.4 ? 1.8 : m < 3.6 ? 1.2 : 0.9;
+            const r = (m < 1 ? 2.3 : m < 2.4 ? 1.8 : m < 3.6 ? 1.2 : 0.9) * zk;
             const a = m < 2.4 ? 1 : m < 4.2 ? 0.92 : 0.72;
             octx.globalAlpha = a;
             octx.fillStyle = '#eaf3ff';
@@ -1941,7 +1973,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 if (!p) return;
                 if (p.x < 10 || p.x > W - 10 || p.y < 12 || p.y > H - 8) return;
                 octx.fillStyle = 'rgba(190,215,255,0.85)';
-                octx.font = "bold 10px 'SeoulNamsan', sans-serif";
+                octx.font = "bold " + (10 + (zoom - 1) * 1.7).toFixed(1) + "px 'SeoulNamsan', sans-serif";
                 octx.textAlign = 'center';
                 octx.fillText(g.name, p.x, p.y - 16);
                 octx.textAlign = 'left';
@@ -1968,7 +2000,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         const marks = [['북', 0], ['동', 90], ['남', 180], ['서', 270]];
         marks.forEach(m => {
             let d = ((m[1] - DIRS[state.dir].az + 540) % 360) - 180;
-            if (Math.abs(d) > 62) return;
+            if (Math.abs(d) > fovH / DEG / 2 + 4) return;
             const p = projV(dirAt(DIRS[state.dir].az * DEG + d * DEG, 1.6 * DEG));
             if (!p) return;
             octx.fillStyle = 'rgba(150,225,255,0.95)';
@@ -2045,6 +2077,40 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     }
     document.querySelectorAll('.dir-btn').forEach(b => b.addEventListener('click', () => setDirection(b.dataset.dir)));
     document.querySelectorAll('.dir-pick').forEach(b => b.addEventListener('click', () => setDirection(b.dataset.dir)));
+
+    /* ---------- 지평선 뷰 확대 (휠 · 핀치 · 슬라이더 · 버튼) ---------- */
+    const OBS_ZOOM_MIN = 1, OBS_ZOOM_MAX = 3.4;
+    const obsZoomRange = document.getElementById('obs-zoom-range');
+    function setObsZoom(v) {
+        state.obsZoom = Math.max(OBS_ZOOM_MIN, Math.min(OBS_ZOOM_MAX, v));
+        document.getElementById('obs-zoom-val').textContent = state.obsZoom.toFixed(1) + '×';
+        if (obsZoomRange && Math.abs(parseFloat(obsZoomRange.value) - state.obsZoom) > 0.001) {
+            obsZoomRange.value = state.obsZoom;
+        }
+        drawObservation();
+    }
+    if (obsZoomRange) obsZoomRange.addEventListener('input', e => setObsZoom(parseFloat(e.target.value)));
+    document.getElementById('obs-zoom-in').addEventListener('click', () => setObsZoom(state.obsZoom * 1.35));
+    document.getElementById('obs-zoom-out').addEventListener('click', () => setObsZoom(state.obsZoom / 1.35));
+    obsCanvas.addEventListener('wheel', e => {
+        e.preventDefault();
+        setObsZoom(state.obsZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+    }, { passive: false });
+    obsCanvas.addEventListener('dblclick', () => setObsZoom(1));
+    let pinchDist = 0;
+    obsCanvas.addEventListener('touchstart', e => {
+        pinchDist = e.touches.length === 2
+            ? Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
+            : 0;
+    }, { passive: true });
+    obsCanvas.addEventListener('touchmove', e => {
+        if (e.touches.length !== 2) return;
+        e.preventDefault();
+        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        if (pinchDist > 4 && d > 4) setObsZoom(state.obsZoom * (d / pinchDist));
+        pinchDist = d;
+    }, { passive: false });
+    obsCanvas.addEventListener('touchend', () => { pinchDist = 0; }, { passive: true });
 
     document.getElementById('btn-play').addEventListener('click', e => {
         state.playing = !state.playing;
