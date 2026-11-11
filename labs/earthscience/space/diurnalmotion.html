@@ -152,6 +152,7 @@
             touch-action: none; cursor: zoom-in;
         }
         .obs-foot { font-size: 10.5px; color: #8fa0ba; font-weight: bold; line-height: 1.45; }
+        .obs-foot .obs-hint { color: #64748b; font-weight: bold; }
         body.light-mode .obs-foot { color: #6b7280; }
 
         /* ---------- 하단 제어 바 ---------- */
@@ -930,7 +931,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             <button class="zoom-btn" type="button" id="obs-zoom-in" aria-label="지평선 뷰 확대" title="확대">＋</button>
             <span class="zoom-val" id="obs-zoom-val">1.0×</span>
         </div>
-        <div class="obs-foot" id="obs-foot">북쪽 하늘의 별은 북극성을 중심으로 반시계 방향으로 돌아요.</div>
+        <div class="obs-foot"><span id="obs-foot">북쪽 하늘의 별은 북극성을 중심으로 반시계 방향으로 돌아요.</span><span class="obs-hint"> · 휠·핀치로 확대, 위아래로 끌어 시선 이동</span></div>
     </div>
 
     <!-- 시간 패널 -->
@@ -1078,7 +1079,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         showGrid: true,
         showHorizon: true,
         showObs: true,
-        obsZoom: 1
+        obsZoom: 1,
+        obsPitch: null
     };
 
     const DIRS = {
@@ -1767,6 +1769,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     const _s = new THREE.Vector3();
     const _p = { x: 0, y: 0, z: 0 };
 
+    let obsPitchDrawn = PITCH, obsFovDrawn = HFOV;
     function drawObservation() {
         const W = OW, H = OH;
         octx.setTransform(ODPR, 0, 0, ODPR, 0, 0);
@@ -1778,7 +1781,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         const zk = 1 + (zoom - 1) * 0.16;
         // 확대해도 지평선이 화면 아래쪽에 계속 보이도록 시선 상향각을 함께 조정
         const vHalf = Math.atan(Math.tan(fovH / 2) * (H / W));
-        const pitchEff = Math.atan(Math.tan(vHalf) * 0.62);
+        const autoPitch = Math.atan(Math.tan(vHalf) * 0.62);
+        const pitchEff = (state.obsPitch === null || state.obsPitch === undefined) ? autoPitch : state.obsPitch;
+        obsPitchDrawn = pitchEff; obsFovDrawn = fovH;
         const fh = new THREE.Vector3().addScaledVector(nVec, Math.cos(az0)).addScaledVector(eVec, Math.sin(az0)).normalize();
         const f = new THREE.Vector3().addScaledVector(fh, Math.cos(pitchEff)).addScaledVector(uVec, Math.sin(pitchEff)).normalize();
         const right = new THREE.Vector3().crossVectors(fh, uVec).normalize();
@@ -2001,7 +2006,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         marks.forEach(m => {
             let d = ((m[1] - DIRS[state.dir].az + 540) % 360) - 180;
             if (Math.abs(d) > fovH / DEG / 2 + 4) return;
-            const p = projV(dirAt(DIRS[state.dir].az * DEG + d * DEG, 1.6 * DEG));
+            const p = projV(dirAt(az0 + d * DEG, 1.6 * DEG));
             if (!p) return;
             octx.fillStyle = 'rgba(150,225,255,0.95)';
             octx.font = "bold 11px 'SeoulNamsan', sans-serif";
@@ -2068,6 +2073,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
     function setDirection(dir) {
         state.dir = dir;
+        state.obsPitch = null;
         document.querySelectorAll('.dir-btn').forEach(b => b.classList.toggle('active', b.dataset.dir === dir));
         document.querySelectorAll('.dir-pick').forEach(b => b.classList.toggle('active', b.dataset.dir === dir));
         document.getElementById('obs-sub').textContent = DIRS[dir].name;
@@ -2096,21 +2102,45 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         e.preventDefault();
         setObsZoom(state.obsZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
     }, { passive: false });
-    obsCanvas.addEventListener('dblclick', () => setObsZoom(1));
+    obsCanvas.addEventListener('dblclick', () => { state.obsPitch = null; setObsZoom(1); });
+    /* 화면을 위아래로 끌면 시선을 올리고 내리기 (확대해도 북극성까지 볼 수 있게) */
+    let obsDrag = null;
+    function panObs(clientY) {
+        const rect = obsCanvas.getBoundingClientRect();
+        if (!rect.height) return;
+        const vFov = 2 * Math.atan(Math.tan(obsFovDrawn / 2) * (rect.height / rect.width));
+        const p = obsDrag.pitch + (obsDrag.y - clientY) / rect.height * vFov;
+        state.obsPitch = Math.max(-8 * DEG, Math.min(88 * DEG, p));
+        drawObservation();
+    }
+    obsCanvas.addEventListener('mousedown', e => {
+        obsDrag = { y: e.clientY, pitch: obsPitchDrawn };
+        obsCanvas.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', e => { if (obsDrag) panObs(e.clientY); });
+    window.addEventListener('mouseup', () => { obsDrag = null; obsCanvas.style.cursor = 'zoom-in'; });
     let pinchDist = 0;
     obsCanvas.addEventListener('touchstart', e => {
-        pinchDist = e.touches.length === 2
-            ? Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY)
-            : 0;
+        if (e.touches.length === 2) {
+            pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            obsDrag = null;
+        } else if (e.touches.length === 1) {
+            pinchDist = 0;
+            obsDrag = { y: e.touches[0].clientY, pitch: obsPitchDrawn };
+        }
     }, { passive: true });
     obsCanvas.addEventListener('touchmove', e => {
-        if (e.touches.length !== 2) return;
-        e.preventDefault();
-        const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-        if (pinchDist > 4 && d > 4) setObsZoom(state.obsZoom * (d / pinchDist));
-        pinchDist = d;
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            if (pinchDist > 4 && d > 4) setObsZoom(state.obsZoom * (d / pinchDist));
+            pinchDist = d;
+        } else if (e.touches.length === 1 && obsDrag) {
+            e.preventDefault();
+            panObs(e.touches[0].clientY);
+        }
     }, { passive: false });
-    obsCanvas.addEventListener('touchend', () => { pinchDist = 0; }, { passive: true });
+    obsCanvas.addEventListener('touchend', () => { pinchDist = 0; obsDrag = null; }, { passive: true });
 
     document.getElementById('btn-play').addEventListener('click', e => {
         state.playing = !state.playing;
