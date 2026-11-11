@@ -382,7 +382,7 @@
     </div>
 </div>
 
-<!-- 상단 우측: 실시간 데이터 카드 & 테마 -->
+<!-- 상단 우측: 실시간 데이터 카드 & 유틸 행 ([제안하기] [야간모드]) -->
 <div class="top-right-bar">
     <div class="glass-panel data-card">
         <div class="data-item">
@@ -406,7 +406,9 @@
             <span class="data-value tag-status" id="val-status">10 pc보다 가까움</span>
         </div>
     </div>
-    <button class="icon-btn svl-util" id="btn-theme" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">☀️</button>
+    <div class="tr-util" style="display:flex; align-items:center; gap:8px;">
+        <button class="icon-btn svl-util" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">☀️</button>
+    </div>
 </div>
 
 <!-- 상단 중앙 안내 툴팁 -->
@@ -1108,14 +1110,6 @@
         const beam = new THREE.Line(beamGeo, beamMat);
         scene.add(beam);
 
-        // 해당 별의 시선 방향 상 10 pc 기준 마커
-        const markerPos = dir.clone().multiplyScalar(R10_3D);
-        const markerGeo = new THREE.SphereGeometry(0.5, 12, 12);
-        const markerMat = new THREE.MeshBasicMaterial({ color: 0xfacc15, wireframe: true });
-        const marker10pc = new THREE.Mesh(markerGeo, markerMat);
-        marker10pc.position.copy(markerPos);
-        guideGroup.add(marker10pc);
-
         starsMap[k] = {
             key: k,
             data: data,
@@ -1127,8 +1121,7 @@
             spike: spike,
             label: label,
             hitMesh: hitMesh,
-            beam: beam,
-            marker10pc: marker10pc
+            beam: beam
         };
     });
 
@@ -1388,12 +1381,16 @@
         });
     }
 
-    // 15. 3D 별 마우스/터치 클릭 및 드래그 인터랙션 (핵심 요구사항)
+    // 15. 3D 별 마우스/터치 클릭 및 연속 드래그 인터랙션
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let isDragging = false;
     let dragStartTime = 0;
     let dragStartPos = { x: 0, y: 0 };
+    let hasDragged = false;
+    const dragPlane = new THREE.Plane();
+    const dragStartHit = new THREE.Vector3();
+    let dragStartDistPc = 10.0;
 
     function setPointer(e) {
         const rect = renderer.domElement.getBoundingClientRect();
@@ -1405,6 +1402,7 @@
         setPointer(e);
         dragStartTime = performance.now();
         dragStartPos = { x: e.clientX, y: e.clientY };
+        hasDragged = false;
 
         raycaster.setFromCamera(pointer, camera);
         const hits = raycaster.intersectObjects(hitMeshes, false);
@@ -1412,6 +1410,19 @@
         if (hits.length > 0) {
             const clickedKey = hits[0].object.userData.starKey;
             selectStar(clickedKey);
+
+            const starObj = starsMap[clickedKey];
+            dragStartDistPc = starObj.distPc;
+            const r3D = distToR3D(dragStartDistPc);
+            const starPos = starObj.dir.clone().multiplyScalar(r3D);
+
+            // 카메라 시선 방향을 법선으로 하는 드래그 평면 설정 (별 위치를 지남)
+            const camDir = new THREE.Vector3();
+            camera.getWorldDirection(camDir);
+            dragPlane.setFromNormalAndCoplanarPoint(camDir, starPos);
+
+            // 드래그 시작 시점의 평면 교차점 포착
+            raycaster.ray.intersectPlane(dragPlane, dragStartHit);
 
             isDragging = true;
             controls.enabled = false;
@@ -1424,24 +1435,24 @@
     window.addEventListener('pointermove', (e) => {
         if (!isDragging) return;
         setPointer(e);
+
+        const dx = Math.abs(e.clientX - dragStartPos.x);
+        const dy = Math.abs(e.clientY - dragStartPos.y);
+        if (dx + dy > 4) hasDragged = true;
+        if (!hasDragged) return;
+
         raycaster.setFromCamera(pointer, camera);
+        const currentHit = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(dragPlane, currentHit)) {
+            const starObj = starsMap[currentStarKey];
+            // 드래그 평면 상 3D 변위 벡터
+            const deltaVec = currentHit.clone().sub(dragStartHit);
+            // 별의 시선 방향 벡터(u)로 투영하여 반지름 변화량 계산
+            const deltaR = deltaVec.dot(starObj.dir);
 
-        const starObj = starsMap[currentStarKey];
-        const ray = raycaster.ray;
-        const u = starObj.dir;
-        const O = ray.origin;
-        const D = ray.direction;
-
-        // 카메라 레이와 별의 시선 직선(s * u) 사이의 최단점 s 도출
-        const b = u.dot(D);
-        const d = u.dot(O);
-        const eVal = D.dot(O);
-        const den = 1.0 - b * b;
-
-        if (Math.abs(den) > 1e-5) {
-            const s = (b * eVal - d) / den;
-            const clampedR = Math.max(5.0, Math.min(220.0, s));
-            const newDist = r3DToDist(clampedR);
+            const startR = distToR3D(dragStartDistPc);
+            const newR = Math.max(5.2, Math.min(220.0, startR + deltaR));
+            const newDist = r3DToDist(newR);
 
             // 10 pc 근처에서 부드러운 스냅 (자석 효과)
             if (Math.abs(newDist - 10.0) < 0.45) {
@@ -1582,7 +1593,7 @@
     }
 
     // 17. 주간/야간 테마 처리
-    const themeBtn = document.getElementById('btn-theme');
+    const themeBtn = document.getElementById('theme-toggle');
     function applyTheme(isDark, save) {
         document.body.classList.toggle('dark-mode', isDark);
         document.body.classList.toggle('light-mode', !isDark);
