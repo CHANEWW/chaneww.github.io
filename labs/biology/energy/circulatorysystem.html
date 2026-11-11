@@ -122,14 +122,6 @@
         .bottom-right-bar { position: fixed; bottom: 20px; right: 20px; z-index: 40; }
         #boardHelp { position: fixed; left: 20px; bottom: 20px; z-index: 5; padding: 7px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.62); color: #7a8390; font-size: 11px; font-weight: bold; pointer-events: none; backdrop-filter: blur(10px); }
 
-        .modal-overlay { position: fixed; inset: 0; z-index: 700; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(18, 22, 30, 0.36); backdrop-filter: blur(7px); }
-        .modal-overlay.show { display: flex; }
-        .modal-card { width: min(500px, 94vw); max-height: 80vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; border-radius: 22px; }
-        .modal-header { display: flex; align-items: flex-start; justify-content: space-between; }
-        .modal-title { font-size: 16px; font-weight: bold; }
-        .modal-close-btn { border: none; background: rgba(0,0,0,0.06); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; }
-        .modal-body { font-size: 13px; line-height: 1.6; color: #4a505c; font-weight: bold; }
-
         body.dark-mode { background-color: #0f1218; color: #f2f2f7; }
         body.dark-mode .glass-panel { background: rgba(30, 34, 42, 0.80); border-color: rgba(255, 255, 255, 0.10); color: #f2f2f7; }
         body.dark-mode .icon-btn { background: rgba(38, 42, 52, 0.85); color: #f2f2f7; }
@@ -204,9 +196,6 @@
                 <span>🏷️</span>
                 <span>3D 라벨</span>
             </button>
-            <button class="control-tab-btn full-btn" id="btn-help">
-                <span>💡 원리 보기</span>
-            </button>
         </div>
     </div>
 
@@ -228,26 +217,13 @@
         </button>
     </div>
 
-    <div class="modal-overlay" id="modal-overlay">
-        <div class="glass-panel modal-card">
-            <div class="modal-header">
-                <div class="modal-title">💡 순환계의 원리</div>
-                <button class="modal-close-btn" id="modal-close">✕</button>
-            </div>
-            <div class="modal-body" id="modal-body">
-                <p><b>1. 온몸순환:</b> 좌심실 → 대동맥 → 온몸의 모세혈관(산소 전달) → 대정맥 → 우심방</p>
-                <p><b>2. 폐순환:</b> 우심실 → 폐동맥 → 폐의 모세혈관(기체 교환) → 폐정맥 → 좌심방</p>
-                <p><b>3. 판막:</b> 혈액이 거꾸로 흐르는 것을 막아 일정한 방향으로 순환하도록 합니다.</p>
-            </div>
-        </div>
-    </div>
-
 <script>
 (function(){
     const container = document.getElementById('canvas-container');
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.localClippingEnabled = true;
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -320,18 +296,40 @@
         scene.add(m); tubes.push({ m, circ: s.circ, base: s.r > 0.1 ? 0.5 : 0.38 });
     });
 
-    // 심장 껍질 및 심실중격 (단면 모형 결합)
-    const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 30),
-        new THREE.MeshPhongMaterial({ color: 0xf0cdb4, transparent: true, opacity: 0.28, depthWrite: false, shininess: 30 }));
+    // 심장 껍질(앞/뒤 분리) 및 심실중격 — 단면 모드에서 실제로 잘라 볼 수 있도록 두 겹으로 만든다
+    const CUT_Z = 0.42;
+    const clipBackHalf = new THREE.Plane(new THREE.Vector3(0, 0, -1), CUT_Z);   // z <= CUT_Z (뒤쪽 절반 유지)
+    const clipFrontHalf = new THREE.Plane(new THREE.Vector3(0, 0, 1), -CUT_Z);  // z >= CUT_Z (앞쪽 절반 유지)
+    const shellGeo = new THREE.SphereGeometry(1, 40, 30);
+    function makeShellMat(opacity) {
+        return new THREE.MeshPhongMaterial({ color: 0xf0cdb4, transparent: true, opacity: opacity, depthWrite: false, shininess: 30, side: THREE.DoubleSide });
+    }
+    const shell = new THREE.Mesh(shellGeo, makeShellMat(0.85));
     shell.position.set(0.1, -0.9, 0); shell.scale.set(2.7, 3.0, 1.6); shell.rotation.z = 0.2; scene.add(shell);
-    
-    const septum = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3.0, 1.3), new THREE.MeshPhongMaterial({ color: 0xf3dccb, transparent: true, opacity: 0.75 }));
+    const shellFront = new THREE.Mesh(shellGeo, makeShellMat(0.12));
+    shellFront.position.copy(shell.position); shellFront.scale.copy(shell.scale); shellFront.rotation.copy(shell.rotation);
+    shellFront.visible = false; scene.add(shellFront);
+
+    // 단면에서 잘린 테두리 — 진짜로 잘라 봤다는 것이 한눈에 보이게
+    const cutEdge = (function () {
+        const rr = Math.sqrt(1 - CUT_Z * CUT_Z);
+        const pts = [];
+        for (let i = 0; i <= 96; i++) {
+            const a = i / 96 * Math.PI * 2;
+            pts.push(new THREE.Vector3(Math.cos(a) * rr, Math.sin(a) * rr, CUT_Z));
+        }
+        const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xc08a6a, transparent: true, opacity: 0.9 }));
+        shell.add(line);
+        return line;
+    })();
+
+    const septum = new THREE.Mesh(new THREE.BoxGeometry(0.14, 3.0, 1.3), new THREE.MeshPhongMaterial({ color: 0xf3dccb, transparent: true, opacity: 0.75, side: THREE.DoubleSide }));
     septum.position.set(0.1, -0.6, 0.1); septum.rotation.z = 0.18; scene.add(septum);
 
     const chambers = [];
     function chamber(c, sc, col, rz, kind) {
         const m = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28),
-            new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: 0.5, depthWrite: false, shininess: 80 }));
+            new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: 0.5, depthWrite: false, shininess: 80, side: THREE.DoubleSide }));
         m.position.copy(c); m.scale.set(...sc); m.rotation.z = rz; scene.add(m);
         chambers.push({ m, base: V(...sc), kind });
     }
@@ -339,6 +337,170 @@
     chamber(LA, [0.75, 0.7, 0.7], RED, 0, 'a');
     chamber(RV, [0.95, 1.4, 0.8], BLUE, 0.2, 'v');
     chamber(LV, [1.0, 1.65, 0.95], RED, 0.25, 'v');
+
+    // =====================================================
+    //  판막(방실판막 · 반월판) — 심장 주기에 맞춰 실제로 여닫힌다
+    // =====================================================
+    const valveLeafTex = (function () {
+        const cv = document.createElement('canvas');
+        cv.width = 128; cv.height = 128;
+        const g = cv.getContext('2d');
+        g.beginPath();
+        g.moveTo(6, 4);
+        g.bezierCurveTo(18, 72, 42, 116, 64, 124);
+        g.bezierCurveTo(86, 116, 110, 72, 122, 4);
+        g.closePath();
+        const grd = g.createLinearGradient(0, 0, 0, 128);
+        grd.addColorStop(0, '#ffdfd0');
+        grd.addColorStop(0.55, '#f6c7b2');
+        grd.addColorStop(1, '#dd9a80');
+        g.fillStyle = grd; g.fill();
+        g.lineWidth = 5; g.strokeStyle = 'rgba(176,106,82,0.95)'; g.stroke();
+        return new THREE.CanvasTexture(cv);
+    })();
+    const valveLeafMat = new THREE.MeshPhongMaterial({ map: valveLeafTex, alphaTest: 0.45, side: THREE.DoubleSide, shininess: 70 });
+    const valveRingMat = new THREE.MeshPhongMaterial({ color: 0xd4694f, shininess: 45, side: THREE.DoubleSide });
+    const valves = [];
+
+    function buildValve(name, pos, dir, R, count, maxAngle) {
+        const g = new THREE.Group();
+        g.position.copy(pos);
+        g.quaternion.setFromUnitVectors(V(0, 1, 0), dir.clone().normalize());
+        scene.add(g);
+
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(R, 0.045, 10, 40), valveRingMat);
+        ring.rotation.x = Math.PI / 2;
+        g.add(ring);
+
+        const flaps = [];
+        const W = 2 * R * Math.sin(Math.PI / count) * 1.32;
+        const L = R * 0.98;
+        for (let i = 0; i < count; i++) {
+            const th = i * 2 * Math.PI / count;
+            const pivot = new THREE.Group();
+            pivot.position.set(R * Math.cos(th), 0, R * Math.sin(th));
+            pivot.rotation.y = -th;
+            g.add(pivot);
+            const flap = new THREE.Group();
+            pivot.add(flap);
+            const geo = new THREE.PlaneGeometry(W, L, 4, 4);
+            geo.translate(0, L / 2, 0);
+            const m = new THREE.Mesh(geo, valveLeafMat);
+            m.rotation.y = Math.PI / 2;
+            flap.add(m);
+            flaps.push(flap);
+        }
+        const v = { name, g, flaps, R, maxAngle: maxAngle || Math.PI / 2 * 0.96, open: 0 };
+        valves.push(v);
+        return v;
+    }
+
+    // 방실판막: 심방 → 심실 (심실 수축 때 닫혀 역류를 막음)
+    const vTricuspid = buildValve('삼첨판', V(-0.78, -0.42, 0.42), V(0.65, -1.8, 0.2), 0.40, 3);
+    const vMitral = buildValve('이첨판', V(1.00, -0.30, -0.30), V(-0.40, -2.1, 0.40), 0.42, 2);
+    // 반월판: 심실 → 동맥 (심실 수축 때 열려 혈액을 내보냄)
+    const vPulm = buildValve('폐동맥판', V(-0.26, 0.02, 0.76), V(0.25, 1.2, 0.3), 0.24, 3);
+    const vAortic = buildValve('대동맥판', V(0.62, -0.32, -0.06), V(-0.25, 1.7, 0.1), 0.24, 3);
+
+    // =====================================================
+    //  3D 명칭 라벨 (스프라이트 + 지시선)
+    // =====================================================
+    const labelGroup = new THREE.Group();
+    scene.add(labelGroup);
+    const LABELS = [];
+    let labelsVisible = true;
+
+    function labelTexture(text, color, bg, fs) {
+        const lines = String(text).split('\n');
+        const cv = document.createElement('canvas');
+        let ctx = cv.getContext('2d');
+        const font = "bold " + fs + "px 'SeoulNamsan', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif";
+        ctx.font = font;
+        let tw = 0;
+        lines.forEach(l => { tw = Math.max(tw, ctx.measureText(l).width); });
+        cv.width = Math.ceil(tw + fs * 0.8);
+        cv.height = Math.round(fs * 1.42 * lines.length);
+        ctx = cv.getContext('2d');
+        ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        if (bg) {
+            const r = Math.round(fs * 0.3), w = cv.width, h = cv.height;
+            ctx.fillStyle = bg;
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(w - r, 0); ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r); ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h); ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.fill();
+        }
+        ctx.fillStyle = color;
+        lines.forEach((l, i) => ctx.fillText(l, cv.width / 2, cv.height * (i + 0.5) / lines.length + fs * 0.04));
+        return cv;
+    }
+
+    function addLabel(text, anchor, pos, opt) {
+        opt = opt || {};
+        const fs = opt.fs || 104;
+        const wpp = 0.0052 * (opt.scale || 0.72);
+        const cv = labelTexture(text, opt.color || '#122233', opt.bg || 'rgba(255,255,255,0.9)', fs);
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+        sp.scale.set(cv.width * wpp, cv.height * wpp, 1);
+        sp.position.copy(pos);
+        sp.renderOrder = 60;
+        labelGroup.add(sp);
+
+        let line = null;
+        if (anchor) {
+            const dir = pos.clone().sub(anchor);
+            if (dir.length() > 0.001) {
+                const shrink = (cv.height * wpp) * 0.5 + 0.04;
+                const end = pos.clone().sub(dir.clone().normalize().multiplyScalar(Math.min(shrink, dir.length() * 0.85)));
+                const g = new THREE.BufferGeometry().setFromPoints([anchor.clone(), end]);
+                line = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x90a2b6, transparent: true, opacity: 0.75, depthTest: false }));
+                line.renderOrder = 55;
+                labelGroup.add(line);
+            }
+        }
+        LABELS.push({ sp, base: sp.scale.clone(), line: line, valveOnly: !!opt.valveOnly, args: { text: text, color: opt.color || '#122233', bg: opt.bg || 'rgba(255,255,255,0.9)', fs: fs, scale: opt.scale || 0.72 } });
+        return sp;
+    }
+
+    // 웹폰트가 늦게 로드되면 라벨 텍스처를 다시 그린다
+    function refreshLabelTextures() {
+        LABELS.forEach(r => {
+            const a = r.args;
+            const cv = labelTexture(a.text, a.color, a.bg, a.fs);
+            const tex = new THREE.CanvasTexture(cv);
+            tex.minFilter = THREE.LinearFilter;
+            r.sp.material.map = tex;
+            r.sp.material.needsUpdate = true;
+            const wpp = 0.0052 * a.scale;
+            r.base.set(cv.width * wpp, cv.height * wpp, 1);
+            r.sp.scale.copy(r.base);
+        });
+    }
+    if (document.fonts && document.fonts.load) {
+        document.fonts.load("bold 104px 'SeoulNamsan'").then(refreshLabelTextures, function () {});
+        if (document.fonts.ready) document.fonts.ready.then(refreshLabelTextures, function () {});
+    }
+
+    // 심방·심실·대혈관 이름
+    addLabel('우심방', RA, V(-3.05, 1.45, 0.3));
+    addLabel('우심실', RV, V(-3.15, -2.15, 0.6));
+    addLabel('좌심방', LA, V(3.05, 1.7, -0.5));
+    addLabel('좌심실', LV, V(3.25, -2.2, -0.2));
+    addLabel('대동맥', V(3.2, 2.8, 0.4), V(4.4, 4.3, 0.5));
+    addLabel('폐동맥', V(-1.8, 2.3, 0.5), V(-2.7, 4.3, 0.6));
+    addLabel('대정맥', V(-4.6, 0.9, -0.3), V(-6.2, 2.1, -0.3));
+    addLabel('폐정맥', V(3.0, 2.6, -1.2), V(5.9, 2.4, -1.7));
+
+    // 판막 이름 (단면 모드에서만)
+    addLabel('삼첨판\n방실판막', V(-0.78, -0.42, 0.42), V(-1.9, -3.25, 1.2), { fs: 84, scale: 0.58, valveOnly: true, color: '#7a2b1e' });
+    addLabel('이첨판\n방실판막', V(1.0, -0.3, -0.3), V(1.95, -3.25, 1.2), { fs: 84, scale: 0.58, valveOnly: true, color: '#7a2b1e' });
+    addLabel('폐동맥판\n반월판', V(-0.26, 0.02, 0.76), V(-1.55, 2.5, 2.0), { fs: 84, scale: 0.58, valveOnly: true, color: '#7a2b1e' });
+    addLabel('대동맥판\n반월판', V(0.62, -0.32, -0.06), V(1.75, 2.35, 2.0), { fs: 84, scale: 0.58, valveOnly: true, color: '#7a2b1e' });
+
 
     // 폐 및 전신 인체 모형
     const mat = (c, o) => new THREE.MeshPhongMaterial({ color: c, transparent: o < 1, opacity: o, shininess: 40 });
@@ -372,7 +534,7 @@
     const dummy = new THREE.Object3D(), tmp = new THREE.Color();
 
     // 상태 관리
-    let mode = 'all', playing = true, speed = 1.0, cross = true, labelsVisible = true;
+    let mode = 'all', playing = true, speed = 1.0, cross = true;
 
     // UI 이벤트 연결
     document.querySelectorAll('[data-mode]').forEach(b => {
@@ -415,15 +577,15 @@
     const btnCut = document.getElementById('btn-cut');
     btnCut.onclick = () => {
         cross = !cross;
-        btnCut.classList.toggle('active', cross);
-        shell.material.opacity = cross ? 0.28 : 0.85;
-        septum.visible = cross;
+        applyCross();
     };
 
-    const btnHelp = document.getElementById('btn-help');
-    const modalOverlay = document.getElementById('modal-overlay');
-    btnHelp.onclick = () => modalOverlay.classList.add('show');
-    document.getElementById('modal-close').onclick = () => modalOverlay.classList.remove('show');
+    const btnLabel = document.getElementById('btn-label');
+    btnLabel.onclick = () => {
+        labelsVisible = !labelsVisible;
+        btnLabel.classList.toggle('active', labelsVisible);
+        updateLabelVisibility();
+    };
 
     document.getElementById('theme-toggle').onclick = () => {
         document.body.classList.toggle('dark-mode');
@@ -435,9 +597,51 @@
     const bump = (x, a, b) => (x >= a && x < b) ? Math.sin(Math.PI * (x - a) / (b - a)) : 0;
     let t = 0, last = performance.now();
 
+    // 판막 진행 각도 적용 (0 = 활짝 열림, 1 = 완전히 닫힘)
+    function setValveOpen(v, o) {
+        // 다 열린 상태에서도 판막이 완전히 옆으로 누운 채 사라지지 않도록 최소 각도(0.3rad)를 둔다
+        const a = 0.30 + (v.maxAngle - 0.30) * (1 - o);
+        v.flaps.forEach(f => { f.rotation.z = a; });
+    }
+
+    // 심장 주기에 따른 판막 개폐: 심실 수축(0.22~0.6)에 방실판막은 닫히고 반월판은 열린다.
+    function updateValves(ph, dt, instant) {
+        const ven = bump(ph, 0.22, 0.6);
+        const avTarget = 0.08 + 0.92 * (1 - ven);   // 이완기·심방 수축기에 열림
+        const slTarget = 0.06 + 0.94 * ven;         // 심실 수축기에 열림
+        const k = instant ? 1 : Math.min(1, dt * 12);
+        [vTricuspid, vMitral].forEach(v => { v.open += (avTarget - v.open) * k; setValveOpen(v, v.open); });
+        [vPulm, vAortic].forEach(v => { v.open += (slTarget - v.open) * k; setValveOpen(v, v.open); });
+    }
+
+    function updateLabelVisibility() {
+        LABELS.forEach(r => {
+            const on = labelsVisible && (!r.valveOnly || cross);
+            r.sp.visible = on;
+            if (r.line) r.line.visible = on;
+        });
+    }
+
+    // 단면(심장을 실제로 잘라 내부 구조를 보여주는 모드)
+    function applyCross() {
+        btnCut.classList.toggle('active', cross);
+        septum.visible = cross;
+        shell.material.clippingPlanes = cross ? [clipBackHalf] : null;
+        shell.material.opacity = cross ? 0.42 : 0.85;
+        shell.material.needsUpdate = true;
+        shellFront.visible = cross;
+        shellFront.material.clippingPlanes = cross ? [clipFrontHalf] : null;
+        shellFront.material.needsUpdate = true;
+        cutEdge.visible = cross;
+        chambers.forEach(c => { c.m.material.opacity = cross ? 0.62 : 0.5; });
+        valves.forEach(v => { v.g.visible = cross; });
+        if (cross) updateValves(t % 1, 0, true);
+        updateLabelVisibility();
+    }
+
     function animate(now) {
         requestAnimationFrame(animate);
-        const dt = Math.min((now - last) / 1000, 0.05);
+        const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
         last = now;
 
         if (playing) t += dt * speed;
@@ -450,6 +654,15 @@
 
         const hs = 1 - 0.025 * ven;
         shell.scale.set(2.7 * hs, 3.0 * hs, 1.6 * hs);
+        shellFront.scale.copy(shell.scale);
+
+        if (cross) updateValves(ph, dt, false);
+
+        // 라벨: 줌을 해도 같은 크기로 읽히도록 카메라 거리에 보정 (좁은 화면은 조금 작게)
+        const camDist = camera.position.distanceTo(controls.target);
+        const narrow = window.innerWidth < 600 ? 0.8 : 1;
+        const lf = Math.min(1.9, Math.max(0.8, camDist / 26)) * narrow;
+        LABELS.forEach(r => { if (r.sp.visible) r.sp.scale.copy(r.base).multiplyScalar(lf); });
 
         const phaseEl = document.getElementById('val-phase');
         if (ph < 0.22) { phaseEl.textContent = '심방 수축'; phaseEl.style.color = '#ff9500'; }
@@ -473,6 +686,7 @@
         controls.update();
         renderer.render(scene, camera);
     }
+    applyCross();
     requestAnimationFrame(animate);
 })();
 </script>
