@@ -1,0 +1,2488 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="1.05">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>열에너지에 따른 상태 변화 3D</title>
+    <meta name="description" content="얼음의 가열 곡선과 수증기의 냉각 곡선을 3D로 관찰하며 상태 변화와 열에너지 출입을 탐구하는 가상실험입니다.">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <!-- Three.js & OrbitControls (로컬 보관) -->
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+            background-color: #eef2f8;
+            color: #1c1c1e;
+            transition: background-color 0.35s ease, color 0.35s ease;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* ---------- Apple visionOS Glassmorphic UI ---------- */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.78);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+            border-radius: 18px;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        /* ---------- 상단 좌측 ---------- */
+        .top-left-bar {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 15px;
+            border-radius: 999px;
+            text-decoration: none;
+            color: #1c1c1e;
+            font-weight: bold;
+            font-size: 13.5px;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease;
+            border: none;
+            font-family: inherit;
+        }
+        .back-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .tag-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 16px;
+            border-radius: 999px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .tag-pill {
+            background: rgba(0, 122, 255, 0.14);
+            color: #007aff;
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 999px;
+            font-weight: 800;
+            letter-spacing: 0.2px;
+        }
+
+        .qr-btn-icon { font-size: 14px; line-height: 1; }
+        .qr-btn-label { font-size: 12.5px; }
+
+        /* ---------- 상단 우측 ---------- */
+        .top-right-bar {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        .tr-util {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            line-height: 1;
+            flex: 0 0 40px;
+            border: none;
+            color: #1c1c1e;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+        .icon-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .data-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 14px;
+            padding: 7px 16px;
+            border-radius: 16px;
+        }
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            line-height: 1.15;
+        }
+        .data-label {
+            font-size: 9.5px;
+            color: #64748b;
+            font-weight: bold;
+            letter-spacing: -0.2px;
+        }
+        .data-value {
+            font-size: 13.5px;
+            font-weight: 900;
+            color: #0284c7;
+            margin-top: 1px;
+            font-variant-numeric: tabular-nums;
+        }
+        .data-sep {
+            width: 1px;
+            height: 22px;
+            background: rgba(0, 0, 0, 0.08);
+        }
+        #valTemp { color: #e11d48; }
+        #valTemp.cold { color: #0284c7; }
+
+        /* ---------- 중앙 힌트 ---------- */
+        .center-tooltip {
+            position: absolute;
+            top: 80px;
+            left: 46%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            border-radius: 999px;
+            font-size: 11.5px;
+            font-weight: bold;
+            color: #334155;
+            pointer-events: none;
+            z-index: 10;
+            white-space: nowrap;
+            letter-spacing: -0.2px;
+            transition: opacity 0.35s ease;
+        }
+        .center-tooltip.hidden { opacity: 0; }
+
+        /* ---------- 좌하단 분자 모델 PIP ---------- */
+        .molecule-card {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            width: 214px;
+            padding: 9px 11px 8px;
+            z-index: 20;
+            border-radius: 16px;
+        }
+        .mol-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            font-size: 10.5px;
+            font-weight: 800;
+            color: #475569;
+            letter-spacing: -0.2px;
+            margin-bottom: 5px;
+        }
+        .mol-state {
+            font-size: 9.5px;
+            font-weight: 800;
+            color: #0284c7;
+            background: rgba(2, 132, 199, 0.12);
+            border-radius: 999px;
+            padding: 1px 7px;
+            white-space: nowrap;
+        }
+        #molCanvasScroller {
+            position: relative;
+            width: 100%;
+            height: 96px;
+        }
+        #molCanvas {
+            width: 100%;
+            height: 96px;
+            display: block;
+            border-radius: 10px;
+            background: rgba(248, 250, 252, 0.75);
+        }
+        .mol-note {
+            margin-top: 4px;
+            font-size: 9px;
+            color: #7c8899;
+            text-align: center;
+            letter-spacing: -0.2px;
+        }
+
+        /* ---------- 하단 중앙 컨트롤 ---------- */
+        .bottom-ctrl-bar {
+            position: absolute;
+            bottom: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            z-index: 40;
+        }
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.92);
+            color: #1c1c1e;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+        }
+        .action-btn:hover { background: #fff; transform: translateY(-1px); }
+
+        /* ---------- 우측 하단 전체화면 ---------- */
+        .bottom-right-bar {
+            position: absolute;
+            bottom: 22px;
+            right: 20px;
+            z-index: 45;
+        }
+        .fullscreen-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 9px 14px;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 800;
+            color: #1c1c1e;
+        }
+
+        /* ---------- 우측 조절 패널 ---------- */
+        .side-ctrl-panel {
+            position: absolute;
+            right: 20px;
+            bottom: 76px;
+            width: 232px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 60;
+            border-radius: 18px;
+        }
+        .panel-title {
+            font-size: 12px;
+            font-weight: 800;
+            color: #475569;
+            letter-spacing: -0.2px;
+            text-align: center;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .tab-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+        }
+        .ctrl-tab-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            padding: 7px 1px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.9);
+            color: #334155;
+            font-family: inherit;
+            font-size: 9.5px;
+            font-weight: 800;
+            line-height: 1.15;
+            cursor: pointer;
+            white-space: nowrap;
+            letter-spacing: -0.3px;
+            transition: all 0.2s ease;
+        }
+        .ctrl-tab-btn .t-ico { font-size: 14px; line-height: 1; }
+        .ctrl-tab-btn:hover { background: #ffffff; }
+        .ctrl-tab-btn.active {
+            background: #007aff;
+            border-color: #007aff;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.28);
+        }
+
+        .seg {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+        .seg-btn {
+            padding: 8px 1px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.9);
+            color: #334155;
+            font-family: inherit;
+            font-size: 10.5px;
+            font-weight: 800;
+            cursor: pointer;
+            white-space: nowrap;
+            letter-spacing: -0.3px;
+            transition: all 0.2s ease;
+        }
+        .seg-btn:hover { background: #ffffff; }
+        #modeHeat.active {
+            background: linear-gradient(135deg, #ff8a3d, #f0431f);
+            border-color: transparent;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(240, 67, 31, 0.3);
+        }
+        #modeCool.active {
+            background: linear-gradient(135deg, #38bdf8, #2563eb);
+            border-color: transparent;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-start {
+            width: 100%;
+            padding: 11px 8px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, #0ea5e9, #2563eb);
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 900;
+            letter-spacing: -0.2px;
+            cursor: pointer;
+            box-shadow: 0 5px 16px rgba(37, 99, 235, 0.28);
+            transition: all 0.2s ease;
+        }
+        .btn-start:hover { transform: translateY(-1px); }
+        .btn-start.paused {
+            background: linear-gradient(135deg, #22c55e, #0d9488);
+            box-shadow: 0 5px 16px rgba(13, 148, 136, 0.26);
+        }
+        .btn-start.pulse { animation: startPulse 1.8s ease-in-out infinite; }
+        @keyframes startPulse {
+            0%, 100% { box-shadow: 0 5px 16px rgba(37, 99, 235, 0.28); }
+            50% { box-shadow: 0 5px 22px rgba(37, 99, 235, 0.6); }
+        }
+
+        .ctrl-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .ctrl-row .lbl {
+            flex: 0 0 26px;
+            font-size: 9.5px;
+            font-weight: 800;
+            color: #64748b;
+            letter-spacing: -0.3px;
+        }
+        .mini {
+            flex: 1 1 0;
+            min-width: 0;
+            padding: 6px 0;
+            border-radius: 9px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.9);
+            color: #334155;
+            font-family: inherit;
+            font-size: 10.5px;
+            font-weight: 800;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.18s ease;
+        }
+        .mini:hover { background: #ffffff; }
+        .mini.active {
+            background: #0f172a;
+            border-color: #0f172a;
+            color: #ffffff;
+        }
+
+        .state-badge {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1px;
+            padding: 7px 8px;
+            border-radius: 12px;
+            background: rgba(2, 132, 199, 0.09);
+            border: 1px dashed rgba(2, 132, 199, 0.28);
+            font-size: 10.5px;
+            font-weight: 800;
+            color: #0369a1;
+            letter-spacing: -0.3px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .state-badge .sb-note { font-size: 8.5px; font-weight: 700; opacity: 0.8; }
+        .state-badge.hot {
+            background: rgba(225, 29, 72, 0.09);
+            border-color: rgba(225, 29, 72, 0.28);
+            color: #be123c;
+        }
+
+        /* ---------- 도킹 서브 패널 ---------- */
+        .sub-panel {
+            position: fixed;
+            right: 264px;
+            bottom: 76px;
+            width: 340px;
+            max-height: 78vh;
+            overflow-y: auto;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            padding: 13px 15px !important;
+            border-radius: 18px;
+            z-index: 55;
+        }
+        .sub-panel.show { display: flex; }
+        .sub-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+        .sub-panel-title {
+            font-size: 12.5px;
+            font-weight: 800;
+            color: #1e293b;
+            letter-spacing: -0.3px;
+        }
+        .sub-close {
+            background: rgba(0, 0, 0, 0.06);
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+            color: #64748b;
+            font-family: inherit;
+        }
+
+        .graph-canvas {
+            width: 100%;
+            height: 200px;
+            display: block;
+            border-radius: 12px;
+            background: rgba(248, 250, 252, 0.9);
+        }
+        .graph-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 9.5px;
+            font-weight: 800;
+            color: #64748b;
+        }
+        .graph-legend i {
+            display: inline-block;
+            width: 14px;
+            height: 8px;
+            border-radius: 3px;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+        .graph-note {
+            font-size: 9.5px;
+            color: #7c8899;
+            line-height: 1.45;
+            letter-spacing: -0.2px;
+        }
+
+        .table-wrap {
+            max-height: 46vh;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, 0.07);
+            -webkit-overflow-scrolling: touch;
+        }
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+            font-variant-numeric: tabular-nums;
+        }
+        table.data-table thead th {
+            position: sticky;
+            top: 0;
+            background: rgba(241, 245, 249, 0.98);
+            color: #475569;
+            font-size: 9.5px;
+            font-weight: 800;
+            padding: 5px 4px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            white-space: nowrap;
+            z-index: 2;
+        }
+        table.data-table td {
+            padding: 4px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.045);
+            color: #334155;
+            text-align: center;
+            white-space: nowrap;
+        }
+        table.data-table td.en { text-align: left; font-size: 9px; color: #64748b; }
+        table.data-table tr.plateau td { background: rgba(251, 146, 60, 0.13); font-weight: 800; color: #b45309; }
+        table.data-table tr.plateau.cool td { background: rgba(56, 189, 248, 0.16); color: #0369a1; }
+        .table-foot {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 9.5px;
+            color: #7c8899;
+            font-weight: 700;
+        }
+
+        /* ---------- 다크 모드 ---------- */
+        body.dark-mode {
+            background-color: #0b1220;
+            color: #e2e8f0;
+        }
+        body.dark-mode .glass-panel {
+            background-color: rgba(22, 30, 45, 0.92);
+            border-color: rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        }
+        body.dark-mode .sub-panel,
+        body.dark-mode .side-ctrl-panel,
+        body.dark-mode .molecule-card {
+            background-color: rgba(22, 30, 45, 0.94) !important;
+        }
+        body.dark-mode .back-btn,
+        body.dark-mode .tag-badge { color: #e2e8f0; }
+        body.dark-mode .icon-btn { color: #e2e8f0; }
+        body.dark-mode .data-label { color: #94a3b8; }
+        body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.12); }
+        body.dark-mode .panel-title { color: #94a3b8; border-bottom-color: rgba(255, 255, 255, 0.1); }
+        body.dark-mode .ctrl-tab-btn,
+        body.dark-mode .seg-btn,
+        body.dark-mode .mini {
+            background: rgba(44, 54, 74, 0.92);
+            border-color: rgba(255, 255, 255, 0.1);
+            color: #cbd5e1;
+        }
+        body.dark-mode .ctrl-tab-btn.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+        body.dark-mode .mini.active { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+        body.dark-mode .state-badge { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3); }
+        body.dark-mode .state-badge.hot { background: rgba(251, 113, 133, 0.14); color: #fda4af; border-color: rgba(251, 113, 133, 0.3); }
+        body.dark-mode .action-btn,
+        body.dark-mode .fullscreen-btn { background: rgba(44, 54, 74, 0.92); color: #e2e8f0; border-color: rgba(255,255,255,0.1); }
+        body.dark-mode .sub-panel-title { color: #f1f5f9; }
+        body.dark-mode .sub-close { background: rgba(255,255,255,0.12); color: #cbd5e1; }
+        body.dark-mode .graph-canvas { background: rgba(15, 23, 42, 0.9); }
+        body.dark-mode .graph-legend, body.dark-mode .graph-note { color: #94a3b8; }        body.dark-mode .table-wrap { border-color: rgba(255,255,255,0.1); }
+        body.dark-mode table.data-table thead th { background: rgba(30, 41, 59, 0.98); color: #cbd5e1; }
+        body.dark-mode table.data-table td { color: #cbd5e1; border-bottom-color: rgba(255,255,255,0.06); }
+        body.dark-mode table.data-table td.en { color: #94a3b8; }
+        body.dark-mode .center-tooltip { color: #cbd5e1; }
+        body.dark-mode .mol-head, body.dark-mode .mol-note { color: #94a3b8; }
+        body.dark-mode #molCanvas { background: rgba(15, 23, 42, 0.75); }
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .top-left-bar .qr-btn-label { display: none; }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    body .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 46px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        max-height: none !important;
+    }
+    body .top-right-bar > .tr-util {
+        order: 10 !important;
+        flex: 0 0 auto !important;
+        gap: 5px !important;
+    }
+    body .top-right-bar > .data-card { flex: 1 1 auto !important; }
+    .tr-util { gap: 5px !important; flex: 0 0 auto; }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 5px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .data-label { font-size: 8.5px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 11.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 92px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11px !important;
+        padding: 6px 12px !important;
+        white-space: normal !important;
+        line-height: 1.4;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    .bottom-ctrl-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 6px !important;
+        justify-content: center !important;
+        flex-wrap: nowrap !important;
+    }
+    .action-btn { padding: 6px 14px !important; font-size: 11.5px !important; }
+
+    .molecule-card {
+        left: 8px !important;
+        bottom: calc(52px + env(safe-area-inset-bottom)) !important;
+        width: 152px !important;
+        padding: 6px 8px 5px !important;
+        border-radius: 13px !important;
+    }
+    .mol-head { font-size: 9px !important; margin-bottom: 3px !important; }
+    .mol-state { font-size: 8px !important; padding: 0 5px !important; }
+    #molCanvasScroller, #molCanvas { height: 62px !important; }
+    .mol-note { display: none !important; }
+
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(64px + env(safe-area-inset-bottom) + var(--svl-sideh, 90px)) !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 42vh;
+        overflow-y: auto;
+        padding: 11px 12px !important;
+        gap: 8px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    body .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(64px + env(safe-area-inset-bottom) + var(--svl-sideh, 90px)) !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 42vh !important;
+    }
+    .sub-panel-title { font-size: 10.5px !important; }
+    .graph-canvas { height: 168px !important; }
+    .table-wrap { max-height: 34vh; }
+    table.data-table { font-size: 9.5px; }
+    table.data-table td { padding: 3px 3px; }
+    table.data-table td.en { font-size: 8.5px; }
+
+    .side-ctrl-panel {
+        right: 8px !important;
+        left: auto !important;
+        bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+        width: min(212px, calc(100vw - 16px)) !important;
+        padding: 8px !important;
+        gap: 6px !important;
+        max-height: 40vh !important;
+    }
+    body .side-ctrl-panel { max-height: 46vh !important; }
+    .panel-title { font-size: 10.5px !important; padding-bottom: 4px !important; }
+    .ctrl-tab-btn { padding: 6px 1px !important; font-size: 9px !important; }
+    .ctrl-tab-btn .t-ico { font-size: 13px !important; }
+    .seg-btn { padding: 7px 1px !important; font-size: 9.5px !important; }
+    .btn-start { padding: 9px 6px !important; font-size: 11.5px !important; }
+    .ctrl-row .lbl { font-size: 9px !important; flex-basis: 24px !important; }
+    .mini { padding: 5px 0 !important; font-size: 9.5px !important; }
+    .state-badge { font-size: 9.5px !important; padding: 6px 6px !important; }
+}
+
+@media (max-width: 430px) {
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 72px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText { display: none !important; }
+
+    .center-tooltip {
+        top: auto !important;
+        bottom: 52px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 46vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    .molecule-card {
+        left: 6px !important;
+        bottom: 36px !important;
+        width: 118px !important;
+        padding: 4px 6px !important;
+    }
+    .mol-head { font-size: 8px !important; margin-bottom: 2px !important; }
+    .mol-state { font-size: 7.5px !important; }
+    #molCanvasScroller, #molCanvas { height: 46px !important; }
+    .mol-note { display: none !important; }
+
+    .side-ctrl-panel {
+        top: 44px !important;
+        right: 8px !important;
+        left: auto !important;
+        bottom: auto !important;
+        width: 196px !important;
+        max-height: calc(100vh - 56px) !important;
+        padding: 7px 8px !important;
+        gap: 5px !important;
+    }
+    body .side-ctrl-panel { width: 196px !important; max-height: calc(100vh - 56px) !important; overflow-y: auto !important; }
+    body .top-right-bar {
+        flex-direction: column !important;
+        align-items: flex-end !important;
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 72px !important;
+    }
+    .panel-title { font-size: 9.5px !important; padding-bottom: 3px !important; }
+    .ctrl-tab-btn { padding: 4px 1px !important; font-size: 8px !important; }
+    .ctrl-tab-btn .t-ico { font-size: 11px !important; }
+    .seg-btn { padding: 5px 1px !important; font-size: 9px !important; }
+    .btn-start { padding: 6px 4px !important; font-size: 10px !important; }
+    .ctrl-row .lbl { font-size: 8px !important; flex-basis: 20px !important; }
+    .mini { padding: 3px 0 !important; font-size: 8.5px !important; }
+    .state-badge { font-size: 8.5px !important; padding: 4px 4px !important; }
+
+    .bottom-ctrl-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .action-btn { padding: 5px 11px !important; font-size: 10px !important; }
+
+    .sub-panel {
+        left: auto !important;
+        right: 8px !important;
+        top: 44px !important;
+        bottom: auto !important;
+        width: min(320px, calc(100vw - 220px)) !important;
+        max-width: none !important;
+        max-height: calc(100vh - 56px);
+        overflow-y: auto;
+        padding: 8px 10px !important;
+        gap: 6px !important;
+    }
+    body .sub-panel { width: min(320px, calc(100vw - 220px)) !important; max-height: calc(100vh - 56px) !important; }
+    .graph-canvas { height: 128px !important; }
+    .table-wrap { max-height: 34vh; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .center-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar .back-btn { display: none !important; }
+html.pseudo-fs .top-right-bar { display: flex !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
+
+/* @@/MOBILE-BASE@@ */
+    </style>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- 상단 좌측: 메인 복귀 · 제목 · QR -->
+    <div class="top-left-bar">
+        <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동">← 메인</a>
+        <div class="tag-badge glass-panel">
+            <span>열에너지에 따른 상태 변화 3D</span>
+            <span class="tag-pill">visionOS</span>
+        </div>
+        <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+            <span class="qr-btn-icon" aria-hidden="true">📱</span>
+            <span class="qr-btn-label">QR code</span>
+        </button>
+    </div>
+
+    <!-- 상단 우측: 유틸 + 데이터 카드 -->
+    <div class="top-right-bar">
+        <div class="tr-util">
+            <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+        </div>
+        <div class="data-card glass-panel" id="dataCard">
+            <div class="data-item">
+                <span class="data-label">현재 온도</span>
+                <span class="data-value" id="valTemp">-10.0 ℃</span>
+            </div>
+            <div class="data-sep"></div>
+            <div class="data-item">
+                <span class="data-label">상태</span>
+                <span class="data-value" id="valState">고체</span>
+            </div>
+            <div class="data-sep"></div>
+            <div class="data-item">
+                <span class="data-label">경과 시간</span>
+                <span class="data-value" id="valTime">0분 00초</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 중앙 힌트 -->
+    <div class="center-tooltip glass-panel" id="centerTooltip">
+        💡 시작을 누르면 얼음이 가열되며 0℃·100℃에서 온도가 멈추는 구간이 나타납니다.
+    </div>
+
+    <!-- 좌하단 분자 모델 PIP -->
+    <div class="molecule-card glass-panel" id="moleculeCard">
+        <div class="mol-head">
+            <span>🧊 H₂O 분자 배열</span>
+            <span class="mol-state" id="molState">고체</span>
+        </div>
+        <div id="molCanvasScroller"><canvas id="molCanvas"></canvas></div>
+        <div class="mol-note" id="molNote">규칙적인 배열 · 제자리 진동</div>
+    </div>
+
+    <!-- 하단 중앙 -->
+    <div class="bottom-ctrl-bar glass-panel">
+        <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+        <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+    </div>
+
+    <!-- 우측 하단 전체화면 -->
+    <div class="bottom-right-bar">
+        <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+            <span id="fullscreenIcon">⛶</span>
+            <span id="fullscreenText">전체화면</span>
+        </button>
+    </div>
+
+    <!-- 우측 조절 패널 -->
+    <div class="side-ctrl-panel glass-panel">
+        <div class="panel-title">⚙️ 열에너지 실험</div>
+        <div class="tab-row">
+            <button class="ctrl-tab-btn active" id="tabControl" type="button"><span class="t-ico">🔬</span><span>실험 조절</span></button>
+            <button class="ctrl-tab-btn" id="tabGraph" type="button"><span class="t-ico">📈</span><span>온도 그래프</span></button>
+            <button class="ctrl-tab-btn" id="tabTable" type="button"><span class="t-ico">📋</span><span>데이터 표</span></button>
+        </div>
+        <div id="paneControl" style="display:flex;flex-direction:column;gap:7px;">
+            <div class="seg">
+                <button class="seg-btn active" id="modeHeat" type="button">🔥 가열 실험</button>
+                <button class="seg-btn" id="modeCool" type="button">❄️ 냉각 실험</button>
+            </div>
+            <button class="btn-start pulse" id="btnStart" type="button">▶ 실험 시작</button>
+            <div class="ctrl-row">
+                <span class="lbl">세기</span>
+                <button class="mini" type="button" data-level="1">약</button>
+                <button class="mini active" type="button" data-level="2">중</button>
+                <button class="mini" type="button" data-level="3">강</button>
+            </div>
+            <div class="ctrl-row">
+                <span class="lbl">배속</span>
+                <button class="mini active" type="button" data-speed="1">1×</button>
+                <button class="mini" type="button" data-speed="2">2×</button>
+                <button class="mini" type="button" data-speed="3">3×</button>
+            </div>
+            <div class="state-badge" id="stateBadge">
+                <span class="sb-name" id="sbName">고체 (얼음)</span>
+                <span class="sb-note" id="sbNote">열 흡수 · 온도 상승</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 서브 패널: 온도 그래프 -->
+    <div class="sub-panel glass-panel" id="panelGraph">
+        <div class="sub-head">
+            <span class="sub-panel-title">📈 시간에 따른 온도 변화</span>
+            <button class="sub-close" id="closeGraph" type="button" aria-label="닫기">✕</button>
+        </div>
+        <canvas id="graphCanvas" class="graph-canvas"></canvas>
+        <div class="graph-legend">
+            <span><i style="background:#f97316;"></i>가열 곡선</span>
+            <span><i style="background:#0ea5e9;"></i>냉각 곡선</span>
+            <span><i style="background:rgba(251,146,60,0.45);"></i>상태 변화 구간</span>
+        </div>
+        <div class="graph-note">수평 구간은 온도가 변하지 않고 열에너지가 출입하는 상태 변화 구간입니다.</div>
+    </div>
+
+    <!-- 서브 패널: 데이터 표 -->
+    <div class="sub-panel glass-panel" id="panelTable">
+        <div class="sub-head">
+            <span class="sub-panel-title">📋 자동 기록 데이터</span>
+            <button class="sub-close" id="closeTable" type="button" aria-label="닫기">✕</button>
+        </div>
+        <div class="table-wrap" id="tableWrap">
+            <table class="data-table">
+                <thead>
+                    <tr><th>시간(초)</th><th>온도(℃)</th><th>상태</th><th>열에너지</th></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+        <div class="table-foot"><span id="rowCount">0행</span><span>1초마다 자동 기록</span></div>
+    </div>
+    <script>
+    (function () {
+        'use strict';
+
+        /* ============================================================
+           유틸
+           ============================================================ */
+        const $ = id => document.getElementById(id);
+        const clamp = (v, a, b) => (v < a ? a : (v > b ? b : v));
+        const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+        /* ============================================================
+           실험 단계 정의
+           ============================================================ */
+        const STEPS = {
+            heat: [
+                { id: 'solid',   name: '고체 (얼음)',        short: '고체',      to: 0,   rate: 3.0, energy: '열 흡수 · 온도 상승' },
+                { id: 'melting', name: '융해 (고체→액체)',   short: '고체→액체', dur: 7, hold: 0,   band: '융해', latent: '융해열', energy: '열 흡수 · 융해열' },
+                { id: 'liquid',  name: '액체 (물)',          short: '액체',      to: 100, rate: 5.0, energy: '열 흡수 · 온도 상승' },
+                { id: 'boiling', name: '끓음 (액체→기체)',   short: '액체→기체', dur: 7, hold: 100, band: '끓음', latent: '기화열', energy: '열 흡수 · 기화열' },
+                { id: 'gas',     name: '기체 (수증기)',      short: '기체',      to: 110, rate: 3.0, energy: '열 흡수 · 온도 상승' }
+            ],
+            cool: [
+                { id: 'gas',        name: '기체 (수증기)',    short: '기체',      to: 100, rate: 3.0, energy: '열 방출 · 온도 하강' },
+                { id: 'condensing', name: '응결 (기체→액체)', short: '기체→액체', dur: 7, hold: 100, band: '응결', latent: '응결열', energy: '열 방출 · 응결열' },
+                { id: 'liquid',     name: '액체 (물)',        short: '액체',      to: 0,   rate: 5.0, energy: '열 방출 · 온도 하강' },
+                { id: 'freezing',   name: '응고 (액체→고체)', short: '액체→고체', dur: 7, hold: 0, band: '응고', latent: '응고열', energy: '열 방출 · 응고열' },
+                { id: 'solid',      name: '고체 (얼음)',      short: '고체',      to: -10, rate: 3.0, energy: '열 방출 · 온도 하강' }
+            ]
+        };
+
+        const LEVEL_FACTOR = { 1: 0.7, 2: 1.0, 3: 1.5 };
+        const WATER_MAX_H = 1.62;
+        const BEAKER_R = 1.42;
+        const BEAKER_BOTTOM = 0.80;
+        const BEAKER_H = 3.05;
+
+        const state = {
+            mode: 'heat',
+            running: false,
+            finished: false,
+            t: 0,
+            temp: -10,
+            stepIdx: 0,
+            prog: 0,
+            level: 2,
+            speed: 1,
+            dark: false,
+            samples: [],
+            bands: [],
+            band: null,
+            lastRec: 0,
+            lastSample: -1,
+            tab: 'control'
+        };
+        const steps = () => STEPS[state.mode];
+        const curStep = () => steps()[state.stepIdx] || steps()[steps().length - 1];
+
+        /* ============================================================
+           Three.js 기본 세팅
+           ============================================================ */
+        const container = $('canvas-container');
+        const LIGHT_BG = 0xeef2f8;
+        const DARK_BG = 0x0b1220;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(LIGHT_BG);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.enablePan = false;
+        controls.minDistance = 5;
+        controls.maxDistance = 32;
+        controls.minPolarAngle = Math.PI * 0.10;
+        controls.maxPolarAngle = Math.PI * 0.50;
+
+        const CAM_TARGET = new THREE.Vector3(0.35, 2.15, 0);
+
+        function fitCamera() {
+            const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+            const portrait = aspect < 1;
+            CAM_TARGET.set(portrait ? 1.02 : 0.35, portrait ? 2.45 : 2.15, 0);
+            const vfov = camera.fov * Math.PI / 180;
+            const needW = portrait ? 7.4 : 9.4;
+            const needH = portrait ? 9.8 : 8.8;
+            const dW = (needW / 2) / (Math.tan(vfov / 2) * aspect);
+            const dH = (needH / 2) / Math.tan(vfov / 2);
+            let dist = Math.max(dW, dH);
+            const mz = parseFloat(document.documentElement.getAttribute('data-mzoom')) || 1;
+            dist = clamp(dist / mz, 9, 30);
+            const dir = new THREE.Vector3(0, 0.62, 1).normalize().multiplyScalar(dist);
+            camera.position.copy(CAM_TARGET).add(dir);
+            controls.target.copy(CAM_TARGET);
+            controls.update();
+        }
+
+        /* ---------- 조명 ---------- */
+        const hemi = new THREE.HemisphereLight(0xffffff, 0xa9b6c8, 0.42);
+        scene.add(hemi);
+
+        const key = new THREE.DirectionalLight(0xffffff, 1.25);
+        key.position.set(7, 13, 9);
+        key.castShadow = true;
+        key.shadow.mapSize.width = 1024;
+        key.shadow.mapSize.height = 1024;
+        key.shadow.camera.near = 1;
+        key.shadow.camera.far = 40;
+        key.shadow.camera.left = -10;
+        key.shadow.camera.right = 10;
+        key.shadow.camera.top = 12;
+        key.shadow.camera.bottom = -4;
+        key.shadow.bias = -0.0012;
+        scene.add(key);
+
+        const fill = new THREE.DirectionalLight(0xdbeafe, 0.26);
+        fill.position.set(-8, 7, -7);
+        scene.add(fill);
+
+        const heatLight = new THREE.PointLight(0xff5a00, 0, 9, 2);
+        heatLight.position.set(0, 1.15, 0);
+        scene.add(heatLight);
+
+        const coldLight = new THREE.PointLight(0x38bdf8, 0, 9, 2);
+        coldLight.position.set(0, 1.0, 0);
+        scene.add(coldLight);
+
+        /* ---------- 바닥 ---------- */
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0xccd8e8, roughness: 0.97, metalness: 0.0 });
+        const ground = new THREE.Mesh(new THREE.CircleGeometry(20, 64), groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // 장치가 놓인 작업대 매트
+        const matMesh = new THREE.Mesh(
+            new THREE.CircleGeometry(5.4, 64),
+            new THREE.MeshStandardMaterial({ color: 0xc3d0e1, roughness: 0.95, metalness: 0.0 })
+        );
+        matMesh.rotation.x = -Math.PI / 2;
+        matMesh.position.y = 0.006;
+        matMesh.receiveShadow = true;
+        scene.add(matMesh);
+
+        /* ============================================================
+           핫플레이트
+           ============================================================ */
+        const hotGroup = new THREE.Group();
+        scene.add(hotGroup);
+
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xdde3ec, roughness: 0.5, metalness: 0.25 });
+        const body = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.66, 3.35), bodyMat);
+        body.position.y = 0.33;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        hotGroup.add(body);
+
+        const frontMat = new THREE.MeshStandardMaterial({ color: 0x2c3440, roughness: 0.5, metalness: 0.4 });
+        const frontPanel = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.4, 0.06), frontMat);
+        frontPanel.position.set(-1.05, 0.34, 1.69);
+        hotGroup.add(frontPanel);
+
+        const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.12, 24), new THREE.MeshStandardMaterial({ color: 0x3b4553, metalness: 0.7, roughness: 0.3 }));
+        knob.rotation.x = Math.PI / 2;
+        knob.position.set(1.12, 0.34, 1.70);
+        hotGroup.add(knob);
+
+        const plateMat = new THREE.MeshStandardMaterial({
+            color: 0x3a414c, roughness: 0.35, metalness: 0.45,
+            emissive: new THREE.Color(0xff4500), emissiveIntensity: 0
+        });
+        const hotPlate = new THREE.Mesh(new THREE.CylinderGeometry(1.82, 1.82, 0.13, 56), plateMat);
+        hotPlate.position.y = 0.73;
+        hotPlate.receiveShadow = true;
+        hotGroup.add(hotPlate);
+
+        const hotRing = new THREE.Mesh(new THREE.TorusGeometry(1.83, 0.042, 10, 56), new THREE.MeshStandardMaterial({ color: 0x9aa4b2, metalness: 0.85, roughness: 0.24 }));
+        hotRing.rotation.x = Math.PI / 2;
+        hotRing.position.y = 0.79;
+        hotGroup.add(hotRing);
+
+        const ledMat = new THREE.MeshStandardMaterial({ color: 0x1b2430, emissive: new THREE.Color(0x22c55e), emissiveIntensity: 0.08 });
+        const led = new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 12), ledMat);
+        led.position.set(-1.58, 0.34, 1.70);
+        hotGroup.add(led);
+
+        /* ============================================================
+           냉각조 (얼음 + 소금 한제 수조)
+           ============================================================ */
+        const coldGroup = new THREE.Group();
+        coldGroup.visible = false;
+        scene.add(coldGroup);
+
+        const tankMat = new THREE.MeshPhongMaterial({ color: 0x8ccbee, transparent: true, opacity: 0.20, shininess: 110, specular: 0xffffff, side: THREE.DoubleSide, depthWrite: false });
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(2.18, 2.06, 1.42, 56, 1, true), tankMat);
+        tank.position.y = 0.71;
+        coldGroup.add(tank);
+
+        const tankBottom = new THREE.Mesh(new THREE.CylinderGeometry(2.06, 2.06, 0.12, 56), new THREE.MeshStandardMaterial({ color: 0xdae8f6, roughness: 0.6, metalness: 0.1 }));
+        tankBottom.position.y = 0.06;
+        tankBottom.receiveShadow = true;
+        coldGroup.add(tankBottom);
+
+        const coldRing = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.05, 10, 64), new THREE.MeshStandardMaterial({ color: 0xa9c6e0, metalness: 0.7, roughness: 0.3 }));
+        coldRing.rotation.x = Math.PI / 2;
+        coldRing.position.y = 1.42;
+        coldGroup.add(coldRing);
+
+        const coldPlateMat = new THREE.MeshStandardMaterial({
+            color: 0xbfe6ff, roughness: 0.25, metalness: 0.15,
+            emissive: new THREE.Color(0x38bdf8), emissiveIntensity: 0.55
+        });
+        const coldPlate = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 1.95, 0.09, 56), coldPlateMat);
+        coldPlate.position.y = 0.16;
+        coldGroup.add(coldPlate);
+
+        // 수조 속 얼음 + 소금물
+        const brineMat = new THREE.MeshPhongMaterial({ color: 0x5cc0ef, transparent: true, opacity: 0.50, shininess: 90, depthWrite: false });
+        const brine = new THREE.Mesh(new THREE.CylinderGeometry(2.02, 1.98, 0.72, 48), brineMat);
+        brine.position.y = 0.46;
+        coldGroup.add(brine);
+
+        const bathIceMat = new THREE.MeshPhongMaterial({ color: 0xeaf9ff, transparent: true, opacity: 0.82, shininess: 120, specular: 0xffffff, flatShading: true });
+        const bathIceGeo = new THREE.IcosahedronGeometry(1, 0);
+        for (let i = 0; i < 20; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const r = 1.50 + Math.random() * 0.42;
+            const cube = new THREE.Mesh(bathIceGeo, bathIceMat);
+            const s = 0.15 + Math.random() * 0.11;
+            cube.scale.set(s * (0.8 + Math.random() * 0.6), s * (0.7 + Math.random() * 0.5), s * (0.8 + Math.random() * 0.6));
+            cube.position.set(Math.cos(a) * r, 0.40 + Math.random() * 0.55, Math.sin(a) * r);
+            cube.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+            coldGroup.add(cube);
+        }
+
+        /* ============================================================
+           비커
+           ============================================================ */
+        const beakerGroup = new THREE.Group();
+        scene.add(beakerGroup);
+
+        const glassMat = new THREE.MeshPhongMaterial({
+            color: 0xffffff, transparent: true, opacity: 0.26, shininess: 130,
+            specular: 0xffffff, side: THREE.DoubleSide, depthWrite: false
+        });
+        const beaker = new THREE.Mesh(new THREE.CylinderGeometry(BEAKER_R, BEAKER_R, BEAKER_H, 64, 1, true), glassMat);
+        beaker.position.y = BEAKER_BOTTOM + BEAKER_H / 2;
+        beakerGroup.add(beaker);
+
+        const beakerBottomMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(BEAKER_R, BEAKER_R * 0.97, 0.07, 56),
+            new THREE.MeshPhongMaterial({ color: 0xe8f6ff, transparent: true, opacity: 0.34, shininess: 130 })
+        );
+        beakerBottomMesh.position.y = BEAKER_BOTTOM + 0.035;
+        beakerGroup.add(beakerBottomMesh);
+
+        const rim = new THREE.Mesh(
+            new THREE.TorusGeometry(BEAKER_R, 0.045, 12, 64),
+            new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, shininess: 140, specular: 0xffffff })
+        );
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = BEAKER_BOTTOM + BEAKER_H;
+        beakerGroup.add(rim);
+
+        // 눈금 (비커 앞면에 새긴 틱과 숫자)
+        function makeValueSprite(text, wUnits, hUnits, color) {
+            const c = document.createElement('canvas');
+            c.width = 128; c.height = 64;
+            const g = c.getContext('2d');
+            g.clearRect(0, 0, 128, 64);
+            g.font = 'bold 40px SeoulNamsan, -apple-system, sans-serif';
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.fillStyle = color || 'rgba(45, 74, 98, 0.85)';
+            g.fillText(text, 64, 34);
+            const tex = new THREE.CanvasTexture(c);
+            if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+            const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+            sp.scale.set(wUnits, hUnits, 1);
+            return sp;
+        }
+        const tickMat = new THREE.MeshBasicMaterial({ color: 0x3f657f, transparent: true, opacity: 0.72 });
+        const tickGeoShort = new THREE.BoxGeometry(0.20, 0.016, 0.012);
+        const tickGeoLong = new THREE.BoxGeometry(0.32, 0.02, 0.012);
+        for (let i = 1; i <= 5; i++) {
+            const y = BEAKER_BOTTOM + 0.44 + (i - 1) * 0.50;
+            const isTop = (i === 5);
+            const tick = new THREE.Mesh(isTop ? tickGeoLong : tickGeoShort, tickMat);
+            tick.position.set(-BEAKER_R * 0.66, y, Math.sqrt(Math.max(0.01, BEAKER_R * BEAKER_R - Math.pow(BEAKER_R * 0.66, 2))) - 0.015);
+            tick.rotation.y = Math.atan2(-BEAKER_R * 0.66, tick.position.z);
+            beakerGroup.add(tick);
+            const label = makeValueSprite(String(i * 50), 0.30, 0.15);
+            label.position.set(-BEAKER_R * 0.30, y, Math.sqrt(Math.max(0.01, BEAKER_R * BEAKER_R - Math.pow(BEAKER_R * 0.30, 2))) - 0.02);
+            beakerGroup.add(label);
+        }
+        const mlLabel = makeValueSprite('250 mL', 0.60, 0.17, 'rgba(45, 74, 98, 0.62)');
+        mlLabel.position.set(-BEAKER_R * 0.10, BEAKER_BOTTOM + 2.86, 1.40);
+        beakerGroup.add(mlLabel);
+
+        /* ---------- 물 ---------- */
+        const waterMat = new THREE.MeshPhongMaterial({
+            color: 0x2fade6, transparent: true, opacity: 0.62, shininess: 60,
+            specular: 0xffffff, depthWrite: false
+        });
+        const water = new THREE.Mesh(new THREE.CylinderGeometry(BEAKER_R * 0.955, BEAKER_R * 0.94, 1, 48), waterMat);
+        water.visible = false;
+        beakerGroup.add(water);
+
+        const waterTop = new THREE.Mesh(
+            new THREE.CircleGeometry(BEAKER_R * 0.955, 48),
+            new THREE.MeshPhongMaterial({ color: 0x9fe0ff, transparent: true, opacity: 0.55, shininess: 140, specular: 0xffffff, side: THREE.DoubleSide, depthWrite: false })
+        );
+        waterTop.rotation.x = -Math.PI / 2;
+        waterTop.visible = false;
+        beakerGroup.add(waterTop);
+
+        /* ---------- 얼음 조각 ---------- */
+        const iceMat = new THREE.MeshPhysicalMaterial({
+            color: 0xe8f8ff, roughness: 0.08, metalness: 0.0,
+            transparent: true, opacity: 0.80, emissive: new THREE.Color(0x9fdfff),
+            emissiveIntensity: 0.30, flatShading: true
+        });
+        const iceGeo = new THREE.IcosahedronGeometry(1, 0);
+        const iceChunks = [];
+        (function buildIce() {
+            for (let i = 0; i < 9; i++) {
+                const a = (i / 9) * Math.PI * 2 + Math.random() * 0.5;
+                const r = 0.15 + Math.random() * 0.75;
+                const x = Math.cos(a) * r;
+                const z = Math.sin(a) * r;
+                const baseY = BEAKER_BOTTOM + 0.22 + Math.random() * 0.92;
+                const mesh = new THREE.Mesh(iceGeo, iceMat);
+                const base = 0.28 + Math.random() * 0.14;
+                mesh.position.set(x, baseY, z);
+                mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+                mesh.scale.setScalar(base);
+                iceMat.needsUpdate = true;
+                beakerGroup.add(mesh);
+                const yn = (baseY - BEAKER_BOTTOM - 0.22) / 0.92;
+                const rn = r / 0.9;
+                iceChunks.push({
+                    mesh,
+                    base,
+                    baseY,
+                    seed: Math.random() * 6.28,
+                    o: clamp(1 - (0.55 * yn + 0.45 * Math.min(1, rn)), 0, 1)
+                });
+            }
+        })();
+
+        // 얼음 덩어리 본체 (조각들이 붙어 있는 덩어리 느낌)
+        const iceBodyMat = new THREE.MeshPhongMaterial({
+            color: 0xd6f0ff, transparent: true, opacity: 0.26,
+            shininess: 110, specular: 0xffffff, depthWrite: false
+        });
+        const iceBody = new THREE.Mesh(new THREE.CylinderGeometry(1.12, 1.08, 1, 40), iceBodyMat);
+        iceBody.visible = false;
+        beakerGroup.add(iceBody);
+
+        /* ---------- 서리 ---------- */        function makeFrostTexture() {
+            const c = document.createElement('canvas');
+            c.width = 256; c.height = 256;
+            const g = c.getContext('2d');
+            g.clearRect(0, 0, 256, 256);
+            for (let i = 0; i < 2600; i++) {
+                const x = Math.random() * 256;
+                const y = Math.random() * 256;
+                const a = 0.08 + Math.random() * 0.5;
+                const rr = 0.4 + Math.random() * 2.0;
+                g.fillStyle = 'rgba(255,255,255,' + a.toFixed(2) + ')';
+                g.beginPath(); g.arc(x, y, rr, 0, 6.3); g.fill();
+            }
+            const t = new THREE.CanvasTexture(c);
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.repeat.set(3, 1);
+            return t;
+        }
+        const frostMesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(BEAKER_R * 1.012, BEAKER_R * 1.012, BEAKER_H, 64, 1, true),
+            new THREE.MeshBasicMaterial({ map: makeFrostTexture(), transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })
+        );
+        frostMesh.visible = false;
+        beakerGroup.add(frostMesh);
+
+        /* ---------- 물방울 ---------- */
+        const droplets = [];
+        (function buildDroplets() {
+            const geo = new THREE.CircleGeometry(0.055, 10);
+            for (let i = 0; i < 46; i++) {
+                const a = Math.random() * Math.PI * 2;
+                const y = BEAKER_BOTTOM + 0.15 + Math.random() * (BEAKER_H - 0.4);
+                const rr = BEAKER_R * 0.975;
+                const m = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
+                    color: 0xdff4ff, transparent: true, opacity: 0, shininess: 140, specular: 0xffffff, side: THREE.DoubleSide, depthWrite: false
+                }));
+                m.position.set(Math.cos(a) * rr, y, Math.sin(a) * rr);
+                m.lookAt(0, y, 0);
+                m.scale.setScalar(0.7 + Math.random() * 0.8);
+                m.visible = false;
+                beakerGroup.add(m);
+                droplets.push({ mesh: m, th: Math.random() * 0.75 });
+            }
+        })();
+
+        /* ============================================================
+           스탠드 + 디지털 온도계
+           ============================================================ */
+        const standMat = new THREE.MeshStandardMaterial({ color: 0x9aa4b2, metalness: 0.82, roughness: 0.26 });
+        const standGroup = new THREE.Group();
+        scene.add(standGroup);
+
+        const standBase = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.14, 1.35), standMat);
+        standBase.position.set(2.85, 0.07, 0);
+        standBase.castShadow = true;
+        standBase.receiveShadow = true;
+        standGroup.add(standBase);
+
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 4.5, 20), standMat);
+        rod.position.set(2.85, 2.39, 0);
+        rod.castShadow = true;
+        standGroup.add(rod);
+
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(2.42, 0.09, 0.09), standMat);
+        arm.position.set(1.66, 4.14, 0);
+        arm.castShadow = true;
+        standGroup.add(arm);
+
+        const clampBlock = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.32, 0.2), standMat);
+        clampBlock.position.set(2.85, 4.14, 0);
+        standGroup.add(clampBlock);
+
+        const probeMat = new THREE.MeshStandardMaterial({ color: 0xcfd8e3, metalness: 0.95, roughness: 0.18 });
+        const probe = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 3.02, 18), probeMat);
+        probe.position.set(0.46, 2.64, 0);
+        probe.castShadow = true;
+        standGroup.add(probe);
+
+        const probeTip = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), probeMat);
+        probeTip.position.set(0.46, 1.14, 0);
+        standGroup.add(probeTip);
+
+        const headBody = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.88, 0.24), new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.45, metalness: 0.2 }));
+        headBody.position.set(2.85, 5.04, 0);
+        headBody.castShadow = true;
+        standGroup.add(headBody);
+
+        const displayCanvas = document.createElement('canvas');
+        displayCanvas.width = 256; displayCanvas.height = 128;
+        const displayTex = new THREE.CanvasTexture(displayCanvas);
+        if (THREE.sRGBEncoding !== undefined) displayTex.encoding = THREE.sRGBEncoding;
+        const displayScreen = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.28, 0.64),
+            new THREE.MeshBasicMaterial({ map: displayTex, transparent: false })
+        );
+        displayScreen.position.set(2.85, 5.07, 0.125);
+        standGroup.add(displayScreen);
+
+        let lastDisplayText = '';
+        function drawDisplay() {
+            const txt = state.temp.toFixed(1) + '℃';
+            if (txt === lastDisplayText) return;
+            lastDisplayText = txt;
+            const g = displayCanvas.getContext('2d');
+            g.fillStyle = '#0a1a14';
+            g.fillRect(0, 0, 256, 128);
+            g.fillStyle = 'rgba(56, 189, 248, 0.08)';
+            g.fillRect(0, 0, 256, 30);
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.font = 'bold 56px "SF Mono", Menlo, Consolas, monospace';
+            g.fillStyle = state.temp <= 0.05 ? '#7dd3fc' : (state.temp >= 99.9 ? '#fb7185' : '#6ee7b7');
+            g.fillText(txt, 128, 66);
+            g.font = 'bold 15px sans-serif';
+            g.fillStyle = 'rgba(148, 197, 180, 0.65)';
+            g.fillText('DIGITAL THERMOMETER', 128, 111);
+            displayTex.needsUpdate = true;
+        }
+
+        /* ============================================================
+           파티클 (수증기 · 기포 · 냉기)
+           ============================================================ */
+        function makeSoftTexture(size) {
+            const c = document.createElement('canvas');
+            c.width = c.height = size;
+            const g = c.getContext('2d');
+            const grd = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+            grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+            grd.addColorStop(0.42, 'rgba(255,255,255,0.40)');
+            grd.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = grd;
+            g.fillRect(0, 0, size, size);
+            return new THREE.CanvasTexture(c);
+        }
+        const SOFT_TEX = makeSoftTexture(96);
+
+        // 기체 상태에서 비커 내부를 채우는 옅은 수증기 기둥
+        const vaporMat = new THREE.MeshPhongMaterial({
+            color: 0xeaf3fb, transparent: true, opacity: 0, depthWrite: false,
+            shininess: 10, side: THREE.DoubleSide
+        });
+        const vapor = new THREE.Mesh(new THREE.CylinderGeometry(1.30, 1.26, 2.4, 32, 1, true), vaporMat);
+        vapor.position.y = BEAKER_BOTTOM + 1.35;
+        vapor.visible = false;
+        beakerGroup.add(vapor);
+
+        const steamPool = [];
+        for (let i = 0; i < 70; i++) {
+            const mat = new THREE.SpriteMaterial({ map: SOFT_TEX, transparent: true, opacity: 0, depthWrite: false, color: 0xffffff });
+            const sp = new THREE.Sprite(mat);
+            sp.visible = false;
+            scene.add(sp);
+            steamPool.push({ sp, life: 0, ttl: 1, vx: 0, vy: 0, vz: 0, size: 1, base: 0.5 });
+        }
+        function tintSteam() {
+            const c = state.dark ? 0xdfe9f5 : 0xb9cbdd;
+            for (let i = 0; i < steamPool.length; i++) steamPool[i].sp.material.color.setHex(c);
+        }
+        tintSteam();
+        let steamAcc = 0;
+        function spawnSteam(sourceY, strength) {
+            const p = steamPool.find(o => o.life <= 0);
+            if (!p) return;
+            const a = Math.random() * Math.PI * 2;
+            const r = Math.random() * BEAKER_R * 0.8;
+            p.sp.position.set(Math.cos(a) * r, sourceY + Math.random() * 0.15, Math.sin(a) * r);
+            p.ttl = 2.0 + Math.random() * 1.6;
+            p.life = p.ttl;
+            p.vx = (Math.random() - 0.5) * 0.42;
+            p.vy = 0.75 + Math.random() * 0.75 + strength * 0.3;
+            p.vz = (Math.random() - 0.5) * 0.42;
+            p.size = 0.7 + Math.random() * 0.5;
+            p.base = 0.40 + strength * 0.30;
+            p.sp.visible = true;
+            p.sp.material.opacity = 0;
+            p.sp.scale.setScalar(p.size);
+        }
+        function updateSteam(dt, intensity, sourceY) {
+            if (intensity > 0.02) {
+                steamAcc += intensity * dt * 46;
+                let guard = 0;
+                while (steamAcc >= 1 && guard++ < 8) { steamAcc -= 1; spawnSteam(sourceY, intensity); }
+            } else {
+                steamAcc = 0;
+            }
+            for (let i = 0; i < steamPool.length; i++) {
+                const p = steamPool[i];
+                if (p.life <= 0) continue;
+                p.life -= dt;
+                if (p.life <= 0) { p.sp.visible = false; p.sp.material.opacity = 0; continue; }
+                const u = 1 - p.life / p.ttl;
+                p.sp.position.x += p.vx * dt;
+                p.sp.position.y += p.vy * dt;
+                p.sp.position.z += p.vz * dt;
+                p.vy *= 0.995;
+                const scale = p.size * (0.7 + u * 2.2);
+                p.sp.scale.setScalar(scale);
+                p.sp.material.opacity = Math.sin(Math.PI * Math.min(1, u * 1.05)) * p.base;
+            }
+        }
+
+        const bubbleMat = new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, shininess: 120, specular: 0xffffff, depthWrite: false });
+        const bubbleGeo = new THREE.SphereGeometry(0.045, 8, 8);
+        const bubbles = [];
+        for (let i = 0; i < 80; i++) {
+            const m = new THREE.Mesh(bubbleGeo, bubbleMat);
+            m.visible = false;
+            scene.add(m);
+            bubbles.push({ m, life: 0, ttl: 1, vx: 0, vy: 0, vz: 0, s: 1 });
+        }
+        let bubbleAcc = 0;
+        function updateBubbles(dt, intensity, waterH) {
+            if (intensity > 0.02 && waterH > 0.08) {
+                bubbleAcc += intensity * dt * 55;
+                let guard = 0;
+                while (bubbleAcc >= 1 && guard++ < 10) {
+                    bubbleAcc -= 1;
+                    const b = bubbles.find(o => o.life <= 0);
+                    if (!b) break;
+                    const a = Math.random() * Math.PI * 2;
+                    const r = Math.random() * BEAKER_R * 0.82;
+                    b.m.position.set(Math.cos(a) * r, BEAKER_BOTTOM + 0.08, Math.sin(a) * r);
+                    b.m.visible = true;
+                    b.ttl = 0.7 + Math.random() * 0.9;
+                    b.life = b.ttl;
+                    b.vy = 0.55 + Math.random() * 0.85;
+                    b.vx = (Math.random() - 0.5) * 0.18;
+                    b.vz = (Math.random() - 0.5) * 0.18;
+                    b.s = 0.6 + Math.random() * 1.1;
+                    b.m.scale.setScalar(b.s);
+                }
+            } else {
+                bubbleAcc = 0;
+            }
+            const top = BEAKER_BOTTOM + waterH;
+            for (let i = 0; i < bubbles.length; i++) {
+                const b = bubbles[i];
+                if (b.life <= 0) continue;
+                b.life -= dt;
+                b.m.position.y += b.vy * dt;
+                b.m.position.x += b.vx * dt;
+                b.m.position.z += b.vz * dt;
+                if (b.life <= 0 || b.m.position.y > top - 0.03) { b.life = 0; b.m.visible = false; }
+            }
+        }
+
+        const mistPool = [];
+        for (let i = 0; i < 34; i++) {
+            const mat = new THREE.SpriteMaterial({ map: SOFT_TEX, transparent: true, opacity: 0, depthWrite: false, color: 0xd6f2ff });
+            const sp = new THREE.Sprite(mat);
+            sp.visible = false;
+            scene.add(sp);
+            mistPool.push({ sp, life: 0, ttl: 1, vx: 0, vy: 0, size: 1 });
+        }
+        let mistAcc = 0;
+        function updateMist(dt, intensity) {
+            if (intensity > 0.02) {
+                mistAcc += intensity * dt * 16;
+                let guard = 0;
+                while (mistAcc >= 1 && guard++ < 5) {
+                    mistAcc -= 1;
+                    const p = mistPool.find(o => o.life <= 0);
+                    if (!p) break;
+                    const a = Math.random() * Math.PI * 2;
+                    const r = 1.5 + Math.random() * 1.1;
+                    p.sp.position.set(Math.cos(a) * r, 1.9 + Math.random() * 0.3, Math.sin(a) * r);
+                    p.ttl = 2.4 + Math.random() * 1.6;
+                    p.life = p.ttl;
+                    p.vx = (Math.random() - 0.5) * 0.5;
+                    p.vy = -0.12 - Math.random() * 0.16;
+                    p.size = 0.7 + Math.random() * 0.7;
+                    p.sp.visible = true;
+                    p.sp.scale.setScalar(p.size);
+                }
+            }
+            for (let i = 0; i < mistPool.length; i++) {
+                const p = mistPool[i];
+                if (p.life <= 0) continue;
+                p.life -= dt;
+                if (p.life <= 0) { p.sp.visible = false; p.sp.material.opacity = 0; continue; }
+                const u = 1 - p.life / p.ttl;
+                p.sp.position.x += p.vx * dt;
+                p.sp.position.y += p.vy * dt;
+                p.sp.material.opacity = Math.sin(Math.PI * Math.min(1, u * 1.05)) * 0.38 * intensity;
+                p.sp.scale.setScalar(p.size * (1 + u * 0.8));
+            }
+        }
+
+        /* ============================================================
+           상태 → 시각값 계산
+           ============================================================ */
+        function visuals() {
+            const st = curStep();
+            const id = st.id;
+            const p = state.prog;
+            const v = { ice: 0, water: 0, steam: 0, bubbles: 0, droplets: 0, frost: 0, mist: 0, hot: 0, cold: 0 };
+
+            if (state.mode === 'heat') {
+                if (id === 'solid') { v.ice = 1; v.frost = 0.22; }
+                else if (id === 'melting') { v.ice = 1 - p; v.water = WATER_MAX_H * p; }
+                else if (id === 'liquid') {
+                    v.water = WATER_MAX_H;
+                    v.bubbles = smooth(76, 100, state.temp) * 0.55;
+                    v.steam = smooth(84, 100, state.temp) * 0.32;
+                }
+                else if (id === 'boiling') { v.water = WATER_MAX_H * (1 - p); v.bubbles = 1; v.steam = 0.85 + p * 0.15; }
+                else if (id === 'gas') { v.steam = 1; }
+            } else {
+                v.cold = 1;
+                if (id === 'gas') { v.steam = 1; }
+                else if (id === 'condensing') { v.water = WATER_MAX_H * p; v.steam = 0.95 * (1 - p * 0.8); v.droplets = p; }
+                else if (id === 'liquid') {
+                    v.water = WATER_MAX_H;
+                    v.droplets = 0.6 * smooth(0, 45, 100 - state.temp) + 0.25;
+                }
+                else if (id === 'freezing') { v.ice = p; v.water = WATER_MAX_H * (1 - p); v.droplets = 0.35 * (1 - p); v.frost = 0.75 * p; }
+                else if (id === 'solid') { v.ice = 1; v.frost = 1; v.droplets = 0.15; }
+            }
+            v.mist = state.mode === 'cool' ? (state.running ? 1 : 0.6) : 0;
+            return v;
+        }
+
+        function iceFactorFor(chunk) {
+            const st = curStep();
+            const id = st.id;
+            const p = state.prog;
+            const o = chunk.o;
+            if (state.mode === 'heat') {
+                if (id === 'solid') return 1;
+                if (id === 'melting') return 1 - smooth((1 - o) * 0.5, (1 - o) * 0.5 + 0.5, p);
+                return 0;
+            }
+            if (id === 'solid') return 1;
+            if (id === 'freezing') return smooth(o * 0.5, o * 0.5 + 0.5, p);
+            return 0;
+        }
+
+        /* ============================================================
+           시뮬레이션
+           ============================================================ */
+        function powerFactor() { return (LEVEL_FACTOR[state.level] || 1) * state.speed; }
+
+        function enterStep(i) {
+            const st = steps()[i];
+            if (!st) {
+                state.finished = true;
+                state.running = false;
+                if (state.band) { state.band.t1 = state.t; state.bands.push(state.band); state.band = null; }
+                updateStartBtn();
+                return;
+            }
+            state.stepIdx = i;
+            state.prog = 0;
+            if (st.dur) {
+                if (state.band) { state.band.t1 = state.t; state.bands.push(state.band); }
+                state.temp = st.hold;
+                state.band = { name: st.band, temp: st.hold, t0: state.t, t1: state.t, cool: state.mode === 'cool' };
+                addRow();
+            } else if (state.band) {
+                state.band.t1 = state.t;
+                state.bands.push(state.band);
+                state.band = null;
+            }
+            pushSample();
+        }
+
+        function simulate(dt) {
+            const st = curStep();
+            const pw = powerFactor();
+            state.t += dt;
+
+            if (st.dur) {
+                state.prog = Math.min(1, state.prog + (dt * pw) / st.dur);
+                state.temp = st.hold;
+                if (state.band) state.band.t1 = state.t;
+                if (state.prog >= 1) enterStep(state.stepIdx + 1);
+            } else {
+                const dir = st.to > state.temp ? 1 : -1;
+                state.temp += dir * st.rate * pw * dt;
+                if ((dir > 0 && state.temp >= st.to) || (dir < 0 && state.temp <= st.to)) {
+                    state.temp = st.to;
+                    enterStep(state.stepIdx + 1);
+                }
+            }
+
+            if (state.t - state.lastRec >= 1) {
+                state.lastRec = state.t;
+                addRow();
+            }
+            if (state.t - state.lastSample >= 0.25) pushSample();
+        }
+
+        function pushSample() {
+            state.lastSample = state.t;
+            state.samples.push({ t: state.t, temp: state.temp });
+            if (state.samples.length > 4000) state.samples.shift();
+        }
+
+        /* ============================================================
+           데이터 표
+           ============================================================ */
+        function energyNote(st) {
+            if (st.dur) return (state.mode === 'heat' ? '열 흡수 · ' : '열 방출 · ') + st.latent;
+            return st.energy;
+        }
+        function addRow() {
+            const st = curStep();
+            const tr = document.createElement('tr');
+            if (st.dur) tr.className = 'plateau' + (state.mode === 'cool' ? ' cool' : '');
+            const td1 = document.createElement('td');
+            td1.textContent = state.t.toFixed(1);
+            const td2 = document.createElement('td');
+            td2.textContent = state.temp.toFixed(1);
+            const td3 = document.createElement('td');
+            td3.textContent = st.short;
+            const td4 = document.createElement('td');
+            td4.className = 'en';
+            td4.textContent = energyNote(st);
+            tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+            const bodyEl = $('tableBody');
+            bodyEl.appendChild(tr);
+            $('rowCount').textContent = bodyEl.children.length + '행';
+            const wrap = $('tableWrap');
+            if (wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 70) {
+                wrap.scrollTop = wrap.scrollHeight;
+            }
+        }
+
+        /* ============================================================
+           HUD
+           ============================================================ */
+        let lastHudTemp = null, lastHudStep = null, lastHudTime = null;
+        function updateHud(force) {
+            const st = curStep();
+            const tTxt = state.temp.toFixed(1) + ' ℃';
+            if (force || tTxt !== lastHudTemp) {
+                lastHudTemp = tTxt;
+                const el = $('valTemp');
+                el.textContent = tTxt;
+                el.classList.toggle('cold', state.temp < 40);
+                $('valState').textContent = st.short;
+                const badge = $('stateBadge');
+                badge.classList.toggle('hot', state.mode === 'heat');
+                $('sbName').textContent = st.name;
+                $('sbNote').textContent = energyNote(st);
+            }
+            const sec = Math.max(0, Math.floor(state.t));
+            const tTime = Math.floor(sec / 60) + '분 ' + String(sec % 60).padStart(2, '0') + '초';
+            if (force || tTime !== lastHudTime) {
+                lastHudTime = tTime;
+                $('valTime').textContent = tTime;
+            }
+            lastHudStep = st.id;
+        }
+
+        function updateStartBtn() {
+            const b = $('btnStart');
+            if (state.finished) {
+                b.textContent = '🔄 다시 시작';
+                b.classList.remove('paused', 'pulse');
+            } else if (state.running) {
+                b.textContent = '⏸ 일시정지';
+                b.classList.remove('paused', 'pulse');
+            } else if (state.t > 0.01) {
+                b.textContent = '▶ 계속하기';
+                b.classList.add('paused');
+                b.classList.remove('pulse');
+            } else {
+                b.textContent = '▶ 실험 시작';
+                b.classList.remove('paused');
+                b.classList.add('pulse');
+            }
+        }
+
+        function updateHint() {
+            $('centerTooltip').textContent = state.mode === 'heat'
+                ? '💡 시작을 누르면 얼음이 가열되며 0℃·100℃에서 온도가 멈추는 구간이 나타납니다.'
+                : '💡 시작을 누르면 수증기가 냉각되며 100℃·0℃에서 온도가 멈추는 구간이 나타납니다.';
+        }
+
+        /* ============================================================
+           초기화 · 모드 전환
+           ============================================================ */
+        function reset() {
+            state.running = false;
+            state.finished = false;
+            state.t = 0;
+            state.stepIdx = 0;
+            state.prog = 0;
+            state.samples = [];
+            state.bands = [];
+            state.band = null;
+            state.lastRec = 0;
+            state.lastSample = -1;
+            state.temp = state.mode === 'heat' ? -10 : 110;
+            $('tableBody').innerHTML = '';
+            $('rowCount').textContent = '0행';
+            pushSample();
+            updateHud(true);
+            updateStartBtn();
+            $('centerTooltip').classList.remove('hidden');
+            hotGroup.visible = state.mode === 'heat';
+            coldGroup.visible = state.mode === 'cool';
+            lastDisplayText = '';
+            drawDisplay();
+            drawGraph();
+        }
+
+        function setMode(mode) {
+            if (state.mode === mode) return;
+            state.mode = mode;
+            $('modeHeat').classList.toggle('active', mode === 'heat');
+            $('modeCool').classList.toggle('active', mode === 'cool');
+            updateHint();
+            reset();
+            applyVisuals(performance.now(), 0);
+        }
+
+        /* ============================================================
+           시각 반영
+           ============================================================ */
+        function applyVisuals(now, dt) {
+            const v = visuals();
+
+            for (let i = 0; i < iceChunks.length; i++) {
+                const c = iceChunks[i];
+                const f = iceFactorFor(c);
+                c.mesh.visible = f > 0.03;
+                if (c.mesh.visible) {
+                    c.mesh.scale.setScalar(c.base * (0.55 + 0.45 * f));
+                    c.mesh.position.y = c.baseY + Math.sin(now * 0.0012 + c.seed) * 0.025;
+                    c.mesh.rotation.y += dt * 0.12;
+                }
+            }
+
+            const h = v.water;
+            const stt = curStep();
+            let puck = 0;
+            if (state.mode === 'heat') {
+                if (stt.id === 'solid') puck = 1;
+                else if (stt.id === 'melting') puck = 1 - state.prog;
+            } else if (stt.id === 'solid') {
+                puck = 1;
+            }
+            if (puck > 0.03) {
+                iceBody.visible = true;
+                const ph = 0.92 * puck;
+                iceBody.scale.set(1, ph, 1);
+                iceBody.position.y = BEAKER_BOTTOM + 0.02 + ph / 2;
+                iceBodyMat.opacity = 0.16 + 0.14 * puck;
+            } else {
+                iceBody.visible = false;
+            }
+            if (h > 0.02) {
+                water.visible = true;
+                water.scale.y = h;
+                water.position.y = BEAKER_BOTTOM + h / 2;
+                waterTop.visible = true;
+                waterTop.position.y = BEAKER_BOTTOM + h - 0.004;
+                const rip = 1 + Math.sin(now * 0.004) * (0.004 + v.bubbles * 0.012);
+                waterTop.scale.set(rip, rip, 1);
+                waterMat.opacity = 0.40 + v.ice * 0.10;
+            } else {
+                water.visible = false;
+                waterTop.visible = false;
+            }
+
+            let vaporAmt = 0;
+            if (state.mode === 'heat') {
+                if (stt.id === 'boiling') vaporAmt = 0.30 + 0.50 * state.prog;
+                else if (stt.id === 'gas') vaporAmt = 0.90;
+            } else {
+                if (stt.id === 'gas') vaporAmt = 0.90;
+                else if (stt.id === 'condensing') vaporAmt = 0.80 * (1 - state.prog * 0.8);
+            }
+            if (vaporAmt > 0.03) {
+                const vh = clamp(BEAKER_H - Math.max(0.25, h) - 0.12, 0.45, 2.6);
+                vapor.visible = true;
+                vapor.scale.y = vh / 2.4;
+                vapor.position.y = BEAKER_BOTTOM + Math.max(0.25, h) + vh / 2;
+                vaporMat.opacity = 0.30 * vaporAmt;
+            } else {
+                vapor.visible = false;
+            }
+
+            frostMesh.visible = v.frost > 0.02;
+            if (frostMesh.visible) {
+                const fh = Math.max(0.05, v.frost);
+                frostMesh.material.opacity = Math.min(0.85, v.frost * 0.8);
+                frostMesh.scale.y = fh;
+                frostMesh.position.y = BEAKER_BOTTOM + (BEAKER_H * fh) / 2;
+            }
+
+            for (let i = 0; i < droplets.length; i++) {
+                const d = droplets[i];
+                const op = clamp((v.droplets * 1.15 - d.th), 0, 0.9);
+                d.mesh.visible = op > 0.03;
+                if (d.mesh.visible) d.mesh.material.opacity = op;
+            }
+
+            const heatOn = state.mode === 'heat';
+            if (heatOn) {
+                const glow = state.running ? (0.06 + 0.92 * Math.pow(clamp((state.temp + 10) / 120, 0, 1), 2)) : 0.02;
+                plateMat.emissiveIntensity = glow + (state.running ? Math.sin(now * 0.004) * 0.05 : 0);
+                heatLight.intensity = state.running ? 1.1 + 0.35 * Math.sin(now * 0.004) : 0.25;
+                coldLight.intensity = 0;
+                ledMat.emissiveIntensity = state.running ? 1.6 : 0.12;
+                ledMat.emissive.setHex(state.running ? 0x22c55e : 0x64748b);
+            } else {
+                const glow = state.running ? 0.85 + 0.25 * Math.sin(now * 0.003) : 0.45;
+                coldPlateMat.emissiveIntensity = glow;
+                coldLight.intensity = state.running ? 0.85 : 0.35;
+                heatLight.intensity = 0;
+                ledMat.emissiveIntensity = 0.12;
+            }
+
+            updateSteam(dt, v.steam, BEAKER_BOTTOM + Math.max(0.12, h));
+            updateBubbles(dt, v.bubbles, h);
+            updateMist(dt, v.mist);
+            drawDisplay();
+        }
+
+        /* ============================================================
+           그래프
+           ============================================================ */
+        function drawGraph() {
+            const cv = $('graphCanvas');
+            if (!cv) return;
+            const w = cv.clientWidth, h = cv.clientHeight;
+            if (!w || !h) return;
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+                cv.width = Math.round(w * dpr);
+                cv.height = Math.round(h * dpr);
+            }
+            const g = cv.getContext('2d');
+            g.setTransform(dpr, 0, 0, dpr, 0, 0);
+            g.clearRect(0, 0, w, h);
+
+            const dark = state.dark;
+            const L = 34, R = 12, T = 16, B = 26;
+            const pw = Math.max(20, w - L - R);
+            const ph = Math.max(20, h - T - B);
+            const maxT = Math.max(20, Math.ceil(state.t / 10) * 10);
+            const yMin = -20, yMax = 120;
+            const X = t => L + (t / maxT) * pw;
+            const Y = v => T + ph - ((v - yMin) / (yMax - yMin)) * ph;
+
+            g.strokeStyle = dark ? 'rgba(148,163,184,0.18)' : 'rgba(100,116,139,0.16)';
+            g.lineWidth = 1;
+            g.font = '9px SeoulNamsan, -apple-system, sans-serif';
+            g.fillStyle = dark ? '#94a3b8' : '#64748b';
+            g.textAlign = 'right';
+            g.textBaseline = 'middle';
+            [-10, 0, 25, 50, 75, 100, 110].forEach(v => {
+                const y = Y(v);
+                g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke();
+                const crowded = (v === 110) && ((Y(100) - Y(110)) < 13);
+                if (!crowded) g.fillText(String(v), L - 5, y);
+            });
+
+            g.textAlign = 'center';
+            g.textBaseline = 'top';
+            const stepX = maxT <= 40 ? 10 : (maxT <= 90 ? 20 : 30);
+            for (let t = 0; t <= maxT + 0.001; t += stepX) {
+                const x = X(t);
+                g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + ph); g.stroke();
+                g.fillText(String(t), x, T + ph + 5);
+            }
+
+            g.save();
+            g.fillStyle = dark ? '#94a3b8' : '#64748b';
+            g.textAlign = 'left';
+            g.textBaseline = 'top';
+            g.fillText('온도(℃)', 2, 1);
+            g.textAlign = 'right';
+            g.fillText('시간(초)', w - 2, h - 11);
+            g.restore();
+
+            const allBands = state.bands.concat(state.band ? [state.band] : []);
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.font = 'bold 9px SeoulNamsan, -apple-system, sans-serif';
+            allBands.forEach(b => {
+                const x0 = X(b.t0);
+                const x1 = X(Math.max(b.t1, b.t0 + 0.3));
+                const y = Y(b.temp);
+                g.fillStyle = b.cool ? 'rgba(56,189,248,0.30)' : 'rgba(251,146,60,0.32)';
+                g.fillRect(x0, y - 6, Math.max(2, x1 - x0), 12);
+                if (x1 - x0 > 30) {
+                    g.fillStyle = b.cool ? '#0284c7' : '#c2410c';
+                    g.fillText(b.name, (x0 + x1) / 2, y - 13);
+                }
+            });
+
+            const s = state.samples;
+            if (s.length > 1) {
+                g.beginPath();
+                for (let i = 0; i < s.length; i++) {
+                    const px = X(s[i].t), py = Y(s[i].temp);
+                    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+                }
+                g.strokeStyle = state.mode === 'heat' ? '#f97316' : '#0ea5e9';
+                g.lineWidth = 2.2;
+                g.lineJoin = 'round';
+                g.lineCap = 'round';
+                g.stroke();
+
+                const lastP = s[s.length - 1];
+                g.beginPath();
+                g.arc(X(lastP.t), Y(lastP.temp), 3.6, 0, 6.3);
+                g.fillStyle = '#ffffff';
+                g.fill();
+                g.lineWidth = 2;
+                g.strokeStyle = state.mode === 'heat' ? '#f97316' : '#0ea5e9';
+                g.stroke();
+            }
+        }
+
+        /* ============================================================
+           분자 모델 PIP
+           ============================================================ */
+        const molCv = $('molCanvas');
+        const mg = molCv.getContext('2d');
+        let molW = 0, molH = 0, molDPR = 1;
+        const mols = [];
+
+        function layoutMol() {
+            const w = molCv.clientWidth || 190;
+            const h = molCv.clientHeight || 96;
+            molDPR = Math.min(window.devicePixelRatio || 1, 2);
+            molCv.width = Math.round(w * molDPR);
+            molCv.height = Math.round(h * molDPR);
+            mg.setTransform(molDPR, 0, 0, molDPR, 0, 0);
+            molW = w; molH = h;
+            const cols = 4, rows = 3;
+            const padX = Math.max(16, w * 0.10);
+            const padY = Math.max(12, h * 0.13);
+            mols.length = 0;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const hx = padX + (w - padX * 2) * (cols === 1 ? 0.5 : c / (cols - 1));
+                    const hy = padY + (h - padY * 2) * (rows === 1 ? 0.5 : r / (rows - 1));
+                    mols.push({
+                        home: { x: hx, y: hy },
+                        x: hx, y: hy,
+                        vx: 0, vy: 0,
+                        rot: Math.random() * 6.28,
+                        spin: (Math.random() - 0.5) * 1.2,
+                        seed: Math.random() * 6.28,
+                        r: 5
+                    });
+                }
+            }
+        }
+
+        function molActivity() {
+            const st = curStep();
+            const id = st.id;
+            if (id === 'solid') return 0.05;
+            if (id === 'melting') return 0.55 + state.prog * 0.3;
+            if (id === 'freezing') return 0.55 * (1 - state.prog) + 0.05;
+            if (id === 'liquid') return 0.55 + 0.45 * clamp(state.temp / 100, 0, 1);
+            if (id === 'boiling') return 1.5;
+            if (id === 'gas') return 1.9;
+            if (id === 'condensing') return 1.7 - state.prog * 0.6;
+            return 0.8;
+        }
+
+        function molLabel(k) {
+            if (k < 0.2) return { s: '고체', n: '규칙적인 배열 · 제자리 진동' };
+            if (k < 1.0) return { s: '상태 변화 중', n: '배열이 흐트러지며 규칙성 붕괴' };
+            if (k < 1.5) return { s: '액체', n: '불규칙한 배열 · 미끄러지듯 이동' };
+            return { s: '기체', n: '넓은 간격 · 빠른 무질서 운동' };
+        }
+
+        function updateMol(dt, now) {
+            const k = molActivity();
+            const blend = clamp((k - 0.12) / 0.85, 0, 1);
+            const dark = state.dark;
+            mg.clearRect(0, 0, molW, molH);
+
+            const speed = 6 + k * 16;
+            const margin = 12;
+            for (let i = 0; i < mols.length; i++) {
+                const m = mols[i];
+                // 자유 운동
+                if (speed > 0) {
+                    if (Math.random() < 0.06) {
+                        const a = Math.random() * 6.283;
+                        m.vx = Math.cos(a);
+                        m.vy = Math.sin(a);
+                    }
+                    m.x += m.vx * speed * dt;
+                    m.y += m.vy * speed * dt;
+                    if (m.x < margin) { m.x = margin; m.vx = Math.abs(m.vx); }
+                    if (m.x > molW - margin) { m.x = molW - margin; m.vx = -Math.abs(m.vx); }
+                    if (m.y < margin * 0.8) { m.y = margin * 0.8; m.vy = Math.abs(m.vy); }
+                    if (m.y > molH - margin * 0.8) { m.y = molH - margin * 0.8; m.vy = -Math.abs(m.vy); }
+                }
+                const vib = 1.0 + k * 0.9;
+                const hx = m.home.x + Math.sin(now * 0.0022 * (1 + k) + m.seed) * vib;
+                const hy = m.home.y + Math.cos(now * 0.0026 * (1 + k) + m.seed * 1.4) * vib;
+                const px = hx + (m.x - hx) * blend;
+                const py = hy + (m.y - hy) * blend;
+                m.rot += m.spin * dt * (0.4 + k);
+
+                // 분자 그리기 (O + H 2개)
+                const ang = 1.91;
+                const d = 6.0;
+                const h1x = px + Math.cos(m.rot - ang / 2) * d;
+                const h1y = py + Math.sin(m.rot - ang / 2) * d;
+                const h2x = px + Math.cos(m.rot + ang / 2) * d;
+                const h2y = py + Math.sin(m.rot + ang / 2) * d;
+                mg.strokeStyle = dark ? 'rgba(148,163,184,0.65)' : 'rgba(148,163,184,0.8)';
+                mg.lineWidth = 1.2;
+                mg.beginPath();
+                mg.moveTo(h1x, h1y); mg.lineTo(px, py); mg.lineTo(h2x, h2y);
+                mg.stroke();
+
+                mg.beginPath();
+                mg.arc(h1x, h1y, 3.0, 0, 6.283);
+                mg.arc(h2x, h2y, 3.0, 0, 6.283);
+                mg.fillStyle = dark ? '#e2e8f0' : '#ffffff';
+                mg.fill();
+                mg.strokeStyle = dark ? 'rgba(148,163,184,0.75)' : 'rgba(148,163,184,0.85)';
+                mg.lineWidth = 1;
+                mg.stroke();
+
+                mg.beginPath();
+                mg.arc(px, py, 5.0, 0, 6.283);
+                mg.fillStyle = '#ef4444';
+                mg.fill();
+            }
+
+            const lab = molLabel(k);
+            if ($('molState').textContent !== lab.s) $('molState').textContent = lab.s;
+            if ($('molNote').textContent !== lab.n) $('molNote').textContent = lab.n;
+        }
+
+        /* ============================================================
+           탭 · 패널
+           ============================================================ */
+        function setTab(tab) {
+            state.tab = tab;
+            $('tabControl').classList.toggle('active', tab === 'control');
+            $('tabGraph').classList.toggle('active', tab === 'graph');
+            $('tabTable').classList.toggle('active', tab === 'table');
+            $('panelGraph').classList.toggle('show', tab === 'graph');
+            $('panelTable').classList.toggle('show', tab === 'table');
+            if (tab === 'graph') drawGraph();
+            if (tab === 'table') {
+                const wrap = $('tableWrap');
+                wrap.scrollTop = wrap.scrollHeight;
+            }
+        }
+
+        /* ============================================================
+           이벤트
+           ============================================================ */
+        $('btnStart').addEventListener('click', function () {
+            if (state.finished) {
+                reset();
+                state.running = true;
+            } else {
+                state.running = !state.running;
+            }
+            updateStartBtn();
+            $('centerTooltip').classList.toggle('hidden', state.running);
+        });
+
+        $('btnReset').addEventListener('click', function () { reset(); });
+        $('btnAlign').addEventListener('click', function () { fitCamera(); });
+
+        $('modeHeat').addEventListener('click', function () { setMode('heat'); });
+        $('modeCool').addEventListener('click', function () { setMode('cool'); });
+
+        Array.prototype.forEach.call(document.querySelectorAll('[data-level]'), function (b) {
+            b.addEventListener('click', function () {
+                state.level = parseInt(b.getAttribute('data-level'), 10);
+                Array.prototype.forEach.call(document.querySelectorAll('[data-level]'), function (x) {
+                    x.classList.toggle('active', x === b);
+                });
+            });
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-speed]'), function (b) {
+            b.addEventListener('click', function () {
+                state.speed = parseInt(b.getAttribute('data-speed'), 10);
+                Array.prototype.forEach.call(document.querySelectorAll('[data-speed]'), function (x) {
+                    x.classList.toggle('active', x === b);
+                });
+            });
+        });
+
+        $('tabControl').addEventListener('click', function () { setTab('control'); });
+        $('tabGraph').addEventListener('click', function () { setTab(state.tab === 'graph' ? 'control' : 'graph'); });
+        $('tabTable').addEventListener('click', function () { setTab(state.tab === 'table' ? 'control' : 'table'); });
+        $('closeGraph').addEventListener('click', function () { setTab('control'); });
+        $('closeTable').addEventListener('click', function () { setTab('control'); });
+
+        $('themeBtn').addEventListener('click', function () {
+            state.dark = !state.dark;
+            document.body.classList.toggle('dark-mode', state.dark);
+            scene.background = new THREE.Color(state.dark ? DARK_BG : LIGHT_BG);
+            groundMat.color.setHex(state.dark ? 0x121b2b : 0xccd8e8);
+            matMesh.material.color.setHex(state.dark ? 0x1c2942 : 0xc3d0e1);
+            hemi.intensity = state.dark ? 0.30 : 0.42;
+            key.intensity = state.dark ? 0.72 : 1.25;
+            fill.intensity = state.dark ? 0.16 : 0.26;
+            tintSteam();
+            $('themeBtn').textContent = state.dark ? '☀️' : '🌙';
+            $('themeBtn').title = state.dark ? '주간 모드로 전환' : '야간 모드로 전환';
+            drawGraph();
+        });
+
+        window.addEventListener('resize', function () {
+            camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            layoutMol();
+            fitCamera();
+            drawGraph();
+        });
+
+        /* ============================================================
+           전체화면 / 창모드
+           ============================================================ */
+        (function () {
+            const docEl = document.documentElement;
+            const btn = document.getElementById('fullscreenBtn');
+            const icon = document.getElementById('fullscreenIcon');
+            const text = document.getElementById('fullscreenText');
+
+            function realFs() {
+                return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+            }
+            function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+            function setUI() {
+                const on = realFs() || pseudo();
+                if (icon) icon.textContent = on ? '🗗' : '⛶';
+                if (text) text.textContent = on ? '창모드' : '전체화면';
+                if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+                document.body.classList.toggle('is-fullscreen', on);
+                setTimeout(function () {
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+                    camera.updateProjectionMatrix();
+                }, 130);
+            }
+
+            if (btn) {
+                btn.addEventListener('click', function () {
+                    if (realFs()) {
+                        if (document.exitFullscreen) document.exitFullscreen();
+                        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                        return;
+                    }
+                    if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+                    if (docEl.requestFullscreen) {
+                        docEl.requestFullscreen().catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                    } else if (docEl.webkitRequestFullscreen) {
+                        docEl.webkitRequestFullscreen();
+                    } else {
+                        docEl.classList.add('pseudo-fs');
+                    }
+                    setUI();
+                }, false);
+            }
+            ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+                document.addEventListener(ev, setUI);
+            });
+            setUI();
+        })();
+
+        /* ============================================================
+           시작
+           ============================================================ */
+        layoutMol();
+        fitCamera();
+        reset();
+        updateStartBtn();
+        updateHint();
+        setTab('control');
+
+        let lastT = performance.now();
+        let lastGraph = 0;
+
+        function loop(now) {
+            requestAnimationFrame(loop);
+            const dt = Math.min((now - lastT) / 1000, 0.08);
+            lastT = now;
+
+            if (state.running && !state.finished) simulate(dt);
+            applyVisuals(now, dt);
+            updateHud(false);
+            updateMol(dt, now);
+            if (state.tab === 'graph' && now - lastGraph > 90) {
+                lastGraph = now;
+                drawGraph();
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        requestAnimationFrame(loop);
+
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(function () {
+                drawGraph();
+                drawDisplay();
+            });
+        }
+    })();
+    </script>
+    <script src="../../common/feedback.js" defer></script>
+    <script src="../../common/ui-layout.js" defer></script>
+    <script src="../../common/lib/qrcode.min.js" defer></script>
+    <script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
