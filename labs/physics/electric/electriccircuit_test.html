@@ -11,28 +11,32 @@
   3) [배포] → [새 배포] → 유형: 웹 앱 / 다음 사용자로 실행: 나 / 액세스 권한: 모든 사용자 → [배포] → 웹 앱 URL 복사
   4) 이 실험실 주소 뒤에 ?hook=복사한URL 을 붙여 한 번 열면 학생 기기에 저장되어 이후 자동 전송됩니다.
      예) .../electriccircuit_test.html?hook=https://script.google.com/macros/s/AKfy.../exec
-     (주소창에 ?school=OO중학교 를 붙이면 워터마크의 학교명이 바뀝니다.)
+     (주소창에 ?school=OO중학교 를 붙이면 입력 모달의 학교 칸이 미리 채워집니다.)
+  5) 시트는 [1반]~[12반] 탭으로 나뉘어 있고, 학생이 고른 반의 탭에 한 줄씩 쌓입니다.
+     칸 순서는  A: 번호 | B: 이름 | C: 제출한 사진 | D: 제출날짜 및 시간 | E: 점수 | F: 회로 요약(비고)
 
   ---- 아래 [Apps Script 코드] 블록 전체를 붙여넣으세요 ----
   const SHEET_ID = '1g6wvP20IaFOK4as0GixHQWRPXCCZA_bVOv140Ez4z64';
-  const FOLDER_NAME = '전기회로 수행평가 제출';
+  const FOLDER_NAME = '전기회로 수행평가 제출';   // 제출 사진을 모아 둘 드라이브 폴더
+  const HEADERS = ['번호', '이름', '제출한 사진', '제출날짜 및 시간', '점수', '회로 요약(비고)'];
 
   function doPost(e) {
     try {
-      const data = JSON.parse((e.postData && e.postData.contents) || e.parameter.payload);
-      const sh = SpreadsheetApp.openById(SHEET_ID).getSheets()[0];
-      let url = '';
-      const b64 = String(data.imageBase64 || '').split(',')[1] || '';
+      const d = JSON.parse((e.postData && e.postData.contents) || e.parameter.payload);
+      const ss = SpreadsheetApp.openById(SHEET_ID);
+      const tab = d.className + '반';
+      let sh = ss.getSheetByName(tab);
+      if (!sh) { sh = ss.insertSheet(tab); sh.appendRow(HEADERS); sh.setFrozenRows(1); }
+      let photo = '';
+      const b64 = String(d.imageBase64 || '').split(',')[1] || '';
       if (b64) {
-        const folder = getFolder_(FOLDER_NAME);
-        const name = data.className + '반_' + data.studentNum + '번_' + data.studentName + '_' + data.fileStamp + '.png';
-        url = folder.createFile(Utilities.newBlob(Utilities.base64Decode(b64), 'image/png', name)).getUrl();
+        const file = getFolder_(FOLDER_NAME).createFile(Utilities.newBlob(
+          Utilities.base64Decode(b64), 'image/png',
+          d.className + '반_' + d.studentNum + '번_' + d.studentName + '_' + d.fileStamp + '.png'));
+        photo = '=HYPERLINK("' + file.getUrl() + '","📷 사진 열기")';
       }
-      sh.appendRow([data.timestamp, data.className, data.studentNum, data.studentName,
-                    data.summary, url, data.partsDetail, '', '']);
-      // 시트에 사진을 바로 보이게 하려면 아래 줄의 주석을 푸세요 (사진이 셀 위에 겹쳐 보입니다)
-      // if (b64) sh.insertImage(Utilities.newBlob(Utilities.base64Decode(b64), 'image/png', name), 6, sh.getLastRow());
-      return ContentService.createTextOutput(JSON.stringify({ ok: true, url: url }))
+      sh.appendRow([d.studentNum, d.studentName, photo, d.timestamp, '', d.summary]);
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, tab: tab }))
         .setMimeType(ContentService.MimeType.JSON);
     } catch (err) {
       return ContentService.createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
@@ -962,6 +966,10 @@ body .side-ctrl-panel .control-tab-btn.svl-capture-btn:hover{background:linear-g
   <div class="svl-glass">
     <div class="svl-m-title" id="svlStuTitle">🎓 수행평가 학생 정보 입력</div>
     <div class="svl-m-sub">회로를 만든 뒤 <b>[📸 회로 캡처 및 제출]</b>을 누르면 이 정보와 함께 선생님께 제출됩니다.</div>
+    <div class="svl-field">
+      <label for="svlSchool">학교</label>
+      <input id="svlSchool" type="text" maxlength="20" placeholder="예) 문산중학교" autocomplete="off" enterkeyhint="next">
+    </div>
     <div class="svl-row">
       <div class="svl-field">
         <label for="svlClass">반</label>
@@ -2337,14 +2345,14 @@ frame();
   const params = new URLSearchParams(location.search);
   if (params.get('hook')) writeLS(LS.hook, params.get('hook').trim());
   if (params.get('school')) writeLS(LS.school, params.get('school').trim());
-  /* ?cls=2&num=15&name=김철수 → 입력 모달을 미리 채워서 연다 (수업 전 테스트용) */
-  const prefill = { cls: params.get('cls') || '', num: params.get('num') || '', name: params.get('name') || '' };
+  /* ?cls=2&num=15&name=김철수&school=문산중학교 → 입력 모달을 미리 채워서 연다 (수업 전 테스트용) */
+  const prefill = { cls: params.get('cls') || '', num: params.get('num') || '', name: params.get('name') || '', school: params.get('school') || '' };
   const webhook = () => (readLS(LS.hook) || SUBMIT_WEBHOOK_URL || '').trim();
-  const schoolName = () => readLS(LS.school) || DEF_SCHOOL;
+  const schoolName = () => st.school || readLS(LS.school) || DEF_SCHOOL;
 
-  const st = { cls: readLS(LS.cls), num: readLS(LS.num), name: readLS(LS.name) };
+  const st = { school: readLS(LS.school), cls: readLS(LS.cls), num: readLS(LS.num), name: readLS(LS.name) };
   const el = id => document.getElementById(id);
-  const stuMask = el('svlStudentMask'), clsSel = el('svlClass'), numIn = el('svlNum'), nameIn = el('svlName'),
+  const stuMask = el('svlStudentMask'), schoolIn = el('svlSchool'), clsSel = el('svlClass'), numIn = el('svlNum'), nameIn = el('svlName'),
         startBtn = el('svlStartBtn'), badge = el('svlStudentBadge'), badgeText = el('svlBadgeText'),
         subMask = el('svlSubmitMask'), subSub = el('svlSubSub'), shotImg = el('svlShotImg'), loadingEl = el('svlLoading'),
         chips = el('svlInfoChips'), summaryBox = el('svlSummary'), submitBtn = el('svlSubmitBtn'),
@@ -2355,7 +2363,7 @@ frame();
   (function () {
     const frag = document.createDocumentFragment();
     const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '반 선택'; frag.appendChild(o0);
-    for (let i = 1; i <= 15; i++) { const o = document.createElement('option'); o.value = String(i); o.textContent = i + '반'; frag.appendChild(o); }
+    for (let i = 1; i <= 12; i++) { const o = document.createElement('option'); o.value = String(i); o.textContent = i + '반'; frag.appendChild(o); }
     clsSel.appendChild(frag);
   })();
   if (params.get('teacher') === '1') cfgBtn.style.display = 'block';
@@ -2370,16 +2378,17 @@ frame();
   }
 
   /* ---------- 학생 정보 ---------- */
-  const hasStudent = () => !!(st.cls && st.num && st.name);
+  const hasStudent = () => !!(st.school && st.cls && st.num && st.name);
   function renderBadge() {
-    if (hasStudent()) { badgeText.textContent = '🎓 ' + st.cls + '반 ' + st.num + '번 ' + st.name; badge.classList.add('on'); }
+    if (hasStudent()) { badgeText.textContent = '🎓 ' + st.school + ' ' + st.cls + '반 ' + st.num + '번 ' + st.name; badge.classList.add('on'); }
     else badge.classList.remove('on');
   }
   function syncStart() {
     const n = parseInt(numIn.value, 10);
-    startBtn.disabled = !(clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim().length > 0);
+    startBtn.disabled = !(schoolIn.value.trim() && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim().length > 0);
   }
   function openStudentModal() {
+    schoolIn.value = st.school || prefill.school || DEF_SCHOOL;
     clsSel.value = st.cls || prefill.cls; numIn.value = st.num || prefill.num; nameIn.value = st.name || prefill.name;
     cancelBtn.style.display = hasStudent() ? 'flex' : 'none';
     stuMask.classList.add('on'); syncStart();
@@ -2387,14 +2396,18 @@ frame();
   }
   function closeStudentModal() { stuMask.classList.remove('on'); }
   clsSel.addEventListener('change', syncStart);
+  schoolIn.addEventListener('input', syncStart);
   numIn.addEventListener('input', syncStart);
   nameIn.addEventListener('input', syncStart);
+  schoolIn.addEventListener('keydown', e => { if (e.key === 'Enter') numIn.focus(); });
   nameIn.addEventListener('keydown', e => { if (e.key === 'Enter' && !startBtn.disabled) startBtn.click(); });
   numIn.addEventListener('keydown', e => { if (e.key === 'Enter') nameIn.focus(); });
   startBtn.addEventListener('click', function () {
     const n = parseInt(numIn.value, 10);
-    if (!(clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim())) return;
+    if (!(schoolIn.value.trim() && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim())) return;
+    st.school = schoolIn.value.trim();
     st.cls = clsSel.value; st.num = String(n); st.name = nameIn.value.trim();
+    writeLS(LS.school, st.school);
     writeLS(LS.cls, st.cls); writeLS(LS.num, st.num); writeLS(LS.name, st.name);
     renderBadge(); closeStudentModal();
     toast('👋 ' + st.cls + '반 ' + st.num + '번 ' + st.name + ' — 회로를 만들고 [📸 회로 캡처 및 제출]을 눌러주세요');
@@ -2549,7 +2562,7 @@ frame();
     loadingEl.textContent = '🖼 캡처 준비 중…'; loadingEl.style.display = 'flex';
     openSubmitModal();
     chips.innerHTML = '';
-    [st.cls + '반', st.num + '번', st.name].forEach(function (v) {
+    [st.school, st.cls + '반', st.num + '번', st.name].forEach(function (v) {
       const s = document.createElement('span'); s.className = 'svl-chip'; s.textContent = v; chips.appendChild(s);
     });
     summaryBox.innerHTML = '<b>회로 분석</b><br>' + lastInfo.summary + '<br><span style="opacity:.72;font-weight:600">' + lastInfo.detail + '</span>';
@@ -2592,7 +2605,7 @@ frame();
       let body = null; try { body = await res.json(); } catch (e) {}
       if (res.ok && (!body || body.ok !== false)) {
         submitBtn.textContent = '✅ 제출 완료';
-        setStatus('ok', '✅ 제출 완료! (' + lastStamp.text + ')' + (body && body.ok === true && body.url ? ' 이미지도 함께 저장되었습니다.' : ''));
+        setStatus('ok', '✅ 제출 완료! (' + lastStamp.text + ')' + (body && body.tab ? ' · ' + body.tab + ' 시트에 기록되었습니다.' : ''));
         subSub.textContent = '선생님께 제출되었습니다. 필요하면 이미지를 한 번 더 저장해 두세요.';
       } else {
         throw new Error((body && body.error) || ('HTTP ' + res.status));
