@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>DNA의 구조와 복제 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #1c1c1e;
+            touch-action: none;
+            transition: background .35s ease, color .35s ease;
+        }
+        body.light-mode {
+            background: radial-gradient(circle at 50% 40%, #ffffff 0%, #eef4fd 55%, #dfeaf9 100%);
+        }
+        body.dark-mode {
+            background: radial-gradient(circle at 50% 38%, #12253f 0%, #081422 55%, #03080f 100%);
+            color: #f2f5fa;
+        }
+
+        #canvas-container {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            z-index: 1; touch-action: none;
+        }
+        #canvas-container canvas { display: block; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+            z-index: 10;
+        }
+        body.dark-mode .glass-panel {
+            background: rgba(16, 26, 44, 0.88);
+            border-color: rgba(255, 255, 255, 0.14);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+            color: #f1f5f9;
+        }
+
+        /* ---------- 상단 좌측 ---------- */
+        .top-left-bar {
+            position: absolute; top: 18px; left: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 20;
+        }
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; font-size: 13px; font-weight: bold;
+            color: #1c1c1e; text-decoration: none; cursor: pointer !important;
+            transition: all .2s ease;
+        }
+        body.dark-mode .back-btn { color: #eaf1ff; }
+        .back-btn:hover { transform: translateY(-1px); }
+        .back-btn:active { transform: scale(0.97); }
+
+        .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; }
+        .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; white-space: nowrap; }
+        .vision-badge {
+            background: rgba(255, 45, 85, 0.14); color: #d81b3f;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; letter-spacing: .2px; white-space: nowrap;
+        }
+        body.dark-mode .vision-badge { background: rgba(255, 45, 85, 0.26); color: #ff9aac; }
+
+        /* ---------- 상단 우측 정보 카드 ---------- */
+        .data-card {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 16px; border-radius: 999px;
+        }
+        .data-item { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 58px; }
+        .data-label { font-size: 10.5px; color: #64748b; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+        body.dark-mode .data-label { color: #94a3b8; }
+        .data-value { font-size: 13px; font-weight: bold; color: #0f172a; letter-spacing: -0.3px; white-space: nowrap; }
+        body.dark-mode .data-value { color: #ffffff; }
+        .data-value.c-step { color: #ff2d55; }
+        .data-value.c-prog { color: #0ea5e9; }
+        .data-value.c-bp { color: #8b5cf6; }
+        body.dark-mode .data-value.c-step { color: #ff8fa3; }
+        body.dark-mode .data-value.c-prog { color: #7dd3fc; }
+        body.dark-mode .data-value.c-bp { color: #c4b5fd; }
+
+        .icon-btn {
+            width: 38px; height: 38px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; border: none;
+            background: rgba(255, 255, 255, 0.88); color: #1c1c1e;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+            transition: all .2s; font-size: 16px; font-family: inherit;
+        }
+        body.dark-mode .icon-btn { background: rgba(22, 32, 52, 0.9); color: #f1f5f9; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+        .icon-btn:hover { transform: scale(1.06); }
+        #theme-toggle { pointer-events: auto; }
+
+        /* ---------- 중앙 상단 안내 ---------- */
+        .center-tooltip {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            padding: 7px 18px; font-size: 12.5px; font-weight: bold;
+            color: #334155; border-radius: 30px;
+            pointer-events: none; z-index: 5;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            white-space: nowrap;
+            transition: opacity .3s ease;
+        }
+        .center-tooltip.off { opacity: 0; }
+        body.dark-mode .center-tooltip {
+            color: #cbd5e1; background: rgba(10, 16, 28, 0.78);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        /* ---------- 하단 중앙 캡슐 바 ---------- */
+        .bottom-control-bar {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 14px; z-index: 80;
+        }
+        .control-capsule-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: 999px; border: none;
+            background: transparent; color: #1c1c1e;
+            font-size: 13px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        body.dark-mode .control-capsule-btn { color: #e6edf9; }
+        .control-capsule-btn:hover { background: rgba(0, 0, 0, 0.06); }
+        body.dark-mode .control-capsule-btn:hover { background: rgba(255, 255, 255, 0.14); }
+        .control-capsule-btn.playing { background: rgba(14, 165, 233, 0.16); color: #0369a1; }
+        body.dark-mode .control-capsule-btn.playing { background: rgba(56, 189, 248, 0.22); color: #bae6fd; }
+
+        /* ---------- 우측 조절 패널 ---------- */
+        #side-ctrl,
+        body #side-ctrl.side-ctrl-panel,
+        body.dark-mode #side-ctrl.side-ctrl-panel {
+            position: fixed !important; right: 20px !important; bottom: 74px !important;
+            width: 268px !important; padding: 12px 13px !important;
+            display: flex !important; flex-direction: column !important; gap: 8px !important; z-index: 85 !important;
+            max-height: calc(100vh - 150px) !important;
+            overflow-y: auto !important; overflow-x: hidden !important;
+            overscroll-behavior: contain !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            border: 1px solid rgba(0, 0, 0, 0.12) !important;
+            box-shadow: 0 10px 32px rgba(15, 23, 42, 0.14) !important;
+            color: #0f172a !important;
+            border-radius: 18px !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+        }
+        body.dark-mode #side-ctrl,
+        body.dark-mode #side-ctrl.side-ctrl-panel {
+            background: rgba(14, 22, 38, 0.96) !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6) !important;
+            color: #ffffff !important;
+        }
+
+        #side-ctrl .panel-header {
+            display: flex !important; align-items: center !important; justify-content: space-between !important;
+            padding-bottom: 7px !important; border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+        }
+        body.dark-mode #side-ctrl .panel-header { border-bottom-color: rgba(255, 255, 255, 0.12) !important; }
+        #side-ctrl .panel-title {
+            font-size: 13px !important; font-weight: 800 !important; color: #0f172a !important; letter-spacing: -0.2px !important;
+        }
+        body.dark-mode #side-ctrl .panel-title { color: #ffffff !important; }
+        .panel-help-btn {
+            width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+            background: rgba(14, 165, 233, 0.14); color: #0369a1;
+            font-size: 12px; font-weight: 800; font-family: inherit; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        body.dark-mode .panel-help-btn { background: rgba(56, 189, 248, 0.22); color: #7dd3fc; }
+
+        /* 탭 */
+        .mode-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .mode-tab {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+            padding: 8px 4px; border-radius: 13px;
+            border: 1.5px solid rgba(0, 0, 0, 0.09);
+            background: rgba(0, 0, 0, 0.03);
+            color: #475569; font-family: inherit; cursor: pointer;
+            transition: all .2s ease;
+        }
+        .mode-tab .mt-ico { font-size: 17px; line-height: 1.1; }
+        .mode-tab .mt-name { font-size: 11.5px; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; }
+        .mode-tab:hover { transform: translateY(-1px); }
+        .mode-tab.active {
+            background: linear-gradient(135deg, #e8f6ff, #d6ecff);
+            border-color: #0ea5e9; color: #0369a1;
+            box-shadow: 0 4px 14px rgba(14, 165, 233, 0.18);
+        }
+        body.dark-mode .mode-tab { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.14); color: #cbd5e1; }
+        body.dark-mode .mode-tab.active { background: rgba(56, 189, 248, 0.2); border-color: #38bdf8; color: #e0f2fe; }
+
+        .ctrl-block { display: flex; flex-direction: column; gap: 6px; }
+
+        /* 슬라이더 */
+        .slider-row {
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 11px; font-weight: 800; color: #475569; letter-spacing: -0.2px;
+            padding: 0 2px;
+        }
+        body.dark-mode .slider-row { color: #cbd5e1; }
+        .slider-row .sl-val { color: #0ea5e9; font-weight: 800; }
+        body.dark-mode .slider-row .sl-val { color: #7dd3fc; }
+        .range-slider {
+            width: 100%; height: 6px; border-radius: 999px; outline: none;
+            -webkit-appearance: none; appearance: none; cursor: pointer;
+            background: #cbd5e1; margin: 0;
+        }
+        body.dark-mode .range-slider { background: #334155; }
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%;
+            background: #0ea5e9; cursor: pointer; box-shadow: 0 2px 6px rgba(14, 165, 233, 0.5);
+        }
+        .range-slider::-moz-range-thumb {
+            width: 17px; height: 17px; border-radius: 50%; border: none;
+            background: #0ea5e9; cursor: pointer;
+        }
+
+        /* 토글 */
+        .sw-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 6px;
+            padding: 7px 9px; border-radius: 10px;
+            background: rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.07);
+            color: #334155; font-family: inherit; font-size: 11px; font-weight: 700;
+            cursor: pointer; transition: all .15s; width: 100%;
+        }
+        body.dark-mode .sw-row { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); color: #e2e8f0; }
+        .sw-row:hover { border-color: rgba(14, 165, 233, 0.45); }
+        .sw-label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+        .sw-track {
+            position: relative; width: 30px; height: 17px; border-radius: 999px;
+            background: #cbd5e1; flex: 0 0 auto; transition: background .2s;
+        }
+        body.dark-mode .sw-track { background: #475569; }
+        .sw-knob {
+            position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+            border-radius: 50%; background: #ffffff; transition: transform .2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,.3);
+        }
+        .sw-row[aria-pressed="true"] .sw-track { background: #0ea5e9; }
+        .sw-row[aria-pressed="true"] .sw-knob { transform: translateX(13px); }
+
+        /* 범례 */
+        .legend-title {
+            font-size: 10.5px; font-weight: 800; color: #64748b; letter-spacing: -0.2px;
+            padding: 2px 2px 0;
+        }
+        body.dark-mode .legend-title { color: #94a3b8; }
+        .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .legend-chip {
+            display: flex; align-items: center; gap: 5px;
+            padding: 5px 7px; border-radius: 9px;
+            background: rgba(0, 0, 0, 0.03); border: 1px solid rgba(0, 0, 0, 0.06);
+            font-size: 10.5px; font-weight: 700; color: #334155; white-space: nowrap;
+        }
+        body.dark-mode .legend-chip { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #e2e8f0; }
+        .legend-chip .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+        .legend-note {
+            font-size: 10px; font-weight: 700; color: #0369a1; letter-spacing: -0.2px;
+            padding: 1px 2px 0; line-height: 1.4;
+        }
+        body.dark-mode .legend-note { color: #7dd3fc; }
+
+        .pair-info {
+            font-size: 10.5px; font-weight: 700; color: #475569; line-height: 1.45;
+            padding: 7px 9px; border-radius: 10px;
+            background: rgba(14, 165, 233, 0.08); border: 1px dashed rgba(14, 165, 233, 0.35);
+            min-height: 32px;
+        }
+        body.dark-mode .pair-info { color: #cbd5e1; background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.4); }
+        .pair-info b { color: #0369a1; font-weight: 900; }
+        body.dark-mode .pair-info b { color: #7dd3fc; }
+
+        /* 단계 */
+        .step-track { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+        .step-seg {
+            position: relative; padding: 5px 1px 6px; border-radius: 9px;
+            border: 1px solid rgba(0, 0, 0, 0.07); background: rgba(0, 0, 0, 0.03);
+            color: #64748b; font-family: inherit; font-size: 9.5px; font-weight: 800;
+            cursor: pointer; transition: all .18s ease; text-align: center; line-height: 1.15;
+            letter-spacing: -0.4px;
+        }
+        .step-seg .sg-num { display: block; font-size: 11.5px; font-weight: 900; }
+        .step-seg:hover { background: rgba(14, 165, 233, 0.1); }
+        .step-seg.active {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #ffffff;
+            border-color: #0284c7; box-shadow: 0 3px 10px rgba(2, 132, 199, 0.3);
+        }
+        body.dark-mode .step-seg { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.12); color: #94a3b8; }
+        body.dark-mode .step-seg.active { background: linear-gradient(135deg, #38bdf8, #0284c7); color: #04121f; }
+
+        .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .act-btn {
+            padding: 8px 4px; border-radius: 11px; border: 1px solid rgba(0, 0, 0, 0.09);
+            background: rgba(255, 255, 255, 0.9); color: #0f172a;
+            font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+            transition: all .18s ease; white-space: nowrap;
+        }
+        .act-btn:hover { background: #ffffff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,.1); }
+        .act-btn:active { transform: scale(0.97); }
+        .act-btn:disabled { opacity: .4; cursor: default; transform: none; box-shadow: none; }
+        body.dark-mode .act-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); color: #f1f5f9; }
+        body.dark-mode .act-btn:hover { background: rgba(255, 255, 255, 0.14); }
+        .act-btn.primary {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; border-color: #0284c7;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        }
+        body.dark-mode .act-btn.primary { background: linear-gradient(135deg, #38bdf8, #0284c7); color: #04121f; }
+
+        #btn-start-rep { width: 100%; padding: 9px 4px; }
+
+        .step-box {
+            padding: 9px 10px; border-radius: 11px;
+            background: rgba(255, 45, 85, 0.07);
+            border-left: 3px solid #ff2d55;
+            line-height: 1.45;
+        }
+        body.dark-mode .step-box { background: rgba(255, 45, 85, 0.14); }
+        .step-box .sb-title { font-size: 11.5px; font-weight: 900; color: #be123c; letter-spacing: -0.3px; }
+        body.dark-mode .step-box .sb-title { color: #ff9aac; }
+        .step-box .sb-text { margin-top: 4px; font-size: 10.5px; font-weight: 600; color: #334155; }
+        body.dark-mode .step-box .sb-text { color: #cbd5e1; }
+
+        /* ---------- 모바일 / 태블릿 ---------- */
+        @media (max-width: 900px) {
+            .top-left-bar { top: 12px; left: 12px; gap: 6px; }
+            .back-btn, .tag-badge { padding: 6px 11px; font-size: 12px; }
+            .title-text { font-size: 12.5px; }
+            .vision-badge { font-size: 9.5px; padding: 2px 6px; }
+            .center-tooltip { display: none; }
+            .data-card { display: none !important; }
+            .icon-btn { width: 34px; height: 34px; font-size: 14px; }
+
+            #side-ctrl,
+            body #side-ctrl.side-ctrl-panel,
+            body.dark-mode #side-ctrl.side-ctrl-panel {
+                right: max(8px, env(safe-area-inset-right)) !important;
+                bottom: calc(60px + env(safe-area-inset-bottom)) !important;
+                width: min(238px, calc(100vw - 16px)) !important;
+                padding: 9px !important; gap: 6px !important;
+                max-height: 47vh !important;
+            }
+            .mode-tab { flex-direction: row; gap: 4px; padding: 7px 3px; }
+            .mode-tab .mt-ico { font-size: 14px; }
+            .mode-tab .mt-name { font-size: 10.5px; }
+            .sw-row { font-size: 10.5px; padding: 5px 7px; }
+            .step-seg { font-size: 8.5px; padding: 4px 0 5px; }
+            .step-seg .sg-num { font-size: 10.5px; }
+            .act-btn { padding: 6px 3px; font-size: 11px; }
+            .legend-chip { font-size: 9.5px; padding: 4px 5px; }
+            .legend-note { font-size: 9.5px; }
+            .pair-info { font-size: 9.5px; }
+            .bottom-control-bar { bottom: calc(10px + env(safe-area-inset-bottom)); padding: 4px 10px; gap: 4px; }
+            .control-capsule-btn { padding: 6px 10px; font-size: 11.5px; }
+        }
+        @media (max-width: 600px) {
+            .top-left-bar { gap: 5px; }
+            .back-btn { padding: 6px 9px; }
+            .back-label { display: none; }
+            .tag-badge { padding: 6px 9px; gap: 5px; }
+            .title-text { font-size: 11.5px; }
+            .vision-badge { font-size: 9px; padding: 1px 5px; }
+        }
+        @media (max-height: 520px) and (orientation: landscape) {
+            #side-ctrl { max-height: 66vh !important; }
+        }
+    </style>
+</head>
+<body class="light-mode">
+
+<div id="canvas-container"></div>
+
+<!-- 상단 좌측 -->
+<div class="top-left-bar">
+    <a href="/index.html" class="glass-panel back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span><span class="back-label">전체 실험실</span></a>
+    <div class="glass-panel tag-badge">
+        <span class="title-text">DNA의 구조와 복제 3D</span>
+        <span class="vision-badge">생명과학</span>
+    </div>
+    <button class="glass-panel back-btn qr-btn" id="qrBtn" type="button" data-qr-title="DNA의 구조와 복제 3D" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span> <span class="qr-btn-label">QR code</span></button>
+</div>
+
+<!-- 상단 우측 -->
+<div class="top-right-bar">
+    <div class="glass-panel data-card">
+        <div class="data-item">
+            <span class="data-label">단계</span>
+            <span class="data-value c-step" id="card-step">1단계 · 안정</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">진행률</span>
+            <span class="data-value c-prog" id="card-prog">0%</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">염기쌍</span>
+            <span class="data-value c-bp" id="card-bp">22</span>
+        </div>
+    </div>
+    <div class="tr-util" style="display:flex; align-items:center; gap:8px;">
+        <button class="icon-btn" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">🌙</button>
+    </div>
+</div>
+
+<!-- 상단 중앙 안내 -->
+<div class="glass-panel center-tooltip" id="guide-tooltip">
+    🧬 드래그로 회전 · 염기쌍을 클릭하면 짝과 수소결합 수가 표시됩니다
+</div>
+
+<!-- 하단 중앙 캡슐 바 -->
+<div class="glass-panel bottom-control-bar">
+    <button class="control-capsule-btn" id="btn-play" type="button">▶ 복제 재생</button>
+    <button class="control-capsule-btn" id="btn-reset" type="button">↺ 초기화</button>
+    <button class="control-capsule-btn" id="btn-align" type="button">🧭 시점 정렬</button>
+</div>
+
+<!-- 우측 하단 전체화면 -->
+<div class="bottom-right-bar">
+    <button class="icon-btn" id="btn-fullscreen" title="전체화면" aria-label="전체화면">⛶</button>
+</div>
+
+<!-- 우측 조절 패널 -->
+<div class="side-ctrl-panel" id="side-ctrl">
+    <div class="panel-header">
+        <span class="panel-title">🧬 DNA 관찰 제어</span>
+        <button class="panel-help-btn" id="btn-guide" type="button" title="조작 안내" aria-label="조작 안내">?</button>
+    </div>
+
+    <div class="mode-tabs">
+        <button class="mode-tab active" id="tab-structure" data-tab="structure" type="button">
+            <span class="mt-ico">🧬</span><span class="mt-name">이중나선 구조</span>
+        </button>
+        <button class="mode-tab" id="tab-replication" data-tab="replication" type="button">
+            <span class="mt-ico">⚙️</span><span class="mt-name">복제 시뮬레이션</span>
+        </button>
+    </div>
+
+    <!-- 이중나선 구조 탭 -->
+    <div class="ctrl-block" id="view-structure">
+        <button class="sw-row" id="tg-rotate" type="button" aria-pressed="true">
+            <span class="sw-label">🔄 자동 회전</span>
+            <span class="sw-track"><span class="sw-knob"></span></span>
+        </button>
+        <div class="slider-row"><span class="sl-name">회전 속도</span><span class="sl-val" id="val-speed">보통</span></div>
+        <input type="range" class="range-slider" id="rng-speed" min="0" max="100" step="1" value="45" aria-label="회전 속도">
+
+        <button class="sw-row" id="tg-labels" type="button" aria-pressed="true">
+            <span class="sw-label">🏷️ 염기 라벨</span>
+            <span class="sw-track"><span class="sw-knob"></span></span>
+        </button>
+        <button class="sw-row" id="tg-bonds" type="button" aria-pressed="true">
+            <span class="sw-label">🔗 수소결합</span>
+            <span class="sw-track"><span class="sw-knob"></span></span>
+        </button>
+        <button class="sw-row" id="tg-backbone" type="button" aria-pressed="true">
+            <span class="sw-label">🧵 골격 튜브</span>
+            <span class="sw-track"><span class="sw-knob"></span></span>
+        </button>
+
+        <div class="legend-title">염기 구분</div>
+        <div class="legend-grid">
+            <div class="legend-chip"><span class="dot" style="background:#ff5a4d"></span>A 아데닌</div>
+            <div class="legend-chip"><span class="dot" style="background:#2f9bff"></span>T 티민</div>
+            <div class="legend-chip"><span class="dot" style="background:#22c55e"></span>G 구아닌</div>
+            <div class="legend-chip"><span class="dot" style="background:#f5c542"></span>C 사이토신</div>
+        </div>
+        <div class="legend-note">A–T는 수소결합 2개 · G–C는 3개로 짝을 이룹니다</div>
+
+        <div class="pair-info" id="pair-info">염기쌍을 클릭하면 어떤 염기끼리 몇 개의 수소결합으로 묶였는지 확인할 수 있습니다.</div>
+
+        <button class="act-btn primary" id="btn-start-rep" type="button">▶ 복제 시작하기</button>
+    </div>
+
+    <!-- 복제 시뮬레이션 탭 -->
+    <div class="ctrl-block" id="view-replication" style="display:none">
+        <div class="action-row">
+            <button class="act-btn" id="btn-prev" type="button">◀ 이전 단계</button>
+            <button class="act-btn primary" id="btn-next" type="button">다음 단계 ▶</button>
+        </div>
+        <div class="step-track" id="step-track">
+            <button class="step-seg active" data-step="1" type="button"><span class="sg-num">1</span>안정</button>
+            <button class="step-seg" data-step="2" type="button"><span class="sg-num">2</span>풀림</button>
+            <button class="step-seg" data-step="3" type="button"><span class="sg-num">3</span>노출</button>
+            <button class="step-seg" data-step="4" type="button"><span class="sg-num">4</span>합성</button>
+            <button class="step-seg" data-step="5" type="button"><span class="sg-num">5</span>완성</button>
+        </div>
+        <div class="slider-row"><span class="sl-name">복제 진행률</span><span class="sl-val" id="val-prog">0%</span></div>
+        <input type="range" class="range-slider" id="rng-prog" min="0" max="100" step="1" value="0" aria-label="복제 진행률">
+
+        <button class="sw-row" id="tg-enzymes" type="button" aria-pressed="true">
+            <span class="sw-label">🧪 효소 표시</span>
+            <span class="sw-track"><span class="sw-knob"></span></span>
+        </button>
+
+        <div class="step-box">
+            <div class="sb-title" id="step-title">1단계 · 안정된 이중나선</div>
+            <div class="sb-text" id="step-text">두 가닥이 나선으로 꼬여 있습니다. A는 T와 2개, G는 C와 3개의 수소결합으로 짝을 이룹니다.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    /* ============================================================
+       1. 상수 · 염기 서열
+       ============================================================ */
+    const SEQ = 'ATGCTTAGGCATCGATTAGCGT';           /* 22 bp */
+    const COMP = { A: 'T', T: 'A', G: 'C', C: 'G' };
+    const HB = { A: 2, T: 2, G: 3, C: 3 };
+    const HEX = { A: '#ff5a4d', T: '#2f9bff', G: '#22c55e', C: '#f5c542' };
+    const COL = { A: 0xff5a4d, T: 0x2f9bff, G: 0x22c55e, C: 0xf5c542 };
+
+    const COL_A = 0x38bdf8;      /* 원본 1가닥 · 하늘색 */
+    const COL_B = 0xa78bfa;      /* 원본 2가닥 · 보라색 */
+    const COL_NEW = 0x34d399;    /* 새로 합성된 가닥 · 민트색 */
+    const COL_HEL = 0xf59e0b;    /* 헬리케이스 */
+    const COL_POLL = 0xff4d94;   /* 중합효소(선도) */
+    const COL_POLR = 0x22d3ee;   /* 중합효소(지연) */
+
+    const CFG = {
+        N: SEQ.length,
+        rise: 0.68,
+        dTheta: Math.PI * 2 / 10,
+        radius: 3.05,
+        sep: 2.75,
+        inner: 0.52,
+        win: 4.2
+    };
+
+    const STEP_META = [
+        { short: '안정', name: '1단계 · 안정된 이중나선', text: '두 가닥이 나선으로 꼬여 있습니다. A는 T와 2개, G는 C와 3개의 수소결합으로 짝을 이룹니다.' },
+        { short: '풀림', name: '2단계 · 가닥 풀림', text: '헬리케이스가 수소결합을 끊으며 나선을 풀어 갑니다. Y자 모양의 복제 분기점이 생깁니다.' },
+        { short: '노출', name: '3단계 · 단일 가닥 노출', text: '풀린 두 가닥이 주형(본보기)으로 드러납니다. 이 서열을 읽고 짝이 되는 염기를 붙일 수 있습니다.' },
+        { short: '합성', name: '4단계 · 새 가닥 합성', text: 'DNA 중합효소가 주형에 맞는 뉴클레오타이드를 하나씩 붙입니다. 선도 가닥은 연속으로, 지연 가닥은 오카자키 조각으로 합성됩니다.' },
+        { short: '완성', name: '5단계 · 반보존적 복제 완료', text: '원래 가닥 1개와 새 가닥 1개가 짝을 이룬 똑같은 딸 DNA 2개가 완성됩니다.' }
+    ];
+    const STEP_TO_PROGRESS = [0, 0.12, 0.34, 0.64, 1];
+
+    /* ============================================================
+       2. 상태
+       ============================================================ */
+    const state = {
+        progress: 0,
+        target: 0,
+        playing: false,
+        step: 1,
+        tab: 'structure',
+        rotate: true,
+        speed: 0.45,
+        labels: true,
+        bonds: true,
+        backbone: true,
+        enzymes: true,
+        selected: -1
+    };
+
+    let scene, camera, renderer, controls;
+    let dnaGroup, enzymeGroup, nucleotideGroup, highlightRing;
+    let helicase, polymeraseL, polymeraseR;
+    let ambient, keyLight, fillLight, rimLight;
+
+    const pairs = [];
+    const pickMeshes = [];
+    const hbMaterials = [];
+    const nucs = [];
+    const baseLabelSprites = [];
+
+    let label5A, label3A, label5B, label3B;
+    let camAnim = null;
+    let userMoved = false;
+    let dirty = true;
+    let lastT = 0;
+    let timeAcc = 0;
+    let uiTick = 0;
+
+    const pointer = new THREE.Vector2();
+    const raycaster = new THREE.Raycaster();
+    let downPos = null;
+    let dragging = false;
+
+    const UP = new THREE.Vector3(0, 1, 0);
+    const _p1 = new THREE.Vector3();
+    const _p2 = new THREE.Vector3();
+    const _d = new THREE.Vector3();
+
+    const CYL = new THREE.CylinderGeometry(1, 1, 1, 10, 1, false);
+    const SPH = new THREE.SphereGeometry(1, 12, 10);
+
+    const clamp01 = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+    const lerp = function (a, b, t) { return a + (b - a) * t; };
+    const smooth01 = function (t) { t = clamp01(t); return t * t * (3 - 2 * t); };
+    const yOfIndex = function (i) { return ((CFG.N - 1) / 2 - i) * CFG.rise; };
+
+    /* ============================================================
+       3. 스프라이트 · 재질 유틸
+       ============================================================ */
+    function makePill(text, accent, big) {
+        const fs = big ? 46 : 40;
+        const padX = 26, padY = 16;
+        const meas = document.createElement('canvas').getContext('2d');
+        meas.font = 'bold ' + fs + 'px "SeoulNamsan", -apple-system, sans-serif';
+        const tw = Math.ceil(meas.measureText(text).width);
+        const W = tw + padX * 2;
+        const H = fs + padY * 2;
+        const cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        const g = cv.getContext('2d');
+        const r = H / 2;
+        g.beginPath();
+        g.moveTo(r, 2);
+        g.lineTo(W - r, 2);
+        g.quadraticCurveTo(W - 2, 2, W - 2, r);
+        g.quadraticCurveTo(W - 2, H - 2, W - r, H - 2);
+        g.lineTo(r, H - 2);
+        g.quadraticCurveTo(2, H - 2, 2, r);
+        g.quadraticCurveTo(2, 2, r, 2);
+        g.closePath();
+        g.fillStyle = 'rgba(12, 20, 36, 0.86)';
+        g.fill();
+        g.lineWidth = 4;
+        g.strokeStyle = accent || 'rgba(203, 213, 225, 0.9)';
+        g.stroke();
+
+        g.font = 'bold ' + fs + 'px "SeoulNamsan", -apple-system, sans-serif';
+        g.fillStyle = '#ffffff';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(text, W / 2, H / 2 + 2);
+
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+        const sp = new THREE.Sprite(mat);
+        const hWorld = big ? 0.62 : 0.5;
+        sp.scale.set(hWorld * (W / H), hWorld, 1);
+        sp.renderOrder = 30;
+        return sp;
+    }
+
+    const baseTextures = {};
+    function baseTexture(letter) {
+        if (baseTextures[letter]) return baseTextures[letter];
+        const S = 128;
+        const cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        const g = cv.getContext('2d');
+        g.beginPath();
+        g.arc(S / 2, S / 2, S * 0.44, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        g.fill();
+        g.lineWidth = 13;
+        g.strokeStyle = HEX[letter];
+        g.stroke();
+        g.font = 'bold 76px "SeoulNamsan", -apple-system, sans-serif';
+        g.fillStyle = HEX[letter];
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(letter, S / 2, S / 2 + 4);
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        baseTextures[letter] = tex;
+        return tex;
+    }
+
+    function makeBaseLabel(letter) {
+        const mat = new THREE.SpriteMaterial({
+            map: baseTexture(letter), transparent: true, depthWrite: false, depthTest: true
+        });
+        const sp = new THREE.Sprite(mat);
+        sp.scale.set(0.68, 0.68, 1);
+        sp.renderOrder = 12;
+        return sp;
+    }
+
+    function matStd(color, opts) {
+        return new THREE.MeshStandardMaterial(Object.assign({
+            color: color, roughness: 0.42, metalness: 0.06
+        }, opts || {}));
+    }
+
+    /* ============================================================
+       4. 기하 배치 유틸
+       ============================================================ */
+    function setNode(mesh, x, y, z, s) {
+        mesh.position.set(x, y, z);
+        mesh.scale.setScalar(s);
+    }
+
+    function setRod(mesh, x1, y1, z1, x2, y2, z2, r) {
+        _p1.set(x1, y1, z1);
+        _p2.set(x2, y2, z2);
+        _d.subVectors(_p2, _p1);
+        const len = _d.length();
+        mesh.position.set((x1 + x2) / 2, (y1 + y2) / 2, (z1 + z2) / 2);
+        if (len < 1e-5) {
+            mesh.scale.set(r, 0.0001, r);
+            return;
+        }
+        mesh.quaternion.setFromUnitVectors(UP, _d.divideScalar(len));
+        mesh.scale.set(r, len, r);
+    }
+
+    /* ============================================================
+       5. DNA 3D 구조 제작
+       ============================================================ */
+    function buildDNA() {
+        dnaGroup = new THREE.Group();
+        scene.add(dnaGroup);
+
+        const N = CFG.N;
+        const R = CFG.radius;
+        const T = CFG.inner;
+
+        const matBackA = matStd(COL_A, { emissive: COL_A, emissiveIntensity: 0.2, roughness: 0.3 });
+        const matBackB = matStd(COL_B, { emissive: COL_B, emissiveIntensity: 0.2, roughness: 0.3 });
+        const matBackN = matStd(COL_NEW, { emissive: COL_NEW, emissiveIntensity: 0.25, roughness: 0.34 });
+
+        for (let i = 0; i < N; i++) {
+            const theta = i * CFG.dTheta;
+            const y = yOfIndex(i);
+            const a = SEQ.charAt(i);
+            const b = COMP[a];
+
+            const pr = {
+                i: i, y: y, theta: theta,
+                ct: Math.cos(theta), st: Math.sin(theta),
+                a: a, b: b, hb: HB[a],
+                s: 0, aLead: 0, aLag: 0
+            };
+
+            pr.nodeA = new THREE.Mesh(SPH, matBackA);
+            pr.nodeB = new THREE.Mesh(SPH, matBackB);
+            pr.nodeNA = new THREE.Mesh(SPH, matBackN);
+            pr.nodeNB = new THREE.Mesh(SPH, matBackN);
+
+            pr.baseA = new THREE.Mesh(CYL, matStd(COL[a], { emissive: COL[a], emissiveIntensity: 0.18, roughness: 0.36 }));
+            pr.baseB = new THREE.Mesh(CYL, matStd(COL[b], { emissive: COL[b], emissiveIntensity: 0.18, roughness: 0.36 }));
+            pr.baseNA = new THREE.Mesh(CYL, matStd(COL[b], {
+                emissive: COL_NEW, emissiveIntensity: 0.32, roughness: 0.36, transparent: true, opacity: 0
+            }));
+            pr.baseNB = new THREE.Mesh(CYL, matStd(COL[a], {
+                emissive: COL_NEW, emissiveIntensity: 0.32, roughness: 0.36, transparent: true, opacity: 0
+            }));
+
+            pr.baseA.userData.pair = i;
+            pr.baseB.userData.pair = i;
+            pr.baseNA.userData.pair = i;
+            pr.baseNB.userData.pair = i;
+            pickMeshes.push(pr.baseA, pr.baseB);
+
+            pr.labelA = makeBaseLabel(a);
+            pr.labelB = makeBaseLabel(b);
+            baseLabelSprites.push(pr.labelA, pr.labelB);
+
+            /* 수소결합 점선 */
+            const matP = new THREE.MeshBasicMaterial({ color: 0x8fa3bb, transparent: true, opacity: 1 });
+            const matL = new THREE.MeshBasicMaterial({ color: 0x8fa3bb, transparent: true, opacity: 0 });
+            const matR = new THREE.MeshBasicMaterial({ color: 0x8fa3bb, transparent: true, opacity: 0 });
+            hbMaterials.push(matP, matL, matR);
+            pr.hbParent = [];
+            pr.hbLeft = [];
+            pr.hbRight = [];
+            const bondCount = HB[a];
+            for (let k = 0; k < bondCount * 2; k++) {
+                pr.hbParent.push(new THREE.Mesh(CYL, matP));
+                pr.hbLeft.push(new THREE.Mesh(CYL, matL));
+                pr.hbRight.push(new THREE.Mesh(CYL, matR));
+            }
+
+            pr.nodeA.visible = pr.nodeB.visible = true;
+            pr.nodeNA.visible = pr.nodeNB.visible = false;
+            pr.baseNA.visible = pr.baseNB.visible = false;
+
+            dnaGroup.add(pr.nodeA, pr.nodeB, pr.nodeNA, pr.nodeNB);
+            dnaGroup.add(pr.baseA, pr.baseB, pr.baseNA, pr.baseNB);
+            dnaGroup.add(pr.labelA, pr.labelB);
+            for (let k = 0; k < pr.hbParent.length; k++) {
+                pr.hbParent[k].visible = false;
+                pr.hbLeft[k].visible = false;
+                pr.hbRight[k].visible = false;
+                dnaGroup.add(pr.hbParent[k], pr.hbLeft[k], pr.hbRight[k]);
+            }
+
+            pairs.push(pr);
+        }
+
+        /* 골격 연결 막대 */
+        for (let i = 0; i < N - 1; i++) {
+            const pr = pairs[i];
+            pr.rodA = new THREE.Mesh(CYL, matBackA);
+            pr.rodB = new THREE.Mesh(CYL, matBackB);
+            pr.rodNA = new THREE.Mesh(CYL, matBackN);
+            pr.rodNB = new THREE.Mesh(CYL, matBackN);
+            pr.rodNA.visible = false;
+            pr.rodNB.visible = false;
+            dnaGroup.add(pr.rodA, pr.rodB, pr.rodNA, pr.rodNB);
+        }
+
+        /* 5' / 3' 말단 표시 */
+        label5A = makePill("5′", '#7dd3fc');
+        label3A = makePill("3′", '#7dd3fc');
+        label5B = makePill("5′", '#c4b5fd');
+        label3B = makePill("3′", '#c4b5fd');
+        dnaGroup.add(label5A, label3A, label5B, label3B);
+
+        /* 선택 강조 링 */
+        highlightRing = new THREE.Mesh(
+            new THREE.TorusGeometry(3.75, 0.055, 8, 64),
+            new THREE.MeshBasicMaterial({ color: 0xff2d55, transparent: true, opacity: 0.9 })
+        );
+        highlightRing.rotation.x = Math.PI / 2;
+        highlightRing.visible = false;
+        dnaGroup.add(highlightRing);
+    }
+
+    /* ============================================================
+       6. 효소 · 뉴클레오타이드
+       ============================================================ */
+    function buildEnzymes() {
+        enzymeGroup = new THREE.Group();
+        scene.add(enzymeGroup);
+
+        /* 헬리케이스: 이중나선을 감싸고 풀어내는 고리 단백질 */
+        helicase = new THREE.Group();
+        const helMat = matStd(COL_HEL, { emissive: COL_HEL, emissiveIntensity: 0.4, roughness: 0.35, metalness: 0.25 });
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(3.42, 0.2, 10, 56), helMat);
+        ring.rotation.x = Math.PI / 2;
+        helicase.add(ring);
+
+        for (let k = 0; k < 4; k++) {
+            const ang = k / 4 * Math.PI * 2 + Math.PI / 4;
+            const bead = new THREE.Mesh(SPH, helMat);
+            bead.scale.setScalar(0.34);
+            bead.position.set(Math.cos(ang) * 3.42, 0, Math.sin(ang) * 3.42);
+            helicase.add(bead);
+        }
+        for (let k = 0; k < 2; k++) {
+            const wedge = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.5, 12), helMat);
+            wedge.position.set(k === 0 ? -1.5 : 1.5, -0.85, 0);
+            wedge.rotation.z = k === 0 ? 0.42 : -0.42;
+            helicase.add(wedge);
+        }
+        const hLabel = makePill('헬리케이스', '#fbbf24');
+        hLabel.position.set(0, 1.45, 0);
+        helicase.add(hLabel);
+        helicase.visible = false;
+        enzymeGroup.add(helicase);
+
+        polymeraseL = makePolymerase(COL_POLL, 'DNA 중합효소 · 선도 가닥', '#ff8fb8');
+        polymeraseR = makePolymerase(COL_POLR, 'DNA 중합효소 · 지연 가닥', '#67e8f9');
+        enzymeGroup.add(polymeraseL, polymeraseR);
+
+        /* 세포질 속 상보적 뉴클레오타이드 */
+        nucleotideGroup = new THREE.Group();
+        const keys = ['A', 'T', 'G', 'C'];
+        for (let i = 0; i < 20; i++) {
+            const letter = keys[i % 4];
+            const m = new THREE.Mesh(SPH, matStd(COL[letter], {
+                emissive: COL[letter], emissiveIntensity: 0.45, roughness: 0.4, transparent: true, opacity: 0.82
+            }));
+            m.scale.setScalar(0.15 + (i % 3) * 0.035);
+            m.userData.ang = i * 2.399963;
+            m.userData.rad = 6.4 + (i % 5) * 0.85;
+            m.userData.yy = -6.4 + (i / 19) * 12.8;
+            m.userData.ph = i * 0.73;
+            nucleotideGroup.add(m);
+            nucs.push(m);
+        }
+        nucleotideGroup.visible = false;
+        scene.add(nucleotideGroup);
+    }
+
+    function makePolymerase(color, label, accent) {
+        const g = new THREE.Group();
+        const mat = matStd(color, { emissive: color, emissiveIntensity: 0.38, roughness: 0.38, metalness: 0.15 });
+        const clamp = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.22, 10, 56, Math.PI * 1.42), mat);
+        clamp.rotation.x = Math.PI / 2;
+        clamp.rotation.z = -0.55;
+        g.add(clamp);
+        const core = new THREE.Mesh(SPH, mat);
+        core.scale.set(0.85, 0.7, 0.85);
+        g.add(core);
+        const lb = makePill(label, accent);
+        lb.position.set(0, 1.15, 0);
+        g.add(lb);
+        g.visible = false;
+        return g;
+    }
+
+    /* ============================================================
+       7. 장면 초기화
+       ============================================================ */
+    function init() {
+        const container = document.getElementById('canvas-container');
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
+        camera.position.set(0, 3.5, 26);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.rotateSpeed = 0.8;
+        controls.zoomSpeed = 0.85;
+        controls.panSpeed = 0.9;
+        controls.minDistance = 5;
+        controls.maxDistance = 90;
+        controls.target.set(0, 0, 0);
+        controls.addEventListener('start', function () { camAnim = null; userMoved = true; });
+
+        ambient = new THREE.HemisphereLight(0xffffff, 0x94a3b8, 0.95);
+        scene.add(ambient);
+        keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        keyLight.position.set(8, 14, 10);
+        scene.add(keyLight);
+        fillLight = new THREE.DirectionalLight(0x93c5fd, 0.5);
+        fillLight.position.set(-10, -6, -8);
+        scene.add(fillLight);
+        rimLight = new THREE.DirectionalLight(0xffffff, 0.35);
+        rimLight.position.set(0, 0, -12);
+        scene.add(rimLight);
+
+        buildDNA();
+        buildEnzymes();
+
+        fitView(false);
+        bindEvents();
+        syncUI();
+        updateDNA();
+        requestAnimationFrame(animate);
+    }
+
+    /* ============================================================
+       8. 진행률 → 단계 상태
+       ============================================================ */
+    function forkAt(p) {
+        const N = CFG.N;
+        if (p <= 0) return 0;
+        if (p < 0.24) return (p / 0.24) * 0.30 * N;
+        if (p < 0.44) return (0.30 + (p - 0.24) / 0.20 * 0.25) * N;
+        if (p < 0.90) return (0.55 + (p - 0.44) / 0.46 * 0.45) * N;
+        return N;
+    }
+
+    function synthFrontAt(p) {
+        const N = CFG.N;
+        if (p < 0.44) return 0;
+        return ((p - 0.44) / 0.56) * (N + 2);
+    }
+
+    function stepOf(p) {
+        if (p < 0.04) return 1;
+        if (p < 0.24) return 2;
+        if (p < 0.44) return 3;
+        if (p < 0.90) return 4;
+        return 5;
+    }
+
+    function gapMultiplier(p) {
+        return 1 + 0.38 * smooth01((p - 0.90) / 0.10);
+    }
+
+    /* ============================================================
+       9. DNA 상태 반영
+       ============================================================ */
+    function updateDNA() {
+        const p = state.progress;
+        const u = forkAt(p);
+        const front = synthFrontAt(p);
+        const gapMul = gapMultiplier(p);
+        const N = CFG.N;
+        const R = CFG.radius;
+        const T = CFG.inner;
+
+        for (let i = 0; i < N; i++) {
+            const pr = pairs[i];
+            const s = clamp01((u - i) / CFG.win);
+            pr.s = s;
+            const off = CFG.sep * s * gapMul;
+            const ct = pr.ct, st = pr.st, y = pr.y;
+
+            /* 원본 A 가닥 (왼쪽 딸 DNA의 주형) */
+            const ax = R * ct - off, az = R * st;
+            const atx = T * ct - off, atz = T * st;
+            /* 원본 B 가닥 (오른쪽 딸 DNA의 주형) */
+            const bx = -R * ct + off, bz = -R * st;
+            const btx = -T * ct + off, btz = -T * st;
+
+            setNode(pr.nodeA, ax, y, az, 0.3);
+            setNode(pr.nodeB, bx, y, bz, 0.3);
+            setRod(pr.baseA, ax, y, az, atx, y, atz, 0.175);
+            setRod(pr.baseB, bx, y, bz, btx, y, btz, 0.175);
+
+            /* 라벨 */
+            pr.labelA.position.set(1.88 * ct - off, y + 0.36, 1.88 * st);
+            pr.labelB.position.set(-1.88 * ct + off, y + 0.36, -1.88 * st);
+
+            /* 새 가닥 합성 정도 */
+            const aLead = clamp01((front - i - 1.0) / 1.5);
+            const chunk = Math.floor(i / 4);
+            const lagThr = chunk * 4 + 2.0;
+            const aLag = clamp01((front - lagThr - (i - chunk * 4) * 0.28) / 1.2);
+            pr.aLead = aLead;
+            pr.aLag = aLag;
+
+            /* 새 가닥 (A 주형과 짝) */
+            const nax = -R * ct - off, naz = -R * st;
+            const natx = -T * ct - off, natz = -T * st;
+            setNode(pr.nodeNA, nax, y, naz, 0.24);
+            setRod(pr.baseNA, nax, y, naz, natx, y, natz, 0.15);
+            pr.baseNA.material.opacity = aLead;
+
+            /* 새 가닥 (B 주형과 짝) */
+            const nbx = R * ct + off, nbz = R * st;
+            const nbtx = T * ct + off, nbtz = T * st;
+            setNode(pr.nodeNB, nbx, y, nbz, 0.24);
+            setRod(pr.baseNB, nbx, y, nbz, nbtx, y, nbtz, 0.15);
+            pr.baseNB.material.opacity = aLag;
+
+            pr.nodeNA.visible = state.backbone && aLead > 0.05;
+            pr.nodeNB.visible = state.backbone && aLag > 0.05;
+            pr.baseNA.visible = aLead > 0.03;
+            pr.baseNB.visible = aLag > 0.03;
+            pr.nodeA.visible = state.backbone;
+            pr.nodeB.visible = state.backbone;
+            pr.baseA.visible = true;
+            pr.baseB.visible = true;
+            pr.labelA.visible = state.labels;
+            pr.labelB.visible = state.labels;
+
+            /* 수소결합: 부모(이중나선) */
+            const perpX = -st, perpZ = ct;
+            const alphaParent = 1 - smooth01((s - 0.08) / 0.75);
+            setBonds(pr.hbParent, atx, y, atz, btx, y, btz, pr.hb, perpX, perpZ,
+                state.bonds && s < 0.99 && alphaParent > 0.02, alphaParent);
+
+            /* 수소결합: 왼쪽 딸 DNA (A 주형 ↔ 새 염기) */
+            const alphaL = aLead * smooth01(s * 1.3);
+            setBonds(pr.hbLeft, atx, y, atz, natx, y, natz, pr.hb, perpX, perpZ,
+                state.bonds && aLead > 0.03, alphaL);
+
+            /* 수소결합: 오른쪽 딸 DNA (B 주형 ↔ 새 염기) */
+            const alphaR = aLag * smooth01(s * 1.3);
+            setBonds(pr.hbRight, btx, y, btz, nbtx, y, nbtz, pr.hb, perpX, perpZ,
+                state.bonds && aLag > 0.03, alphaR);
+        }
+
+        /* 골격 연결 막대 */
+        for (let i = 0; i < N - 1; i++) {
+            const a = pairs[i], b = pairs[i + 1];
+            if (!a.rodA) continue;
+
+            const ax1 = R * a.ct - CFG.sep * a.s * gapMul, az1 = R * a.st;
+            const bx1 = -R * a.ct + CFG.sep * a.s * gapMul, bz1 = -R * a.st;
+            const ax2 = R * b.ct - CFG.sep * b.s * gapMul, az2 = R * b.st;
+            const bx2 = -R * b.ct + CFG.sep * b.s * gapMul, bz2 = -R * b.st;
+
+            setRod(a.rodA, ax1, a.y, az1, ax2, b.y, az2, 0.12);
+            setRod(a.rodB, bx1, a.y, bz1, bx2, b.y, bz2, 0.12);
+            a.rodA.visible = state.backbone;
+            a.rodB.visible = state.backbone;
+
+            const nax1 = -R * a.ct - CFG.sep * a.s * gapMul, naz1 = -R * a.st;
+            const nbx1 = R * a.ct + CFG.sep * a.s * gapMul, nbz1 = R * a.st;
+            const nax2 = -R * b.ct - CFG.sep * b.s * gapMul, naz2 = -R * b.st;
+            const nbx2 = R * b.ct + CFG.sep * b.s * gapMul, nbz2 = R * b.st;
+
+            setRod(a.rodNA, nax1, a.y, naz1, nax2, b.y, naz2, 0.1);
+            setRod(a.rodNB, nbx1, a.y, nbz1, nbx2, b.y, nbz2, 0.1);
+            a.rodNA.visible = state.backbone && a.aLead > 0.1 && b.aLead > 0.1;
+            /* 지연 가닥은 오카자키 조각 사이에 틈을 남긴다 */
+            a.rodNB.visible = state.backbone && a.aLag > 0.25 && b.aLag > 0.25 && (i % 4 !== 3);
+        }
+
+        /* 5' / 3' 말단 (반평행 구조) */
+        const p0 = pairs[0], pN = pairs[N - 1];
+        const off0 = CFG.sep * p0.s * gapMul;
+        const offN = CFG.sep * pN.s * gapMul;
+        label5A.position.set(R * p0.ct - off0 + 1.05, p0.y + 0.52, R * p0.st + 0.4);
+        label3B.position.set(-R * p0.ct + off0 - 1.05, p0.y + 0.52, -R * p0.st - 0.4);
+        label3A.position.set(R * pN.ct - offN + 1.05, pN.y - 0.52, R * pN.st + 0.4);
+        label5B.position.set(-R * pN.ct + offN - 1.05, pN.y - 0.52, -R * pN.st - 0.4);
+
+        /* 선택 강조 */
+        if (state.selected >= 0 && state.selected < N) {
+            const sel = pairs[state.selected];
+            highlightRing.visible = true;
+            highlightRing.position.set(0, sel.y, 0);
+            const pulse = 1 + Math.sin(timeAcc * 3) * 0.02;
+            highlightRing.scale.setScalar(pulse);
+        } else {
+            highlightRing.visible = false;
+        }
+    }
+
+    function setBonds(list, x1, y1, z1, x2, y2, z2, count, perpX, perpZ, on, alpha) {
+        const offs = count >= 3 ? [-0.17, 0, 0.17] : [-0.13, 0.13];
+        let k = 0;
+        for (let b = 0; b < count; b++) {
+            const o = offs[b];
+            const sx1 = x1 + perpX * o, sz1 = z1 + perpZ * o;
+            const sx2 = x2 + perpX * o, sz2 = z2 + perpZ * o;
+            for (let d = 0; d < 2; d++) {
+                const t1 = 0.12 + d * 0.42;
+                const t2 = t1 + 0.24;
+                const m = list[k++];
+                if (!m) continue;
+                setRod(m,
+                    lerp(sx1, sx2, t1), y1, lerp(sz1, sz2, t1),
+                    lerp(sx1, sx2, t2), y2, lerp(sz1, sz2, t2),
+                    0.052);
+                m.visible = !!(on && alpha > 0.02);
+                m.material.opacity = alpha;
+            }
+        }
+    }
+
+    /* ============================================================
+       10. 효소 위치
+       ============================================================ */
+    function updateEnzymes() {
+        const p = state.progress;
+        const u = forkAt(p);
+        const front = synthFrontAt(p);
+        const gapMul = gapMultiplier(p);
+        const rot = dnaGroup.rotation.y;
+        const cs = Math.cos(rot);
+        const sn = Math.sin(rot);
+
+        const showEnz = state.enzymes && p > 0.006 && p < 0.999;
+        helicase.visible = showEnz;
+
+        if (showEnz) {
+            const fi = Math.max(0, Math.min(CFG.N - 0.5, u - 0.5));
+            helicase.position.set(0, yOfIndex(fi), 0);
+            helicase.rotation.y = rot;
+        }
+
+        const leadIdx = Math.max(0, Math.min(CFG.N - 0.6, front - 0.6));
+        const lagIdx = Math.max(0, Math.min(CFG.N - 0.6, front - 3.4));
+
+        const showL = showEnz && front > 1.4 && front < CFG.N + 1.2;
+        const showR = showEnz && front > 4.2 && front < CFG.N + 1.2;
+
+        polymeraseL.visible = showL;
+        polymeraseR.visible = showR;
+
+        if (showL) {
+            const sL = clamp01((u - leadIdx) / CFG.win);
+            const lx = -CFG.sep * sL * gapMul;
+            polymeraseL.position.set(lx * cs, yOfIndex(leadIdx), -lx * sn);
+            polymeraseL.rotation.y = rot;
+        }
+        if (showR) {
+            const sR = clamp01((u - lagIdx) / CFG.win);
+            const rx = CFG.sep * sR * gapMul;
+            polymeraseR.position.set(rx * cs, yOfIndex(lagIdx), -rx * sn);
+            polymeraseR.rotation.y = rot;
+        }
+
+        nucleotideGroup.visible = p > 0.44 && p < 0.995;
+    }
+
+    /* ============================================================
+       11. UI 동기화
+       ============================================================ */
+    const $ = function (id) { return document.getElementById(id); };
+
+    function syncUI() {
+        const p = state.progress;
+        const step = stepOf(p);
+        if (step !== state.step) state.step = step;
+
+        const meta = STEP_META[step - 1];
+        $('card-step').textContent = step + '단계 · ' + meta.short;
+        $('card-prog').textContent = Math.round(p * 100) + '%';
+        $('card-bp').textContent = String(CFG.N);
+        $('val-prog').textContent = Math.round(p * 100) + '%';
+        $('rng-prog').value = String(Math.round(p * 100));
+        $('step-title').textContent = meta.name;
+        $('step-text').textContent = meta.text;
+
+        const segs = document.querySelectorAll('.step-seg');
+        for (let i = 0; i < segs.length; i++) {
+            segs[i].classList.toggle('active', i === step - 1);
+        }
+
+        $('btn-play').textContent = state.playing ? '⏸ 일시정지' : '▶ 복제 재생';
+        $('btn-play').classList.toggle('playing', state.playing);
+        $('btn-prev').disabled = step <= 1;
+        $('btn-next').disabled = step >= 5;
+    }
+
+    /* ============================================================
+       12. 카메라
+       ============================================================ */
+    function fitView(animated) {
+        const aspect = window.innerWidth / window.innerHeight;
+        const vFov = camera.fov * Math.PI / 180;
+        const halfH = 8.4;
+        const halfW = 7.4;
+        const distV = halfH / Math.tan(vFov / 2);
+        const distH = halfW / (Math.tan(vFov / 2) * Math.max(0.42, aspect));
+        const dist = Math.max(distV, distH) * 1.02;
+        const dir = new THREE.Vector3(0.32, 0.18, 1).normalize();
+        const tgt = new THREE.Vector3(0, 0.2, 0);
+        const pos = tgt.clone().addScaledVector(dir, dist);
+
+        if (animated) {
+            camAnim = {
+                start: performance.now(), dur: 750,
+                p0: camera.position.clone(), p1: pos,
+                t0: controls.target.clone(), t1: tgt
+            };
+        } else {
+            camera.position.copy(pos);
+            controls.target.copy(tgt);
+            controls.update();
+        }
+    }
+
+    /* ============================================================
+       13. 이벤트
+       ============================================================ */
+    function setToggle(el, on) {
+        el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+
+    function selectPair(i) {
+        state.selected = i;
+        if (i < 0) {
+            $('pair-info').innerHTML = '염기쌍을 클릭하면 어떤 염기끼리 몇 개의 수소결합으로 묶였는지 확인할 수 있습니다.';
+            return;
+        }
+        const pr = pairs[i];
+        const nameA = pr.a === 'A' ? '아데닌' : pr.a === 'T' ? '티민' : pr.a === 'G' ? '구아닌' : '사이토신';
+        const nameB = pr.b === 'A' ? '아데닌' : pr.b === 'T' ? '티민' : pr.b === 'G' ? '구아닌' : '사이토신';
+        $('pair-info').innerHTML = '<b>' + (i + 1) + '번째 염기쌍</b> · ' + pr.a + '–' + pr.b +
+            ' (' + nameA + '–' + nameB + ')<br>수소결합 <b>' + pr.hb + '개</b>' +
+            (pr.hb === 2 ? ' · A–T는 2개로 결합합니다' : ' · G–C는 3개로 결합합니다');
+        dirty = true;
+    }
+
+    function pickAt(clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(pickMeshes, false);
+        return hits.length ? hits[0].object.userData.pair : -1;
+    }
+
+    function setTab(tab) {
+        state.tab = tab;
+        $('tab-structure').classList.toggle('active', tab === 'structure');
+        $('tab-replication').classList.toggle('active', tab === 'replication');
+        $('view-structure').style.display = tab === 'structure' ? 'flex' : 'none';
+        $('view-replication').style.display = tab === 'replication' ? 'flex' : 'none';
+    }
+
+    function gotoStep(n) {
+        n = Math.max(1, Math.min(5, n));
+        state.playing = false;
+        state.target = STEP_TO_PROGRESS[n - 1];
+        if (state.target < state.progress) {
+            state.progress = state.target;
+            dirty = true;
+        }
+        syncUI();
+    }
+
+    function togglePlay() {
+        if (state.playing) {
+            state.playing = false;
+        } else {
+            if (state.progress >= 0.999) {
+                state.progress = 0;
+                state.target = 0;
+                dirty = true;
+            }
+            state.playing = true;
+            setTab('replication');
+        }
+        syncUI();
+    }
+
+    function bindEvents() {
+        /* 탭 */
+        $('tab-structure').addEventListener('click', function () { setTab('structure'); });
+        $('tab-replication').addEventListener('click', function () { setTab('replication'); });
+
+        /* 복제 시작 */
+        $('btn-start-rep').addEventListener('click', function () {
+            setTab('replication');
+            state.progress = 0;
+            state.target = 0;
+            state.playing = true;
+            syncUI();
+        });
+
+        /* 재생 */
+        $('btn-play').addEventListener('click', togglePlay);
+
+        /* 초기화 */
+        $('btn-reset').addEventListener('click', function () {
+            state.playing = false;
+            state.progress = 0;
+            state.target = 0;
+            state.selected = -1;
+            selectPair(-1);
+            state.rotate = true;
+            setToggle($('tg-rotate'), true);
+            state.labels = true;
+            setToggle($('tg-labels'), true);
+            state.bonds = true;
+            setToggle($('tg-bonds'), true);
+            state.backbone = true;
+            setToggle($('tg-backbone'), true);
+            state.enzymes = true;
+            setToggle($('tg-enzymes'), true);
+            dirty = true;
+            syncUI();
+            fitView(true);
+        });
+
+        /* 시점 정렬 */
+        $('btn-align').addEventListener('click', function () { fitView(true); });
+
+        /* 이전 / 다음 */
+        $('btn-prev').addEventListener('click', function () { gotoStep(stepOf(state.target) - 1); });
+        $('btn-next').addEventListener('click', function () { gotoStep(stepOf(state.target) + 1); });
+
+        /* 단계 트랙 */
+        const segs = document.querySelectorAll('.step-seg');
+        for (let i = 0; i < segs.length; i++) {
+            segs[i].addEventListener('click', function () {
+                gotoStep(parseInt(this.getAttribute('data-step'), 10));
+            });
+        }
+
+        /* 진행률 슬라이더 */
+        $('rng-prog').addEventListener('input', function () {
+            state.playing = false;
+            state.progress = parseInt(this.value, 10) / 100;
+            state.target = state.progress;
+            dirty = true;
+            syncUI();
+        });
+
+        /* 회전 속도 */
+        $('rng-speed').addEventListener('input', function () {
+            const v = parseInt(this.value, 10);
+            state.speed = v / 100;
+            const txt = v === 0 ? '정지' : v < 30 ? '느리게' : v < 65 ? '보통' : v < 88 ? '빠르게' : '매우 빠르게';
+            $('val-speed').textContent = txt;
+        });
+
+        /* 토글 */
+        function bindToggle(id, key) {
+            const el = $(id);
+            el.addEventListener('click', function () {
+                state[key] = !state[key];
+                setToggle(el, state[key]);
+                dirty = true;
+            });
+        }
+        bindToggle('tg-rotate', 'rotate');
+        bindToggle('tg-labels', 'labels');
+        bindToggle('tg-bonds', 'bonds');
+        bindToggle('tg-backbone', 'backbone');
+        bindToggle('tg-enzymes', 'enzymes');
+
+        /* 안내 */
+        $('btn-guide').addEventListener('click', function () {
+            const tip = $('guide-tooltip');
+            tip.classList.toggle('off');
+            setTimeout(function () { tip.classList.remove('off'); }, 4200);
+        });
+
+        /* 전체화면 */
+        $('btn-fullscreen').addEventListener('click', function () {
+            if (!document.fullscreenElement) {
+                const p = document.documentElement.requestFullscreen
+                    ? document.documentElement.requestFullscreen()
+                    : document.documentElement.webkitRequestFullscreen();
+                if (p && p.catch) p.catch(function () {});
+            } else {
+                const p = document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen();
+                if (p && p.catch) p.catch(function () {});
+            }
+        });
+
+        /* 클릭 · 드래그 */
+        const el = renderer.domElement;
+        el.addEventListener('pointerdown', function (e) {
+            downPos = { x: e.clientX, y: e.clientY };
+            dragging = false;
+        });
+        el.addEventListener('pointermove', function (e) {
+            if (downPos) {
+                const dx = e.clientX - downPos.x;
+                const dy = e.clientY - downPos.y;
+                if (dx * dx + dy * dy > 64) dragging = true;
+            }
+        });
+        el.addEventListener('pointerup', function (e) {
+            if (!dragging && downPos) {
+                selectPair(pickAt(e.clientX, e.clientY));
+            }
+            downPos = null;
+            dragging = false;
+        });
+        el.addEventListener('pointerleave', function () {
+            downPos = null;
+            dragging = false;
+        });
+
+        /* 창 크기 */
+        let lastW = window.innerWidth, lastH = window.innerHeight;
+        window.addEventListener('resize', function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (!userMoved || Math.abs(window.innerWidth - lastW) > 120 || Math.abs(window.innerHeight - lastH) > 120) {
+                fitView(false);
+            }
+            lastW = window.innerWidth;
+            lastH = window.innerHeight;
+        });
+    }
+
+    /* ============================================================
+       14. 테마
+       ============================================================ */
+    function applyTheme(isDark, save) {
+        document.body.classList.toggle('dark-mode', isDark);
+        document.body.classList.toggle('light-mode', !isDark);
+        const btn = $('theme-toggle');
+        if (btn) {
+            btn.textContent = isDark ? '☀️' : '🌙';
+            btn.setAttribute('title', isDark ? '주간 모드로 전환' : '야간 모드로 전환');
+            btn.setAttribute('aria-label', isDark ? '주간 모드로 전환' : '야간 모드로 전환');
+        }
+        if (ambient) ambient.intensity = isDark ? 0.55 : 0.95;
+        if (keyLight) keyLight.intensity = isDark ? 0.7 : 0.85;
+        if (fillLight) fillLight.intensity = isDark ? 0.35 : 0.5;
+
+        const hbColor = isDark ? 0xcbd5e1 : 0x8fa3bb;
+        for (let i = 0; i < hbMaterials.length; i++) hbMaterials[i].color.setHex(hbColor);
+
+        if (save) {
+            try { localStorage.setItem('svlLabTheme', isDark ? 'dark' : 'light'); } catch (e) {}
+        }
+    }
+
+    $('theme-toggle').addEventListener('click', function () {
+        applyTheme(!document.body.classList.contains('dark-mode'), true);
+    });
+
+    /* ============================================================
+       15. 애니메이션
+       ============================================================ */
+    function animate(t) {
+        requestAnimationFrame(animate);
+        const dt = Math.min(0.05, (t - lastT) / 1000 || 0);
+        lastT = t;
+        timeAcc += dt;
+
+        /* 진행률 */
+        if (state.playing) {
+            state.progress = Math.min(1, state.progress + dt * 0.062);
+            state.target = state.progress;
+            dirty = true;
+            uiTick += dt;
+            if (uiTick > 0.1) { uiTick = 0; syncUI(); }
+            if (state.progress >= 1) {
+                state.playing = false;
+                syncUI();
+            }
+        } else if (Math.abs(state.target - state.progress) > 0.0006) {
+            const k = 1 - Math.pow(0.0015, dt);
+            state.progress = lerp(state.progress, state.target, k);
+            if (Math.abs(state.target - state.progress) < 0.0008) state.progress = state.target;
+            dirty = true;
+            uiTick += dt;
+            if (uiTick > 0.08) { uiTick = 0; syncUI(); }
+        }
+
+        /* 자동 회전 */
+        if (state.rotate && state.speed > 0.001) {
+            dnaGroup.rotation.y += dt * 0.55 * state.speed;
+            dirty = true;
+        }
+
+        /* 카메라 애니메이션 */
+        if (camAnim) {
+            const k = Math.min(1, (performance.now() - camAnim.start) / camAnim.dur);
+            const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+            camera.position.lerpVectors(camAnim.p0, camAnim.p1, e);
+            controls.target.lerpVectors(camAnim.t0, camAnim.t1, e);
+            if (k >= 1) camAnim = null;
+        }
+
+        /* 효소 숨쉬기 */
+        if (helicase && helicase.visible) {
+            helicase.children[0].rotation.z += dt * 1.2;
+        }
+        if (polymeraseL && polymeraseL.visible) polymeraseL.scale.setScalar(1 + Math.sin(timeAcc * 4) * 0.03);
+        if (polymeraseR && polymeraseR.visible) polymeraseR.scale.setScalar(1 + Math.sin(timeAcc * 4 + 1.4) * 0.03);
+
+        /* 뉴클레오타이드 부유 */
+        if (nucleotideGroup && nucleotideGroup.visible) {
+            for (let i = 0; i < nucs.length; i++) {
+                const m = nucs[i];
+                const ang = m.userData.ang + timeAcc * 0.09;
+                m.position.set(Math.cos(ang) * m.userData.rad,
+                    m.userData.yy + Math.sin(timeAcc * 0.7 + m.userData.ph) * 0.3,
+                    Math.sin(ang) * m.userData.rad);
+            }
+        }
+
+        if (dirty) {
+            updateDNA();
+            dirty = false;
+        }
+        updateEnzymes();
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* ============================================================
+       16. 시작
+       ============================================================ */
+    try {
+        const saved = localStorage.getItem('svlLabTheme');
+        applyTheme(saved === 'dark', false);
+    } catch (e) {
+        applyTheme(false, false);
+    }
+
+    init();
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () {
+            /* 웹폰트 준비 후 라벨 텍스처를 다시 그린다 */
+            for (let key in baseTextures) {
+                if (baseTextures[key]) baseTextures[key].needsUpdate = true;
+            }
+        }).catch(function () {});
+    }
+})();
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
