@@ -510,8 +510,14 @@
         return declinationRad(dayToTheta(day)) / DEG;
     }
     // 남중고도 h = 90° − 위도 + 적위
+    //  (적위가 위도보다 커서 태양이 천정을 넘어 북쪽 자오선으로 넘어가면 180° − h)
     function noonAltitude(lat, decDeg) {
         return 90 - lat + decDeg;
+    }
+    function noonInfo(lat, decDeg) {
+        var raw = 90 - lat + decDeg;
+        var north = raw > 90;
+        return { h: north ? 180 - raw : raw, north: north, raw: raw };
     }
     // 낮의 길이: cos H0 = −tanφ·tanδ  (지평선 h=0 기준)
     function dayLengthHours(lat, decDeg) {
@@ -1430,7 +1436,8 @@
 
     function updateUI() {
         var dd = decDegOf(state.day);
-        var noon = noonAltitude(state.lat, dd);
+        var nm = noonInfo(state.lat, dd);
+        var noon = nm.h;
         var dl = dayLengthHours(state.lat, dd);
         var flux = Math.max(0, Math.sin(noon * DEG));
         var fluxFill = document.getElementById('flux-fill');
@@ -1444,12 +1451,12 @@
         el['val-season'].textContent = seasonTxt;
         el['val-date'].textContent = dateTxt;
         el['val-lat'].textContent = latTxt;
-        el['val-noon'].textContent = noon.toFixed(1) + '°';
+        el['val-noon'].textContent = noon.toFixed(1) + '°' + (nm.north ? '(북)' : '');
         el['val-day'].textContent = dl >= 23.99 ? '24시간' : (dl <= 0.01 ? '0시간' : fmtHM(dl));
         el['val-flux'].textContent = flux.toFixed(2);
 
         el['in-dec'].textContent = (dd >= 0 ? '+' : '') + dd.toFixed(1) + '°';
-        el['in-noon'].textContent = noon.toFixed(1) + '°';
+        el['in-noon'].textContent = noon.toFixed(1) + '°' + (nm.north ? ' (북쪽 자오선)' : '');
         el['in-daylen'].textContent = dl >= 23.99 ? '24시간 (백야)' : (dl <= 0.01 ? '0시간 (극야)' : fmtHM(dl) + ' / ' + fmtHM(24 - dl));
         el['in-flux'].textContent = flux.toFixed(2);
         el['in-shadow'].textContent = shadowRatio === null ? '—' : (shadowRatio > 99 ? '매우 김' : shadowRatio.toFixed(2) + '배');
@@ -1751,10 +1758,12 @@
         calc: function (day, lat, hour) {
             var d = decDegOf(day);
             var rr = sunAltAz(lat, d, (hour - 12) * 15);
+            var ni = noonInfo(lat, d);
             return {
                 theta: dayToTheta(day) / DEG,
                 dec: d,
-                noonAlt: noonAltitude(lat, d),
+                noonAlt: ni.h,
+                noonNorth: ni.north,
                 dayLen: dayLengthHours(lat, d),
                 flux: Math.max(0, Math.sin(noonAltitude(lat, d) * DEG)),
                 alt: rr.alt / DEG,
