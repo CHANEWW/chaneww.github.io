@@ -937,6 +937,7 @@
     var state = {
         duration: 180,
         remaining: 180,
+        endAt: 0,          /* 실행 중일 때 남은 시간의 기준 시각(ms) */
         running: false,
         finished: false,
         clockOn: true,
@@ -1069,6 +1070,7 @@
             state.finished = false;
         }
         if (state.running) {
+            state.endAt = performance.now() + state.remaining * 1000;
             var fallen = 1 - (state.duration > 0 ? state.remaining / state.duration : 0);
             resetParticles(pileTopY(fallen));
         }
@@ -1101,6 +1103,7 @@
         if (state.remaining <= 0.001) state.remaining = state.duration;
         state.finished = false;
         state.running = true;
+        state.endAt = performance.now() + state.remaining * 1000;
         clockFinishMode = false;
         clockMat.opacity = 1;
         lastFillF = -1; lastFallenF = -1;
@@ -1111,6 +1114,7 @@
 
     function resetAll(showToast) {
         state.running = false;
+        state.endAt = 0;
         state.finished = false;
         state.remaining = state.duration;
         clockFinishMode = false;
@@ -1173,9 +1177,10 @@
             if (p >= 1) finishFlip();
         }
 
-        /* 타이머 진행 */
+        /* 타이머 진행 (프레임 지연과 무관하게 실제 시간 기준) */
         if (state.running && !flipAnim) {
-            state.remaining -= dt;
+            if (!state.endAt) state.endAt = now + state.remaining * 1000;
+            state.remaining = (state.endAt - now) / 1000;
             if (state.remaining <= 0) {
                 state.remaining = 0;
                 onFinished();
