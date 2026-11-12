@@ -402,6 +402,27 @@
             .control-capsule-btn { padding: 6px 12px; font-size: 11.5px; }
             .bottom-right-bar { bottom: 16px; right: 12px; }
         }
+    
+        #btn-fullscreen {
+            height: 44px; padding: 0 16px; border-radius: 9999px;
+            display: inline-flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 700; font-family: inherit; color: #ffffff;
+            background: rgba(11, 17, 30, 0.95); border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            transition: transform .15s ease, background .2s ease;
+        }
+        body.light-mode #btn-fullscreen {
+            background: rgba(255, 255, 255, 0.95); border-color: rgba(0, 0, 0, 0.15); color: #0f172a;
+        }
+        #btn-fullscreen:hover { transform: translateY(-1px) scale(1.03); }
+        #btn-fullscreen:active { transform: scale(0.96); }
+        #btn-fullscreen .fs-icon { font-size: 16px; line-height: 1; }
+        @media (max-width: 768px) {
+            #btn-fullscreen { height: 38px; padding: 0 12px; font-size: 12px; }
+            #btn-fullscreen .fs-label { display: none; }
+        }
+    
     </style>
 </head>
 <body class="dark-mode">
@@ -552,7 +573,7 @@
 
 <!-- 우측 하단 전체화면 버튼 -->
 <div class="bottom-right-bar">
-    <button class="icon-btn glass-panel" id="btn-fullscreen" title="전체화면 전환" aria-label="전체화면">⛶</button>
+    <button id="btn-fullscreen" class="glass-panel" title="전체화면" aria-label="전체화면으로 전환"><span class="fs-icon" id="fs-icon">⛶</span><span class="fs-label" id="fs-label">전체화면</span></button>
 </div>
 
 <script>
@@ -1817,14 +1838,36 @@
 
     // 14. 전체화면 제어
     const fsBtn = document.getElementById('btn-fullscreen');
+    function realFs() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+    function pseudoFs() { return document.documentElement.classList.contains('pseudo-fs'); }
+    function updateFsUI() {
+        const on = realFs() || pseudoFs();
+        document.body.classList.toggle('is-fullscreen', on);
+        const icon = document.getElementById('fs-icon');
+        const label = document.getElementById('fs-label');
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (label) label.textContent = on ? '창모드' : '전체화면';
+    }
     if (fsBtn) {
-        fsBtn.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            } else {
-                document.exitFullscreen().catch(() => {});
+        fsBtn.addEventListener('click', async () => {
+            try {
+                if (!realFs() && !pseudoFs()) {
+                    const root = document.documentElement;
+                    if (root.requestFullscreen) await root.requestFullscreen();
+                    else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
+                    else root.classList.add('pseudo-fs');
+                } else {
+                    if (document.exitFullscreen) await document.exitFullscreen();
+                    else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+                    document.documentElement.classList.remove('pseudo-fs');
+                }
+            } catch (e) {
+                document.documentElement.classList.toggle('pseudo-fs');
             }
+            updateFsUI();
         });
+        document.addEventListener('fullscreenchange', updateFsUI);
+        document.addEventListener('webkitfullscreenchange', updateFsUI);
     }
 
     // 15. 리사이즈 핸들러
