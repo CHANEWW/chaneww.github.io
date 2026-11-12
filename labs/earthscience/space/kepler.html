@@ -313,7 +313,7 @@
             body.dark-mode #side-ctrl.side-ctrl-panel {
                 right: 8px !important; bottom: 64px !important;
                 width: min(300px, calc(100vw - 16px)) !important; padding: 10px !important;
-                max-height: 56vh !important;
+                max-height: 42vh !important;
             }
             .bottom-control-bar { bottom: 14px; padding: 5px 10px; gap: 4px; }
             .control-capsule-btn { padding: 6px 10px; font-size: 11.5px; }
@@ -1020,21 +1020,51 @@
         if (velArrow.visible) {
             const dir = new THREE.Vector3(vx, 0, vz).normalize();
             velArrow.setDirection(dir);
-            const len = Math.max(1.6, vkm * 0.3);
-            velArrow.setLength(len, len * 0.34, len * 0.19);
+            const len = Math.max(1.5, vkm * 0.26);
+            velArrow.setLength(len, len * 0.3, len * 0.13);
         }
     }
 
     /* ============================================================
        8. 카메라 정렬
        ============================================================ */
+    let lastFitSpan = 0, lastFitW = 0, lastFitH = 0;
+
     function fitCamera() {
-        const span = 2 * A3();
-        const cx = -C3();
-        const k = camera.aspect < 1 ? 1.5 : 1.0;
-        controls.target.set(cx, 0, 0);
-        camera.position.set(cx + span * 0.06 * k, span * 0.62 * k, span * 0.92 * k);
+        const W = window.innerWidth, H = window.innerHeight;
+        const aspect = W / H;
+        const span = 2 * A3();                 // 장축 길이(월드 단위)
+        const cx = -C3();                      // 타원 중심
+        const portrait = aspect < 0.95;
+        const reserve = (!portrait && W > 760) ? 360 : 0;   // 우측 조절 패널 자리
+        const availW = Math.max(220, W - reserve - 40);
+
+        /* 필요한 시야 폭(월드) : 가로 여유와 세로 최소 여유 중 큰 값 */
+        const viewW = Math.max(span * W / (0.92 * availW), 0.8 * span * aspect);
+        const dist = viewW / (0.8284 * aspect);              // 0.8284 = 2·tan(22.5°)
+        const viewH = viewW / aspect;
+
+        const dir = portrait
+            ? new THREE.Vector3(0, 0.78, 0.62)
+            : new THREE.Vector3(0, 0.55, 0.835);
+        dir.normalize();
+
+        /* 타원 중심이 패널 왼쪽 여백의 가운데에 오도록 목표점을 옮긴다 */
+        const shiftX = (reserve / 2) * (viewW / W);
+        const shiftY = portrait ? -0.16 * viewH : 0;         // 세로 화면은 하단 패널을 피해 위로
+
+        controls.target.set(cx + shiftX, shiftY, 0);
+        camera.position.copy(controls.target).addScaledVector(dir, dist);
+
+        lastFitSpan = A3();
+        lastFitW = W; lastFitH = H;
         controls.update();
+    }
+
+    /* 반장축을 크게 바꾸면 궤도가 화면을 벗어나므로 그때만 다시 맞춘다 */
+    function maybeRefit() {
+        if (!lastFitSpan) return;
+        if (Math.abs(A3() / lastFitSpan - 1) > 0.3) fitCamera();
     }
 
     /* ============================================================
@@ -1070,6 +1100,7 @@
         rebuildAll();
         updatePlanet();
         syncChips();
+        maybeRefit();
     });
     rngE.addEventListener('input', function () {
         state.e = parseFloat(this.value);
@@ -1221,6 +1252,10 @@
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        /* 주소창이 숨는 정도의 작은 변화로는 시점을 건드리지 않는다 */
+        if (Math.abs(window.innerWidth - lastFitW) > 90 || Math.abs(window.innerHeight - lastFitH) > 90) {
+            fitCamera();
+        }
     });
 
     let lastTime = performance.now();
