@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>세포 분열 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+
+        body, html {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #f2f5fa;
+            color: #1c1c1e;
+            touch-action: none;
+            transition: background-color .3s ease, color .3s ease;
+        }
+        body.dark-mode {
+            background-color: #0d121f;
+            color: #f2f5fa;
+        }
+
+        /* 메인 레이아웃 래퍼 */
+        #app-wrap {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* 상단 네비게이션 헤더 */
+        #top-nav {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 50;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            text-decoration: none;
+            font-size: 13.5px;
+            font-weight: 700;
+            color: inherit;
+            transition: transform .15s ease, background-color .2s ease;
+        }
+        .back-btn:hover { transform: translateY(-1px); }
+        .back-btn:active { transform: scale(0.97); }
+
+        .title-badge-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 16px;
+            border-radius: 999px;
+        }
+        .lab-title {
+            font-size: 14.5px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+        }
+        .badge-subj {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+        body.dark-mode .badge-subj {
+            background: rgba(30, 64, 175, 0.4);
+            color: #93c5fd;
+        }
+
+        /* Glassmorphism 카드 */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.82);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.85);
+            border-radius: 18px;
+            box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+            transition: background .25s ease, border-color .25s ease, box-shadow .25s ease;
+        }
+        body.dark-mode .glass-card {
+            background: rgba(23, 32, 54, 0.78);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        }
+
+        /* 중앙 메인 비교 컨테이너 (사진의 좌우 2분할 뷰) */
+        #content-area {
+            flex: 1;
+            padding: 0 20px 84px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            pointer-events: auto;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 탭별 표시 영역 */
+        .tab-view {
+            display: none;
+            width: 100%;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .tab-view.active {
+            display: flex;
+        }
+
+        /* 좌우 2분할 그리드 */
+        .split-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            width: 100%;
+        }
+
+        /* 개별 세포 실험 카드 */
+        .cell-card {
+            padding: 14px 16px 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-radius: 18px;
+            min-height: 440px;
+        }
+        .cell-card-header {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        body.dark-mode .cell-card-header {
+            color: #f8fafc;
+        }
+        .cell-card-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 9px;
+            border-radius: 999px;
+            background: #e2e8f0;
+            color: #475569;
+        }
+        body.dark-mode .cell-card-badge {
+            background: rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+        }
+
+        /* 3D 캔버스 뷰포트 컨테이너 */
+        .viewport-box {
+            position: relative;
+            width: 100%;
+            height: 250px;
+            border-radius: 14px;
+            background: rgba(241, 245, 249, 0.65);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+            touch-action: none;
+        }
+        body.dark-mode .viewport-box {
+            background: rgba(10, 16, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .viewport-box canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+        }
+
+        .viewport-hint {
+            position: absolute;
+            top: 8px;
+            left: 10px;
+            font-size: 11px;
+            color: #64748b;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 2px 7px;
+            border-radius: 6px;
+            pointer-events: none;
+        }
+        body.dark-mode .viewport-hint {
+            color: #94a3b8;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        /* 채워진 정도 프로그레스 바 */
+        .progress-bar-wrap {
+            width: 100%;
+            height: 14px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+            position: relative;
+        }
+        body.dark-mode .progress-bar-wrap {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            border-radius: 999px;
+            transition: width 0.15s linear;
+        }
+
+        /* 데이터 표 */
+        .data-table {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 13px;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 3.5px 0;
+            border-bottom: 1px dashed rgba(0, 0, 0, 0.05);
+        }
+        body.dark-mode .data-row {
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+        }
+        .data-row:last-child {
+            border-bottom: none;
+        }
+        .data-label {
+            color: #475569;
+            font-weight: 600;
+        }
+        body.dark-mode .data-label {
+            color: #94a3b8;
+        }
+        .data-val {
+            font-weight: 800;
+            color: #0f172a;
+            font-variant-numeric: tabular-nums;
+        }
+        body.dark-mode .data-val {
+            color: #f8fafc;
+        }
+        .data-val.accent-val {
+            color: #10b981;
+        }
+
+        /* 하단 비교 결과 요약 카드 */
+        .summary-card {
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border-radius: 18px;
+        }
+        .summary-title {
+            font-size: 14.5px;
+            font-weight: 800;
+            color: #0f172a;
+        }
+        body.dark-mode .summary-title {
+            color: #f8fafc;
+        }
+        .summary-line {
+            font-size: 13.5px;
+            font-weight: 700;
+            color: #334155;
+            line-height: 1.45;
+        }
+        body.dark-mode .summary-line {
+            color: #cbd5e1;
+        }
+        .highlight-red {
+            color: #e11d48;
+            font-weight: 800;
+        }
+        .highlight-green {
+            color: #059669;
+            font-weight: 800;
+        }
+        .summary-desc {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+            margin-top: 2px;
+        }
+        body.dark-mode .summary-desc {
+            color: #94a3b8;
+        }
+
+        /* 탭 2: 단일 세포 크기 탐구 */
+        .explore-card {
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .explore-viewport {
+            width: 100%;
+            height: 320px;
+            border-radius: 14px;
+            background: rgba(241, 245, 249, 0.65);
+            position: relative;
+            overflow: hidden;
+        }
+        body.dark-mode .explore-viewport {
+            background: rgba(10, 16, 30, 0.85);
+        }
+
+        /* 탭 3: 한천 조각 확산 실험 */
+        .agar-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+        .agar-card {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .agar-viewport {
+            width: 100%;
+            height: 200px;
+            border-radius: 12px;
+            background: rgba(241, 245, 249, 0.65);
+            position: relative;
+            overflow: hidden;
+        }
+        body.dark-mode .agar-viewport {
+            background: rgba(10, 16, 30, 0.85);
+        }
+
+        /* 하단 중앙 글래스 캡슐 컨트롤 바 */
+        #bottom-bar {
+            position: fixed;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 7px 14px;
+            border-radius: 999px;
+            z-index: 100;
+            pointer-events: auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+        }
+        .cbtn {
+            border: none;
+            background: rgba(255, 255, 255, 0.85);
+            color: #1e293b;
+            padding: 8px 16px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            border-radius: 999px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: transform .15s ease, background .2s ease;
+            white-space: nowrap;
+        }
+        body.dark-mode .cbtn {
+            background: rgba(30, 41, 59, 0.85);
+            color: #f1f5f9;
+        }
+        .cbtn:hover { transform: translateY(-1px); background: #ffffff; }
+        body.dark-mode .cbtn:hover { background: #334155; }
+        .cbtn:active { transform: scale(0.96); }
+        .cbtn.primary {
+            background: #10b981;
+            color: #ffffff;
+        }
+        .cbtn.primary:hover {
+            background: #059669;
+        }
+
+        /* 우측 상단 유틸리티 (제안하기 및 야간모드 토글) */
+        .tr-util {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icon-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: transform .15s ease, background .2s ease;
+        }
+        .icon-btn:hover { transform: scale(1.06); }
+        .icon-btn:active { transform: scale(0.94); }
+
+        /* 우측 조절 패널 (#side-ctrl) - 공통 ui-layout 충돌 방지 고대비 고정 */
+        #side-ctrl {
+            position: fixed !important;
+            right: 20px !important;
+            bottom: 74px !important;
+            width: 250px !important;
+            padding: 14px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 10px !important;
+            z-index: 100 !important;
+            border-radius: 18px !important;
+            pointer-events: auto !important;
+            background: rgba(255, 255, 255, 0.92) !important;
+            border: 1px solid rgba(255, 255, 255, 0.95) !important;
+            color: #0f172a !important;
+            box-shadow: 0 12px 36px rgba(15, 23, 42, 0.12) !important;
+        }
+        body.dark-mode #side-ctrl {
+            background: rgba(20, 28, 48, 0.92) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            color: #f8fafc !important;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        body.dark-mode .panel-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .panel-title {
+            font-size: 13.5px;
+            font-weight: 800;
+        }
+
+        /* 탭 선택기 */
+        .tab-selector {
+            display: flex;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 3px;
+            border-radius: 12px;
+            gap: 3px;
+        }
+        body.dark-mode .tab-selector {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .tab-btn {
+            flex: 1;
+            border: none;
+            background: transparent;
+            color: inherit;
+            padding: 6px 4px;
+            font-family: inherit;
+            font-size: 11.5px;
+            font-weight: 700;
+            border-radius: 9px;
+            cursor: pointer;
+            transition: all .2s ease;
+            text-align: center;
+        }
+        .tab-btn.active {
+            background: #ffffff;
+            color: #10b981;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+        body.dark-mode .tab-btn.active {
+            background: #1e293b;
+            color: #34d399;
+        }
+
+        /* 조절 슬라이더 및 버튼 그룹 */
+        .ctrl-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .ctrl-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #64748b;
+        }
+        body.dark-mode .ctrl-label-row {
+            color: #94a3b8;
+        }
+        .ctrl-val-badge {
+            color: #10b981;
+            font-weight: 800;
+        }
+        .ctrl-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 999px;
+            background: #cbd5e1;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+        body.dark-mode .ctrl-slider {
+            background: #334155;
+        }
+        .ctrl-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #10b981;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+        }
+
+        /* 반응형 모바일 */
+        @media (max-width: 768px) {
+            #top-nav { padding: 12px 14px; }
+            .lab-title { font-size: 13.5px; }
+            #content-area { padding: 0 12px 120px 12px; gap: 10px; }
+            .split-grid { grid-template-columns: 1fr; gap: 12px; }
+            .cell-card { min-height: auto; padding: 12px; }
+            .viewport-box { height: 190px; }
+            #side-ctrl {
+                right: 12px !important;
+                bottom: 64px !important;
+                width: 220px !important;
+                padding: 10px !important;
+            }
+            .panel-title { font-size: 12px; }
+            .tab-btn { font-size: 10.5px; padding: 5px 2px; }
+            .agar-grid { grid-template-columns: 1fr; }
+            .agar-viewport { height: 160px; }
+        }
+    </style>
+</head>
+<body class="light-mode">
+
+<div id="app-wrap">
+    <!-- 상단 헤더 바 -->
+    <header id="top-nav">
+        <div class="header-left">
+            <a href="../../../index.html" class="back-btn glass-card">← 메인으로</a>
+            <div class="title-badge-wrap glass-card">
+                <span class="lab-title">세포 분열 3D</span>
+                <span class="badge-subj">생명과학</span>
+            </div>
+        </div>
+        <div class="tr-util">
+            <button class="icon-btn glass-card" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">🌙</button>
+        </div>
+    </header>
+
+    <!-- 중앙 실험 컨텐츠 영역 -->
+    <main id="content-area">
+
+        <!-- 탭 1: 표면적과 흡수 비교 (사진 명세 완벽 구현) -->
+        <div class="tab-view active" id="view-tab1">
+            <div class="split-grid">
+                <!-- 좌측: 분열 전: 세포 1개 -->
+                <div class="cell-card glass-card">
+                    <div class="cell-card-header">
+                        <span>분열 전: 세포 1개</span>
+                        <span class="cell-card-badge">한 변 4cm</span>
+                    </div>
+                    <div class="viewport-box" id="vp-left">
+                        <span class="viewport-hint">드래그하여 3D 회전</span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                        <div class="progress-bar-fill" id="bar-fill-left"></div>
+                    </div>
+                    <div class="data-table">
+                        <div class="data-row">
+                            <span class="data-label">채워진 정도</span>
+                            <span class="data-val accent-val" id="val-fill-left">0%</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">표면적 합</span>
+                            <span class="data-val" id="val-area-left">96</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">부피 합</span>
+                            <span class="data-val" id="val-vol-left">64</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">표면적 ÷ 부피</span>
+                            <span class="data-val" id="val-ratio-left">1.5</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">초당 흡수한 입자</span>
+                            <span class="data-val" id="val-rate-left">0 개</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">가득 찬 시간</span>
+                            <span class="data-val" id="val-time-left">...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 우측: 분열 후: 세포 8개 -->
+                <div class="cell-card glass-card">
+                    <div class="cell-card-header">
+                        <span>분열 후: 세포 8개</span>
+                        <span class="cell-card-badge">한 변 2cm × 8개</span>
+                    </div>
+                    <div class="viewport-box" id="vp-right">
+                        <span class="viewport-hint">드래그하여 3D 회전</span>
+                    </div>
+                    <div class="progress-bar-wrap">
+                        <div class="progress-bar-fill" id="bar-fill-right"></div>
+                    </div>
+                    <div class="data-table">
+                        <div class="data-row">
+                            <span class="data-label">채워진 정도</span>
+                            <span class="data-val accent-val" id="val-fill-right">0%</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">표면적 합</span>
+                            <span class="data-val" id="val-area-right">192</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">부피 합</span>
+                            <span class="data-val" id="val-vol-right">64</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">표면적 ÷ 부피</span>
+                            <span class="data-val" id="val-ratio-right">3.0</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">초당 흡수한 입자</span>
+                            <span class="data-val" id="val-rate-right">0 개</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">가득 찬 시간</span>
+                            <span class="data-val" id="val-time-right">...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 하단 비교 결과 카드 -->
+            <div class="summary-card glass-card">
+                <div class="summary-title">비교 결과</div>
+                <div class="summary-line">
+                    오른쪽 세포의 표면적 합은 왼쪽의 <span class="highlight-red">2배</span>예요.
+                </div>
+                <div class="summary-line">
+                    지금 흡수 속도는 왼쪽의 <span class="highlight-red" id="summary-rate-ratio">1.0배</span>예요.
+                </div>
+                <div class="summary-desc">
+                    부피가 같아도 잘게 나누면 표면적이 늘어나 물질이 드나드는 면이 많아져요. 그래서 세포는 계속 커지지 않고 분열해요. (단위는 가상 단위, 입자 흡수 속도는 시뮬레이션 시간 기준)
+                </div>
+            </div>
+        </div>
+
+        <!-- 탭 2: 세포 크기와 비율 탐구 -->
+        <div class="tab-view" id="view-tab2">
+            <div class="explore-card glass-card">
+                <div class="cell-card-header">
+                    <span>단일 세포 크기 변화와 표면적·부피 관계</span>
+                    <span class="cell-card-badge" id="badge-size-l">한 변 1cm</span>
+                </div>
+                <div class="explore-viewport" id="vp-explore"></div>
+                <div class="data-table">
+                    <div class="data-row">
+                        <span class="data-label">한 변의 길이 (L)</span>
+                        <span class="data-val" id="val-exp-l">1.0 cm</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">겉넓이 / 표면적 (S = 6L²)</span>
+                        <span class="data-val" id="val-exp-s">6.0 cm²</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">부피 (V = L³)</span>
+                        <span class="data-val" id="val-exp-v">1.0 cm³</span>
+                    </div>
+                    <div class="data-row">
+                        <span class="data-label">부피에 대한 표면적의 비 (S ÷ V = 6/L)</span>
+                        <span class="data-val accent-val" id="val-exp-ratio">6.0</span>
+                    </div>
+                </div>
+                <div class="summary-desc">
+                    💡 세포의 크기가 1cm에서 4cm로 커지면, 부피는 <strong>64배</strong> 커지지만 표면적은 <strong>16배</strong>밖에 늘어나지 않습니다. 그 결과 단위 부피당 표면적의 비(S/V)가 6.0에서 1.5로 <strong>1/4로 급감</strong>하여 물질 교환이 어려워집니다.
+                </div>
+            </div>
+        </div>
+
+        <!-- 탭 3: 한천 조각 물질 확산 실험 -->
+        <div class="tab-view" id="view-tab3">
+            <div class="summary-card glass-card" style="margin-bottom:0;">
+                <div class="summary-title">우뭇가사리 한천 조각의 물질 확산 실험</div>
+                <div class="summary-desc">
+                    페놀프탈레인을 넣은 한천 조각을 수산화나트륨(NaOH) 용액에 동일한 시간 동안 담갔을 때, 용액이 침투하는 깊이는 모두 같지만 <strong>크기가 작은 조각일수록 중심부까지 침투하는 부피 비율(%)이 훨씬 높습니다.</strong>
+                </div>
+            </div>
+            <div class="agar-grid">
+                <div class="agar-card glass-card">
+                    <div class="cell-card-header">
+                        <span style="font-size:13.5px;">1cm × 1cm</span>
+                        <span class="cell-card-badge" id="badge-agar-1">침투율 100%</span>
+                    </div>
+                    <div class="agar-viewport" id="vp-agar-1"></div>
+                    <div class="summary-desc" style="font-size:11.5px; text-align:center;">
+                        중심부까지 완전히 영양소 도달
+                    </div>
+                </div>
+                <div class="agar-card glass-card">
+                    <div class="cell-card-header">
+                        <span style="font-size:13.5px;">2cm × 2cm</span>
+                        <span class="cell-card-badge" id="badge-agar-2">침투율 87.5%</span>
+                    </div>
+                    <div class="agar-viewport" id="vp-agar-2"></div>
+                    <div class="summary-desc" style="font-size:11.5px; text-align:center;">
+                        중심부 1cm³ 영역 물질 미도달
+                    </div>
+                </div>
+                <div class="agar-card glass-card">
+                    <div class="cell-card-header">
+                        <span style="font-size:13.5px;">4cm × 4cm</span>
+                        <span class="cell-card-badge" id="badge-agar-4">침투율 57.8%</span>
+                    </div>
+                    <div class="agar-viewport" id="vp-agar-4"></div>
+                    <div class="summary-desc" style="font-size:11.5px; text-align:center;">
+                        중심부 절반 가까이 물질 미도달(굶주림)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 하단 고정 캡슐 컨트롤 바 -->
+    <div id="bottom-bar" class="glass-card">
+        <button class="cbtn primary" id="btn-toggle-sim">▶ 시작</button>
+        <button class="cbtn" id="btn-reset-sim">↺ 초기화</button>
+        <button class="cbtn" id="btn-reset-cam">🧭 시점 정렬</button>
+    </div>
+</div>
+
+<!-- 우측 고정 조절 패널 (#side-ctrl) -->
+<div id="side-ctrl" class="glass-card">
+    <div class="panel-header">
+        <span class="panel-title">실험 제어 및 탭</span>
+    </div>
+    <div class="tab-selector">
+        <button class="tab-btn active" data-tab="tab1">흡수 비교</button>
+        <button class="tab-btn" data-tab="tab2">크기 탐구</button>
+        <button class="tab-btn" data-tab="tab3">한천 확산</button>
+    </div>
+
+    <!-- 탭 1 전용 컨트롤 -->
+    <div class="ctrl-group" id="ctrl-tab1">
+        <div class="ctrl-label-row">
+            <span>시뮬레이션 속도</span>
+            <span class="ctrl-val-badge" id="lbl-speed">1.0x</span>
+        </div>
+        <input type="range" class="ctrl-slider" id="rng-speed" min="0.5" max="3.0" step="0.5" value="1.0">
+
+        <div class="ctrl-label-row" style="margin-top:4px;">
+            <span>외부 입자 밀도</span>
+            <span class="ctrl-val-badge" id="lbl-particles">180개</span>
+        </div>
+        <input type="range" class="ctrl-slider" id="rng-particles" min="80" max="300" step="20" value="180">
+    </div>
+
+    <!-- 탭 2 전용 컨트롤 -->
+    <div class="ctrl-group" id="ctrl-tab2" style="display:none;">
+        <div class="ctrl-label-row">
+            <span>세포 한 변의 길이</span>
+            <span class="ctrl-val-badge" id="lbl-cell-size">1.0 cm</span>
+        </div>
+        <input type="range" class="ctrl-slider" id="rng-cell-size" min="1.0" max="4.0" step="0.5" value="1.0">
+    </div>
+
+    <!-- 탭 3 전용 컨트롤 -->
+    <div class="ctrl-group" id="ctrl-tab3" style="display:none;">
+        <div class="ctrl-label-row">
+            <span>확산 침투 깊이</span>
+            <span class="ctrl-val-badge" id="lbl-agar-depth">0.5 cm</span>
+        </div>
+        <input type="range" class="ctrl-slider" id="rng-agar-depth" min="0.1" max="0.5" step="0.05" value="0.5">
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    // 1. 상태 변수
+    let isRunning = false;
+    let currentTab = 'tab1';
+    let simSpeed = 1.0;
+    let particleCount = 180;
+    let simTime = 0; // 초 단위
+
+    // 왼쪽(분열 전 1개), 오른쪽(분열 후 8개) 시뮬레이션 누적치
+    const MAX_CAPACITY = 1000; // 가득 차는 입자 기준
+    let filledLeft = 0;
+    let filledRight = 0;
+    let rateLeft = 0;
+    let rateRight = 0;
+    let timeDoneLeft = null;
+    let timeDoneRight = null;
+
+    let recentHitsLeft = 0;
+    let recentHitsRight = 0;
+    let rateTimer = 0;
+
+    // 2. 색상 상수
+    const COLOR_BOX_WIREFRAME = 0x64748b;
+    const COLOR_CELL_GREEN = 0x10b981;
+    const COLOR_CELL_FILL = 0x047857;
+    const COLOR_PARTICLE_BLUE = 0x2563eb;
+    const BOUNDARY_HALF = 3.6; // 외곽 와이어프레임 박스 반경 (-3.6 ~ +3.6 = 7.2)
+
+    // 3. Three.js 인스턴스 (좌 / 우)
+    let sceneL, cameraL, rendererL, controlsL;
+    let sceneR, cameraR, rendererR, controlsR;
+    let sceneExp, cameraExp, rendererExp, controlsExp;
+    let sceneAgars = [];
+
+    // 메쉬 참조
+    let cellMeshL, cellWireL;
+    let cellMeshesR = [], cellWiresR = [];
+    let particlesL, particlesR;
+    let particleDataL = [], particleDataR = [];
+
+    // 4. 초기화 - 탭 1 듀얼 뷰포트
+    function initTab1Viewports() {
+        const vpL = document.getElementById('vp-left');
+        const vpR = document.getElementById('vp-right');
+
+        // --- 왼쪽 (분열 전 1개) ---
+        sceneL = new THREE.Scene();
+        cameraL = new THREE.PerspectiveCamera(45, vpL.clientWidth / vpL.clientHeight, 0.1, 100);
+        cameraL.position.set(7, 6, 8.5);
+
+        rendererL = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        rendererL.setSize(vpL.clientWidth, vpL.clientHeight);
+        rendererL.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        vpL.appendChild(rendererL.domElement);
+
+        controlsL = new THREE.OrbitControls(cameraL, rendererL.domElement);
+        controlsL.enableDamping = true;
+        controlsL.dampingFactor = 0.08;
+        controlsL.minDistance = 4;
+        controlsL.maxDistance = 18;
+
+        // 조명 (양쪽 동일)
+        const addLights = (scene) => {
+            const amb = new THREE.AmbientLight(0xffffff, 0.85);
+            scene.add(amb);
+            const dir1 = new THREE.DirectionalLight(0xffffff, 0.7);
+            dir1.position.set(6, 10, 8);
+            scene.add(dir1);
+            const dir2 = new THREE.DirectionalLight(0x93c5fd, 0.4);
+            dir2.position.set(-6, -5, -6);
+            scene.add(dir2);
+        };
+        addLights(sceneL);
+
+        // 외곽 회색 와이어프레임 큐브 (사진의 투명 경계 박스)
+        const boxGeo = new THREE.BoxGeometry(BOUNDARY_HALF * 2, BOUNDARY_HALF * 2, BOUNDARY_HALF * 2);
+        const boxEdges = new THREE.EdgesGeometry(boxGeo);
+        const boxLineL = new THREE.LineSegments(boxEdges, new THREE.LineBasicMaterial({ color: COLOR_BOX_WIREFRAME, transparent: true, opacity: 0.65 }));
+        sceneL.add(boxLineL);
+
+        // 중앙 녹색 반투명 큐브 1개 (한 변 4.0)
+        const cellGeoL = new THREE.BoxGeometry(4.0, 4.0, 4.0);
+        const cellMatL = new THREE.MeshStandardMaterial({
+            color: COLOR_CELL_GREEN,
+            transparent: true,
+            opacity: 0.45,
+            roughness: 0.25,
+            metalness: 0.1
+        });
+        cellMeshL = new THREE.Mesh(cellGeoL, cellMatL);
+        sceneL.add(cellMeshL);
+
+        const cellWireGeoL = new THREE.EdgesGeometry(cellGeoL);
+        cellWireL = new THREE.LineSegments(cellWireGeoL, new THREE.LineBasicMaterial({ color: 0x059669, linewidth: 2 }));
+        cellMeshL.add(cellWireL);
+
+        // --- 오른쪽 (분열 후 8개) ---
+        sceneR = new THREE.Scene();
+        cameraR = new THREE.PerspectiveCamera(45, vpR.clientWidth / vpR.clientHeight, 0.1, 100);
+        cameraR.position.copy(cameraL.position);
+
+        rendererR = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        rendererR.setSize(vpR.clientWidth, vpR.clientHeight);
+        rendererR.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        vpR.appendChild(rendererR.domElement);
+
+        controlsR = new THREE.OrbitControls(cameraR, rendererR.domElement);
+        controlsR.enableDamping = true;
+        controlsR.dampingFactor = 0.08;
+        controlsR.minDistance = 4;
+        controlsR.maxDistance = 18;
+
+        addLights(sceneR);
+
+        const boxLineR = new THREE.LineSegments(boxEdges, new THREE.LineBasicMaterial({ color: COLOR_BOX_WIREFRAME, transparent: true, opacity: 0.65 }));
+        sceneR.add(boxLineR);
+
+        // 한 변 2.0짜리 세포 8개 (약간의 간격을 둔 2x2x2 배치)
+        const gap = 0.22;
+        const subSize = 1.9; // 1.9 + gap ≈ 2.12
+        const offsets = [-1.06, 1.06];
+
+        const cellGeoR = new THREE.BoxGeometry(subSize, subSize, subSize);
+        const cellWireGeoR = new THREE.EdgesGeometry(cellGeoR);
+
+        for (let x of offsets) {
+            for (let y of offsets) {
+                for (let z of offsets) {
+                    const mat = new THREE.MeshStandardMaterial({
+                        color: COLOR_CELL_GREEN,
+                        transparent: true,
+                        opacity: 0.45,
+                        roughness: 0.25,
+                        metalness: 0.1
+                    });
+                    const m = new THREE.Mesh(cellGeoR, mat);
+                    m.position.set(x, y, z);
+                    sceneR.add(m);
+
+                    const wire = new THREE.LineSegments(cellWireGeoR, new THREE.LineBasicMaterial({ color: 0x059669, linewidth: 2 }));
+                    m.add(wire);
+
+                    cellMeshesR.push(m);
+                    cellWiresR.push(wire);
+                }
+            }
+        }
+
+        // 시점 동기화: 한쪽을 돌리면 다른 쪽도 함께 회전! (사진의 일체형 관찰 경험)
+        let isSyncingL = false, isSyncingR = false;
+        controlsL.addEventListener('change', () => {
+            if (!isSyncingL) {
+                isSyncingR = true;
+                cameraR.position.copy(cameraL.position);
+                cameraR.quaternion.copy(cameraL.quaternion);
+                controlsR.target.copy(controlsL.target);
+                controlsR.update();
+                isSyncingR = false;
+            }
+        });
+        controlsR.addEventListener('change', () => {
+            if (!isSyncingR) {
+                isSyncingL = true;
+                cameraL.position.copy(cameraR.position);
+                cameraL.quaternion.copy(cameraR.quaternion);
+                controlsL.target.copy(controlsR.target);
+                controlsL.update();
+                isSyncingL = false;
+            }
+        });
+
+        // 파티클 시스템 초기화 (좌 / 우)
+        setupParticles();
+    }
+
+    // 5. 파티클 시스템 생성 (부유하는 푸른색 영양소/확산 입자들)
+    function setupParticles() {
+        if (particlesL) sceneL.remove(particlesL);
+        if (particlesR) sceneR.remove(particlesR);
+
+        const count = particleCount;
+
+        // 원형 입자 캔버스 텍스처
+        const pCanvas = document.createElement('canvas');
+        pCanvas.width = 32; pCanvas.height = 32;
+        const pCtx = pCanvas.getContext('2d');
+        const pGrad = pCtx.createRadialGradient(16, 16, 2, 16, 16, 16);
+        pGrad.addColorStop(0, '#60a5fa');
+        pGrad.addColorStop(0.5, '#2563eb');
+        pGrad.addColorStop(1, 'rgba(37,99,235,0)');
+        pCtx.fillStyle = pGrad;
+        pCtx.beginPath();
+        pCtx.arc(16, 16, 15, 0, Math.PI * 2);
+        pCtx.fill();
+        const pTexture = new THREE.CanvasTexture(pCanvas);
+
+        const pMat = new THREE.PointsMaterial({
+            size: 0.28,
+            map: pTexture,
+            transparent: true,
+            opacity: 0.9,
+            depthWrite: false,
+            blending: THREE.NormalBlending
+        });
+
+        // 왼쪽 입자
+        const posL = new Float32Array(count * 3);
+        particleDataL = [];
+        for (let i = 0; i < count; i++) {
+            resetParticlePos(posL, i, true);
+            particleDataL.push({
+                vx: (Math.random() - 0.5) * 1.6,
+                vy: (Math.random() - 0.5) * 1.6,
+                vz: (Math.random() - 0.5) * 1.6
+            });
+        }
+        const geoL = new THREE.BufferGeometry();
+        geoL.setAttribute('position', new THREE.BufferAttribute(posL, 3));
+        particlesL = new THREE.Points(geoL, pMat.clone());
+        sceneL.add(particlesL);
+
+        // 오른쪽 입자
+        const posR = new Float32Array(count * 3);
+        particleDataR = [];
+        for (let i = 0; i < count; i++) {
+            resetParticlePos(posR, i, false);
+            particleDataR.push({
+                vx: (Math.random() - 0.5) * 1.6,
+                vy: (Math.random() - 0.5) * 1.6,
+                vz: (Math.random() - 0.5) * 1.6
+            });
+        }
+        const geoR = new THREE.BufferGeometry();
+        geoR.setAttribute('position', new THREE.BufferAttribute(posR, 3));
+        particlesR = new THREE.Points(geoR, pMat.clone());
+        sceneR.add(particlesR);
+    }
+
+    // 입자 위치 리셋
+    function resetParticlePos(array, idx, isLeft) {
+        // 경계 박스 내부에서 세포 바깥쪽 영역에 스폰
+        const b = BOUNDARY_HALF - 0.2;
+        let x, y, z;
+        while (true) {
+            x = (Math.random() * 2 - 1) * b;
+            y = (Math.random() * 2 - 1) * b;
+            z = (Math.random() * 2 - 1) * b;
+            // 왼쪽 큐브 내부인지 검사 (4x4x4 -> 반경 2.0)
+            if (isLeft) {
+                if (Math.abs(x) < 2.0 && Math.abs(y) < 2.0 && Math.abs(z) < 2.0) continue;
+            } else {
+                // 오른쪽은 약간 중심 피해서 스폰
+                if (Math.abs(x) < 1.0 && Math.abs(y) < 1.0 && Math.abs(z) < 1.0) continue;
+            }
+            break;
+        }
+        array[idx * 3] = x;
+        array[idx * 3 + 1] = y;
+        array[idx * 3 + 2] = z;
+    }
+
+    // 6. 파티클 물리 업데이트 및 표면 충돌/흡수 연산
+    function updateParticles(dt) {
+        const b = BOUNDARY_HALF - 0.15;
+        const effectiveDt = dt * simSpeed;
+
+        // --- 왼쪽 (분열 전: 세포 1개, 반경 2.0) ---
+        const posL = particlesL.geometry.attributes.position.array;
+        for (let i = 0; i < particleCount; i++) {
+            let px = posL[i * 3];
+            let py = posL[i * 3 + 1];
+            let pz = posL[i * 3 + 2];
+            const p = particleDataL[i];
+
+            px += p.vx * effectiveDt;
+            py += p.vy * effectiveDt;
+            pz += p.vz * effectiveDt;
+
+            // 외곽 경계 박스 반사
+            if (Math.abs(px) > b) { p.vx *= -1; px = Math.sign(px) * b; }
+            if (Math.abs(py) > b) { p.vy *= -1; py = Math.sign(py) * b; }
+            if (Math.abs(pz) > b) { p.vz *= -1; pz = Math.sign(pz) * b; }
+
+            // 중앙 세포 1개 (한 변 4 -> [-2, 2]) 충돌/흡수 판정
+            if (Math.abs(px) <= 2.0 && Math.abs(py) <= 2.0 && Math.abs(pz) <= 2.0) {
+                // 흡수 이벤트 발생!
+                if (filledLeft < MAX_CAPACITY) {
+                    filledLeft += 1.0;
+                    recentHitsLeft += 1.0;
+                }
+                // 입자는 흡수되어 외곽 경계로 재스폰
+                resetParticlePos(posL, i, true);
+                p.vx = (Math.random() - 0.5) * 1.6;
+                p.vy = (Math.random() - 0.5) * 1.6;
+                p.vz = (Math.random() - 0.5) * 1.6;
+                continue;
+            }
+
+            posL[i * 3] = px;
+            posL[i * 3 + 1] = py;
+            posL[i * 3 + 2] = pz;
+        }
+        particlesL.geometry.attributes.position.needsUpdate = true;
+
+        // --- 오른쪽 (분열 후: 세포 8개, 각 [-1.06 - 0.95, -1.06 + 0.95] 등) ---
+        const posR = particlesR.geometry.attributes.position.array;
+        const subH = 0.95; // 1.9 / 2
+        const offsets = [-1.06, 1.06];
+
+        for (let i = 0; i < particleCount; i++) {
+            let px = posR[i * 3];
+            let py = posR[i * 3 + 1];
+            let pz = posR[i * 3 + 2];
+            const p = particleDataR[i];
+
+            px += p.vx * effectiveDt;
+            py += p.vy * effectiveDt;
+            pz += p.vz * effectiveDt;
+
+            // 외곽 경계 반사
+            if (Math.abs(px) > b) { p.vx *= -1; px = Math.sign(px) * b; }
+            if (Math.abs(py) > b) { p.vy *= -1; py = Math.sign(py) * b; }
+            if (Math.abs(pz) > b) { p.vz *= -1; pz = Math.sign(pz) * b; }
+
+            // 8개 서브 큐브 충돌 검사 (표면적이 2배라 충돌 확률이 자연스럽게 약 2배!)
+            let hit = false;
+            for (let ox of offsets) {
+                if (Math.abs(px - ox) <= subH) {
+                    for (let oy of offsets) {
+                        if (Math.abs(py - oy) <= subH) {
+                            for (let oz of offsets) {
+                                if (Math.abs(pz - oz) <= subH) {
+                                    hit = true;
+                                    break;
+                                }
+                            }
+                            if (hit) break;
+                        }
+                    }
+                    if (hit) break;
+                }
+            }
+
+            if (hit) {
+                if (filledRight < MAX_CAPACITY) {
+                    filledRight += 1.0;
+                    recentHitsRight += 1.0;
+                }
+                resetParticlePos(posR, i, false);
+                p.vx = (Math.random() - 0.5) * 1.6;
+                p.vy = (Math.random() - 0.5) * 1.6;
+                p.vz = (Math.random() - 0.5) * 1.6;
+                continue;
+            }
+
+            posR[i * 3] = px;
+            posR[i * 3 + 1] = py;
+            posR[i * 3 + 2] = pz;
+        }
+        particlesR.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // 7. 실시간 UI 수치 및 프로그레스 바 연동
+    function updateDataUI(dt) {
+        simTime += dt * simSpeed;
+
+        // 초당 흡수율 계산 (0.5초 주기 갱신)
+        rateTimer += dt;
+        if (rateTimer >= 0.4) {
+            rateLeft = Math.round(recentHitsLeft / rateTimer);
+            rateRight = Math.round(recentHitsRight / rateTimer);
+            recentHitsLeft = 0;
+            recentHitsRight = 0;
+            rateTimer = 0;
+
+            document.getElementById('val-rate-left').textContent = rateLeft + ' 개';
+            document.getElementById('val-rate-right').textContent = rateRight + ' 개';
+
+            // 속도 배율 업데이트
+            const ratio = rateLeft > 0 ? (rateRight / rateLeft).toFixed(1) : (rateRight > 0 ? '2.0' : '1.0');
+            document.getElementById('summary-rate-ratio').textContent = ratio + '배';
+        }
+
+        // 채워진 백분율
+        const pctL = Math.min(100, Math.round((filledLeft / MAX_CAPACITY) * 100));
+        const pctR = Math.min(100, Math.round((filledRight / MAX_CAPACITY) * 100));
+
+        document.getElementById('bar-fill-left').style.width = pctL + '%';
+        document.getElementById('val-fill-left').textContent = pctL + '%';
+
+        document.getElementById('bar-fill-right').style.width = pctR + '%';
+        document.getElementById('val-fill-right').textContent = pctR + '%';
+
+        // 세포 색상 진하기 변화 (흡수될수록 더 짙은 에메랄드 그린으로 포화)
+        const alphaL = 0.35 + (pctL / 100) * 0.45;
+        cellMeshL.material.opacity = alphaL;
+        cellMeshL.material.color.setHex(pctL === 100 ? 0x059669 : COLOR_CELL_GREEN);
+
+        const alphaR = 0.35 + (pctR / 100) * 0.45;
+        cellMeshesR.forEach(m => {
+            m.material.opacity = alphaR;
+            m.material.color.setHex(pctR === 100 ? 0x059669 : COLOR_CELL_GREEN);
+        });
+
+        // 100% 도달 시간 기록
+        if (pctL >= 100 && timeDoneLeft === null) {
+            timeDoneLeft = simTime.toFixed(1) + '초';
+            document.getElementById('val-time-left').textContent = timeDoneLeft;
+        }
+        if (pctR >= 100 && timeDoneRight === null) {
+            timeDoneRight = simTime.toFixed(1) + '초';
+            document.getElementById('val-time-right').textContent = timeDoneRight;
+        }
+
+        // 둘 다 100% 도달 시 자동 일시정지
+        if (pctL >= 100 && pctR >= 100) {
+            setSimulationRunning(false);
+        }
+    }
+
+    // 8. 탭 2: 단일 세포 크기 탐구 초기화
+    let expCellMesh, expWireMesh;
+    function initTab2Explore() {
+        const vp = document.getElementById('vp-explore');
+        sceneExp = new THREE.Scene();
+        cameraExp = new THREE.PerspectiveCamera(45, vp.clientWidth / vp.clientHeight, 0.1, 100);
+        cameraExp.position.set(6, 4.5, 7);
+
+        rendererExp = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        rendererExp.setSize(vp.clientWidth, vp.clientHeight);
+        rendererExp.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        vp.appendChild(rendererExp.domElement);
+
+        controlsExp = new THREE.OrbitControls(cameraExp, rendererExp.domElement);
+        controlsExp.enableDamping = true;
+        controlsExp.dampingFactor = 0.08;
+
+        const amb = new THREE.AmbientLight(0xffffff, 0.85);
+        sceneExp.add(amb);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+        dir.position.set(5, 8, 5);
+        sceneExp.add(dir);
+
+        // 기준 가이드 그리드
+        const grid = new THREE.GridHelper(8, 8, 0x94a3b8, 0xcbd5e1);
+        grid.position.y = -2.2;
+        sceneExp.add(grid);
+
+        // 단일 세포 큐브
+        const geo = new THREE.BoxGeometry(2, 2, 2);
+        const mat = new THREE.MeshStandardMaterial({
+            color: COLOR_CELL_GREEN,
+            transparent: true,
+            opacity: 0.55,
+            roughness: 0.2
+        });
+        expCellMesh = new THREE.Mesh(geo, mat);
+        sceneExp.add(expCellMesh);
+
+        const wireGeo = new THREE.EdgesGeometry(geo);
+        expWireMesh = new THREE.LineSegments(wireGeo, new THREE.LineBasicMaterial({ color: 0x059669, linewidth: 2 }));
+        expCellMesh.add(expWireMesh);
+
+        updateExploreCell(1.0);
+    }
+
+    function updateExploreCell(L) {
+        // 크기 스케일 (화면 비율 맞춤: L=1 -> 1.2, L=4 -> 4.8)
+        const scale = L * 1.15;
+        if (expCellMesh) {
+            expCellMesh.scale.set(scale, scale, scale);
+        }
+
+        const S = (6 * L * L).toFixed(1);
+        const V = (L * L * L).toFixed(1);
+        const ratio = ( (6 * L * L) / (L * L * L) ).toFixed(1);
+
+        document.getElementById('badge-size-l').textContent = `한 변 ${L.toFixed(1)}cm`;
+        document.getElementById('lbl-cell-size').textContent = `${L.toFixed(1)} cm`;
+        document.getElementById('val-exp-l').textContent = `${L.toFixed(1)} cm`;
+        document.getElementById('val-exp-s').textContent = `${S} cm²`;
+        document.getElementById('val-exp-v').textContent = `${V} cm³`;
+        document.getElementById('val-exp-ratio').textContent = ratio;
+    }
+
+    // 9. 탭 3: 한천 조각 확산 실험 초기화
+    function initTab3Agar() {
+        const sizes = [1.0, 2.0, 4.0];
+        sceneAgars = [];
+
+        sizes.forEach((size, idx) => {
+            const vpId = `vp-agar-${Math.round(size)}`;
+            const vp = document.getElementById(vpId);
+            if (!vp) return;
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.1, 100);
+            camera.position.set(4.5, 3.5, 5);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(vp.clientWidth, vp.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            vp.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            const amb = new THREE.AmbientLight(0xffffff, 0.9);
+            scene.add(amb);
+            const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+            dir.position.set(5, 6, 4);
+            scene.add(dir);
+
+            // 한천 외부 큐브 (침투된 붉은색/분홍색 영역)
+            const sScale = size * 0.7;
+            const outerGeo = new THREE.BoxGeometry(sScale, sScale, sScale);
+            const outerMat = new THREE.MeshStandardMaterial({
+                color: 0xf43f5e, // 페놀프탈레인 반응 분홍/붉은색
+                transparent: true,
+                opacity: 0.65,
+                roughness: 0.3
+            });
+            const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+            scene.add(outerMesh);
+
+            const wire = new THREE.LineSegments(new THREE.EdgesGeometry(outerGeo), new THREE.LineBasicMaterial({ color: 0xbe123c }));
+            outerMesh.add(wire);
+
+            // 미침투 중심부 큐브 (침투 안 된 흰색 영역)
+            const innerMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 })
+            );
+            outerMesh.add(innerMesh);
+
+            sceneAgars.push({ scene, camera, renderer, controls, outerMesh, innerMesh, size, sScale });
+        });
+
+        updateAgarDiffusion(0.5);
+    }
+
+    function updateAgarDiffusion(depth) {
+        document.getElementById('lbl-agar-depth').textContent = depth.toFixed(2) + ' cm';
+
+        sceneAgars.forEach(item => {
+            const { innerMesh, size, sScale } = item;
+            // 미침투 중심부 한 변의 길이: Math.max(0, size - 2 * depth)
+            const unpenetrated = Math.max(0, size - 2 * depth);
+            const ratio = unpenetrated / size;
+
+            if (ratio <= 0.01) {
+                innerMesh.visible = false;
+            } else {
+                innerMesh.visible = true;
+                const innerScale = sScale * ratio;
+                innerMesh.scale.set(innerScale, innerScale, innerScale);
+            }
+
+            // 침투 부피 비율 계산
+            const totalVol = Math.pow(size, 3);
+            const unpVol = Math.pow(unpenetrated, 3);
+            const penPct = Math.round(((totalVol - unpVol) / totalVol) * 100);
+
+            const badge = document.getElementById(`badge-agar-${Math.round(size)}`);
+            if (badge) badge.textContent = `침투율 ${penPct}%`;
+        });
+    }
+
+    // 10. 시뮬레이션 제어 (시작/정지/리셋)
+    function setSimulationRunning(run) {
+        isRunning = run;
+        const btn = document.getElementById('btn-toggle-sim');
+        if (btn) {
+            btn.textContent = isRunning ? '⏸ 일시정지' : '▶ 시작';
+            btn.classList.toggle('primary', !isRunning);
+        }
+    }
+
+    function resetSimulation() {
+        setSimulationRunning(false);
+        simTime = 0;
+        filledLeft = 0;
+        filledRight = 0;
+        rateLeft = 0;
+        rateRight = 0;
+        timeDoneLeft = null;
+        timeDoneRight = null;
+        recentHitsLeft = 0;
+        recentHitsRight = 0;
+        rateTimer = 0;
+
+        document.getElementById('bar-fill-left').style.width = '0%';
+        document.getElementById('val-fill-left').textContent = '0%';
+        document.getElementById('val-rate-left').textContent = '0 개';
+        document.getElementById('val-time-left').textContent = '...';
+
+        document.getElementById('bar-fill-right').style.width = '0%';
+        document.getElementById('val-fill-right').textContent = '0%';
+        document.getElementById('val-rate-right').textContent = '0 개';
+        document.getElementById('val-time-right').textContent = '...';
+
+        document.getElementById('summary-rate-ratio').textContent = '1.0배';
+
+        if (cellMeshL) {
+            cellMeshL.material.opacity = 0.45;
+            cellMeshL.material.color.setHex(COLOR_CELL_GREEN);
+        }
+        cellMeshesR.forEach(m => {
+            m.material.opacity = 0.45;
+            m.material.color.setHex(COLOR_CELL_GREEN);
+        });
+
+        setupParticles();
+    }
+
+    function resetCameras() {
+        if (cameraL && cameraR) {
+            cameraL.position.set(7, 6, 8.5);
+            controlsL.target.set(0, 0, 0);
+            controlsL.update();
+
+            cameraR.position.set(7, 6, 8.5);
+            controlsR.target.set(0, 0, 0);
+            controlsR.update();
+        }
+        if (cameraExp) {
+            cameraExp.position.set(6, 4.5, 7);
+            controlsExp.target.set(0, 0, 0);
+            controlsExp.update();
+        }
+    }
+
+    // 11. 탭 전환
+    function switchTab(tabId) {
+        currentTab = tabId;
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tabId);
+        });
+
+        document.getElementById('view-tab1').classList.toggle('active', tabId === 'tab1');
+        document.getElementById('view-tab2').classList.toggle('active', tabId === 'tab2');
+        document.getElementById('view-tab3').classList.toggle('active', tabId === 'tab3');
+
+        document.getElementById('ctrl-tab1').style.display = tabId === 'tab1' ? 'flex' : 'none';
+        document.getElementById('ctrl-tab2').style.display = tabId === 'tab2' ? 'flex' : 'none';
+        document.getElementById('ctrl-tab3').style.display = tabId === 'tab3' ? 'flex' : 'none';
+
+        // 탭 전환 시 뷰포트 크기 갱신
+        setTimeout(() => {
+            onWindowResize();
+        }, 50);
+    }
+
+    // 12. 윈도우 리사이즈 처리
+    function onWindowResize() {
+        const vpL = document.getElementById('vp-left');
+        if (vpL && rendererL) {
+            cameraL.aspect = vpL.clientWidth / vpL.clientHeight;
+            cameraL.updateProjectionMatrix();
+            rendererL.setSize(vpL.clientWidth, vpL.clientHeight);
+        }
+        const vpR = document.getElementById('vp-right');
+        if (vpR && rendererR) {
+            cameraR.aspect = vpR.clientWidth / vpR.clientHeight;
+            cameraR.updateProjectionMatrix();
+            rendererR.setSize(vpR.clientWidth, vpR.clientHeight);
+        }
+        const vpExp = document.getElementById('vp-explore');
+        if (vpExp && rendererExp) {
+            cameraExp.aspect = vpExp.clientWidth / vpExp.clientHeight;
+            cameraExp.updateProjectionMatrix();
+            rendererExp.setSize(vpExp.clientWidth, vpExp.clientHeight);
+        }
+        sceneAgars.forEach(item => {
+            const vp = item.renderer.domElement.parentElement;
+            if (vp) {
+                item.camera.aspect = vp.clientWidth / vp.clientHeight;
+                item.camera.updateProjectionMatrix();
+                item.renderer.setSize(vp.clientWidth, vp.clientHeight);
+            }
+        });
+    }
+
+    // 13. 메인 렌더 루프
+    let lastTime = performance.now();
+    function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min((now - lastTime) * 0.001, 0.1);
+        lastTime = now;
+
+        if (currentTab === 'tab1') {
+            if (isRunning) {
+                updateParticles(dt);
+                updateDataUI(dt);
+            }
+
+            // 부드러운 유영 회전
+            if (controlsL) controlsL.update();
+            if (controlsR) controlsR.update();
+
+            if (rendererL && sceneL && cameraL) rendererL.render(sceneL, cameraL);
+            if (rendererR && sceneR && cameraR) rendererR.render(sceneR, cameraR);
+        } else if (currentTab === 'tab2') {
+            if (controlsExp) controlsExp.update();
+            if (expCellMesh) expCellMesh.rotation.y += 0.3 * dt;
+            if (rendererExp && sceneExp && cameraExp) rendererExp.render(sceneExp, cameraExp);
+        } else if (currentTab === 'tab3') {
+            sceneAgars.forEach(item => {
+                item.controls.update();
+                item.outerMesh.rotation.y += 0.25 * dt;
+                item.renderer.render(item.scene, item.camera);
+            });
+        }
+    }
+
+    // 14. 이벤트 리스너 바인딩
+    window.addEventListener('DOMContentLoaded', () => {
+        initTab1Viewports();
+        initTab2Explore();
+        initTab3Agar();
+
+        // 탭 버튼 클릭
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+
+        // 하단 컨트롤 버튼
+        document.getElementById('btn-toggle-sim').addEventListener('click', () => {
+            setSimulationRunning(!isRunning);
+        });
+        document.getElementById('btn-reset-sim').addEventListener('click', resetSimulation);
+        document.getElementById('btn-reset-cam').addEventListener('click', resetCameras);
+
+        // 조절 슬라이더
+        const rngSpeed = document.getElementById('rng-speed');
+        if (rngSpeed) {
+            rngSpeed.addEventListener('input', (e) => {
+                simSpeed = parseFloat(e.target.value);
+                document.getElementById('lbl-speed').textContent = simSpeed.toFixed(1) + 'x';
+            });
+        }
+
+        const rngParticles = document.getElementById('rng-particles');
+        if (rngParticles) {
+            rngParticles.addEventListener('input', (e) => {
+                particleCount = parseInt(e.target.value, 10);
+                document.getElementById('lbl-particles').textContent = particleCount + '개';
+                setupParticles();
+            });
+        }
+
+        const rngCellSize = document.getElementById('rng-cell-size');
+        if (rngCellSize) {
+            rngCellSize.addEventListener('input', (e) => {
+                updateExploreCell(parseFloat(e.target.value));
+            });
+        }
+
+        const rngAgarDepth = document.getElementById('rng-agar-depth');
+        if (rngAgarDepth) {
+            rngAgarDepth.addEventListener('input', (e) => {
+                updateAgarDiffusion(parseFloat(e.target.value));
+            });
+        }
+
+        // 테마 토글 버튼
+        const themeBtn = document.getElementById('theme-toggle');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', () => {
+                const isDark = document.body.classList.toggle('dark-mode');
+                document.body.classList.toggle('light-mode', !isDark);
+                themeBtn.textContent = isDark ? '☀️' : '🌙';
+            });
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        // 첫 시작 시 시뮬레이션 자동 재생
+        setSimulationRunning(true);
+        requestAnimationFrame(animate);
+    });
+
+})();
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
