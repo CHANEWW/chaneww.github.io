@@ -1,0 +1,2066 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>체세포 분열과 감수 분열 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+
+        :root {
+            --ink: #0f172a;
+            --ink-soft: #475569;
+            --n2: #1d4ed8;
+            --n1: #c2410c;
+        }
+
+        body, html {
+            width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+            background: radial-gradient(circle at 50% 32%, #ffffff 0%, #edf4fc 52%, #dce8f6 100%);
+            color: var(--ink);
+            touch-action: none;
+            transition: background .35s ease, color .3s ease;
+        }
+        body.dark-mode {
+            background: radial-gradient(circle at 50% 32%, #17253f 0%, #0b1220 58%, #060a14 100%);
+            color: #f8fafc;
+        }
+
+        #canvas-container {
+            position: absolute; inset: 0;
+            z-index: 1;
+            touch-action: none;
+        }
+        #canvas-container canvas { display: block; touch-action: none; }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.90);
+            -webkit-backdrop-filter: blur(18px);
+            backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 8px 26px rgba(15, 23, 42, 0.10);
+            color: var(--ink);
+            transition: background .3s ease, color .3s ease, border-color .3s ease;
+        }
+        body.dark-mode .glass-card {
+            background: rgba(19, 27, 46, 0.90);
+            border-color: rgba(255, 255, 255, 0.13);
+            color: #f8fafc;
+            box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45);
+        }
+
+        /* ---------- 상단 좌측 헤더 ---------- */
+        #top-nav {
+            position: fixed;
+            top: max(14px, env(safe-area-inset-top));
+            left: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 65;
+            max-width: calc(100vw - 36px);
+        }
+        .back-btn {
+            display: inline-flex; align-items: center;
+            padding: 9px 14px;
+            border-radius: 999px;
+            font-size: 12.5px; font-weight: 700;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .back-btn:hover { background: #ffffff; }
+        body.dark-mode .back-btn:hover { background: rgba(38, 50, 74, 0.95); }
+        .title-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 14px; font-weight: 800;
+            letter-spacing: -0.3px;
+            white-space: nowrap;
+        }
+        .vision-badge {
+            font-size: 9px; font-weight: 800; letter-spacing: 0.4px;
+            padding: 2px 7px; border-radius: 999px;
+            background: linear-gradient(135deg, #7ff0e6, #85b4ff);
+            color: #062740;
+        }
+        .qr-button {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 9px 12px;
+            border-radius: 999px;
+            border: none;
+            font-family: inherit;
+            font-size: 12px; font-weight: 700;
+            cursor: pointer;
+        }
+
+        /* ---------- 상단 우측 데이터 카드 ---------- */
+        .data-card {
+            padding: 9px 12px;
+            border-radius: 16px;
+            display: flex; flex-direction: column; gap: 5px;
+            min-width: 176px;
+        }
+        .data-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .data-label { font-size: 10.5px; font-weight: 700; color: #64748b; white-space: nowrap; }
+        body.dark-mode .data-label { color: #94a3b8; }
+        .data-value { font-size: 12px; font-weight: 800; white-space: nowrap; letter-spacing: -0.2px; }
+        .data-value.big { font-size: 14.5px; color: var(--n2); }
+        body.dark-mode .data-value.big { color: #7dd3fc; }
+        .data-value.warm { color: var(--n1); }
+        body.dark-mode .data-value.warm { color: #fdba74; }
+
+        .icon-btn {
+            width: 38px; height: 38px;
+            border-radius: 50%;
+            border: none; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+            padding: 0;
+        }
+        .icon-btn:hover { transform: scale(1.06); }
+        .icon-btn:active { transform: scale(0.95); }
+
+        /* ---------- 상단 중앙 2n / n 배지 ---------- */
+        #count-badge {
+            position: fixed;
+            top: max(14px, env(safe-area-inset-top));
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 64;
+            padding: 8px 16px 9px;
+            border-radius: 18px;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            max-width: min(560px, calc(100vw - 720px));
+        }
+        .cb-main { display: flex; align-items: flex-end; justify-content: center; gap: 9px; flex-wrap: wrap; }
+        .cb-item {
+            display: flex; flex-direction: column; align-items: center;
+            line-height: 1.1; opacity: 0.42;
+            transition: opacity .3s ease;
+        }
+        .cb-item.on { opacity: 1; }
+        .cb-k { font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: -0.2px; white-space: nowrap; }
+        body.dark-mode .cb-k { color: #94a3b8; }
+        .cb-v { font-size: 20px; font-weight: 800; letter-spacing: -0.7px; white-space: nowrap; }
+        .cb-v.n2 { color: var(--n2); }
+        .cb-v.n1 { color: var(--n1); }
+        body.dark-mode .cb-v.n2 { color: #7dd3fc; }
+        body.dark-mode .cb-v.n1 { color: #fdba74; }
+        .cb-arrow { font-size: 15px; font-weight: 800; color: #94a3b8; padding-bottom: 3px; }
+        .cb-sub { font-size: 11.5px; font-weight: 800; color: #334155; letter-spacing: -0.2px; text-align: center; }
+        body.dark-mode .cb-sub { color: #cbd5e1; }
+
+        /* ---------- 우측 조절 패널 ---------- */
+        #side-ctrl {
+            position: fixed !important;
+            right: 20px !important;
+            bottom: 74px !important;
+            top: auto !important;
+            left: auto !important;
+            width: 252px !important;
+            max-height: calc(100vh - 172px) !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            padding: 12px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 9px !important;
+            border-radius: 18px !important;
+            z-index: 100 !important;
+            background: rgba(255, 255, 255, 0.92) !important;
+            border: 1px solid rgba(255, 255, 255, 0.95) !important;
+            color: #0f172a !important;
+            box-shadow: 0 12px 36px rgba(15, 23, 42, 0.14) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            backdrop-filter: blur(20px) !important;
+            overscroll-behavior: contain;
+        }
+        body.dark-mode #side-ctrl {
+            background: rgba(20, 28, 48, 0.92) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            color: #f8fafc !important;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5) !important;
+        }
+        #side-ctrl::-webkit-scrollbar { width: 4px; }
+        #side-ctrl::-webkit-scrollbar-thumb { background: rgba(120, 128, 148, 0.4); border-radius: 2px; }
+
+        .panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        }
+        body.dark-mode .panel-header { border-bottom-color: rgba(255, 255, 255, 0.12); }
+        .panel-title { font-size: 12px; font-weight: 800; letter-spacing: -0.2px; color: #334155; }
+        body.dark-mode .panel-title { color: #cbd5e1; }
+
+        .tab-selector {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            padding: 4px;
+            border-radius: 12px;
+            background: rgba(148, 163, 184, 0.16);
+        }
+        body.dark-mode .tab-selector { background: rgba(255, 255, 255, 0.07); }
+        .tab-btn {
+            border: none;
+            background: transparent;
+            color: #475569;
+            font-family: inherit;
+            font-size: 10.5px;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+            padding: 7px 2px;
+            border-radius: 9px;
+            cursor: pointer;
+            transition: all .18s ease;
+            white-space: nowrap;
+        }
+        .tab-btn.active {
+            background: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.14);
+        }
+        body.dark-mode .tab-btn { color: #cbd5e1; }
+        body.dark-mode .tab-btn.active { background: #2c3b5a; color: #ffffff; }
+
+        .tab-pane { display: none; flex-direction: column; gap: 8px; }
+        .tab-pane.active { display: flex; }
+
+        .stage-now {
+            display: flex; align-items: baseline; gap: 6px;
+            padding: 6px 9px;
+            border-radius: 10px;
+            background: rgba(29, 78, 216, 0.09);
+            border: 1px solid rgba(29, 78, 216, 0.16);
+        }
+        body.dark-mode .stage-now { background: rgba(125, 211, 252, 0.12); border-color: rgba(125, 211, 252, 0.2); }
+        .sn-idx { font-size: 10.5px; font-weight: 800; color: #1d4ed8; }
+        body.dark-mode .sn-idx { color: #7dd3fc; }
+        .sn-name { font-size: 12.5px; font-weight: 800; letter-spacing: -0.3px; }
+        .sn-count { margin-left: auto; font-size: 11.5px; font-weight: 800; color: #1d4ed8; }
+        body.dark-mode .sn-count { color: #7dd3fc; }
+
+        .stage-list { display: flex; flex-direction: column; gap: 3px; }
+        .stage-item {
+            display: flex; align-items: center; gap: 7px;
+            width: 100%;
+            padding: 5px 7px;
+            border-radius: 9px;
+            border: 1px solid transparent;
+            background: rgba(148, 163, 184, 0.11);
+            color: inherit;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: left;
+            transition: all .16s ease;
+        }
+        .stage-item:hover { background: rgba(148, 163, 184, 0.2); }
+        .stage-item.active {
+            background: #1d4ed8;
+            border-color: #1d4ed8;
+            color: #ffffff;
+        }
+        .stage-item.active .si-sub { color: rgba(255, 255, 255, 0.85); }
+        body.dark-mode .stage-item { background: rgba(255, 255, 255, 0.07); }
+        body.dark-mode .stage-item.active { background: #2563eb; border-color: #2563eb; }
+        .si-num {
+            flex: 0 0 auto;
+            width: 17px; height: 17px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9.5px; font-weight: 800;
+            background: rgba(29, 78, 216, 0.14);
+            color: #1d4ed8;
+        }
+        .stage-item.active .si-num { background: rgba(255, 255, 255, 0.25); color: #ffffff; }
+        body.dark-mode .si-num { background: rgba(125, 211, 252, 0.18); color: #7dd3fc; }
+        .si-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+        .si-name { font-size: 11.5px; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; }
+        .si-sub { font-size: 9.5px; font-weight: 700; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        body.dark-mode .si-sub { color: #94a3b8; }
+
+        .ctrl-row { display: flex; flex-direction: column; gap: 4px; }
+        .ctrl-row-h { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; font-weight: 800; color: #334155; }
+        body.dark-mode .ctrl-row-h { color: #cbd5e1; }
+        .ctrl-v { font-size: 10.5px; font-weight: 800; color: #1d4ed8; }
+        body.dark-mode .ctrl-v { color: #7dd3fc; }
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none;
+            width: 100%; height: 5px; border-radius: 999px;
+            background: rgba(148, 163, 184, 0.4);
+            outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 15px; height: 15px; border-radius: 50%;
+            background: #1d4ed8;
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.3);
+        }
+        body.dark-mode input[type="range"]::-webkit-slider-thumb { background: #7dd3fc; }
+
+        .toggle-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+        .tgl {
+            padding: 6px 2px;
+            border-radius: 9px;
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            background: rgba(255, 255, 255, 0.6);
+            color: #64748b;
+            font-family: inherit;
+            font-size: 9.5px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all .16s ease;
+        }
+        .tgl.active { background: #1d4ed8; border-color: #1d4ed8; color: #ffffff; }
+        body.dark-mode .tgl { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+        body.dark-mode .tgl.active { background: #2563eb; border-color: #2563eb; color: #ffffff; }
+
+        .seg-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .seg-btn {
+            padding: 7px 2px;
+            border-radius: 9px;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            background: rgba(255, 255, 255, 0.55);
+            color: #475569;
+            font-family: inherit;
+            font-size: 10px; font-weight: 800;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .seg-btn.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+        body.dark-mode .seg-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+        body.dark-mode .seg-btn.active { background: #7dd3fc; border-color: #7dd3fc; color: #0b1220; }
+
+        .stage-hint {
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.42;
+            letter-spacing: -0.2px;
+            color: #475569;
+            padding: 6px 8px;
+            border-radius: 9px;
+            background: rgba(148, 163, 184, 0.12);
+            word-break: keep-all;
+        }
+        body.dark-mode .stage-hint { color: #cbd5e1; background: rgba(255, 255, 255, 0.06); }
+
+        .legend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 9.5px; font-weight: 800; color: #64748b; }
+        body.dark-mode .legend { color: #94a3b8; }
+        .legend span { display: inline-flex; align-items: center; gap: 4px; }
+        .legend i { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+
+        .wide-btn {
+            width: 100%;
+            padding: 8px;
+            border-radius: 10px;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            background: rgba(255, 255, 255, 0.6);
+            color: inherit;
+            font-family: inherit;
+            font-size: 10.5px; font-weight: 800;
+            cursor: pointer;
+        }
+        body.dark-mode .wide-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); }
+        .wide-btn:hover { background: #ffffff; }
+        body.dark-mode .wide-btn:hover { background: rgba(255, 255, 255, 0.16); }
+
+        /* ---------- 비교표 카드 ---------- */
+        #compare-card {
+            position: fixed;
+            left: 20px;
+            bottom: 92px;
+            width: 372px;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 12px 14px 14px;
+            border-radius: 18px;
+            z-index: 70;
+        }
+        #compare-card.hidden { display: none; }
+        .cc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+        .cc-title { font-size: 12px; font-weight: 800; letter-spacing: -0.3px; }
+        .cc-close {
+            width: 24px; height: 24px; border-radius: 50%;
+            border: none; background: rgba(148, 163, 184, 0.2);
+            color: inherit; font-size: 12px; cursor: pointer; line-height: 1;
+        }
+        .cmp-table { width: 100%; border-collapse: collapse; font-size: 10.5px; letter-spacing: -0.2px; }
+        .cmp-table th, .cmp-table td {
+            padding: 6px 5px;
+            text-align: center;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+            vertical-align: middle;
+            word-break: keep-all;
+        }
+        .cmp-table th { font-size: 10px; font-weight: 800; color: #475569; }
+        body.dark-mode .cmp-table th { color: #cbd5e1; }
+        .cmp-table th:first-child, .cmp-table td:first-child {
+            text-align: left; font-weight: 800; color: #334155; white-space: nowrap;
+        }
+        body.dark-mode .cmp-table td:first-child { color: #e2e8f0; }
+        .cmp-table .th-mit { color: #1d4ed8; }
+        .cmp-table .th-mei { color: #c2410c; }
+        body.dark-mode .cmp-table .th-mit { color: #7dd3fc; }
+        body.dark-mode .cmp-table .th-mei { color: #fdba74; }
+        .cmp-table td b.n2 { color: var(--n2); font-size: 12px; }
+        .cmp-table td b.n1 { color: var(--n1); font-size: 12px; }
+        body.dark-mode .cmp-table td b.n2 { color: #7dd3fc; }
+        body.dark-mode .cmp-table td b.n1 { color: #fdba74; }
+        .cmp-table small { font-size: 9px; font-weight: 700; color: #64748b; }
+        body.dark-mode .cmp-table small { color: #94a3b8; }
+
+        /* ---------- 하단 캡슐 바 ---------- */
+        .cbtn .lbl-short { display: none; }
+        body #bar #btn-play {
+            background: #1d4ed8 !important;
+            border-color: #1d4ed8 !important;
+            color: #ffffff !important;
+        }
+        body #bar #btn-play:hover { background: #1e40af !important; }
+
+        /* ---------- 모바일 ---------- */
+        @media (max-width: 1240px) {
+            #count-badge { top: calc(max(14px, env(safe-area-inset-top)) + 58px); max-width: min(560px, calc(100vw - 40px)); }
+        }
+        @media (max-width: 900px) {
+            .data-card { display: none; }
+            #count-badge { max-width: calc(100vw - 24px); padding: 7px 12px 8px; }
+            .cb-v { font-size: 17px; }
+            .cb-k { font-size: 9px; }
+            .cb-sub { font-size: 10.5px; }
+        }
+        @media (max-width: 768px) {
+            #top-nav { left: 10px; gap: 6px; }
+            .title-badge { display: none; }
+            .vision-badge { display: none; }
+            .back-btn { padding: 8px 10px; font-size: 11px; }
+            .qr-button { padding: 8px 10px; }
+            .qr-button .qr-label { display: none; }
+            #side-ctrl {
+                right: max(8px, env(safe-area-inset-right)) !important;
+                bottom: calc(60px + env(safe-area-inset-bottom)) !important;
+                width: min(224px, calc(100vw - 16px)) !important;
+                max-height: 40vh !important;
+                padding: 9px !important;
+                gap: 7px !important;
+            }
+            #count-badge { top: calc(max(8px, env(safe-area-inset-top)) + 52px); }
+            #compare-card {
+                left: 8px; right: 8px; width: auto;
+                bottom: calc(66px + env(safe-area-inset-bottom));
+                max-height: 44vh;
+                z-index: 120;
+            }
+            .cmp-table { font-size: 10px; }
+            .cbtn .lbl-full { display: none; }
+            .cbtn .lbl-short { display: inline; }
+        }
+        @media (max-height: 520px) and (orientation: landscape) {
+            #side-ctrl { max-height: calc(100vh - 120px) !important; bottom: 56px !important; }
+            #count-badge { top: 8px; }
+            .cb-v { font-size: 15px; }
+        }
+    </style>
+</head>
+<body class="light-mode">
+
+<div id="canvas-container"></div>
+
+<!-- 상단 좌측: 메인 이동 · 제목 · QR -->
+<header id="top-nav">
+    <a href="../../../index.html" class="glass-card back-btn">← 메인으로</a>
+    <div class="glass-card title-badge">
+        <span>체세포 분열과 감수 분열 3D</span>
+        <span class="vision-badge">visionOS</span>
+    </div>
+    <button class="glass-card qr-button" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span aria-hidden="true">📱</span><span class="qr-label">QR code</span>
+    </button>
+</header>
+
+<!-- 상단 우측: 실시간 데이터 카드 + 유틸 -->
+<div class="top-right-bar">
+    <div class="glass-card data-card">
+        <div class="data-item"><span class="data-label">분열 방식</span><span class="data-value" id="val-mode">체세포 분열</span></div>
+        <div class="data-item"><span class="data-label">현재 단계</span><span class="data-value" id="val-stage">① 간기</span></div>
+        <div class="data-item"><span class="data-label">염색체 수</span><span class="data-value big" id="val-count">2n = 4</span></div>
+        <div class="data-item"><span class="data-label">세포 수</span><span class="data-value" id="val-cells">1개</span></div>
+        <div class="data-item"><span class="data-label">DNA량</span><span class="data-value" id="val-dna">2배</span></div>
+    </div>
+    <div class="tr-util" style="display:flex; align-items:center; gap:8px;">
+        <button class="icon-btn glass-card" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">🌙</button>
+    </div>
+</div>
+
+<!-- 상단 중앙: 2n / n 고대비 배지 -->
+<div id="count-badge" class="glass-card">
+    <div class="cb-main" id="cb-main"></div>
+    <div class="cb-sub" id="cb-sub">염색체 수 2n = 4</div>
+</div>
+
+<!-- 비교표 -->
+<div id="compare-card" class="glass-card hidden">
+    <div class="cc-head">
+        <span class="cc-title">📊 체세포 분열 vs 감수 분열</span>
+        <button class="cc-close" id="cc-close" type="button" aria-label="닫기">✕</button>
+    </div>
+    <table class="cmp-table">
+        <thead>
+            <tr><th>비교 항목</th><th class="th-mit">체세포 분열</th><th class="th-mei">감수 분열</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>분열 횟수</td><td>1회</td><td>2회 (연속)</td></tr>
+            <tr><td>딸세포 수</td><td><b>2개</b></td><td><b>4개</b></td></tr>
+            <tr><td>염색체 수</td><td><b class="n2">2n → 2n</b><br><small>불변</small></td><td><b class="n1">2n → n</b><br><small>절반</small></td></tr>
+            <tr><td>딸세포의 유전자</td><td>모세포와 같음</td><td>모세포와 다름<br><small>유전적 다양성</small></td></tr>
+            <tr><td>분열 장소</td><td>온몸<br><small>생장점·형성층</small></td><td>생식 기관<br><small>정소·난소·꽃밥</small></td></tr>
+            <tr><td>의의</td><td>생장·재생<br>무성생식</td><td>유성생식<br><small>세대가 바뀌어도 염색체 수 일정</small></td></tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- 하단 중앙 캡슐 바 -->
+<div class="bottom-control-bar" id="bar">
+    <button class="cbtn" id="btn-prev" type="button">◀<span class="lbl-full">이전 단계</span><span class="lbl-short">이전</span></button>
+    <button class="cbtn" id="btn-play" type="button"><span id="play-icon">▶</span><span id="play-label" class="lbl-full">자동 재생</span></button>
+    <button class="cbtn" id="btn-next" type="button"><span class="lbl-full">다음 단계</span><span class="lbl-short">다음</span>▶</button>
+    <button class="cbtn" id="btn-reset" type="button">↺<span class="lbl-full">초기화</span></button>
+    <button class="cbtn" id="btn-align" type="button">🧭<span class="lbl-full">시점 정렬</span></button>
+</div>
+
+<!-- 우측 하단 전체화면 -->
+<div class="bottom-right-bar" id="fullscreenBtn">
+    <button class="icon-btn glass-card" id="btn-fullscreen" type="button" title="전체화면" aria-label="전체화면">⤢</button>
+</div>
+
+<!-- 우측 조절 패널 -->
+<div class="side-ctrl-panel" id="side-ctrl">
+    <div class="panel-header">
+        <span class="panel-title" id="panel-main-title">🧬 세포 분열 조절</span>
+    </div>
+
+    <div class="tab-selector">
+        <button class="tab-btn active" type="button" data-tab="mitosis">체세포 분열</button>
+        <button class="tab-btn" type="button" data-tab="meiosis">감수 분열</button>
+        <button class="tab-btn" type="button" data-tab="compare">분열 비교</button>
+    </div>
+
+    <!-- 탭 1: 체세포 분열 -->
+    <div class="tab-pane active" id="pane-mitosis">
+        <div class="stage-now">
+            <span class="sn-idx" id="mit-idx">1 / 5</span>
+            <span class="sn-name" id="mit-name">간기</span>
+            <span class="sn-count" id="mit-count">2n = 4</span>
+        </div>
+        <div class="stage-list" id="mit-stages"></div>
+        <div class="ctrl-row">
+            <div class="ctrl-row-h"><span>재생 속도</span><span class="ctrl-v" id="lbl-speed">1.0×</span></div>
+            <input type="range" id="rng-speed" min="0.5" max="2" step="0.25" value="1" aria-label="재생 속도">
+        </div>
+        <div class="toggle-row">
+            <button class="tgl active" type="button" id="tgl-spindle">방추사</button>
+            <button class="tgl active" type="button" id="tgl-labels">2n·n 라벨</button>
+            <button class="tgl" type="button" id="tgl-zoom">염색체 확대</button>
+        </div>
+        <div class="stage-hint" id="mit-hint">핵막 안에서 염색사가 복제되어 DNA량이 2배가 됩니다.</div>
+        <div class="legend">
+            <span><i style="background:#2f7bf6"></i>부계 염색체</span>
+            <span><i style="background:#e8455e"></i>모계 염색체</span>
+        </div>
+    </div>
+
+    <!-- 탭 2: 감수 분열 -->
+    <div class="tab-pane" id="pane-meiosis">
+        <div class="stage-now">
+            <span class="sn-idx" id="mei-idx">1 / 9</span>
+            <span class="sn-name" id="mei-name">간기</span>
+            <span class="sn-count" id="mei-count">2n = 4</span>
+        </div>
+        <div class="stage-list" id="mei-stages"></div>
+        <div class="ctrl-row">
+            <div class="ctrl-row-h"><span>재생 속도</span><span class="ctrl-v" id="lbl-speed2">1.0×</span></div>
+            <input type="range" id="rng-speed2" min="0.5" max="2" step="0.25" value="1" aria-label="재생 속도">
+        </div>
+        <div class="toggle-row">
+            <button class="tgl active" type="button" id="tgl-spindle2">방추사</button>
+            <button class="tgl active" type="button" id="tgl-labels2">2n·n 라벨</button>
+            <button class="tgl" type="button" id="tgl-zoom2">염색체 확대</button>
+        </div>
+        <div class="stage-hint" id="mei-hint">염색사가 복제됩니다. 아직 2n = 4입니다.</div>
+        <div class="legend">
+            <span><i style="background:#2f7bf6"></i>부계 염색체</span>
+            <span><i style="background:#e8455e"></i>모계 염색체</span>
+        </div>
+    </div>
+
+    <!-- 탭 3: 분열 비교 -->
+    <div class="tab-pane" id="pane-compare">
+        <div class="stage-now">
+            <span class="sn-name">두 분열을 나란히 비교</span>
+        </div>
+        <div class="ctrl-row">
+            <div class="ctrl-row-h"><span>단계 진행</span><span class="ctrl-v" id="lbl-cmp">0%</span></div>
+            <input type="range" id="rng-cmp" min="0" max="100" step="1" value="0" aria-label="비교 단계 진행">
+        </div>
+        <div class="seg-row" id="cmp-view">
+            <button class="seg-btn active" type="button" data-view="both">둘 다</button>
+            <button class="seg-btn" type="button" data-view="mit">체세포</button>
+            <button class="seg-btn" type="button" data-view="mei">감수</button>
+        </div>
+        <div class="stage-hint" id="cmp-hint">왼쪽은 체세포 분열(2n → 2n), 오른쪽은 감수 분열(2n → n)입니다. 슬라이더로 두 과정을 같은 비율로 진행시켜 보세요.</div>
+        <button class="wide-btn" type="button" id="btn-table">📊 비교 요약표 보기</button>
+        <div class="legend">
+            <span><i style="background:#2f7bf6"></i>부계 염색체</span>
+            <span><i style="background:#e8455e"></i>모계 염색체</span>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    /* =========================================================
+       0. 상수 · 염색체 정의
+       ========================================================= */
+    const ROD_R = 0.055;       // 염색 분체(막대) 반지름
+    const BOW = 0.095;         // 4분체 X자 모양을 만드는 휘어짐
+    const CHROM_DEF = {
+        A: { color: 0x2f7bf6, len: 0.86 },   // 부계 · 긴 염색체 (상동쌍 1)
+        B: { color: 0xe8455e, len: 0.86 },   // 모계 · 긴 염색체 (상동쌍 1)
+        C: { color: 0x2f7bf6, len: 0.60 },   // 부계 · 짧은 염색체 (상동쌍 2)
+        D: { color: 0xe8455e, len: 0.60 }    // 모계 · 짧은 염색체 (상동쌍 2)
+    };
+    const CHROM_IDS = ['A', 'B', 'C', 'D'];
+    const ALL8 = ['A0', 'A1', 'B0', 'B1', 'C0', 'C1', 'D0', 'D1'];
+    const CELL_COUNT = 7;
+
+    /* =========================================================
+       1. 씬 · 카메라 · 조명
+       ========================================================= */
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 300);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if ('outputEncoding' in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.075;
+    controls.minDistance = 3;
+    controls.maxDistance = 34;
+    controls.rotateSpeed = 0.85;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    keyLight.position.set(5, 7, 8);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xbcd7ff, 0.45);
+    fillLight.position.set(-7, -4, -6);
+    scene.add(fillLight);
+    const rimLight = new THREE.DirectionalLight(0x9fd4ff, 0.35);
+    rimLight.position.set(0, 3, -9);
+    scene.add(rimLight);
+
+    /* =========================================================
+       2. 라벨 스프라이트
+       ========================================================= */
+    const labelCache = new Map();
+
+    function roundRect(g, x, y, w, h, r) {
+        g.beginPath();
+        g.moveTo(x + r, y);
+        g.lineTo(x + w - r, y);
+        g.quadraticCurveTo(x + w, y, x + w, y + r);
+        g.lineTo(x + w, y + h - r);
+        g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        g.lineTo(x + r, y + h);
+        g.quadraticCurveTo(x, y + h, x, y + h - r);
+        g.lineTo(x, y + r);
+        g.quadraticCurveTo(x, y, x + r, y);
+        g.closePath();
+    }
+
+    function buildLabel(text, opts) {
+        opts = opts || {};
+        const fs = 62;
+        const padX = 30, padY = 20;
+        const font = '800 ' + fs + 'px SeoulNamsan, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+        const measure = document.createElement('canvas').getContext('2d');
+        measure.font = font;
+        const tw = Math.ceil(measure.measureText(text).width);
+        const w = Math.max(140, tw + padX * 2);
+        const h = fs + padY * 2;
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const g = cv.getContext('2d');
+        g.font = font;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        roundRect(g, 4, 4, w - 8, h - 8, 22);
+        g.fillStyle = opts.bg || 'rgba(12, 20, 36, 0.90)';
+        g.fill();
+        g.lineWidth = 5;
+        g.strokeStyle = opts.border || 'rgba(140, 190, 255, 0.65)';
+        g.stroke();
+        g.fillStyle = opts.color || '#f8fbff';
+        g.fillText(text, w / 2, h / 2 + 3);
+
+        const tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+        const sp = new THREE.Sprite(mat);
+        const worldH = opts.worldH || 0.30;
+        sp.scale.set(worldH * (w / h), worldH, 1);
+        sp.userData.baseScale = sp.scale.clone();
+        sp.userData.text = text;
+        sp.renderOrder = 30;
+        return sp;
+    }
+
+    function labelOpts(text) {
+        if (/n =/.test(text) && !/2n/.test(text)) {
+            return { color: '#fdba74', border: 'rgba(251, 146, 60, 0.85)' };
+        }
+        if (/2n/.test(text)) {
+            return { color: '#93c5fd', border: 'rgba(96, 165, 250, 0.85)' };
+        }
+        return { color: '#ffe08a', border: 'rgba(250, 204, 21, 0.9)' };
+    }
+
+    function setLabel(sprite, text, opts) {
+        if (sprite.userData.text === text) return;
+        sprite.userData.text = text;
+        const key = text + '|' + (opts && opts.color ? opts.color : '') + '|' + (opts && opts.worldH ? opts.worldH : 0.3);
+        let base = labelCache.get(key);
+        if (!base) {
+            base = buildLabel(text, opts || labelOpts(text));
+            labelCache.set(key, base);
+        }
+        if (sprite.material.map && !sprite.material.map.__shared) {
+            // 캐시 텍스처가 아닌 이전 텍스처만 정리
+            sprite.material.map.dispose();
+        }
+        sprite.material.map = base.material.map;
+        sprite.material.needsUpdate = true;
+        sprite.userData.baseScale = base.scale.clone();
+        sprite.scale.copy(sprite.userData.baseScale).multiplyScalar(sprite.userData.labelScale || 1);
+    }
+
+    /* =========================================================
+       3. 3D 오브젝트 빌더
+       ========================================================= */
+    function buildChromatid(len, color, side) {
+        const g = new THREE.Group();
+        const col = new THREE.Color(color);
+        const rodMat = new THREE.MeshStandardMaterial({
+            color: col, roughness: 0.36, metalness: 0.12,
+            emissive: col.clone().multiplyScalar(0.22),
+            transparent: true, opacity: 1
+        });
+        const beadMat = new THREE.MeshStandardMaterial({
+            color: col.clone().multiplyScalar(0.52), roughness: 0.5, metalness: 0.15,
+            transparent: true, opacity: 1
+        });
+        const thMat = new THREE.MeshStandardMaterial({
+            color: col.clone().lerp(new THREE.Color(0xffffff), 0.18),
+            roughness: 0.95, transparent: true, opacity: 0
+        });
+
+        // 막대(염색 분체): 가운데에서 양끝이 바깥으로 휘어 두 가닥이 X자를 만든다
+        const pts = [];
+        const N = 14;
+        for (let i = 0; i <= N; i++) {
+            const u = i / N;
+            const y = (u - 0.5) * len;
+            const x = side * BOW * Math.pow(Math.abs((u - 0.5) * 2), 1.7);
+            pts.push(new THREE.Vector3(x, y, Math.sin(u * Math.PI * 2) * 0.008));
+        }
+        const curve = new THREE.CatmullRomCurve3(pts);
+        const rod = new THREE.Mesh(new THREE.TubeGeometry(curve, 26, ROD_R, 10, false), rodMat);
+        const tipGeo = new THREE.SphereGeometry(ROD_R * 1.03, 10, 8);
+        const tipA = new THREE.Mesh(tipGeo, rodMat); tipA.position.copy(pts[0]);
+        const tipB = new THREE.Mesh(tipGeo, rodMat); tipB.position.copy(pts[N]);
+        const bead = new THREE.Mesh(new THREE.SphereGeometry(ROD_R * 1.3, 12, 10), beadMat);
+
+        // 간기 염색사(실 모양)
+        const tp = [];
+        const M = 18;
+        for (let i = 0; i <= M; i++) {
+            const u = i / M;
+            const y = (u - 0.5) * len * 1.30;
+            const x = Math.sin(u * 9.2 + side * 2.4) * 0.082 + side * 0.018;
+            const z = Math.cos(u * 7.1 + side * 1.7) * 0.062;
+            tp.push(new THREE.Vector3(x, y, z));
+        }
+        const thCurve = new THREE.CatmullRomCurve3(tp);
+        const thread = new THREE.Mesh(new THREE.TubeGeometry(thCurve, 64, 0.022, 6, false), thMat);
+
+        g.add(rod, tipA, tipB, bead, thread);
+        return { group: g, rod, tips: [tipA, tipB], bead, thread, rodMat, beadMat, thMat };
+    }
+
+    function buildCell() {
+        const group = new THREE.Group();
+
+        const memMat = new THREE.MeshPhysicalMaterial({
+            color: 0x9ec9f4, transparent: true, opacity: 0.15, roughness: 0.12,
+            metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.22,
+            depthWrite: false, side: THREE.FrontSide
+        });
+        const mem = new THREE.Mesh(new THREE.SphereGeometry(1, 44, 30), memMat);
+        const shMat = new THREE.MeshBasicMaterial({
+            color: 0x77aee6, transparent: true, opacity: 0.19, depthWrite: false, side: THREE.BackSide
+        });
+        const shell = new THREE.Mesh(new THREE.SphereGeometry(1, 44, 30), shMat);
+
+        const nucGroup = new THREE.Group();
+        const nucMat = new THREE.MeshPhysicalMaterial({
+            color: 0xa78bfa, transparent: true, opacity: 0.17, roughness: 0.25, depthWrite: false
+        });
+        const nuc = new THREE.Mesh(new THREE.SphereGeometry(1, 36, 24), nucMat);
+        const nucShMat = new THREE.MeshBasicMaterial({
+            color: 0x9b7cf0, transparent: true, opacity: 0.24, depthWrite: false, side: THREE.BackSide
+        });
+        const nucShell = new THREE.Mesh(new THREE.SphereGeometry(1.008, 36, 24), nucShMat);
+        const nucleolus = new THREE.Mesh(
+            new THREE.SphereGeometry(0.17, 20, 16),
+            new THREE.MeshStandardMaterial({ color: 0x7c5cd6, roughness: 0.45, transparent: true, opacity: 0.8 })
+        );
+        nucleolus.position.set(0.42, -0.36, 0.16);
+        nucGroup.add(nuc, nucShell, nucleolus);
+
+        group.add(mem, shell, nucGroup);
+        return { group, mem, shell, memMat, shMat, nucGroup, nucMat, nucShMat, nucleolus };
+    }
+
+    const MAX_SEG = 30;
+    function buildSpindleSet() {
+        const group = new THREE.Group();
+        const list = [];
+        for (let s = 0; s < 3; s++) {
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(MAX_SEG * 2 * 3);
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setDrawRange(0, 0);
+            const mat = new THREE.LineBasicMaterial({ color: 0x7b8da6, transparent: true, opacity: 0, depthWrite: false });
+            const lines = new THREE.LineSegments(geo, mat);
+            const cMat = new THREE.MeshStandardMaterial({
+                color: 0x7c8ea6, emissive: 0x1e293b, roughness: 0.35, metalness: 0.25,
+                transparent: true, opacity: 0
+            });
+            const centA = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), cMat);
+            const centB = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), cMat);
+            const ringA = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.014, 8, 22), cMat);
+            const ringB = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.014, 8, 22), cMat);
+            centA.add(ringA); centB.add(ringB);
+            group.add(lines, centA, centB);
+            list.push({ lines, mat, geo, pos, centA, centB, cMat });
+        }
+        return { group, list };
+    }
+
+    /* =========================================================
+       4. 프레임(키프레임) 정의
+       ========================================================= */
+    function symPos(cx, cy, cz, e, sep) {
+        const v = new THREE.Vector3(sep, 0, 0).applyEuler(new THREE.Euler(e[0], e[1], e[2]));
+        return [[cx - v.x, cy - v.y, cz - v.z], [cx + v.x, cy + v.y, cz + v.z]];
+    }
+    function ch(cx, cy, cz, e, sep, o) {
+        o = o || {};
+        const p = symPos(cx, cy, cz, e, sep);
+        return {
+            c0: p[0], c1: p[1], e: e,
+            rod: o.rod !== undefined ? o.rod : 1,
+            thread: o.thread !== undefined ? o.thread : 0,
+            v0: o.v0 !== undefined ? o.v0 : 1,
+            v1: o.v1 !== undefined ? o.v1 : 1,
+            cond: o.cond !== undefined ? o.cond : 1
+        };
+    }
+    function chAbs(c0, c1, e, o) {
+        o = o || {};
+        return {
+            c0: c0, c1: c1, e: e,
+            rod: o.rod !== undefined ? o.rod : 1,
+            thread: o.thread !== undefined ? o.thread : 0,
+            v0: o.v0 !== undefined ? o.v0 : 1,
+            v1: o.v1 !== undefined ? o.v1 : 1,
+            cond: o.cond !== undefined ? o.cond : 1
+        };
+    }
+    function cellDef(i, x, y, r, o) {
+        o = o || {};
+        return {
+            i: i, x: x, y: y, z: o.z || 0, r: r,
+            sx: o.sx !== undefined ? o.sx : 1,
+            sy: o.sy !== undefined ? o.sy : 1,
+            mem: o.mem !== undefined ? o.mem : 0.15,
+            nuc: o.nuc !== undefined ? o.nuc : 0.17,
+            nr: o.nr !== undefined ? o.nr : r * 0.63,
+            label: o.label || '',
+            labelOp: o.label ? 1 : 0,
+            labelDy: o.labelDy || 0
+        };
+    }
+    function spin(p1, p2, targets, op) {
+        return { p1: p1, p2: p2, targets: targets || [], op: op };
+    }
+
+    /* ---------- 체세포 분열 프레임 (0~8) ---------- */
+    const MIT_FRAMES = [
+        // 0 · 간기 시작 (염색사 한 가닥)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.15, nuc: 0.17, nr: 0.78, label: '모세포 2n = 4' })],
+            chroms: {
+                A: ch(-0.17, 0.11, 0.05, [0.45, 0.30, 0.35], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 }),
+                B: ch(0.15, 0.19, -0.09, [0.22, 0.80, 0.28], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 }),
+                C: ch(0.09, -0.15, 0.14, [0.60, 0.28, 0.70], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 }),
+                D: ch(-0.13, -0.17, -0.11, [0.30, 0.52, 0.22], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 })
+            },
+            spindles: []
+        },
+        // 1 · 간기 끝 (DNA 2배 복제)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.15, nuc: 0.18, nr: 0.78, label: '모세포 2n = 4' })],
+            chroms: {
+                A: ch(-0.17, 0.11, 0.05, [0.45, 0.30, 0.35], 0.095, { rod: 0, thread: 1, cond: 0.85 }),
+                B: ch(0.15, 0.19, -0.09, [0.22, 0.80, 0.28], 0.095, { rod: 0, thread: 1, cond: 0.85 }),
+                C: ch(0.09, -0.15, 0.14, [0.60, 0.28, 0.70], 0.095, { rod: 0, thread: 1, cond: 0.85 }),
+                D: ch(-0.13, -0.17, -0.11, [0.30, 0.52, 0.22], 0.095, { rod: 0, thread: 1, cond: 0.85 })
+            },
+            spindles: []
+        },
+        // 2 · 전기 중반 (응축 · 핵막 소실)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.16, nuc: 0.05, nr: 0.80 })],
+            chroms: {
+                A: ch(-0.14, 0.10, 0.04, [0.42, 0.28, 0.30], 0.075, { rod: 0.8, thread: 0.42, cond: 0.93 }),
+                B: ch(0.13, 0.15, -0.07, [0.20, 0.72, 0.24], 0.075, { rod: 0.8, thread: 0.42, cond: 0.93 }),
+                C: ch(0.08, -0.13, 0.12, [0.55, 0.26, 0.62], 0.075, { rod: 0.8, thread: 0.42, cond: 0.93 }),
+                D: ch(-0.11, -0.15, -0.09, [0.28, 0.48, 0.20], 0.075, { rod: 0.8, thread: 0.42, cond: 0.93 })
+            },
+            spindles: [spin([-1.12, 0, 0], [1.12, 0, 0], ALL8, 0.25)]
+        },
+        // 3 · 전기 끝 (염색체 응축 완료 · 방추사 완성)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.16, nuc: 0, nr: 0.80 })],
+            chroms: {
+                A: ch(-0.14, 0.10, 0.04, [0.35, 0.22, 0.20], 0.075, { cond: 1 }),
+                B: ch(0.13, 0.16, -0.07, [0.18, 0.60, 0.20], 0.075, { cond: 1 }),
+                C: ch(0.08, -0.13, 0.12, [0.50, 0.22, 0.50], 0.075, { cond: 1 }),
+                D: ch(-0.11, -0.15, -0.09, [0.28, 0.40, 0.20], 0.075, { cond: 1 })
+            },
+            spindles: [spin([-1.12, 0, 0], [1.12, 0, 0], ALL8, 0.85)]
+        },
+        // 4 · 중기 (적도판에 일렬 배열)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.17, nuc: 0, nr: 0.80 })],
+            chroms: {
+                A: ch(0, 0.68, 0.20, [0, 0, 0], 0.09, { cond: 0.55 }),
+                C: ch(0, 0.26, -0.20, [0, 0, 0], 0.09, { cond: 0.52 }),
+                B: ch(0, -0.26, 0.20, [0, 0, 0], 0.09, { cond: 0.55 }),
+                D: ch(0, -0.68, -0.20, [0, 0, 0], 0.09, { cond: 0.52 })
+            },
+            spindles: [spin([-1.12, 0, 0], [1.12, 0, 0], ALL8, 1.0)]
+        },
+        // 5 · 후기 중반 (염색 분체 분리)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.17, nuc: 0, sx: 1.06 })],
+            chroms: {
+                A: ch(0, 0.68, 0.20, [0, 0, 0], 0.38, { cond: 0.55 }),
+                C: ch(0, 0.26, -0.20, [0, 0, 0], 0.38, { cond: 0.52 }),
+                B: ch(0, -0.26, 0.20, [0, 0, 0], 0.38, { cond: 0.55 }),
+                D: ch(0, -0.68, -0.20, [0, 0, 0], 0.38, { cond: 0.52 })
+            },
+            spindles: [spin([-1.18, 0, 0], [1.18, 0, 0], ALL8, 0.95)]
+        },
+        // 6 · 후기 끝 (양극 도착)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.16, nuc: 0, sx: 1.12 })],
+            chroms: {
+                A: ch(0, 0.68, 0.20, [0, 0, 0], 0.72, { cond: 0.55 }),
+                C: ch(0, 0.26, -0.20, [0, 0, 0], 0.72, { cond: 0.52 }),
+                B: ch(0, -0.26, 0.20, [0, 0, 0], 0.72, { cond: 0.55 }),
+                D: ch(0, -0.68, -0.20, [0, 0, 0], 0.72, { cond: 0.52 })
+            },
+            spindles: [spin([-1.24, 0, 0], [1.24, 0, 0], ALL8, 0.85)]
+        },
+        // 7 · 말기 (핵막 재생성 · 세포질 분열 시작)
+        {
+            cells: [
+                cellDef(0, 0, 0, 1.20, { mem: 0.03, nuc: 0, sx: 1.05 }),
+                cellDef(1, -1.16, 0, 0.95, { mem: 0.18, nuc: 0.05, nr: 0.58, label: '딸세포 2n = 4' }),
+                cellDef(2, 1.16, 0, 0.95, { mem: 0.18, nuc: 0.05, nr: 0.58, label: '딸세포 2n = 4' })
+            ],
+            chroms: {
+                A: chAbs([-1.14, 0.26, 0.06], [1.14, 0.26, 0.06], [0.10, 0.15, 0.22], { cond: 0.70 }),
+                B: chAbs([-1.16, -0.12, 0.18], [1.16, -0.12, 0.18], [0.06, 0.10, 1.42], { cond: 0.70 }),
+                C: chAbs([-1.06, -0.28, -0.04], [1.06, -0.28, -0.04], [0.14, 0.20, -0.62], { cond: 0.70 }),
+                D: chAbs([-1.22, 0.02, -0.20], [1.22, 0.02, -0.20], [0.08, -0.15, 2.02], { cond: 0.70 })
+            },
+            spindles: [spin([-1.0, 0, 0], [1.0, 0, 0], ALL8, 0.12)]
+        },
+        // 8 · 말기 끝 (딸세포 2개 완성)
+        {
+            cells: [
+                cellDef(1, -1.16, 0, 0.97, { mem: 0.20, nuc: 0.18, nr: 0.60, label: '딸세포 2n = 4' }),
+                cellDef(2, 1.16, 0, 0.97, { mem: 0.20, nuc: 0.18, nr: 0.60, label: '딸세포 2n = 4' })
+            ],
+            chroms: {
+                A: chAbs([-1.14, 0.26, 0.06], [1.14, 0.26, 0.06], [0.10, 0.15, 0.22], { cond: 0.70 }),
+                B: chAbs([-1.16, -0.12, 0.18], [1.16, -0.12, 0.18], [0.06, 0.10, 1.42], { cond: 0.70 }),
+                C: chAbs([-1.06, -0.28, -0.04], [1.06, -0.28, -0.04], [0.14, 0.20, -0.62], { cond: 0.70 }),
+                D: chAbs([-1.22, 0.02, -0.20], [1.22, 0.02, -0.20], [0.08, -0.15, 2.02], { cond: 0.70 })
+            },
+            spindles: []
+        }
+    ];
+
+    /* ---------- 감수 분열 프레임 (0~11) ---------- */
+    const MEI_FRAMES = [
+        // 0 · 간기 시작
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.15, nuc: 0.17, nr: 0.78, label: '모세포 2n = 4' })],
+            chroms: {
+                A: ch(-0.17, 0.11, 0.05, [0.45, 0.30, 0.35], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 }),
+                B: ch(0.15, 0.19, -0.09, [0.22, 0.80, 0.28], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 }),
+                C: ch(0.09, -0.15, 0.14, [0.60, 0.28, 0.70], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 }),
+                D: ch(-0.13, -0.17, -0.11, [0.30, 0.52, 0.22], 0.012, { rod: 0, thread: 1, v1: 0, cond: 0.85 })
+            },
+            spindles: []
+        },
+        // 1 · 간기 끝 (복제)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.15, nuc: 0.18, nr: 0.78, label: '모세포 2n = 4' })],
+            chroms: {
+                A: ch(-0.17, 0.11, 0.05, [0.45, 0.30, 0.35], 0.095, { rod: 0, thread: 1, cond: 0.85 }),
+                B: ch(0.15, 0.19, -0.09, [0.22, 0.80, 0.28], 0.095, { rod: 0, thread: 1, cond: 0.85 }),
+                C: ch(0.09, -0.15, 0.14, [0.60, 0.28, 0.70], 0.095, { rod: 0, thread: 1, cond: 0.85 }),
+                D: ch(-0.13, -0.17, -0.11, [0.30, 0.52, 0.22], 0.095, { rod: 0, thread: 1, cond: 0.85 })
+            },
+            spindles: []
+        },
+        // 2 · 전기 I 중반 (상동 염색체 접합 → 2가 염색체)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.16, nuc: 0.06, nr: 0.80 })],
+            chroms: {
+                A: ch(-0.10, 0.32, 0.03, [0.10, 0, 0.05], 0.075, { rod: 0.8, thread: 0.4, cond: 0.93 }),
+                B: ch(0.11, 0.32, -0.03, [0.10, 0, 0.05], 0.075, { rod: 0.8, thread: 0.4, cond: 0.93 }),
+                C: ch(-0.10, -0.31, 0.03, [0.12, 0, 0], 0.075, { rod: 0.8, thread: 0.4, cond: 0.93 }),
+                D: ch(0.10, -0.31, -0.03, [0.12, 0, 0], 0.075, { rod: 0.8, thread: 0.4, cond: 0.93 })
+            },
+            spindles: [spin([-1.12, 0, 0], [1.12, 0, 0], ALL8, 0.18)],
+            anno: { text: '2가 염색체 (4분체)', pos: [1.42, 0.92, 0], op: 1 }
+        },
+        // 3 · 전기 I 끝
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.16, nuc: 0, nr: 0.80 })],
+            chroms: {
+                A: ch(-0.11, 0.33, 0.03, [0.08, 0, 0.03], 0.075, { cond: 1 }),
+                B: ch(0.11, 0.33, -0.03, [0.08, 0, 0.03], 0.075, { cond: 1 }),
+                C: ch(-0.10, -0.32, 0.03, [0.10, 0, 0], 0.075, { cond: 1 }),
+                D: ch(0.10, -0.32, -0.03, [0.10, 0, 0], 0.075, { cond: 1 })
+            },
+            spindles: [spin([-1.12, 0, 0], [1.12, 0, 0], ALL8, 0.85)],
+            anno: { text: '2가 염색체 (4분체)', pos: [1.42, 0.92, 0], op: 1 }
+        },
+        // 4 · 중기 I (2가 염색체 적도판 배열)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.17, nuc: 0, nr: 0.80 })],
+            chroms: {
+                A: ch(-0.11, 0.40, 0.10, [0, 0, 0], 0.09, { cond: 0.76 }),
+                B: ch(0.11, 0.40, 0.10, [0, 0, 0], 0.09, { cond: 0.76 }),
+                C: ch(-0.11, -0.40, -0.08, [0, 0, 0], 0.09, { cond: 0.80 }),
+                D: ch(0.11, -0.40, -0.08, [0, 0, 0], 0.09, { cond: 0.80 })
+            },
+            spindles: [spin([-1.12, 0, 0], [1.12, 0, 0], ALL8, 1.0)]
+        },
+        // 5 · 후기 I 중반 (상동 염색체 분리)
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.17, nuc: 0, sx: 1.06 })],
+            chroms: {
+                A: ch(-0.42, 0.40, 0.06, [0, 0, 0], 0.075, { cond: 0.76 }),
+                B: ch(0.42, 0.40, 0.06, [0, 0, 0], 0.075, { cond: 0.76 }),
+                C: ch(-0.42, -0.40, -0.04, [0, 0, 0], 0.075, { cond: 0.80 }),
+                D: ch(0.42, -0.40, -0.04, [0, 0, 0], 0.075, { cond: 0.80 })
+            },
+            spindles: [spin([-1.18, 0, 0], [1.18, 0, 0], ALL8, 0.95)]
+        },
+        // 6 · 후기 I 끝
+        {
+            cells: [cellDef(0, 0, 0, 1.20, { mem: 0.16, nuc: 0, sx: 1.12 })],
+            chroms: {
+                A: ch(-0.72, 0.40, 0.06, [0, 0, 0], 0.075, { cond: 0.78 }),
+                B: ch(0.72, 0.40, 0.06, [0, 0, 0], 0.075, { cond: 0.78 }),
+                C: ch(-0.72, -0.40, -0.04, [0, 0, 0], 0.075, { cond: 0.82 }),
+                D: ch(0.72, -0.40, -0.04, [0, 0, 0], 0.075, { cond: 0.82 })
+            },
+            spindles: [spin([-1.24, 0, 0], [1.24, 0, 0], ALL8, 0.85)]
+        },
+        // 7 · 말기 I (2개 세포 · n = 2)
+        {
+            cells: [
+                cellDef(0, 0, 0, 1.20, { mem: 0.03, nuc: 0, sx: 1.05 }),
+                cellDef(1, -1.16, 0, 0.95, { mem: 0.18, nuc: 0.15, nr: 0.56, label: 'n = 2' }),
+                cellDef(2, 1.16, 0, 0.95, { mem: 0.18, nuc: 0.15, nr: 0.56, label: 'n = 2' })
+            ],
+            chroms: {
+                A: ch(-1.16, 0.20, 0.06, [0.06, 0, 0.16], 0.09, { cond: 0.58 }),
+                B: ch(1.16, 0.20, 0.06, [0.06, 0, 0.16], 0.09, { cond: 0.58 }),
+                C: ch(-1.09, -0.22, 0.00, [0.10, 0.12, -0.55], 0.09, { cond: 0.55 }),
+                D: ch(1.09, -0.22, 0.00, [0.10, 0.12, -0.55], 0.09, { cond: 0.55 })
+            },
+            spindles: [spin([-1.0, 0, 0], [1.0, 0, 0], ALL8, 0.1)]
+        },
+        // 8 · 전기 II (복제 없이 2번째 분열 시작)
+        {
+            cells: [
+                cellDef(1, -1.16, 0, 0.95, { mem: 0.18, nuc: 0.04, nr: 0.56 }),
+                cellDef(2, 1.16, 0, 0.95, { mem: 0.18, nuc: 0.04, nr: 0.56 })
+            ],
+            chroms: {
+                A: ch(-1.10, 0.02, 0.06, [0, 0, 1.57], 0.075, { cond: 0.86 }),
+                B: ch(1.10, 0.02, 0.06, [0, 0, 1.57], 0.075, { cond: 0.86 }),
+                C: ch(-1.24, 0.00, -0.10, [0, 0, 1.57], 0.075, { cond: 0.86 }),
+                D: ch(1.24, 0.00, -0.10, [0, 0, 1.57], 0.075, { cond: 0.86 })
+            },
+            spindles: [
+                spin([-1.16, 0.98, 0], [-1.16, -0.98, 0], ['A0', 'A1', 'C0', 'C1'], 0.7),
+                spin([1.16, 0.98, 0], [1.16, -0.98, 0], ['B0', 'B1', 'D0', 'D1'], 0.7)
+            ]
+        },
+        // 9 · 중기 II
+        {
+            cells: [
+                cellDef(1, -1.16, 0, 0.95, { mem: 0.18, nuc: 0, nr: 0.56 }),
+                cellDef(2, 1.16, 0, 0.95, { mem: 0.18, nuc: 0, nr: 0.56 })
+            ],
+            chroms: {
+                A: ch(-1.06, 0, 0.06, [0, 0, 1.57], 0.075, { cond: 0.80 }),
+                B: ch(1.06, 0, 0.06, [0, 0, 1.57], 0.075, { cond: 0.80 }),
+                C: ch(-1.26, 0, -0.08, [0, 0, 1.57], 0.075, { cond: 0.80 }),
+                D: ch(1.26, 0, -0.08, [0, 0, 1.57], 0.075, { cond: 0.80 })
+            },
+            spindles: [
+                spin([-1.16, 0.96, 0], [-1.16, -0.96, 0], ['A0', 'A1', 'C0', 'C1'], 0.95),
+                spin([1.16, 0.96, 0], [1.16, -0.96, 0], ['B0', 'B1', 'D0', 'D1'], 0.95)
+            ]
+        },
+        // 10 · 후기 II (염색 분체 분리)
+        {
+            cells: [
+                cellDef(1, -1.16, 0, 0.95, { mem: 0.18, nuc: 0, sy: 1.12 }),
+                cellDef(2, 1.16, 0, 0.95, { mem: 0.18, nuc: 0, sy: 1.12 })
+            ],
+            chroms: {
+                A: ch(-1.06, 0, 0.06, [0, 0, 1.57], 0.40, { cond: 0.76 }),
+                B: ch(1.06, 0, 0.06, [0, 0, 1.57], 0.40, { cond: 0.76 }),
+                C: ch(-1.26, 0, -0.08, [0, 0, 1.57], 0.40, { cond: 0.76 }),
+                D: ch(1.26, 0, -0.08, [0, 0, 1.57], 0.40, { cond: 0.76 })
+            },
+            spindles: [
+                spin([-1.16, 1.04, 0], [-1.16, -1.04, 0], ['A0', 'A1', 'C0', 'C1'], 0.9),
+                spin([1.16, 1.04, 0], [1.16, -1.04, 0], ['B0', 'B1', 'D0', 'D1'], 0.9)
+            ]
+        },
+        // 11 · 말기 II (생식세포 4개 · 각 n = 2)
+        {
+            cells: [
+                cellDef(3, -1.02, 0.72, 0.62, { mem: 0.20, nuc: 0.18, nr: 0.42, label: 'n = 2' }),
+                cellDef(4, -1.02, -0.72, 0.62, { mem: 0.20, nuc: 0.18, nr: 0.42, label: 'n = 2' }),
+                cellDef(5, 1.02, 0.72, 0.62, { mem: 0.20, nuc: 0.18, nr: 0.42, label: 'n = 2' }),
+                cellDef(6, 1.02, -0.72, 0.62, { mem: 0.20, nuc: 0.18, nr: 0.42, label: 'n = 2' })
+            ],
+            chroms: {
+                A: chAbs([-1.00, 0.86, 0.04], [-1.00, -0.58, -0.04], [0.06, 0.12, 0.30], { cond: 0.48 }),
+                B: chAbs([1.00, 0.86, 0.04], [1.00, -0.58, -0.04], [0.06, 0.12, -0.30], { cond: 0.48 }),
+                C: chAbs([-1.00, 0.48, -0.03], [-1.00, -0.94, 0.03], [0.08, 0.14, 1.15], { cond: 0.46 }),
+                D: chAbs([1.00, 0.48, -0.03], [1.00, -0.94, 0.03], [0.08, 0.14, -1.15], { cond: 0.46 })
+            },
+            spindles: [],
+            anno: { text: '', pos: [0, 1.95, 0], op: 0 }
+        }
+    ];
+
+    /* ---------- 단계 정의 (프레임 범위 + UI 문구) ---------- */
+    const MIT_STAGES = [
+        {
+            name: '간기', tag: '①', sub: '염색사 복제', frames: [0, 1],
+            hint: '핵막 안에서 염색사가 복제되어 DNA량이 2배가 됩니다. 염색체 수는 2n = 4 그대로입니다.',
+            count: '2n = 4', dna: '2배', cells: '1개',
+            badge: [['모세포', '2n = 4', 'n2'], ['복제 후 DNA량', '2n = 4', 'n2']],
+            badgeSub: 'DNA량만 2배 · 염색체 수 불변 (2n)'
+        },
+        {
+            name: '전기', tag: '②', sub: '핵막 소실 · 응축', frames: [1, 3],
+            hint: '핵막이 사라지고 염색사가 굵고 짧은 염색체로 응축됩니다. 양극에 방추사가 만들어집니다.',
+            count: '2n = 4', dna: '2배', cells: '1개',
+            badge: [['염색체 수', '2n = 4', 'n2']],
+            badgeSub: '2n = 4 · 염색체 4개가 뚜렷하게'
+        },
+        {
+            name: '중기', tag: '③', sub: '적도판 배열', frames: [3, 4],
+            hint: '염색체 4개가 세포의 적도판에 일렬로 늘어섭니다. 염색체를 관찰하기 가장 좋은 시기입니다.',
+            count: '2n = 4', dna: '2배', cells: '1개',
+            badge: [['염색체 수', '2n = 4', 'n2']],
+            badgeSub: '염색체 관찰 최적기 · 2n = 4'
+        },
+        {
+            name: '후기', tag: '④', sub: '염색 분체 분리', frames: [4, 6],
+            hint: '방추사가 수축하면서 염색 분체가 갈라져 양쪽 극으로 이동합니다. 염색체 수는 아직 2n = 4입니다.',
+            count: '2n = 4', dna: '2배', cells: '1개 (이동 중)',
+            badge: [['염색체 수', '2n = 4', 'n2']],
+            badgeSub: '한 염색체 → 두 염색 분체가 양극으로'
+        },
+        {
+            name: '말기 · 세포질 분열', tag: '⑤', sub: '딸세포 2개 완성', frames: [6, 8],
+            hint: '핵막이 다시 생기고 세포질이 나뉘어 딸세포 2개가 완성됩니다. 각 딸세포는 모세포와 똑같이 2n = 4!',
+            count: '딸세포 2n = 4', dna: '2배', cells: '2개',
+            badge: [['모세포', '2n = 4', 'n2'], ['딸세포 2개', '각 2n = 4', 'n2']],
+            badgeSub: '염색체 수 불변 (2n → 2n) · 모세포와 유전자가 같음'
+        }
+    ];
+
+    const MEI_STAGES = [
+        {
+            name: '간기', tag: '①', sub: '염색사 복제', frames: [0, 1],
+            hint: '염색사가 복제되어 DNA량이 2배가 됩니다. 아직 2n = 4입니다.',
+            count: '2n = 4', dna: '2배', cells: '1개',
+            badge: [['모세포', '2n = 4', 'n2']],
+            badgeSub: '모세포 2n = 4 · 감수 분열 시작'
+        },
+        {
+            name: '전기 I', tag: '②', sub: '2가 염색체 형성', frames: [1, 3],
+            hint: '상동 염색체끼리 붙어 2가 염색체(4분체)를 만듭니다. 체세포 분열과 결정적으로 다른 점입니다!',
+            count: '2n = 4', dna: '2배', cells: '1개',
+            badge: [['모세포', '2n = 4', 'n2']],
+            badgeSub: '상동 염색체 2쌍 접합 → 4분체 2개'
+        },
+        {
+            name: '중기 I', tag: '③', sub: '2가 염색체 배열', frames: [3, 4],
+            hint: '2가 염색체 2개가 적도판에 배열됩니다. 상동 염색체가 서로 반대쪽 극을 향합니다.',
+            count: '2n = 4', dna: '2배', cells: '1개',
+            badge: [['모세포', '2n = 4', 'n2']],
+            badgeSub: '2가 염색체가 적도판에 배열'
+        },
+        {
+            name: '후기 I', tag: '④', sub: '상동 염색체 분리', frames: [4, 6],
+            hint: '상동 염색체가 갈라져 양극으로 이동합니다. 염색 분체는 아직 붙어 있어 염색체 수가 반으로 줄어듭니다.',
+            count: '2n → n', dna: '2배', cells: '1개 (이동 중)',
+            badge: [['모세포', '2n = 4', 'n2'], ['감수 1분열 후', 'n = 2', 'n1']],
+            badgeSub: '상동 염색체 분리 · 염색체 수 반감 시작 (2n → n)'
+        },
+        {
+            name: '말기 I', tag: '⑤', sub: '2개 세포 · n = 2', frames: [6, 7],
+            hint: '2개 세포로 나뉘며 염색체 수가 2n = 4 → n = 2로 반감합니다. 체세포 분열과 가장 큰 차이!',
+            count: 'n = 2', dna: '2배', cells: '2개',
+            badge: [['모세포', '2n = 4', 'n2'], ['감수 1분열 후', 'n = 2', 'n1']],
+            badgeSub: '염색체 수 반감! (2n = 4 → n = 2)'
+        },
+        {
+            name: '전기 II', tag: '⑥', sub: '복제 없이 시작', frames: [7, 8],
+            hint: '복제 없이 바로 2번째 분열이 시작됩니다. 각 세포에 염색체가 2개(n = 2)씩 있습니다.',
+            count: 'n = 2', dna: '2배', cells: '2개',
+            badge: [['모세포', '2n = 4', 'n2'], ['감수 1분열 후', 'n = 2', 'n1']],
+            badgeSub: '염색체 복제 없음 · n = 2 유지'
+        },
+        {
+            name: '중기 II', tag: '⑦', sub: '적도판 배열', frames: [8, 9],
+            hint: '두 세포에서 각각 염색체 2개가 적도판에 배열됩니다.',
+            count: 'n = 2', dna: '2배', cells: '2개',
+            badge: [['모세포', '2n = 4', 'n2'], ['감수 1분열 후', 'n = 2', 'n1']],
+            badgeSub: '두 세포가 동시에 중기'
+        },
+        {
+            name: '후기 II', tag: '⑧', sub: '염색 분체 분리', frames: [9, 10],
+            hint: '염색 분체가 갈라져 양극으로 이동합니다. 이제 곧 4개의 생식세포가 됩니다.',
+            count: 'n = 2', dna: '1배', cells: '2개 → 4개',
+            badge: [['모세포', '2n = 4', 'n2'], ['감수 1분열 후', 'n = 2', 'n1']],
+            badgeSub: '염색 분체 분리 · 염색체 수 n = 2 유지'
+        },
+        {
+            name: '말기 II', tag: '⑨', sub: '생식세포 4개', frames: [10, 11],
+            hint: '최종 4개의 생식세포(n = 2)가 완성됩니다. 염색체 수가 모세포의 절반입니다!',
+            count: '각 n = 2', dna: '1배', cells: '4개',
+            badge: [['모세포', '2n = 4', 'n2'], ['감수 1분열 후', 'n = 2', 'n1'], ['생식세포 4개', '각 n = 2', 'n1']],
+            badgeSub: '염색체 수 절반 (2n → n) · 생식세포 4개'
+        }
+    ];
+
+    /* =========================================================
+       5. 프레임 정규화 · 보간
+       ========================================================= */
+    function emptyCell(i) {
+        return { i: i, x: 0, y: 0, z: 0, r: 1, sx: 1, sy: 1, mem: 0, nuc: 0, nr: 0.6, label: '', labelOp: 0, labelDy: 0 };
+    }
+    function normalizeFrame(f) {
+        const cells = [];
+        for (let i = 0; i < CELL_COUNT; i++) {
+            const src = (f.cells || []).find(c => c.i === i);
+            cells.push(src ? Object.assign(emptyCell(i), src) : emptyCell(i));
+        }
+        const chroms = {};
+        CHROM_IDS.forEach(id => {
+            const c = f.chroms[id];
+            chroms[id] = {
+                c0: c.c0.slice(), c1: c.c1.slice(), e: c.e.slice(),
+                rod: c.rod, thread: c.thread, v0: c.v0, v1: c.v1, cond: c.cond
+            };
+        });
+        const spindles = [];
+        for (let s = 0; s < 3; s++) {
+            const src = (f.spindles || [])[s];
+            spindles.push(src
+                ? { p1: src.p1.slice(), p2: src.p2.slice(), targets: src.targets.slice(), op: src.op }
+                : { p1: [0, 0, 0], p2: [0, 0, 0], targets: [], op: 0 });
+        }
+        const anno = f.anno
+            ? { text: f.anno.text, pos: f.anno.pos.slice(), op: f.anno.op }
+            : { text: '', pos: [0, 2, 0], op: 0 };
+        return { cells: cells, chroms: chroms, spindles: spindles, anno: anno };
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function lerp3(a, b, t) { return [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)]; }
+
+    function blendFrames(A, B, u) {
+        const cells = [];
+        for (let i = 0; i < CELL_COUNT; i++) {
+            const a = A.cells[i], b = B.cells[i];
+            let label = a.label, lop = lerp(a.labelOp, b.labelOp, u);
+            if (b.label && (u > 0.35 || !a.label)) label = b.label;
+            else if (!a.label && !b.label) label = '';
+            cells.push({
+                i: i,
+                x: lerp(a.x, b.x, u), y: lerp(a.y, b.y, u), z: lerp(a.z, b.z, u),
+                r: lerp(a.r, b.r, u), sx: lerp(a.sx, b.sx, u), sy: lerp(a.sy, b.sy, u),
+                mem: lerp(a.mem, b.mem, u), nuc: lerp(a.nuc, b.nuc, u), nr: lerp(a.nr, b.nr, u),
+                label: label, labelOp: lop, labelDy: lerp(a.labelDy || 0, b.labelDy || 0, u)
+            });
+        }
+        const chroms = {};
+        CHROM_IDS.forEach(id => {
+            const a = A.chroms[id], b = B.chroms[id];
+            chroms[id] = {
+                c0: lerp3(a.c0, b.c0, u), c1: lerp3(a.c1, b.c1, u),
+                e: lerp3(a.e, b.e, u),
+                rod: lerp(a.rod, b.rod, u), thread: lerp(a.thread, b.thread, u),
+                v0: lerp(a.v0, b.v0, u), v1: lerp(a.v1, b.v1, u),
+                cond: lerp(a.cond, b.cond, u)
+            };
+        });
+        const spindles = [];
+        for (let s = 0; s < 3; s++) {
+            const a = A.spindles[s], b = B.spindles[s];
+            spindles.push({
+                p1: lerp3(a.p1, b.p1, u), p2: lerp3(a.p2, b.p2, u),
+                targets: (u < 0.5 ? a.targets : b.targets),
+                op: lerp(a.op, b.op, u)
+            });
+        }
+        const anno = {
+            text: (u < 0.5 ? A.anno.text : B.anno.text),
+            pos: lerp3(A.anno.pos, B.anno.pos, u),
+            op: lerp(A.anno.op, B.anno.op, u)
+        };
+        return { cells: cells, chroms: chroms, spindles: spindles, anno: anno };
+    }
+
+    const MIT_NORM = MIT_FRAMES.map(normalizeFrame);
+    const MEI_NORM = MEI_FRAMES.map(normalizeFrame);
+
+    function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+
+    function sampleStage(mode, stageIndex, t) {
+        const stages = mode === 'mitosis' ? MIT_STAGES : MEI_STAGES;
+        const frames = mode === 'mitosis' ? MIT_NORM : MEI_NORM;
+        const st = stages[Math.max(0, Math.min(stages.length - 1, stageIndex))];
+        const f0 = frames[st.frames[0]];
+        const f1 = frames[st.frames[1]];
+        return blendFrames(f0, f1, easeInOut(Math.max(0, Math.min(1, t))));
+    }
+
+    /* =========================================================
+       6. 프로세스(체세포/감수) 인스턴스
+       ========================================================= */
+    function createProcess(mode) {
+        const group = new THREE.Group();
+        scene.add(group);
+
+        const chromatids = {};
+        CHROM_IDS.forEach(id => {
+            for (let k = 0; k < 2; k++) {
+                const obj = buildChromatid(CHROM_DEF[id].len, CHROM_DEF[id].color, k === 0 ? -1 : 1);
+                chromatids[id + k] = obj;
+                group.add(obj.group);
+            }
+        });
+
+        const cells = [];
+        const labels = [];
+        for (let i = 0; i < CELL_COUNT; i++) {
+            const c = buildCell();
+            cells.push(c);
+            group.add(c.group);
+            const lb = buildLabel(' ', { worldH: 0.17 });
+            lb.visible = false;
+            lb.userData.labelScale = 1;
+            group.add(lb);
+            labels.push(lb);
+        }
+
+        const spindle = buildSpindleSet();
+        group.add(spindle.group);
+
+
+        const anno = buildLabel(' ', { color: '#ffe08a', border: 'rgba(250, 204, 21, 0.95)', worldH: 0.215 });
+        anno.visible = false;
+        anno.userData.labelScale = 1;
+        group.add(anno);
+
+        const title = buildLabel(mode === 'mitosis' ? '체세포 분열 · 2n → 2n' : '감수 분열 · 2n → n', {
+            color: mode === 'mitosis' ? '#bfdbfe' : '#fed7aa',
+            border: mode === 'mitosis' ? 'rgba(96,165,250,0.95)' : 'rgba(251,146,60,0.95)',
+            worldH: 0.24
+        });
+        title.visible = false;
+        title.userData.labelScale = 1;
+        group.add(title);
+
+        return {
+            mode: mode, group: group, chromatids: chromatids, cells: cells,
+            labels: labels, spindle: spindle, anno: anno, title: title,
+            labelScale: 1
+        };
+    }
+
+    const PROC = {
+        mitosis: createProcess('mitosis'),
+        meiosis: createProcess('meiosis')
+    };
+
+    function chromPos(st, id) {
+        const c = st.chroms[id.charAt(0)];
+        const p = id.charAt(1) === '0' ? c.c0 : c.c1;
+        return new THREE.Vector3(p[0], p[1], p[2]);
+    }
+
+    const CELL_PALETTE = {
+        light: { mem: 0xd8e9fa, shell: 0x5b9fd8, nuc: 0xc0affa, nucShell: 0x8a6ae8 },
+        dark: { mem: 0x86bdec, shell: 0x3c7db8, nuc: 0xb2a0fb, nucShell: 0x8f6ff0 }
+    };
+    function paintCells() {
+        const p = document.body.classList.contains('dark-mode') ? CELL_PALETTE.dark : CELL_PALETTE.light;
+        [PROC.mitosis, PROC.meiosis].forEach(proc => {
+            proc.cells.forEach(c => {
+                c.memMat.color.setHex(p.mem);
+                c.shMat.color.setHex(p.shell);
+                c.nucMat.color.setHex(p.nuc);
+                c.nucShMat.color.setHex(p.nucShell);
+            });
+        });
+    }
+
+    function applyProcess(proc, st, plateOp) {
+        const dark = document.body.classList.contains('dark-mode');
+        const shellBoost = dark ? 1.35 : 2.05;
+        // ---- 세포 ----
+        for (let i = 0; i < CELL_COUNT; i++) {
+            const c = proc.cells[i];
+            const d = st.cells[i];
+            const on = d.mem > 0.004 || d.nuc > 0.004;
+            c.group.visible = on;
+            if (!on) {
+                proc.labels[i].visible = false;
+                continue;
+            }
+            c.group.position.set(d.x, d.y, d.z);
+            c.mem.scale.set(d.r * d.sx, d.r * d.sy, d.r);
+            c.shell.scale.set(d.r * d.sx * 1.006, d.r * d.sy * 1.006, d.r * 1.006);
+            c.memMat.opacity = Math.min(0.45, d.mem * 1.08);
+            c.shMat.opacity = Math.min(0.62, d.mem * shellBoost);
+            c.nucGroup.visible = d.nuc > 0.004;
+            if (c.nucGroup.visible) {
+                c.nucGroup.scale.setScalar(Math.max(0.001, d.nr));
+                c.nucMat.opacity = Math.min(0.42, d.nuc);
+                c.nucShMat.opacity = Math.min(0.55, d.nuc * 1.5);
+                c.nucleolus.material.opacity = Math.min(0.85, d.nuc * 5);
+                c.nucleolus.visible = d.nuc > 0.05;
+            }
+            const lb = proc.labels[i];
+            if (d.label && d.labelOp > 0.5 && state.showLabels) {
+                setLabel(lb, d.label, Object.assign(labelOpts(d.label), { worldH: 0.17 }));
+                lb.userData.labelScale = proc.labelScale;
+                lb.scale.copy(lb.userData.baseScale).multiplyScalar(proc.labelScale);
+                lb.visible = true;
+                lb.position.set(d.x, d.y + d.r * d.sy + 0.24 + (d.labelDy || 0), d.z);
+            } else {
+                lb.visible = false;
+            }
+        }
+
+        // ---- 염색 분체 ----
+        const boost = state.chromBoost;
+        CHROM_IDS.forEach(id => {
+            const d = st.chroms[id];
+            const sc = Math.max(0.05, d.cond * boost);
+            for (let k = 0; k < 2; k++) {
+                const obj = proc.chromatids[id + k];
+                const pos = k === 0 ? d.c0 : d.c1;
+                const vis = k === 0 ? d.v0 : d.v1;
+                obj.group.position.set(pos[0], pos[1], pos[2]);
+                obj.group.rotation.set(d.e[0], d.e[1], d.e[2]);
+                obj.group.scale.setScalar(sc);
+                const rodOp = Math.max(0, Math.min(1, d.rod * vis));
+                const thOp = Math.max(0, Math.min(1, d.thread * vis));
+                obj.rodMat.opacity = rodOp;
+                obj.beadMat.opacity = rodOp;
+                obj.thMat.opacity = thOp * 0.95;
+                const rodOn = rodOp > 0.02;
+                const thOn = thOp > 0.02;
+                obj.rod.visible = rodOn;
+                obj.tips[0].visible = rodOn;
+                obj.tips[1].visible = rodOn;
+                obj.bead.visible = rodOn;
+                obj.thread.visible = thOn;
+                obj.group.visible = rodOn || thOn;
+            }
+        });
+
+        // ---- 방추사 ----
+        for (let s = 0; s < 3; s++) {
+            const sd = st.spindles[s];
+            const o = proc.spindle.list[s];
+            const on = state.showSpindle && sd.op > 0.02 && sd.targets.length > 0;
+            o.lines.visible = on;
+            o.centA.visible = on;
+            o.centB.visible = on;
+            if (!on) continue;
+            const p1 = new THREE.Vector3(sd.p1[0], sd.p1[1], sd.p1[2]);
+            const p2 = new THREE.Vector3(sd.p2[0], sd.p2[1], sd.p2[2]);
+            let vi = 0;
+            const push = (a, b) => {
+                if (vi >= MAX_SEG) return;
+                const base = vi * 6;
+                o.pos[base] = a.x; o.pos[base + 1] = a.y; o.pos[base + 2] = a.z;
+                o.pos[base + 3] = b.x; o.pos[base + 4] = b.y; o.pos[base + 5] = b.z;
+                vi++;
+            };
+            push(p1, p2);
+            for (let i = 0; i < sd.targets.length; i++) {
+                const tp = chromPos(st, sd.targets[i]);
+                push(p1, tp);
+                push(p2, tp);
+            }
+            o.geo.attributes.position.needsUpdate = true;
+            o.geo.setDrawRange(0, vi * 2);
+            o.mat.opacity = Math.min(0.7, sd.op * 0.55);
+            o.cMat.opacity = Math.min(1, sd.op);
+            o.centA.position.copy(p1);
+            o.centB.position.copy(p2);
+            o.centA.lookAt(p2);
+            o.centB.lookAt(p1);
+        }
+
+        // ---- 주석 라벨 ----
+        if (state.showLabels && st.anno.op > 0.5 && st.anno.text) {
+            setLabel(proc.anno, st.anno.text, {
+                color: '#ffe08a', border: 'rgba(250, 204, 21, 0.95)', worldH: 0.19
+            });
+            proc.anno.userData.labelScale = proc.labelScale;
+            proc.anno.scale.copy(proc.anno.userData.baseScale).multiplyScalar(proc.labelScale);
+            proc.anno.position.set(st.anno.pos[0], st.anno.pos[1], st.anno.pos[2]);
+            proc.anno.visible = true;
+        } else {
+            proc.anno.visible = false;
+        }
+    }
+
+    /* =========================================================
+       7. 상태 · 카메라 배치
+       ========================================================= */
+    const state = {
+        mode: 'mitosis',
+        stage: { mitosis: 0, meiosis: 0 },
+        t: { mitosis: 0, meiosis: 0 },
+        playing: false,
+        animating: false,
+        speed: 1,
+        compareP: 0,
+        comparePlaying: false,
+        cmpView: 'both',
+        showSpindle: true,
+        showLabels: true,
+        chromBoost: 1,
+        tableOpen: false
+    };
+
+    const STAGE_DUR = 2.9;
+
+    function stagesOf(mode) { return mode === 'mitosis' ? MIT_STAGES : MEI_STAGES; }
+
+    function plateOpacity(mode, idx) {
+        if (mode === 'mitosis') return idx === 2 ? 1 : (idx === 3 ? 0.65 : 0);
+        return (idx === 2 || idx === 6) ? 1 : ((idx === 3 || idx === 7) ? 0.65 : 0);
+    }
+
+    function fitCamera(instant) {
+        const aspect = Math.max(0.4, window.innerWidth / window.innerHeight);
+        const isCmp = state.mode === 'compare';
+        const portraitFit = (Math.max(0.4, window.innerWidth / window.innerHeight) < 0.82);
+        const halfW = isCmp ? 4.55 : (portraitFit ? 2.02 : 2.32);
+        const halfH = isCmp ? 2.15 : 1.78;
+        const fov = THREE.MathUtils.degToRad(45);
+        const dH = halfH / Math.tan(fov / 2);
+        const dW = halfW / (Math.tan(fov / 2) * aspect);
+        const dist = Math.max(dH, dW) * 1.14;
+        const az = isCmp ? 0.12 : 0.0;
+        const portrait = aspect < 0.82 && !isCmp;
+        const tx = isCmp ? 0.55 : (portrait ? 0.10 : 0);
+        const ty = isCmp ? 0.0 : (portrait ? -0.92 : 0.10);
+        camera.position.set(tx + Math.sin(az) * dist, ty + (isCmp ? 0.55 : 0.62), Math.cos(az) * dist);
+        controls.target.set(tx, ty, 0);
+        camera.lookAt(controls.target);
+        controls.update();
+    }
+
+    function layoutProcesses() {
+        const isCmp = state.mode === 'compare';
+        if (isCmp) {
+            const s = 0.66;
+            PROC.mitosis.labelScale = 1 / s * 0.70;
+            PROC.meiosis.labelScale = 1 / s * 0.70;
+            PROC.mitosis.group.position.set(-2.35, 0, 0);
+            PROC.meiosis.group.position.set(2.35, 0, 0);
+            PROC.mitosis.group.scale.setScalar(s);
+            PROC.meiosis.group.scale.setScalar(s);
+            PROC.mitosis.group.visible = state.cmpView !== 'mei';
+            PROC.meiosis.group.visible = state.cmpView !== 'mit';
+            PROC.mitosis.title.visible = true;
+            PROC.meiosis.title.visible = true;
+            [[PROC.mitosis, -2.35], [PROC.meiosis, 2.35]].forEach(pair => {
+                const p = pair[0], x = pair[1];
+                p.title.userData.labelScale = p.labelScale;
+                p.title.scale.copy(p.title.userData.baseScale).multiplyScalar(p.labelScale);
+                p.title.position.set(0, 2.62, 0);
+            });
+        } else {
+            const active = state.mode === 'mitosis' ? PROC.mitosis : PROC.meiosis;
+            const other = state.mode === 'mitosis' ? PROC.meiosis : PROC.mitosis;
+            active.labelScale = 1;
+            active.group.position.set(0, 0, 0);
+            active.group.scale.setScalar(1);
+            active.group.visible = true;
+            active.title.visible = false;
+            other.group.visible = false;
+        }
+    }
+
+    /* =========================================================
+       8. HUD · 패널
+       ========================================================= */
+    const $ = id => document.getElementById(id);
+    const valMode = $('val-mode'), valStage = $('val-stage'), valCount = $('val-count'),
+        valCells = $('val-cells'), valDna = $('val-dna');
+    const cbMain = $('cb-main'), cbSub = $('cb-sub');
+
+    function badgeHTML(mode, idx) {
+        const stages = stagesOf(mode);
+        const s = stages[idx];
+        const hi = (mode === 'mitosis')
+            ? (idx >= 4 ? 1 : 0)
+            : (idx >= 8 ? 2 : (idx >= 4 ? 1 : 0));
+        let html = '';
+        s.badge.forEach((item, i) => {
+            const tone = item[2] || '';
+            if (i > 0) html += '<span class="cb-arrow">→</span>';
+            html += '<div class="cb-item' + (i === hi ? ' on' : '') + '">'
+                + '<span class="cb-k">' + item[0] + '</span>'
+                + '<span class="cb-v ' + tone + '">' + item[1] + '</span></div>';
+        });
+        return html;
+    }
+
+    let lastHudKey = '';
+    function updateHUD() {
+        if (state.mode === 'compare') {
+            const p = Math.round(state.compareP * 100);
+            const key = 'cmp' + p + state.cmpView;
+            if (key === lastHudKey) return;
+            lastHudKey = key;
+            valMode.textContent = '체세포 vs 감수';
+            valStage.textContent = '동시 진행 ' + p + '%';
+            const mTotal = state.compareP * 5;
+            const mi = Math.min(4, Math.floor(mTotal));
+            const eTotal = state.compareP * 9;
+            const ei = Math.min(8, Math.floor(eTotal));
+            const mName = MIT_STAGES[mi].name;
+            const eName = MEI_STAGES[ei].name;
+            valCount.textContent = '2n → ' + (ei >= 8 ? 'n' : 'n');
+            valCount.classList.remove('warm');
+            valCells.textContent = MIT_STAGES[4].cells + ' / ' + MEI_STAGES[8].cells;
+            valDna.textContent = '—';
+            cbMain.innerHTML =
+                '<div class="cb-item on"><span class="cb-k">체세포 분열</span><span class="cb-v n2">2n = 4 → 2n = 4</span></div>'
+                + '<span class="cb-arrow">|</span>'
+                + '<div class="cb-item on"><span class="cb-k">감수 분열</span><span class="cb-v n1">2n = 4 → n = 2</span></div>';
+            cbSub.textContent = '왼쪽 ' + mName + ' · 오른쪽 ' + eName + ' (염색체 수 불변 vs 절반)';
+            return;
+        }
+        const mode = state.mode;
+        const stages = stagesOf(mode);
+        const idx = state.stage[mode];
+        const s = stages[idx];
+        const key = mode + idx + state.t[mode].toFixed(2);
+        if (key === lastHudKey) return;
+        lastHudKey = key;
+
+        valMode.textContent = mode === 'mitosis' ? '체세포 분열' : '감수 분열';
+        valStage.textContent = s.tag + ' ' + s.name;
+        valCount.textContent = s.count;
+        valCount.classList.toggle('warm', /^n|각 n/.test(s.count) && !/2n/.test(s.count));
+        valCells.textContent = s.cells;
+        valDna.textContent = s.dna;
+        cbMain.innerHTML = badgeHTML(mode, idx);
+        cbSub.textContent = s.badgeSub;
+
+        const idxEl = $(mode === 'mitosis' ? 'mit-idx' : 'mei-idx');
+        const nameEl = $(mode === 'mitosis' ? 'mit-name' : 'mei-name');
+        const countEl = $(mode === 'mitosis' ? 'mit-count' : 'mei-count');
+        const hintEl = $(mode === 'mitosis' ? 'mit-hint' : 'mei-hint');
+        if (idxEl) idxEl.textContent = (idx + 1) + ' / ' + stages.length;
+        if (nameEl) nameEl.textContent = s.name;
+        if (countEl) countEl.textContent = s.count;
+        if (hintEl) hintEl.textContent = s.hint;
+
+        const listId = mode === 'mitosis' ? 'mit-stages' : 'mei-stages';
+        const list = $(listId);
+        if (list) {
+            Array.prototype.forEach.call(list.children, (btn, i) => {
+                btn.classList.toggle('active', i === idx);
+            });
+        }
+    }
+
+    function buildStageList() {
+        const make = (host, stages) => {
+            host.innerHTML = '';
+            stages.forEach((s, i) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'stage-item' + (i === 0 ? ' active' : '');
+                b.innerHTML = '<span class="si-num">' + (i + 1) + '</span><span class="si-text">'
+                    + '<span class="si-name">' + s.name + '</span>'
+                    + '<span class="si-sub">' + s.sub + '</span></span>';
+                b.addEventListener('click', () => jumpToStage(i));
+                host.appendChild(b);
+            });
+        };
+        make($('mit-stages'), MIT_STAGES);
+        make($('mei-stages'), MEI_STAGES);
+    }
+
+    function jumpToStage(i) {
+        const mode = state.mode;
+        if (mode === 'compare') return;
+        const stages = stagesOf(mode);
+        state.stage[mode] = Math.max(0, Math.min(stages.length - 1, i));
+        state.t[mode] = 0;
+        state.animating = true;
+        lastHudKey = '';
+        updateHUD();
+    }
+
+    function setPlaying(on) {
+        state.playing = on;
+        if (on) {
+            if (state.mode === 'compare') {
+                state.comparePlaying = true;
+                if (state.compareP >= 0.999) { state.compareP = 0; $('rng-cmp').value = 0; }
+            } else {
+                state.animating = true;
+                const mode = state.mode;
+                if (state.t[mode] >= 0.999 && state.stage[mode] >= stagesOf(mode).length - 1) {
+                    state.stage[mode] = 0;
+                    state.t[mode] = 0;
+                }
+            }
+            state.animating = true;
+        } else {
+            state.comparePlaying = false;
+        }
+        $('play-icon').textContent = on ? '⏸' : '▶';
+        $('play-label').textContent = on ? '일시정지' : '자동 재생';
+    }
+
+    /* =========================================================
+       9. 렌더 루프
+       ========================================================= */
+    function updateSim(dt) {
+        if (state.mode === 'compare') {
+            if (state.comparePlaying) {
+                state.compareP = Math.min(1, state.compareP + dt * state.speed / 26);
+                $('rng-cmp').value = Math.round(state.compareP * 100);
+                $('lbl-cmp').textContent = Math.round(state.compareP * 100) + '%';
+                if (state.compareP >= 0.999) setPlaying(false);
+                lastHudKey = '';
+            }
+            const mTotal = state.compareP * 5;
+            const mStage = Math.min(4, Math.floor(mTotal));
+            const mU = Math.min(1, mTotal - mStage);
+            const eTotal = state.compareP * 9;
+            const eStage = Math.min(8, Math.floor(eTotal));
+            const eU = Math.min(1, eTotal - eStage);
+            if (PROC.mitosis.group.visible) {
+                applyProcess(PROC.mitosis, sampleStage('mitosis', mStage, mU), plateOpacity('mitosis', mStage));
+            }
+            if (PROC.meiosis.group.visible) {
+                applyProcess(PROC.meiosis, sampleStage('meiosis', eStage, eU), plateOpacity('meiosis', eStage));
+            }
+            updateHUD();
+            return;
+        }
+
+        const mode = state.mode;
+        const stages = stagesOf(mode);
+        const idx = state.stage[mode];
+
+        if (state.playing || state.animating) {
+            state.t[mode] = Math.min(1, state.t[mode] + dt * state.speed / STAGE_DUR);
+            if (state.t[mode] >= 1) {
+                if (state.playing && idx < stages.length - 1) {
+                    state.stage[mode] = idx + 1;
+                    state.t[mode] = 0;
+                } else {
+                    state.animating = false;
+                    if (idx >= stages.length - 1) setPlaying(false);
+                }
+            }
+        }
+
+        const proc = mode === 'mitosis' ? PROC.mitosis : PROC.meiosis;
+        applyProcess(proc, sampleStage(mode, state.stage[mode], state.t[mode]), plateOpacity(mode, state.stage[mode]));
+        updateHUD();
+    }
+
+    let lastTime = performance.now();
+    function animate(now) {
+        requestAnimationFrame(animate);
+        const dt = Math.min(0.12, (now - lastTime) / 1000);
+        lastTime = now;
+        updateSim(dt);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* =========================================================
+       10. 이벤트 바인딩
+       ========================================================= */
+    function setMode(mode) {
+        if (mode === state.mode) return;
+        state.mode = mode;
+        document.querySelectorAll('#side-ctrl .tab-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.tab === mode);
+        });
+        ['mitosis', 'meiosis', 'compare'].forEach(m => {
+            const pane = $('pane-' + m);
+            if (pane) pane.classList.toggle('active', m === mode);
+        });
+        $('compare-card').classList.toggle('hidden', !(mode === 'compare' && state.tableOpen));
+        lastHudKey = '';
+        layoutProcesses();
+        fitCamera();
+        setPlaying(false);
+        updateHUD();
+    }
+
+    function bindUI() {
+        document.querySelectorAll('#side-ctrl .tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => setMode(btn.dataset.tab));
+        });
+
+        $('btn-prev').addEventListener('click', () => {
+            if (state.mode === 'compare') {
+                state.compareP = Math.max(0, state.compareP - 0.1);
+                $('rng-cmp').value = Math.round(state.compareP * 100);
+                $('lbl-cmp').textContent = Math.round(state.compareP * 100) + '%';
+                lastHudKey = '';
+                return;
+            }
+            jumpToStage(state.stage[state.mode] - 1);
+        });
+        $('btn-next').addEventListener('click', () => {
+            if (state.mode === 'compare') {
+                state.compareP = Math.min(1, state.compareP + 0.1);
+                $('rng-cmp').value = Math.round(state.compareP * 100);
+                $('lbl-cmp').textContent = Math.round(state.compareP * 100) + '%';
+                lastHudKey = '';
+                return;
+            }
+            jumpToStage(state.stage[state.mode] + 1);
+        });
+        $('btn-play').addEventListener('click', () => setPlaying(!state.playing));
+        $('btn-reset').addEventListener('click', () => {
+            state.t = { mitosis: 0, meiosis: 0 };
+            state.stage = { mitosis: 0, meiosis: 0 };
+            state.compareP = 0;
+            $('rng-cmp').value = 0;
+            $('lbl-cmp').textContent = '0%';
+            setPlaying(false);
+            state.animating = true;
+            lastHudKey = '';
+            fitCamera();
+            updateHUD();
+        });
+        $('btn-align').addEventListener('click', () => fitCamera());
+
+        const speedInput = $('rng-speed');
+        const speedInput2 = $('rng-speed2');
+        const applySpeed = v => {
+            state.speed = v;
+            $('lbl-speed').textContent = v.toFixed(1) + '×';
+            $('lbl-speed2').textContent = v.toFixed(1) + '×';
+            speedInput.value = v;
+            speedInput2.value = v;
+        };
+        speedInput.addEventListener('input', e => applySpeed(parseFloat(e.target.value)));
+        speedInput2.addEventListener('input', e => applySpeed(parseFloat(e.target.value)));
+
+        const bindToggle = (id, fn, init) => {
+            const el = $(id);
+            el.classList.toggle('active', init);
+            el.addEventListener('click', () => {
+                const on = !el.classList.contains('active');
+                el.classList.toggle('active', on);
+                fn(on);
+            });
+        };
+        bindToggle('tgl-spindle', on => { state.showSpindle = on; }, true);
+        bindToggle('tgl-spindle2', on => { state.showSpindle = on; }, true);
+        bindToggle('tgl-labels', on => { state.showLabels = on; }, true);
+        bindToggle('tgl-labels2', on => { state.showLabels = on; }, true);
+        bindToggle('tgl-zoom', on => { state.chromBoost = on ? 1.32 : 1; }, false);
+        bindToggle('tgl-zoom2', on => { state.chromBoost = on ? 1.32 : 1; }, false);
+
+        $('rng-cmp').addEventListener('input', e => {
+            state.compareP = parseFloat(e.target.value) / 100;
+            $('lbl-cmp').textContent = Math.round(state.compareP * 100) + '%';
+            lastHudKey = '';
+        });
+        document.querySelectorAll('#cmp-view .seg-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#cmp-view .seg-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.cmpView = btn.dataset.view;
+                layoutProcesses();
+                lastHudKey = '';
+            });
+        });
+        $('btn-table').addEventListener('click', () => {
+            state.tableOpen = !state.tableOpen;
+            $('compare-card').classList.toggle('hidden', !state.tableOpen);
+        });
+        $('cc-close').addEventListener('click', () => {
+            state.tableOpen = false;
+            $('compare-card').classList.add('hidden');
+        });
+
+        // 테마
+        const themeBtn = $('theme-toggle');
+        themeBtn.addEventListener('click', () => {
+            const dark = document.body.classList.toggle('dark-mode');
+            document.body.classList.toggle('light-mode', !dark);
+            themeBtn.textContent = dark ? '☀️' : '🌙';
+            paintCells();
+            labelCache.clear();
+            Object.values(PROC).forEach(p => {
+                p.labels.forEach(l => { l.userData.text = null; });
+                p.anno.userData.text = null;
+                p.title.userData.text = null;
+            });
+            lastHudKey = '';
+        });
+
+        // 전체화면
+        $('btn-fullscreen').addEventListener('click', () => {
+            const el = document.documentElement;
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+                else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            fitCamera();
+        });
+    }
+
+    /* =========================================================
+       11. 시작
+       ========================================================= */
+    let started = false;
+    function start() {
+        if (started) return;
+        started = true;
+        buildStageList();
+        bindUI();
+        paintCells();
+        layoutProcesses();
+        fitCamera();
+        updateHUD();
+        // 첫 장면은 간기가 스스로 진행되는 모습으로 시작
+        state.animating = true;
+        setTimeout(() => { if (!state.playing) setPlaying(true); }, 900);
+        requestAnimationFrame(animate);
+    }
+
+    if (document.fonts && document.fonts.load) {
+        document.fonts.load('800 62px SeoulNamsan').then(start).catch(start);
+        setTimeout(start, 1600);
+    } else {
+        start();
+    }
+
+})();
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
