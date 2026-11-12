@@ -1,0 +1,1793 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="svl-build" content="cell-v1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>세포 내부 탐험 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #1c1c1e;
+            touch-action: none;
+            transition: background .35s ease, color .35s ease;
+        }
+        body {
+            background: radial-gradient(circle at 50% 42%, #ffffff 0%, #eaf2fc 55%, #dbe7f7 100%);
+        }
+        body.dark-mode {
+            background: radial-gradient(circle at 50% 40%, #122440 0%, #081220 55%, #04090f 100%);
+            color: #f2f5fa;
+        }
+
+        #canvas-container {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            z-index: 1; touch-action: none;
+        }
+        #canvas-container canvas { display: block; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+            z-index: 10;
+        }
+        body.dark-mode .glass-panel {
+            background: rgba(16, 26, 44, 0.86);
+            border-color: rgba(255, 255, 255, 0.14);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+            color: #f1f5f9;
+        }
+
+        /* ---------- 상단 좌측 바 ---------- */
+        .top-left-bar {
+            position: absolute; top: 18px; left: 20px;
+            display: flex; align-items: center; gap: 10px; z-index: 20;
+        }
+        .back-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; font-size: 13px; font-weight: bold;
+            color: #1c1c1e; text-decoration: none; cursor: pointer !important;
+            transition: all .2s ease;
+        }
+        body.dark-mode .back-btn { color: #eaf1ff; }
+        .back-btn:hover { transform: translateY(-1px); }
+        .back-btn:active { transform: scale(0.97); }
+
+        .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; }
+        .title-text { font-size: 14px; font-weight: bold; letter-spacing: -0.3px; white-space: nowrap; }
+        .vision-badge {
+            background: rgba(255, 45, 85, 0.14); color: #d81b3f;
+            padding: 2px 8px; border-radius: 10px;
+            font-size: 11px; font-weight: bold; letter-spacing: .2px; white-space: nowrap;
+        }
+        body.dark-mode .vision-badge { background: rgba(255, 45, 85, 0.26); color: #ff9aac; }
+
+        /* ---------- 상단 우측 정보 카드 ---------- */
+        .data-card {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 16px; border-radius: 999px;
+        }
+        .data-item { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 62px; }
+        .data-label { font-size: 10.5px; color: #64748b; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+        body.dark-mode .data-label { color: #94a3b8; }
+        .data-value { font-size: 13px; font-weight: bold; color: #0f172a; letter-spacing: -0.3px; white-space: nowrap; }
+        body.dark-mode .data-value { color: #ffffff; }
+        .data-value.c-cell { color: #ff2d55; }
+        .data-value.c-step { color: #0ea5e9; }
+        .data-value.c-focus { color: #8b5cf6; max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
+        body.dark-mode .data-value.c-cell { color: #ff8fa3; }
+        body.dark-mode .data-value.c-step { color: #7dd3fc; }
+        body.dark-mode .data-value.c-focus { color: #c4b5fd; }
+
+        .icon-btn {
+            width: 38px; height: 38px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; border: none;
+            background: rgba(255, 255, 255, 0.88); color: #1c1c1e;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+            transition: all .2s; font-size: 16px; font-family: inherit;
+        }
+        body.dark-mode .icon-btn { background: rgba(22, 32, 52, 0.9); color: #f1f5f9; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+        .icon-btn:hover { transform: scale(1.06); }
+        #theme-toggle { pointer-events: auto; }
+
+        /* ---------- 중앙 상단 안내 툴팁 ---------- */
+        .center-tooltip {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            padding: 7px 18px; font-size: 12.5px; font-weight: bold;
+            color: #334155; border-radius: 30px;
+            pointer-events: none; z-index: 5;
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            white-space: nowrap;
+        }
+        body.dark-mode .center-tooltip {
+            color: #cbd5e1; background: rgba(10, 16, 28, 0.75);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        /* ---------- 하단 중앙 글래스 캡슐 바 ---------- */
+        .bottom-control-bar {
+            position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 14px; z-index: 80;
+        }
+        .control-capsule-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border-radius: 999px; border: none;
+            background: transparent; color: #1c1c1e;
+            font-size: 13px; font-weight: bold; font-family: inherit;
+            cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        body.dark-mode .control-capsule-btn { color: #e6edf9; }
+        .control-capsule-btn:hover { background: rgba(0, 0, 0, 0.06); }
+        body.dark-mode .control-capsule-btn:hover { background: rgba(255, 255, 255, 0.14); }
+
+        /* ---------- 우측 조절 패널 ---------- */
+        #side-ctrl,
+        body #side-ctrl.side-ctrl-panel,
+        body.dark-mode #side-ctrl.side-ctrl-panel {
+            position: fixed !important; right: 20px !important; bottom: 74px !important;
+            width: 268px !important; padding: 12px 13px !important;
+            display: flex !important; flex-direction: column !important; gap: 9px !important; z-index: 85 !important;
+            max-height: calc(100vh - 150px) !important;
+            overflow-y: auto !important; overflow-x: hidden !important;
+            overscroll-behavior: contain !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            border: 1px solid rgba(0, 0, 0, 0.12) !important;
+            box-shadow: 0 10px 32px rgba(15, 23, 42, 0.14) !important;
+            color: #0f172a !important;
+            border-radius: 18px !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+        }
+        body.dark-mode #side-ctrl,
+        body.dark-mode #side-ctrl.side-ctrl-panel {
+            background: rgba(14, 22, 38, 0.95) !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6) !important;
+            color: #ffffff !important;
+        }
+
+        #side-ctrl .panel-header {
+            display: flex !important; align-items: center !important; justify-content: space-between !important;
+            padding-bottom: 7px !important; border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+        }
+        body.dark-mode #side-ctrl .panel-header { border-bottom-color: rgba(255, 255, 255, 0.12) !important; }
+        #side-ctrl .panel-title {
+            font-size: 13px !important; font-weight: 800 !important; color: #0f172a !important; letter-spacing: -0.2px !important;
+        }
+        body.dark-mode #side-ctrl .panel-title { color: #ffffff !important; }
+        .panel-help-btn {
+            width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+            background: rgba(14, 165, 233, 0.14); color: #0369a1;
+            font-size: 12px; font-weight: 800; font-family: inherit; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+        }
+        body.dark-mode .panel-help-btn { background: rgba(56, 189, 248, 0.22); color: #7dd3fc; }
+
+        /* 세포 선택 탭 */
+        .cell-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .cell-tab {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+            padding: 8px 4px; border-radius: 13px;
+            border: 1.5px solid rgba(0, 0, 0, 0.09);
+            background: rgba(0, 0, 0, 0.03);
+            color: #475569; font-family: inherit; cursor: pointer;
+            transition: all .2s ease;
+        }
+        .cell-tab .ct-icon { font-size: 18px; line-height: 1.1; }
+        .cell-tab .ct-name { font-size: 11.5px; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; }
+        .cell-tab:hover { transform: translateY(-1px); }
+        .cell-tab.active {
+            background: linear-gradient(135deg, #fff0f3, #ffe3e9);
+            border-color: #ff2d55; color: #c2183e;
+            box-shadow: 0 4px 14px rgba(255, 45, 85, 0.18);
+        }
+        .cell-tab.active.plant {
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            border-color: #16a34a; color: #15803d;
+            box-shadow: 0 4px 14px rgba(22, 163, 74, 0.18);
+        }
+        body.dark-mode .cell-tab { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.14); color: #cbd5e1; }
+        body.dark-mode .cell-tab.active { background: rgba(255, 45, 85, 0.22); border-color: #ff5c7c; color: #ffc2ce; }
+        body.dark-mode .cell-tab.active.plant { background: rgba(22, 163, 74, 0.24); border-color: #34d399; color: #bbf7d0; }
+
+        /* 확대/축소 */
+        .zoom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .zoom-btn {
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            padding: 9px 4px; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.9); color: #0f172a;
+            font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+            transition: all .18s ease; white-space: nowrap;
+        }
+        .zoom-btn:hover { background: #ffffff; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,.1); }
+        .zoom-btn:active { transform: scale(0.97); }
+        .zoom-btn:disabled { opacity: .4; cursor: default; transform: none; box-shadow: none; }
+        body.dark-mode .zoom-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); color: #f1f5f9; }
+        body.dark-mode .zoom-btn:hover { background: rgba(255, 255, 255, 0.14); }
+
+        /* 단계 트랙 */
+        .step-track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+        .step-seg {
+            position: relative; padding: 5px 2px 6px; border-radius: 9px;
+            border: 1px solid rgba(0, 0, 0, 0.07); background: rgba(0, 0, 0, 0.03);
+            color: #64748b; font-family: inherit; font-size: 10.5px; font-weight: 800;
+            cursor: pointer; transition: all .18s ease; text-align: center; line-height: 1.15;
+        }
+        .step-seg .sg-num { display: block; font-size: 12px; font-weight: 900; }
+        .step-seg:hover { background: rgba(14, 165, 233, 0.1); }
+        .step-seg.active {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #ffffff;
+            border-color: #0284c7; box-shadow: 0 3px 10px rgba(2, 132, 199, 0.3);
+        }
+        body.dark-mode .step-seg { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.12); color: #94a3b8; }
+        body.dark-mode .step-seg.active { background: linear-gradient(135deg, #38bdf8, #0284c7); color: #04121f; }
+        .step-caption {
+            font-size: 10.5px; font-weight: 700; color: #0369a1; letter-spacing: -0.2px;
+            padding: 0 2px; line-height: 1.35;
+        }
+        body.dark-mode .step-caption { color: #7dd3fc; }
+
+        /* 소기관 바로가기 칩 */
+        .chip-title {
+            font-size: 10.5px; font-weight: 800; color: #64748b; letter-spacing: -0.2px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        body.dark-mode .chip-title { color: #94a3b8; }
+        .chip-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+        .org-chip {
+            display: flex; align-items: center; gap: 4px;
+            padding: 6px 5px; border-radius: 9px;
+            border: 1px solid rgba(0, 0, 0, 0.07); background: rgba(255, 255, 255, 0.86);
+            color: #334155; font-family: inherit; font-size: 10.5px; font-weight: 700;
+            cursor: pointer; transition: all .15s ease; white-space: nowrap; overflow: hidden;
+            letter-spacing: -0.3px; text-align: left;
+        }
+        .org-chip .ch-ico { font-size: 11px; flex: 0 0 auto; }
+        .org-chip:hover { background: #ffffff; border-color: rgba(14, 165, 233, 0.4); }
+        .org-chip.active {
+            background: rgba(14, 165, 233, 0.14); border-color: #0ea5e9; color: #0369a1;
+            box-shadow: 0 2px 8px rgba(14, 165, 233, 0.18);
+        }
+        body.dark-mode .org-chip { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.12); color: #e2e8f0; }
+        body.dark-mode .org-chip:hover { background: rgba(255, 255, 255, 0.12); }
+        body.dark-mode .org-chip.active { background: rgba(56, 189, 248, 0.22); border-color: #38bdf8; color: #e0f2fe; }
+
+        /* 토글 */
+        .sw-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 6px;
+            padding: 7px 9px; border-radius: 10px;
+            background: rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.07);
+            color: #334155; font-family: inherit; font-size: 11px; font-weight: 700;
+            cursor: pointer; transition: all .15s; width: 100%;
+        }
+        body.dark-mode .sw-row { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); color: #e2e8f0; }
+        .sw-label { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+        .sw-track {
+            position: relative; width: 30px; height: 17px; border-radius: 999px;
+            background: #cbd5e1; flex: 0 0 auto; transition: background .2s;
+        }
+        body.dark-mode .sw-track { background: #475569; }
+        .sw-knob {
+            position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+            border-radius: 50%; background: #ffffff; transition: transform .2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,.3);
+        }
+        .sw-row[aria-pressed="true"] .sw-track { background: #0ea5e9; }
+        .sw-row[aria-pressed="true"] .sw-knob { transform: translateX(13px); }
+
+        /* ---------- 소기관 특징 카드 ---------- */
+        .organelle-card {
+            position: fixed; left: 20px; bottom: 96px;
+            width: 340px; max-height: 48vh; overflow-y: auto;
+            padding: 14px 16px 15px; z-index: 75;
+            transition: opacity .25s ease, transform .25s ease;
+        }
+        body.dark-mode .organelle-card { color: #f1f5f9; }
+        .organelle-card.hidden { opacity: 0; transform: translateY(10px); pointer-events: none; }
+        .oc-close {
+            position: absolute; top: 10px; right: 10px;
+            width: 24px; height: 24px; border-radius: 50%; border: none; cursor: pointer;
+            background: rgba(0, 0, 0, 0.05); color: #64748b; font-size: 12px; font-family: inherit;
+            display: flex; align-items: center; justify-content: center;
+        }
+        body.dark-mode .oc-close { background: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+        .oc-head { display: flex; align-items: center; gap: 10px; padding-right: 26px; }
+        .oc-icon {
+            width: 38px; height: 38px; border-radius: 12px; flex: 0 0 auto;
+            display: flex; align-items: center; justify-content: center; font-size: 19px;
+            background: linear-gradient(135deg, rgba(255, 45, 85, 0.14), rgba(14, 165, 233, 0.14));
+        }
+        .oc-name { font-size: 17px; font-weight: 900; letter-spacing: -0.5px; line-height: 1.2; }
+        .oc-en { font-size: 10.5px; font-weight: 700; color: #94a3b8; letter-spacing: 0.2px; }
+        body.dark-mode .oc-en { color: #94a3b8; }
+        .oc-tag {
+            display: inline-block; margin: 9px 0 0; padding: 3px 9px; border-radius: 999px;
+            font-size: 10px; font-weight: 800; letter-spacing: -0.2px;
+            background: rgba(14, 165, 233, 0.12); color: #0369a1;
+        }
+        body.dark-mode .oc-tag { background: rgba(56, 189, 248, 0.2); color: #bae6fd; }
+        .oc-tag.plant { background: rgba(22, 163, 74, 0.13); color: #15803d; }
+        body.dark-mode .oc-tag.plant { background: rgba(52, 211, 153, 0.2); color: #bbf7d0; }
+        .oc-tag.animal { background: rgba(249, 115, 22, 0.14); color: #c2410c; }
+        body.dark-mode .oc-tag.animal { background: rgba(251, 146, 60, 0.22); color: #fed7aa; }
+        .oc-desc { margin: 9px 0 0; font-size: 12.5px; line-height: 1.62; color: #334155; font-weight: 500; }
+        body.dark-mode .oc-desc { color: #cbd5e1; }
+        .oc-metaphor {
+            margin-top: 10px; padding: 8px 10px; border-radius: 10px;
+            background: rgba(251, 191, 36, 0.12); border-left: 3px solid #f59e0b;
+            font-size: 11.5px; line-height: 1.45; color: #92400e;
+        }
+        body.dark-mode .oc-metaphor { background: rgba(251, 191, 36, 0.14); color: #fcd34d; }
+        .oc-metaphor b { font-weight: 800; }
+        .oc-compare { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+        .oc-cmp-row { display: flex; align-items: flex-start; gap: 6px; font-size: 11.5px; line-height: 1.45; color: #475569; }
+        body.dark-mode .oc-cmp-row { color: #cbd5e1; }
+        .oc-cmp-row b { font-weight: 800; }
+        .oc-cmp-row .dot { flex: 0 0 auto; margin-top: 1px; }
+
+        /* ---------- 모바일 / 태블릿 ---------- */
+        @media (max-width: 900px) {
+            .top-left-bar { top: 12px; left: 12px; gap: 6px; }
+            .back-btn, .tag-badge { padding: 6px 11px; font-size: 12px; }
+            .title-text { font-size: 12.5px; }
+            .vision-badge { font-size: 9.5px; padding: 2px 6px; }
+            .center-tooltip { display: none; }
+            .data-card { display: none !important; }
+            .icon-btn { width: 34px; height: 34px; font-size: 14px; }
+            .chip-grid { grid-template-columns: repeat(3, 1fr) !important; }
+            .org-chip { font-size: 9.5px !important; padding: 5px 3px !important; gap: 2px; }
+            .org-chip .ch-ico { font-size: 10px; }
+
+            #side-ctrl,
+            body #side-ctrl.side-ctrl-panel,
+            body.dark-mode #side-ctrl.side-ctrl-panel {
+                right: 8px !important; bottom: 62px !important;
+                width: min(238px, calc(100vw - 16px)) !important;
+                padding: 9px !important; gap: 6px !important;
+                max-height: 46vh !important;
+            }
+            .cell-tab { flex-direction: row; gap: 4px; padding: 7px 3px; }
+            .cell-tab .ct-icon { font-size: 14px; }
+            .cell-tab .ct-name { font-size: 10.5px; }
+            .chip-title { display: none; }
+            .zoom-btn { padding: 7px 3px; font-size: 11px; }
+            .step-seg { font-size: 9px; padding: 4px 1px 5px; }
+            .step-seg .sg-num { font-size: 11px; }
+            .org-chip { font-size: 10px; padding: 5px 4px; }
+            .sw-row { font-size: 10.5px; padding: 5px 7px; }
+            .step-caption { font-size: 10px; }
+
+            .organelle-card {
+                left: 10px; right: 10px; bottom: auto; top: 62px;
+                width: auto; max-height: 27vh; padding: 10px 12px 11px;
+            }
+            .oc-name { font-size: 15px; }
+            .oc-icon { width: 32px; height: 32px; border-radius: 10px; font-size: 16px; }
+            .oc-desc { font-size: 11px; line-height: 1.5; margin-top: 7px; }
+            .oc-tag { margin-top: 7px; }
+            .oc-metaphor { margin-top: 7px; padding: 6px 8px; font-size: 10.5px; }
+            .oc-compare { margin-top: 7px; }
+            .oc-cmp-row { font-size: 10.5px; }
+
+            .bottom-control-bar { bottom: 12px; padding: 5px 10px; gap: 4px; }
+            .control-capsule-btn { padding: 6px 10px; font-size: 11.5px; }
+        }
+        @media (max-height: 520px) and (orientation: landscape) {
+            .organelle-card { max-height: 24vh; width: 300px; right: auto; top: 56px; }
+            #side-ctrl { max-height: 60vh !important; }
+        }
+        /* 좁은 휴대폰: 헤더가 상단 유틸 버튼과 겹치지 않도록 문구를 줄인다 */
+        @media (max-width: 600px) {
+            .top-left-bar { gap: 5px; }
+            .back-btn { padding: 6px 9px; }
+            .back-label { display: none; }
+            .tag-badge { padding: 6px 9px; gap: 5px; }
+            .title-text { font-size: 11.5px; }
+            .vision-badge { font-size: 9px; padding: 1px 5px; }
+        }
+    </style>
+</head>
+<body class="light-mode">
+
+<div id="canvas-container"></div>
+
+<!-- 상단 좌측: 전체 실험실 이동 & 제목 -->
+<div class="top-left-bar">
+    <a href="/index.html" class="glass-panel back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span><span class="back-label">전체 실험실</span></a>
+    <div class="glass-panel tag-badge">
+        <span class="title-text">세포 내부 탐험 3D</span>
+        <span class="vision-badge">생명과학</span>
+    </div>
+    <button class="glass-panel back-btn qr-btn" id="qrBtn" type="button" data-qr-title="세포 내부 탐험 3D" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span> <span class="qr-btn-label">QR code</span></button>
+</div>
+
+<!-- 상단 우측: 관찰 정보 카드 & 테마 -->
+<div class="top-right-bar">
+    <div class="glass-panel data-card">
+        <div class="data-item">
+            <span class="data-label">관찰 세포</span>
+            <span class="data-value c-cell" id="card-cell">동물세포</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">확대 단계</span>
+            <span class="data-value c-step" id="card-step">2단계</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">포커스</span>
+            <span class="data-value c-focus" id="card-focus">전체</span>
+        </div>
+    </div>
+    <div class="tr-util" style="display:flex; align-items:center; gap:8px;">
+        <button class="icon-btn" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">🌙</button>
+    </div>
+</div>
+
+<!-- 상단 중앙 안내 -->
+<div class="glass-panel center-tooltip" id="guide-tooltip">
+    🧫 소기관을 클릭하면 기능이 나옵니다 · 식물세포에만 세포벽·엽록체·대형 액포가 있습니다
+</div>
+
+<!-- 소기관 특징 카드 -->
+<div class="glass-panel organelle-card" id="organelle-card">
+    <button class="oc-close" id="card-close" type="button" title="카드 닫기" aria-label="카드 닫기">✕</button>
+    <div class="oc-head">
+        <div class="oc-icon" id="oc-icon">🔎</div>
+        <div>
+            <div class="oc-name" id="oc-name">세포 탐험 안내</div>
+            <div class="oc-en" id="oc-en">Explore the cell</div>
+        </div>
+    </div>
+    <span class="oc-tag" id="oc-tag">사용 방법</span>
+    <p class="oc-desc" id="oc-desc">세포 안의 소기관을 클릭하면 이름과 기능이 여기에 나타납니다. 아래 [확대] 버튼을 누르면 세포 속으로 한 단계씩 들어가며 소기관을 자세히 볼 수 있습니다.</p>
+    <div class="oc-metaphor" id="oc-metaphor"><b>오늘의 관찰 포인트</b> — 동물세포와 식물세포를 오가며 세포벽·엽록체·대형 액포의 유무를 비교해 보세요.</div>
+    <div class="oc-compare" id="oc-compare">
+        <div class="oc-cmp-row"><span class="dot">🐾</span><span><b>동물세포</b> — 둥근 모양, 세포벽·엽록체·대형 액포가 없습니다.</span></div>
+        <div class="oc-cmp-row"><span class="dot">🌱</span><span><b>식물세포</b> — 각진 모양, 세포벽·엽록체·대형 액포가 있습니다.</span></div>
+    </div>
+</div>
+
+<!-- 하단 중앙 글래스 캡슐 바 -->
+<div class="glass-panel bottom-control-bar">
+    <button class="control-capsule-btn" id="btn-cut">✂️ 단면 닫기</button>
+    <button class="control-capsule-btn" id="btn-reset">↺ 초기화</button>
+    <button class="control-capsule-btn" id="btn-align">🧭 시점 정렬</button>
+</div>
+
+<!-- 우측 하단 전체화면 -->
+<div class="bottom-right-bar">
+    <button class="icon-btn" id="btn-fullscreen" title="전체화면" aria-label="전체화면">⛶</button>
+</div>
+
+<!-- 우측 조절 패널 -->
+<div class="side-ctrl-panel" id="side-ctrl">
+    <div class="panel-header">
+        <span class="panel-title">🧫 세포 탐험 제어</span>
+        <button class="panel-help-btn" id="btn-guide" type="button" title="탐험 안내 보기" aria-label="탐험 안내 보기">?</button>
+    </div>
+
+    <!-- 동물세포 / 식물세포 선택 탭 -->
+    <div class="cell-tabs">
+        <button class="cell-tab active" id="tab-animal" data-cell="animal" type="button">
+            <span class="ct-icon">🐾</span><span class="ct-name">동물세포</span>
+        </button>
+        <button class="cell-tab plant" id="tab-plant" data-cell="plant" type="button">
+            <span class="ct-icon">🌱</span><span class="ct-name">식물세포</span>
+        </button>
+    </div>
+
+    <!-- 확대 / 축소 -->
+    <div class="zoom-row">
+        <button class="zoom-btn" id="btn-zoom-out" type="button">🔎 축소</button>
+        <button class="zoom-btn" id="btn-zoom-in" type="button">🔍 확대</button>
+    </div>
+    <div class="step-track" id="step-track">
+        <button class="step-seg" data-step="1" type="button"><span class="sg-num">1</span>외형</button>
+        <button class="step-seg" data-step="2" type="button"><span class="sg-num">2</span>단면</button>
+        <button class="step-seg" data-step="3" type="button"><span class="sg-num">3</span>소기관</button>
+        <button class="step-seg" data-step="4" type="button"><span class="sg-num">4</span>초미세</button>
+    </div>
+    <div class="step-caption" id="step-caption">2단계 · 세포 단면과 세포질을 살펴보세요</div>
+
+    <!-- 소기관 바로가기 -->
+    <div class="chip-title"><span>소기관 바로가기</span><span id="chip-count">8</span></div>
+    <div class="chip-grid" id="chip-grid"></div>
+
+    <!-- 보기 옵션 -->
+    <button class="sw-row" id="tg-cut" type="button" aria-pressed="true">
+        <span class="sw-label">✂️ 단면 투시</span>
+        <span class="sw-track"><span class="sw-knob"></span></span>
+    </button>
+    <button class="sw-row" id="tg-labels" type="button" aria-pressed="true">
+        <span class="sw-label">🏷️ 명칭 라벨</span>
+        <span class="sw-track"><span class="sw-knob"></span></span>
+    </button>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    /* ============================================================
+       1. 소기관 정보 (중학교 과학 눈높이)
+       ============================================================ */
+    const ORGANELLES = {
+        membrane: {
+            name: '세포막', en: 'Cell Membrane', icon: '🫧',
+            desc: '세포를 둘러싼 얇은 막입니다. 세포 안팎으로 드나드는 물질을 골라 통과시켜, 필요한 영양소와 산소는 들이고 노폐물은 내보냅니다.',
+            metaphor: '세포의 정문 경비실',
+            tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
+        },
+        wall: {
+            name: '세포벽', en: 'Cell Wall', icon: '🧱',
+            desc: '식물세포에서 세포막 바깥을 한 겹 더 둘러싼 단단한 벽입니다. 셀룰로오스로 만들어져 세포를 보호하고, 식물이 똑바로 서서 자랄 수 있게 버팁니다.',
+            metaphor: '세포를 감싼 튼튼한 성벽',
+            tagPlant: '식물세포 전용'
+        },
+        nucleus: {
+            name: '핵', en: 'Nucleus', icon: '🧠',
+            desc: '세포의 활동을 조절하는 사령부입니다. 유전 정보를 담은 DNA가 있어 세포가 무엇을 어떻게 할지 정하고, 핵 속의 인은 단백질을 만드는 리보솜을 만듭니다.',
+            metaphor: '세포의 사령탑',
+            tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
+        },
+        mitochondria: {
+            name: '미토콘드리아', en: 'Mitochondria', icon: '⚡',
+            desc: '포도당을 산소와 반응시켜 세포가 쓸 에너지를 만드는 곳입니다(세포 호흡). 안쪽 막이 주름져 있어 에너지를 만드는 넓은 면적을 확보합니다.',
+            metaphor: '세포의 발전소',
+            tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
+        },
+        chloroplast: {
+            name: '엽록체', en: 'Chloroplast', icon: '🌿',
+            desc: '햇빛 에너지를 이용해 물과 이산화탄소로 포도당과 산소를 만듭니다(광합성). 초록색을 띠게 하는 엽록소가 있고, 안쪽의 그라나에서 빛을 흡수합니다.',
+            metaphor: '세포의 태양광 식량 공장',
+            tagPlant: '식물세포 전용'
+        },
+        vacuole: {
+            name: '액포', en: 'Vacuole', icon: '💧',
+            desc: '물과 양분, 노폐물을 저장하는 커다란 주머니입니다. 물을 많이 머금으면 세포가 팽팽해져 식물이 서 있고, 물이 빠져나가면 세포가 줄어들어 시듭니다.',
+            metaphor: '세포의 물탱크',
+            tagPlant: '식물세포 전용(대형 액포)'
+        },
+        er: {
+            name: '소포체', en: 'Endoplasmic Reticulum', icon: '🛤️',
+            desc: '핵 주변에서 단백질과 지질을 만들어 세포 안 곳곳으로 운반하는 통로입니다. 표면에 리보솜이 붙은 부분은 거친면 소포체라고 부릅니다.',
+            metaphor: '세포의 생산 라인 겸 택배 통로',
+            tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
+        },
+        golgi: {
+            name: '골지체', en: 'Golgi Apparatus', icon: '📦',
+            desc: '소포체에서 만든 물질을 받아 모양을 다듬고 포장해, 세포 밖으로 내보내거나 다른 소기관으로 보냅니다.',
+            metaphor: '세포의 포장·배송 센터',
+            tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
+        },
+        lysosome: {
+            name: '리소좀', en: 'Lysosome', icon: '🧹',
+            desc: '세포 안의 노폐물이나 침입한 세균을 소화 효소로 분해하는 작은 주머니입니다. 낡은 세포 소기관을 정리하는 데도 쓰입니다.',
+            metaphor: '세포의 청소부',
+            tagAnimal: '동물세포에서 주로 관찰', tagPlant: '동물·식물 공통'
+        },
+        ribosome: {
+            name: '리보솜', en: 'Ribosome', icon: '⚙️',
+            desc: '아미노산을 순서대로 연결해 단백질을 만드는 아주 작은 알갱이입니다. 핵에서 만든 설계도를 읽어 세포가 쓸 단백질을 조립합니다.',
+            metaphor: '세포의 부품 공장',
+            tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
+        },
+        centrosome: {
+            name: '중심체', en: 'Centrosome', icon: '✳️',
+            desc: '세포가 분열할 때 방추사를 만들어 염색체가 양쪽으로 정확히 나뉘도록 돕습니다. 동물세포에는 있지만 식물세포에서는 관찰되지 않습니다.',
+            metaphor: '세포 분열의 안내판',
+            tagAnimal: '동물세포 전용'
+        }
+    };
+
+    const CELL_ORDER = {
+        animal: ['membrane', 'nucleus', 'mitochondria', 'er', 'golgi', 'lysosome', 'centrosome', 'ribosome'],
+        plant: ['wall', 'membrane', 'nucleus', 'vacuole', 'chloroplast', 'mitochondria', 'er', 'golgi', 'ribosome']
+    };
+
+    const STEP_INFO = [
+        { n: 1, short: '외형', caption: '1단계 · 세포의 전체 모양과 크기를 봅니다' },
+        { n: 2, short: '단면', caption: '2단계 · 단면을 열어 세포질 속을 살펴봅니다' },
+        { n: 3, short: '소기관', caption: '3단계 · 주요 소기관을 가까이에서 관찰합니다' },
+        { n: 4, short: '초미세', caption: '4단계 · 소기관 내부의 초미세 구조까지 봅니다' }
+    ];
+
+    const VIEW = {
+        animal: { dist: [18.5, 15.0, 11.0, 7.8], target: new THREE.Vector3(0, 0.1, 0) },
+        plant: { dist: [20.5, 16.5, 12.0, 8.6], target: new THREE.Vector3(0, 0, 0) }
+    };
+    const VIEW_DIR = new THREE.Vector3(0.26, 0.36, 1).normalize();
+
+    /* 세로로 긴 화면(휴대폰)에서는 가로 화각이 좁아지므로 카메라를 더 멀리 둔다 */
+    function aspectFactor() {
+        const a = window.innerWidth / Math.max(1, window.innerHeight);
+        return Math.max(1, Math.min(2.55, 1.15 / a));
+    }
+
+    /* ============================================================
+       2. 상태
+       ============================================================ */
+    let scene, camera, renderer, controls;
+    let ambient, keyLight, fillLight;
+    let isDark = false;
+    let currentCell = 'animal';
+    let step = 2;
+    let cutOpen = true;
+    let showLabels = true;
+    let selectedKey = null;
+    let hoveredKey = null;
+    let camAnim = null;
+    let scaledKey = null;
+
+    const cellRoots = {};
+    const organelleMap = { animal: {}, plant: {} };
+    const organelleRadius = { animal: {}, plant: {} };
+    const pickMeshes = { animal: [], plant: [] };
+    const labelSprites = { animal: [], plant: [] };
+    const refs = {};
+
+    const pointer = new THREE.Vector2();
+    const raycaster = new THREE.Raycaster();
+    let pointerActive = false;
+    let pointerDownPos = null;
+    let dragging = false;
+    let frameCount = 0;
+    let lastFitW = 0, lastFitH = 0;
+
+    /* ============================================================
+       3. 공통 재질 · 라벨
+       ============================================================ */
+    function matStd(color, opts) {
+        return new THREE.MeshStandardMaterial(Object.assign({
+            color: color, roughness: 0.55, metalness: 0.05
+        }, opts || {}));
+    }
+
+    function makeLabelSprite(text, accent) {
+        const W = 384, H = 96;
+        const canvas = document.createElement('canvas');
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, W, H);
+
+        const r = 32;
+        ctx.beginPath();
+        ctx.moveTo(12 + r, 14);
+        ctx.lineTo(W - 12 - r, 14);
+        ctx.quadraticCurveTo(W - 12, 14, W - 12, 14 + r);
+        ctx.lineTo(W - 12, H - 14 - r);
+        ctx.quadraticCurveTo(W - 12, H - 14, W - 12 - r, H - 14);
+        ctx.lineTo(12 + r, H - 14);
+        ctx.quadraticCurveTo(12, H - 14, 12, H - 14 - r);
+        ctx.lineTo(12, 14 + r);
+        ctx.quadraticCurveTo(12, 14, 12 + r, 14);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(12, 20, 36, 0.84)';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = accent || 'rgba(125, 211, 252, 0.85)';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(42, H / 2, 6, 0, Math.PI * 2);
+        ctx.fillStyle = accent || '#7dd3fc';
+        ctx.fill();
+
+        ctx.font = 'bold 34px "SeoulNamsan", -apple-system, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, W / 2 + 10, H / 2 + 1);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        const mat = new THREE.SpriteMaterial({
+            map: texture, transparent: true, depthTest: false, depthWrite: false
+        });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(1.5, 0.375, 1);
+        sprite.renderOrder = 20;
+        return sprite;
+    }
+
+    /* ============================================================
+       4. 소기관 3D 모델
+       ============================================================ */
+    function buildNucleus(radius) {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(radius, 34, 26),
+            matStd(0x8b5cf6, { transparent: true, opacity: 0.78, roughness: 0.4, metalness: 0.02 })
+        );
+        g.add(body);
+
+        const envelope = new THREE.Mesh(
+            new THREE.SphereGeometry(radius * 1.035, 34, 26),
+            matStd(0x6d28d9, { transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
+        );
+        g.add(envelope);
+
+        const nucleolus = new THREE.Mesh(
+            new THREE.SphereGeometry(radius * 0.36, 20, 16),
+            matStd(0x4c1d95, { roughness: 0.45 })
+        );
+        nucleolus.position.set(radius * 0.3, -radius * 0.18, radius * 0.2);
+        g.add(nucleolus);
+
+        const poreMat = matStd(0x312e81, { roughness: 0.5 });
+        for (let i = 0; i < 12; i++) {
+            const phi = i * 2.399963;
+            const y = 1 - (i / 11) * 2;
+            const rr = Math.sqrt(Math.max(0, 1 - y * y));
+            const p = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.055, 8, 6), poreMat);
+            p.position.set(Math.cos(phi) * rr * radius, y * radius, Math.sin(phi) * rr * radius);
+            g.add(p);
+        }
+
+        // 염색질 가닥
+        const strandMat = matStd(0xc4b5fd, { transparent: true, opacity: 0.75, roughness: 0.6 });
+        for (let i = 0; i < 3; i++) {
+            const strand = new THREE.Mesh(
+                new THREE.TorusGeometry(radius * (0.5 + i * 0.13), radius * 0.028, 6, 30, Math.PI * (1.1 + i * 0.2)),
+                strandMat
+            );
+            strand.rotation.set(Math.PI * 0.5 + i * 0.5, i * 0.9, i * 0.7);
+            g.add(strand);
+        }
+        return g;
+    }
+
+    function buildMitochondrion(scale) {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 24, 18),
+            matStd(0xf97316, { transparent: true, opacity: 0.5, roughness: 0.4, depthWrite: false })
+        );
+        body.scale.set(1.75, 0.76, 0.76);
+        g.add(body);
+
+        const cristaMat = matStd(0xfb923c, { roughness: 0.5 });
+        for (let i = -1; i <= 1; i++) {
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.315, 0.048, 8, 22), cristaMat);
+            ring.rotation.y = Math.PI / 2;
+            ring.position.x = i * 0.36;
+            ring.scale.set(1, 0.92, 0.92);
+            g.add(ring);
+        }
+        g.scale.setScalar(scale || 1);
+        return g;
+    }
+
+    function buildER(scale) {
+        const g = new THREE.Group();
+        const mat = matStd(0x22d3ee, { transparent: true, opacity: 0.9, roughness: 0.5, side: THREE.DoubleSide });
+        const dotMat = matStd(0x0e7490, { roughness: 0.6 });
+        const radii = [0.72, 0.97, 1.22, 1.47];
+        for (let i = 0; i < radii.length; i++) {
+            const radius = radii[i];
+            const arc = new THREE.Mesh(
+                new THREE.TorusGeometry(radius, 0.068, 8, 30, Math.PI * 0.92),
+                mat
+            );
+            arc.rotation.z = -0.5 + i * 0.12;
+            arc.position.set(0.05 * i, 0.08 * i, -0.2 * i);
+            g.add(arc);
+
+            for (let k = 0; k < 4; k++) {
+                const a = -0.3 + k * 0.4;
+                const dot = new THREE.Mesh(new THREE.SphereGeometry(0.058, 8, 6), dotMat);
+                dot.position.set(Math.cos(a) * radius, Math.sin(a) * radius, -0.2 * i + 0.02);
+                g.add(dot);
+            }
+        }
+        g.scale.setScalar(scale || 1);
+        return g;
+    }
+
+    function buildGolgi(scale) {
+        const g = new THREE.Group();
+        const mat = matStd(0xf472b6, { transparent: true, opacity: 0.92, roughness: 0.45 });
+        for (let i = 0; i < 5; i++) {
+            const radius = 0.92 - i * 0.125;
+            const arc = new THREE.Mesh(
+                new THREE.TorusGeometry(radius, 0.072, 8, 26, Math.PI * 1.0),
+                mat
+            );
+            arc.rotation.z = Math.PI * 0.52;
+            arc.position.set(0, i * 0.175 - 0.35, 0);
+            g.add(arc);
+        }
+        const vesicleMat = matStd(0xf9a8d4, { transparent: true, opacity: 0.9, roughness: 0.5 });
+        [[0.75, 0.62, 0.18], [-0.7, 0.55, -0.12], [0.45, -0.7, 0.1]].forEach(function (p) {
+            const v = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), vesicleMat);
+            v.position.set(p[0], p[1], p[2]);
+            g.add(v);
+        });
+        g.scale.setScalar(scale || 1);
+        return g;
+    }
+
+    function buildLysosome(scale) {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(0.4, 22, 16),
+            matStd(0xa855f7, { transparent: true, opacity: 0.92, roughness: 0.4 })
+        );
+        g.add(body);
+        const granMat = matStd(0xfbbf24, { roughness: 0.5 });
+        [[0.13, 0.08, 0.06], [-0.1, 0.13, -0.05], [0.02, -0.14, 0.12]].forEach(function (p) {
+            const dot = new THREE.Mesh(new THREE.SphereGeometry(0.062, 8, 6), granMat);
+            dot.position.set(p[0], p[1], p[2]);
+            g.add(dot);
+        });
+        g.scale.setScalar(scale || 1);
+        return g;
+    }
+
+    function buildCentrosome(scale) {
+        const g = new THREE.Group();
+        const mat = matStd(0xfacc15, { roughness: 0.45, metalness: 0.15 });
+        const c1 = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 1.05, 12, 1, true), mat);
+        c1.rotation.z = Math.PI / 2;
+        g.add(c1);
+        const c2 = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 1.05, 12, 1, true), mat);
+        c2.rotation.x = Math.PI / 2;
+        g.add(c2);
+        const core = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), matStd(0xeab308, { roughness: 0.5 }));
+        g.add(core);
+        g.scale.setScalar(scale || 1);
+        return g;
+    }
+
+    function buildRibosomeCluster(scale) {
+        const g = new THREE.Group();
+        const mat = matStd(0x312e81, { roughness: 0.6 });
+        for (let i = 0; i < 16; i++) {
+            const phi = i * 2.399963;
+            const t = i / 16;
+            const rad = 0.18 + (i % 4) * 0.17;
+            const dot = new THREE.Mesh(new THREE.SphereGeometry(0.068, 8, 6), mat);
+            dot.position.set(
+                Math.cos(phi) * rad,
+                Math.sin(phi * 1.7) * rad * 0.8 + t * 0.24,
+                Math.sin(phi) * rad * 0.9
+            );
+            g.add(dot);
+        }
+        g.scale.setScalar(scale || 1);
+        return g;
+    }
+
+    function buildChloroplast(scale) {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(0.62, 26, 18),
+            matStd(0x22c55e, { transparent: true, opacity: 0.32, roughness: 0.35, depthWrite: false })
+        );
+        body.scale.set(1.72, 0.94, 1.14);
+        g.add(body);
+
+        const discMat = matStd(0x166534, { roughness: 0.5 });
+        for (let s = 0; s < 3; s++) {
+            const px = -0.52 + s * 0.52;
+            for (let i = 0; i < 5; i++) {
+                const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.032, 14), discMat);
+                disc.position.set(px, -0.13 + i * 0.065, (s - 1) * 0.26);
+                g.add(disc);
+            }
+        }
+        const linkMat = matStd(0x4ade80, { transparent: true, opacity: 0.8, roughness: 0.5 });
+        for (let s = 0; s < 2; s++) {
+            const link = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.02, 6), linkMat);
+            link.rotation.z = Math.PI / 2;
+            link.position.set(0, -0.09 + s * 0.1, (s === 0 ? -0.52 : 0.52));
+            g.add(link);
+        }
+        g.scale.setScalar(scale || 1);
+        return g;
+    }
+
+    function buildVacuole() {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(1, 40, 28),
+            matStd(0x38bdf8, { transparent: true, opacity: 0.2, roughness: 0.2, side: THREE.DoubleSide, depthWrite: false })
+        );
+        body.scale.set(2.35, 1.85, 1.72);
+        g.add(body);
+        const inner = new THREE.Mesh(
+            new THREE.SphereGeometry(0.94, 36, 24),
+            matStd(0x0ea5e9, { transparent: true, opacity: 0.12, roughness: 0.25, depthWrite: false })
+        );
+        inner.scale.set(2.35, 1.85, 1.72);
+        g.add(inner);
+        return g;
+    }
+
+    function buildBoxFaces(w, h, d, material) {
+        const group = new THREE.Group();
+        const specs = [
+            { size: [d, h], pos: [w / 2, 0, 0], rot: [0, Math.PI / 2, 0] },
+            { size: [d, h], pos: [-w / 2, 0, 0], rot: [0, -Math.PI / 2, 0] },
+            { size: [w, d], pos: [0, h / 2, 0], rot: [-Math.PI / 2, 0, 0] },
+            { size: [w, d], pos: [0, -h / 2, 0], rot: [Math.PI / 2, 0, 0] },
+            { size: [w, d], pos: [0, 0, d / 2], rot: [0, 0, 0] },
+            { size: [w, d], pos: [0, 0, -d / 2], rot: [0, 0, 0] }
+        ];
+        const faces = [];
+        specs.forEach(function (s) {
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(s.size[0], s.size[1]), material);
+            m.position.set(s.pos[0], s.pos[1], s.pos[2]);
+            m.rotation.set(s.rot[0], s.rot[1], s.rot[2]);
+            group.add(m);
+            faces.push(m);
+        });
+        return { group: group, faces: faces };
+    }
+
+    /* ============================================================
+       5. 세포 조립
+       ============================================================ */
+    function registerOrganelle(cellKey, key, group, radius) {
+        group.userData.orgKey = key;
+        group.traverse(function (o) {
+            if (o.isMesh) {
+                o.userData.orgKey = key;
+                pickMeshes[cellKey].push(o);
+            }
+        });
+        organelleMap[cellKey][key] = group;
+        organelleRadius[cellKey][key] = radius || 1;
+    }
+
+    function buildAnimalCell() {
+        const root = new THREE.Group();
+        const R = 5.0;
+        const phiStart = Math.PI * 0.75;
+        const phiLen = Math.PI * 1.5;
+
+        const membraneMat = matStd(0x38bdf8, {
+            transparent: true, opacity: 0.17, roughness: 0.2, metalness: 0.05,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+        const geoFull = new THREE.SphereGeometry(R, 64, 44);
+        const geoCut = new THREE.SphereGeometry(R, 64, 44, phiStart, phiLen);
+        const membrane = new THREE.Mesh(geoFull, membraneMat);
+        root.add(membrane);
+        registerOrganelle('animal', 'membrane', membrane, R);
+
+        const edgeGroup = new THREE.Group();
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.85 });
+        [phiStart, phiStart + phiLen].forEach(function (phi) {
+            const pts = [];
+            for (let i = 0; i <= 54; i++) {
+                const th = Math.PI * i / 54;
+                pts.push(new THREE.Vector3(
+                    -R * Math.cos(phi) * Math.sin(th),
+                    R * Math.cos(th),
+                    R * Math.sin(phi) * Math.sin(th)
+                ));
+            }
+            edgeGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), edgeMat));
+        });
+        edgeGroup.visible = false;
+        root.add(edgeGroup);
+
+        // 핵
+        const nucleus = buildNucleus(1.35);
+        nucleus.position.set(-1.6, 0.7, -0.55);
+        root.add(nucleus);
+        registerOrganelle('animal', 'nucleus', nucleus, 1.4);
+
+        // 미토콘드리아 (3개)
+        const mito = new THREE.Group();
+        [[2.05, -1.95, 0.35, 0.55, 0.3, 1.0],
+         [-2.9, -1.35, 0.55, 0.5, -0.5, -0.7],
+         [0.55, 2.6, -1.7, 0.46, 0.8, 0.25]].forEach(function (p) {
+            const m = buildMitochondrion(p[3]);
+            m.position.set(p[0], p[1], p[2]);
+            m.rotation.set(p[4], p[5], 0.2);
+            mito.add(m);
+        });
+        root.add(mito);
+        registerOrganelle('animal', 'mitochondria', mito, 1.4);
+
+        // 소포체 (핵 주변을 감싸듯 배치)
+        const er = buildER(0.95);
+        er.position.set(0.15, 1.25, 0.15);
+        er.rotation.set(0.15, -0.85, 0.25);
+        root.add(er);
+        registerOrganelle('animal', 'er', er, 1.6);
+
+        // 골지체
+        const golgi = buildGolgi(1.0);
+        golgi.position.set(2.45, 0.2, 0.5);
+        golgi.rotation.set(0.4, -0.5, 0.2);
+        root.add(golgi);
+        registerOrganelle('animal', 'golgi', golgi, 1.05);
+
+        // 리소좀
+        const lyso = new THREE.Group();
+        [[-2.05, -2.55, 1.15, 1.0], [1.15, -0.55, 1.5, 0.85]].forEach(function (p) {
+            const l = buildLysosome(p[3]);
+            l.position.set(p[0], p[1], p[2]);
+            lyso.add(l);
+        });
+        root.add(lyso);
+        registerOrganelle('animal', 'lysosome', lyso, 0.6);
+
+        // 중심체
+        const centro = buildCentrosome(1.0);
+        centro.position.set(-3.05, 1.9, 0.95);
+        centro.rotation.set(0.3, 0.4, 0.2);
+        root.add(centro);
+        registerOrganelle('animal', 'centrosome', centro, 0.7);
+
+        // 리보솜
+        const ribo = new THREE.Group();
+        [[-0.55, -2.95, 1.3], [2.95, 1.75, 0.75], [0.75, -1.2, -2.05]].forEach(function (p) {
+            const c = buildRibosomeCluster(1.0);
+            c.position.set(p[0], p[1], p[2]);
+            ribo.add(c);
+        });
+        root.add(ribo);
+        registerOrganelle('animal', 'ribosome', ribo, 0.9);
+
+        // 라벨 (기본 시점에서 서로 겹치지 않도록 배치)
+        const labels = [
+            ['membrane', '세포막', 3.55, 2.95, -1.2, '#7dd3fc'],
+            ['nucleus', '핵', -2.0, 2.25, -0.5, '#c4b5fd'],
+            ['mitochondria', '미토콘드리아', 1.95, -1.05, 0.6, '#fdba74'],
+            ['er', '소포체', 1.0, 3.05, 0.4, '#67e8f9'],
+            ['golgi', '골지체', 3.1, 0.85, 0.7, '#f9a8d4'],
+            ['lysosome', '리소좀', -2.65, -3.35, 1.1, '#d8b4fe'],
+            ['centrosome', '중심체', -3.2, 3.25, 0.95, '#fde047'],
+            ['ribosome', '리보솜', 0.1, -3.6, 1.3, '#a5b4fc']
+        ];
+        labels.forEach(function (L) {
+            const s = makeLabelSprite(L[1], L[5]);
+            s.position.set(L[2], L[3], L[4]);
+            root.add(s);
+            labelSprites.animal.push(s);
+        });
+
+        refs.animal = { membrane: membrane, geoFull: geoFull, geoCut: geoCut, edgeGroup: edgeGroup };
+        return root;
+    }
+
+    function buildPlantCell() {
+        const root = new THREE.Group();
+        const W = 9.6, H = 7.6, D = 7.6;
+
+        // 세포벽
+        const wallMat = matStd(0x22c55e, {
+            transparent: true, opacity: 0.12, roughness: 0.5,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+        const wall = buildBoxFaces(W, H, D, wallMat);
+        const wallGroup = new THREE.Group();
+        wallGroup.add(wall.group);
+        const wallEdge = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(W, H, D)),
+            new THREE.LineBasicMaterial({ color: 0x15803d, transparent: true, opacity: 0.9 })
+        );
+        wallGroup.add(wallEdge);
+        root.add(wallGroup);
+        registerOrganelle('plant', 'wall', wallGroup, 6.0);
+
+        // 세포막 (세포벽 안쪽)
+        const memMat = matStd(0x38bdf8, {
+            transparent: true, opacity: 0.09, roughness: 0.35,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+        const mem = buildBoxFaces(W - 0.42, H - 0.42, D - 0.42, memMat);
+        const memGroup = new THREE.Group();
+        memGroup.add(mem.group);
+        const memEdge = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(W - 0.42, H - 0.42, D - 0.42)),
+            new THREE.LineBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: 0.35 })
+        );
+        memGroup.add(memEdge);
+        root.add(memGroup);
+        registerOrganelle('plant', 'membrane', memGroup, 5.6);
+
+        // 핵
+        const nucleus = buildNucleus(1.15);
+        nucleus.position.set(-2.9, -0.6, -0.5);
+        root.add(nucleus);
+        registerOrganelle('plant', 'nucleus', nucleus, 1.2);
+
+        // 대형 중심 액포
+        const vacuole = buildVacuole();
+        vacuole.position.set(0.95, 0.35, -1.0);
+        root.add(vacuole);
+        registerOrganelle('plant', 'vacuole', vacuole, 2.6);
+
+        // 엽록체
+        const chloro = new THREE.Group();
+        [[2.6, 1.9, 0.7, 0.5, 0.5, 0.9],
+         [3.5, -0.75, 1.3, 0.44, -0.3, 1.7],
+         [-2.35, -2.4, 1.0, 0.5, -0.2, 0.4],
+         [-0.7, 2.35, 1.5, 0.46, 0.6, 1.2],
+         [3.2, 0.55, -0.2, 0.42, 0.1, 0.6]].forEach(function (p) {
+            const c = buildChloroplast(p[3]);
+            c.position.set(p[0], p[1], p[2]);
+            c.rotation.set(p[4], p[5], 0.15);
+            chloro.add(c);
+        });
+        root.add(chloro);
+        registerOrganelle('plant', 'chloroplast', chloro, 1.0);
+
+        // 미토큰드리아
+        const mito = new THREE.Group();
+        [[0.4, 2.9, -2.0, 0.52, 0.4, 0.3],
+         [-1.05, -2.9, 1.4, 0.44, -0.4, -0.5]].forEach(function (p) {
+            const m = buildMitochondrion(p[3]);
+            m.position.set(p[0], p[1], p[2]);
+            m.rotation.set(p[4], p[5], 0.2);
+            mito.add(m);
+        });
+        root.add(mito);
+        registerOrganelle('plant', 'mitochondria', mito, 1.1);
+
+        // 소포체
+        const er = buildER(0.86);
+        er.position.set(-2.45, 1.15, 0.1);
+        er.rotation.set(0.2, -0.8, 0.2);
+        root.add(er);
+        registerOrganelle('plant', 'er', er, 1.4);
+
+        // 골지체
+        const golgi = buildGolgi(0.9);
+        golgi.position.set(2.85, -2.0, 1.25);
+        golgi.rotation.set(0.5, -0.4, 0.3);
+        root.add(golgi);
+        registerOrganelle('plant', 'golgi', golgi, 1.0);
+
+        // 리보솜
+        const ribo = new THREE.Group();
+        [[3.55, 1.35, 1.9], [-1.6, -1.6, 2.3], [-3.9, 1.9, -1.2]].forEach(function (p) {
+            const c = buildRibosomeCluster(1.0);
+            c.position.set(p[0], p[1], p[2]);
+            ribo.add(c);
+        });
+        root.add(ribo);
+        registerOrganelle('plant', 'ribosome', ribo, 0.85);
+
+        // 라벨
+        const labels = [
+            ['wall', '세포벽', 0.0, 4.45, 1.6, '#86efac'],
+            ['membrane', '세포막', -3.95, 2.95, 1.8, '#7dd3fc'],
+            ['nucleus', '핵', -3.15, 0.95, -0.4, '#c4b5fd'],
+            ['vacuole', '액포', 0.8, 2.6, 0.2, '#7dd3fc'],
+            ['chloroplast', '엽록체', 2.9, 2.95, 0.9, '#86efac'],
+            ['mitochondria', '미토콘드리아', 1.45, 3.6, -1.8, '#fdba74'],
+            ['er', '소포체', -1.45, 2.6, 1.0, '#67e8f9'],
+            ['golgi', '골지체', 2.9, -1.0, 1.4, '#f9a8d4'],
+            ['ribosome', '리보솜', 3.4, 1.5, 2.2, '#a5b4fc']
+        ];
+        labels.forEach(function (L) {
+            const s = makeLabelSprite(L[1], L[5]);
+            s.position.set(L[2], L[3], L[4]);
+            root.add(s);
+            labelSprites.plant.push(s);
+        });
+
+        refs.plant = {
+            wallFront: wall.faces[4], wallTop: wall.faces[2],
+            memFront: mem.faces[4], memTop: mem.faces[2]
+        };
+        return root;
+    }
+
+    /* ============================================================
+       6. 장면 초기화
+       ============================================================ */
+    function init() {
+        const container = document.getElementById('canvas-container');
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 6.0, 17.5);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.07;
+        controls.rotateSpeed = 0.75;
+        controls.zoomSpeed = 0.8;
+        controls.panSpeed = 0.8;
+        controls.minDistance = 3.2;
+        controls.maxDistance = 70;
+        controls.target.set(0, 0.1, 0);
+        controls.addEventListener('start', function () { camAnim = null; });
+
+        ambient = new THREE.HemisphereLight(0xffffff, 0x94a3b8, 0.95);
+        scene.add(ambient);
+        keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        keyLight.position.set(7, 12, 9);
+        scene.add(keyLight);
+        fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
+        fillLight.position.set(-9, -5, -7);
+        scene.add(fillLight);
+        const inner = new THREE.PointLight(0xffffff, 0.45, 40);
+        inner.position.set(0, 0, 4);
+        scene.add(inner);
+
+        cellRoots.animal = buildAnimalCell();
+        scene.add(cellRoots.animal);
+        cellRoots.plant = buildPlantCell();
+        cellRoots.plant.visible = false;
+        scene.add(cellRoots.plant);
+
+        buildChips();
+        bindEvents();
+        applyCut();
+        applyStep(2, true);
+        setCell('animal', true);
+        applyTheme(false, false);
+        requestAnimationFrame(animate);
+    }
+
+    /* ============================================================
+       7. 단면 · 단계 · 카메라
+       ============================================================ */
+    function applyCut() {
+        if (refs.animal) {
+            refs.animal.membrane.geometry = cutOpen ? refs.animal.geoCut : refs.animal.geoFull;
+            refs.animal.edgeGroup.visible = cutOpen;
+        }
+        if (refs.plant) {
+            refs.plant.wallFront.visible = !cutOpen;
+            refs.plant.wallTop.visible = !cutOpen;
+            refs.plant.memFront.visible = !cutOpen;
+            refs.plant.memTop.visible = !cutOpen;
+        }
+        const tg = document.getElementById('tg-cut');
+        if (tg) tg.setAttribute('aria-pressed', cutOpen ? 'true' : 'false');
+        const btn = document.getElementById('btn-cut');
+        if (btn) btn.textContent = cutOpen ? '✂️ 단면 닫기' : '✂️ 단면 열기';
+        updateLabelVisibility();
+    }
+
+    function updateLabelVisibility() {
+        const visible = showLabels && step >= 2;
+        (labelSprites.animal || []).forEach(function (s) { s.visible = visible && currentCell === 'animal'; });
+        (labelSprites.plant || []).forEach(function (s) { s.visible = visible && currentCell === 'plant'; });
+    }
+
+    function applyStep(n, instant) {
+        step = Math.max(1, Math.min(4, n));
+        cutOpen = step >= 2;
+        applyCut();
+
+        const cfg = VIEW[currentCell];
+        const dist = cfg.dist[step - 1] * aspectFactor();
+        const target = cfg.target.clone();
+        const pos = target.clone().add(VIEW_DIR.clone().multiplyScalar(dist));
+        if (instant) {
+            camera.position.copy(pos);
+            controls.target.copy(target);
+            camAnim = null;
+        } else {
+            flyTo(pos, target, 850);
+        }
+
+        document.querySelectorAll('.step-seg').forEach(function (b) {
+            b.classList.toggle('active', Number(b.dataset.step) === step);
+        });
+        document.getElementById('step-caption').textContent = STEP_INFO[step - 1].caption;
+        document.getElementById('card-step').textContent = step + '단계';
+        document.getElementById('btn-zoom-in').disabled = step >= 4;
+        document.getElementById('btn-zoom-out').disabled = step <= 1;
+    }
+
+    function flyTo(pos, target, dur) {
+        camAnim = {
+            p0: camera.position.clone(), p1: pos.clone(),
+            t0: controls.target.clone(), t1: target.clone(),
+            start: performance.now(), dur: dur || 850
+        };
+    }
+
+    function easeInOut(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    }
+
+    function focusOrganelle(key, hitPoint) {
+        const g = organelleMap[currentCell][key];
+        if (!g) return;
+        const center = new THREE.Vector3();
+        g.getWorldPosition(center);
+        if (hitPoint) center.lerp(hitPoint, 0.55);
+        const radius = organelleRadius[currentCell][key] || 1;
+        const dist = Math.max(3.0, Math.min(15, radius * 2.7 + 2.0)) * Math.min(1.8, aspectFactor());
+        const target = center.clone();
+        const pos = target.clone().add(VIEW_DIR.clone().multiplyScalar(dist));
+        flyTo(pos, target, 800);
+    }
+
+    /* ============================================================
+       8. 선택 · 하이라이트
+       ============================================================ */
+    function matsOf(group) {
+        if (!group) return [];
+        if (!group.userData.mats) {
+            const list = [];
+            group.traverse(function (o) {
+                if (o.isMesh && o.material && o.material.emissive) list.push(o.material);
+            });
+            group.userData.mats = list;
+        }
+        return group.userData.mats;
+    }
+
+    function paintHighlight(key, mode) {
+        const list = matsOf(organelleMap[currentCell][key]);
+        list.forEach(function (m) {
+            if (m.userData.baseEmissive === undefined) {
+                m.userData.baseEmissive = m.emissive.getHex();
+                m.userData.baseEmissiveInt = m.emissiveIntensity;
+            }
+            if (mode === 'selected') {
+                m.emissive.setHex(0x1d4ed8);
+                m.emissiveIntensity = 0.6;
+            } else if (mode === 'hover') {
+                m.emissive.setHex(0x0ea5e9);
+                m.emissiveIntensity = 0.35;
+            } else {
+                m.emissive.setHex(m.userData.baseEmissive);
+                m.emissiveIntensity = m.userData.baseEmissiveInt;
+            }
+        });
+    }
+
+    function setHover(key) {
+        if (hoveredKey === key) return;
+        const prev = hoveredKey;
+        hoveredKey = key;
+        if (prev && prev !== selectedKey) paintHighlight(prev, null);
+        if (key && key !== selectedKey) paintHighlight(key, 'hover');
+        renderer.domElement.style.cursor = key ? 'pointer' : 'grab';
+    }
+
+    function selectOrganelle(key, opts) {
+        const options = opts || {};
+        if (selectedKey && selectedKey !== key) paintHighlight(selectedKey, null);
+        selectedKey = key;
+        paintHighlight(key, 'selected');
+        showOrganelleCard(key);
+        pulseSelect();
+        if (options.focus !== false) {
+            focusOrganelle(key, options.point || null);
+        }
+        document.querySelectorAll('.org-chip').forEach(function (c) {
+            c.classList.toggle('active', c.dataset.key === key);
+        });
+        const info = ORGANELLES[key];
+        document.getElementById('card-focus').textContent = info ? info.name : '전체';
+        document.getElementById('card-cell').textContent = currentCell === 'animal' ? '동물세포' : '식물세포';
+    }
+
+    let pulseT = 0;
+    function pulseSelect() { pulseT = 1; }
+
+    function clearSelection() {
+        if (selectedKey) paintHighlight(selectedKey, null);
+        selectedKey = null;
+        hoveredKey = null;
+        document.querySelectorAll('.org-chip').forEach(function (c) { c.classList.remove('active'); });
+        document.getElementById('card-focus').textContent = '전체';
+        showGuideCard();
+    }
+
+    /* ============================================================
+       9. 카드
+       ============================================================ */
+    const card = document.getElementById('organelle-card');
+
+    function tagClass(tag) {
+        if (!tag) return '';
+        if (tag.indexOf('식물세포 전용') >= 0) return 'plant';
+        if (tag.indexOf('동물세포 전용') >= 0) return 'animal';
+        return '';
+    }
+
+    function showOrganelleCard(key) {
+        const info = ORGANELLES[key];
+        if (!info) return;
+        const tag = (currentCell === 'plant' ? info.tagPlant : info.tagAnimal) || info.tagAnimal || info.tagPlant || '동물·식물 공통';
+        document.getElementById('oc-icon').textContent = info.icon;
+        document.getElementById('oc-name').textContent = info.name;
+        document.getElementById('oc-en').textContent = info.en;
+        const tagEl = document.getElementById('oc-tag');
+        tagEl.textContent = tag;
+        tagEl.className = 'oc-tag ' + tagClass(tag);
+        document.getElementById('oc-desc').textContent = info.desc;
+        document.getElementById('oc-metaphor').innerHTML = '<b>' + info.metaphor + '</b>';
+        document.getElementById('oc-compare').style.display = 'none';
+        card.classList.remove('hidden');
+    }
+
+    function showGuideCard() {
+        document.getElementById('oc-icon').textContent = '🔎';
+        document.getElementById('oc-name').textContent = '세포 탐험 안내';
+        document.getElementById('oc-en').textContent = 'Explore the cell';
+        const tagEl = document.getElementById('oc-tag');
+        tagEl.textContent = '사용 방법';
+        tagEl.className = 'oc-tag';
+        document.getElementById('oc-desc').textContent = '세포 안의 소기관을 클릭하면 이름과 기능이 여기에 나타납니다. [확대] 버튼을 누르면 세포 속으로 한 단계씩 들어가며 소기관을 자세히 볼 수 있습니다.';
+        document.getElementById('oc-metaphor').innerHTML = '<b>오늘의 관찰 포인트</b> — 동물세포와 식물세포를 오가며 세포벽·엽록체·대형 액포의 유무를 비교해 보세요.';
+        document.getElementById('oc-compare').style.display = 'flex';
+        document.getElementById('oc-compare').innerHTML =
+            '<div class="oc-cmp-row"><span class="dot">🐾</span><span><b>동물세포</b> — 둥근 모양, 세포벽·엽록체·대형 액포가 없습니다.</span></div>' +
+            '<div class="oc-cmp-row"><span class="dot">🌱</span><span><b>식물세포</b> — 각진 모양, 세포벽·엽록체·대형 액포가 있습니다.</span></div>';
+        card.classList.remove('hidden');
+    }
+
+    /* ============================================================
+       10. 칩 · 셀 탭
+       ============================================================ */
+    function buildChips() {
+        const grid = document.getElementById('chip-grid');
+        grid.innerHTML = '';
+        const keys = CELL_ORDER[currentCell];
+        keys.forEach(function (key) {
+            const info = ORGANELLES[key];
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'org-chip';
+            b.dataset.key = key;
+            b.innerHTML = '<span class="ch-ico">' + info.icon + '</span><span>' + info.name + '</span>';
+            b.addEventListener('click', function () {
+                selectOrganelle(key, {});
+            });
+            grid.appendChild(b);
+        });
+        document.getElementById('chip-count').textContent = keys.length;
+    }
+
+    function setCell(cellKey, instant) {
+        if (cellKey === currentCell && !instant) {
+            // 같은 세포를 다시 누르면 시점만 정렬
+            applyStep(step, false);
+            return;
+        }
+        clearSelection();
+        if (cellRoots.animal) cellRoots.animal.visible = cellKey === 'animal';
+        if (cellRoots.plant) cellRoots.plant.visible = cellKey === 'plant';
+        currentCell = cellKey;
+
+        document.getElementById('tab-animal').classList.toggle('active', cellKey === 'animal');
+        document.getElementById('tab-plant').classList.toggle('active', cellKey === 'plant');
+        document.getElementById('card-cell').textContent = cellKey === 'animal' ? '동물세포' : '식물세포';
+
+        buildChips();
+        applyCut();
+        updateLabelVisibility();
+
+        const cfg = VIEW[currentCell];
+        const target = cfg.target.clone();
+        const pos = target.clone().add(VIEW_DIR.clone().multiplyScalar(cfg.dist[step - 1] * aspectFactor()));
+        if (instant) {
+            camera.position.copy(pos);
+            controls.target.copy(target);
+        } else {
+            flyTo(pos, target, 900);
+        }
+
+        // 카드 안내도 세포에 맞게 바꾼다
+        showGuideCard();
+    }
+
+    /* ============================================================
+       11. 입력 이벤트
+       ============================================================ */
+    function updatePointer(e) {
+        pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        pointerActive = true;
+    }
+
+    function isVisible(obj) {
+        let o = obj;
+        while (o) {
+            if (o.visible === false) return false;
+            o = o.parent;
+        }
+        return true;
+    }
+
+    function pickAt() {
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(pickMeshes[currentCell], false);
+        for (let i = 0; i < hits.length; i++) {
+            if (isVisible(hits[i].object)) return hits[i];
+        }
+        return null;
+    }
+
+    function bindEvents() {
+        const el = renderer.domElement;
+
+        el.addEventListener('pointerdown', function (e) {
+            pointerDownPos = { x: e.clientX, y: e.clientY };
+            dragging = false;
+            updatePointer(e);
+        });
+
+        el.addEventListener('pointermove', function (e) {
+            updatePointer(e);
+            if (pointerDownPos) {
+                const dx = e.clientX - pointerDownPos.x;
+                const dy = e.clientY - pointerDownPos.y;
+                if (dx * dx + dy * dy > 36) dragging = true;
+            }
+        });
+
+        el.addEventListener('pointerup', function (e) {
+            updatePointer(e);
+            const wasDrag = dragging;
+            pointerDownPos = null;
+            dragging = false;
+            if (wasDrag) return;
+            if (e.pointerType === 'touch' || e.button === 0) {
+                const hit = pickAt();
+                if (hit && hit.object.userData.orgKey) {
+                    selectOrganelle(hit.object.userData.orgKey, { point: hit.point });
+                }
+            }
+        });
+
+        el.addEventListener('pointerleave', function () {
+            pointerActive = false;
+            setHover(null);
+        });
+
+        document.getElementById('btn-zoom-in').addEventListener('click', function () {
+            clearSelection();
+            applyStep(step + 1, false);
+        });
+        document.getElementById('btn-zoom-out').addEventListener('click', function () {
+            clearSelection();
+            applyStep(step - 1, false);
+        });
+        document.querySelectorAll('.step-seg').forEach(function (b) {
+            b.addEventListener('click', function () {
+                clearSelection();
+                applyStep(Number(b.dataset.step), false);
+            });
+        });
+
+        document.getElementById('tab-animal').addEventListener('click', function () { setCell('animal', false); });
+        document.getElementById('tab-plant').addEventListener('click', function () { setCell('plant', false); });
+
+        document.getElementById('btn-cut').addEventListener('click', function () {
+            cutOpen = !cutOpen;
+            applyCut();
+            updateCutHint();
+        });
+        document.getElementById('tg-cut').addEventListener('click', function () {
+            cutOpen = !cutOpen;
+            applyCut();
+            updateCutHint();
+        });
+        document.getElementById('tg-labels').addEventListener('click', function () {
+            showLabels = !showLabels;
+            document.getElementById('tg-labels').setAttribute('aria-pressed', showLabels ? 'true' : 'false');
+            updateLabelVisibility();
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', function () {
+            clearSelection();
+            cutOpen = true;
+            step = 2;
+            applyCut();
+            applyStep(2, false);
+            showLabels = true;
+            document.getElementById('tg-labels').setAttribute('aria-pressed', 'true');
+            updateLabelVisibility();
+        });
+
+        document.getElementById('btn-align').addEventListener('click', function () {
+            const cfg = VIEW[currentCell];
+            const target = cfg.target.clone();
+            const pos = target.clone().add(VIEW_DIR.clone().multiplyScalar(cfg.dist[step - 1] * aspectFactor()));
+            flyTo(pos, target, 700);
+        });
+
+        document.getElementById('card-close').addEventListener('click', function () {
+            card.classList.add('hidden');
+        });
+        document.getElementById('btn-guide').addEventListener('click', function () {
+            clearSelection();
+            showGuideCard();
+        });
+
+        document.getElementById('btn-fullscreen').addEventListener('click', function () {
+            if (!document.fullscreenElement) {
+                const p = document.documentElement.requestFullscreen
+                    ? document.documentElement.requestFullscreen()
+                    : document.documentElement.webkitRequestFullscreen();
+                if (p && p.catch) p.catch(function () {});
+            } else {
+                const p = document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen();
+                if (p && p.catch) p.catch(function () {});
+            }
+        });
+
+        window.addEventListener('resize', function () {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (Math.abs(window.innerWidth - lastFitW) > 90 || Math.abs(window.innerHeight - lastFitH) > 90) {
+                const cfg = VIEW[currentCell];
+                const target = cfg.target.clone();
+                const pos = target.clone().add(VIEW_DIR.clone().multiplyScalar(cfg.dist[step - 1] * aspectFactor()));
+                flyTo(pos, target, 600);
+            }
+        });
+        lastFitW = window.innerWidth;
+        lastFitH = window.innerHeight;
+    }
+
+    function updateCutHint() {
+        const hint = document.getElementById('guide-tooltip');
+        if (hint) {
+            hint.textContent = cutOpen
+                ? '🧫 소기관을 클릭하면 기능이 나옵니다 · 식물세포에만 세포벽·엽록체·대형 액포가 있습니다'
+                : '🧫 단면을 닫았습니다 · 아래 [단면 열기]를 누르면 세포 속이 보입니다';
+        }
+    }
+
+    /* ============================================================
+       12. 테마
+       ============================================================ */
+    function applyTheme(dark, save) {
+        isDark = dark;
+        document.body.classList.toggle('dark-mode', dark);
+        document.body.classList.toggle('light-mode', !dark);
+        const btn = document.getElementById('theme-toggle');
+        if (btn) {
+            btn.textContent = dark ? '☀️' : '🌙';
+            btn.title = dark ? '주간 모드로 전환' : '야간 모드로 전환';
+            btn.setAttribute('aria-label', btn.title);
+        }
+        if (ambient) {
+            ambient.intensity = dark ? 0.62 : 0.95;
+            keyLight.intensity = dark ? 0.7 : 0.8;
+            fillLight.intensity = dark ? 0.35 : 0.45;
+        }
+        if (save) {
+            try { localStorage.setItem('svlLabTheme', dark ? 'dark' : 'light'); } catch (e) {}
+        }
+    }
+
+    /* ============================================================
+       13. 애니메이션
+       ============================================================ */
+    let lastTime = performance.now();
+
+    function updateLabelScale() {
+        const list = currentCell === 'animal' ? labelSprites.animal : labelSprites.plant;
+        const tmp = new THREE.Vector3();
+        for (let i = 0; i < list.length; i++) {
+            const s = list[i];
+            if (!s.visible) continue;
+            s.getWorldPosition(tmp);
+            const d = camera.position.distanceTo(tmp);
+            let k = Math.max(0.42, Math.min(1.7, d / 16));
+            if (window.innerWidth < 700) k *= 0.8;
+            s.scale.set(1.5 * k, 0.375 * k, 1);
+        }
+    }
+
+    function animate(time) {
+        requestAnimationFrame(animate);
+        const dt = Math.max(0, Math.min(0.05, (time - lastTime) / 1000));
+        lastTime = time;
+
+        if (camAnim) {
+            const k = Math.min(1, (performance.now() - camAnim.start) / camAnim.dur);
+            const e = easeInOut(k);
+            camera.position.lerpVectors(camAnim.p0, camAnim.p1, e);
+            controls.target.lerpVectors(camAnim.t0, camAnim.t1, e);
+            if (k >= 1) camAnim = null;
+        } else if (!pointerDownPos) {
+            // 미세한 생동감: 선택한 소기관이 살짝 숨쉬듯 커졌다 작아진다
+            if (pulseT > 0) pulseT = Math.max(0, pulseT - dt * 1.6);
+        }
+
+        if (scaledKey && (!selectedKey || selectedKey !== scaledKey)) {
+            const old = organelleMap[currentCell][scaledKey];
+            if (old && old.userData.baseScale) old.scale.setScalar(old.userData.baseScale);
+            scaledKey = null;
+        }
+        if (selectedKey && organelleRadius[currentCell][selectedKey] < 3.5) {
+            const target = organelleMap[currentCell][selectedKey];
+            if (target) {
+                if (scaledKey !== selectedKey) {
+                    target.userData.baseScale = target.scale.x;
+                    scaledKey = selectedKey;
+                }
+                target.scale.setScalar(target.userData.baseScale * (1 + 0.05 * pulseT));
+            }
+        }
+
+        // 호버 판정 (데스크톱, 드래그 중 아님)
+        frameCount++;
+        if (pointerActive && !pointerDownPos && frameCount % 3 === 0) {
+            const hit = pickAt();
+            setHover(hit && hit.object.userData.orgKey ? hit.object.userData.orgKey : null);
+        }
+        if (frameCount % 2 === 0) updateLabelScale();
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* ============================================================
+       14. 시작
+       ============================================================ */
+    init();
+
+    const themeBtn = document.getElementById('theme-toggle');
+    themeBtn.addEventListener('click', function () { applyTheme(!isDark, true); });
+    let savedTheme = 'light';
+    try { savedTheme = localStorage.getItem('svlLabTheme') || 'light'; } catch (e) {}
+    applyTheme(savedTheme === 'dark', false);
+
+    window.addEventListener('load', function () {
+        lastFitW = window.innerWidth;
+        lastFitH = window.innerHeight;
+    });
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () {
+            // 웹폰트가 준비되면 라벨 텍스처를 다시 그려 폰트를 통일한다
+            (labelSprites.animal || []).concat(labelSprites.plant || []).forEach(function (s) {
+                if (s.material && s.material.map) s.material.map.needsUpdate = true;
+            });
+        }).catch(function () {});
+    }
+})();
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
