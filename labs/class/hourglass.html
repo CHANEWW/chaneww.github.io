@@ -693,32 +693,57 @@
         upperSand.geometry = new THREE.LatheGeometry(pts, 44);
     }
 
-    /* 아래쪽 모래: 쌓이는 원뿔 더미 */
+    /* 아래쪽 모래: 쌓이는 원뿔 더미 (부피에 맞춰 꼭대기 높이 역산) */
     var PILE_BASE = BASE_Y + 0.025;
-    var PILE_HMAX = NECK_Y - PILE_BASE - 0.09;
+    var PILE_SLOPE = 1.32;      /* 안식각 기울기 (반지름 = 높이 × 1.32) */
+    var PILE_MAXAPEX = NECK_Y - PILE_BASE - 0.035;
+    var AVN = 220;
+    var volApex = new Float32Array(AVN + 1);
+    (function () {
+        var dy = PILE_MAXAPEX / AVN;
+        for (var i = 1; i <= AVN; i++) {
+            var h = i * dy;
+            var acc = 0, steps = 48;
+            for (var k = 0; k < steps; k++) {
+                var y = PILE_BASE + h * (k + 0.5) / steps;
+                var rr = Math.min(rInner(y), PILE_SLOPE * (PILE_BASE + h - y));
+                if (rr > 0) acc += Math.PI * rr * rr * (h / steps);
+            }
+            volApex[i] = acc;
+        }
+    })();
+    function apexFromVolume(V) {
+        if (V <= 0) return PILE_BASE;
+        if (V >= volApex[AVN]) return PILE_BASE + PILE_MAXAPEX;
+        var lo = 0, hi = AVN;
+        while (hi - lo > 1) {
+            var mid = (lo + hi) >> 1;
+            if (volApex[mid] < V) lo = mid; else hi = mid;
+        }
+        var v0 = volApex[lo], v1 = volApex[hi];
+        var t = (v1 > v0) ? (V - v0) / (v1 - v0) : 0;
+        return PILE_BASE + (lo + t) * (PILE_MAXAPEX / AVN);
+    }
+    function fallenVolume(fallen) {
+        return Math.max(0, Math.min(1, fallen)) * volTable[VS];
+    }
     function pileTopY(fallen) {
-        return PILE_BASE + PILE_HMAX * Math.pow(Math.max(0, Math.min(1, fallen)), 0.82);
+        return apexFromVolume(fallenVolume(fallen));
     }
     function buildLowerSand(fallen) {
         if (fallen <= 0.0015) { lowerSand.visible = false; return; }
         lowerSand.visible = true;
-        var h = PILE_HMAX * Math.pow(Math.min(1, fallen), 0.82);
-        var topY = PILE_BASE + h;
-        var rBase = Math.min(rInner(PILE_BASE + 0.06) * 0.96, h * 1.12);
+        var apexY = apexFromVolume(fallenVolume(fallen));
 
         var pts = [new THREE.Vector2(0.001, PILE_BASE)];
-        pts.push(new THREE.Vector2(rBase, PILE_BASE));
-
-        var N = 14;
-        for (var k = 1; k <= N; k++) {
-            var t = k / N;
-            var y = PILE_BASE + h * t;
-            var coneR = rBase * (1 - t);
-            var wallR = rInner(y) * 0.95;
-            pts.push(new THREE.Vector2(Math.max(0.002, Math.min(coneR, wallR)), y));
+        var N = 20;
+        for (var k = 0; k <= N; k++) {
+            var y = PILE_BASE + (apexY - PILE_BASE) * (k / N);
+            var rr = Math.min(rInner(y), PILE_SLOPE * (apexY - y));
+            pts.push(new THREE.Vector2(Math.max(0.002, rr), y));
         }
         disposeGeo(lowerSand);
-        lowerSand.geometry = new THREE.LatheGeometry(pts, 40);
+        lowerSand.geometry = new THREE.LatheGeometry(pts, 44);
     }
 
     /* ---------- 낙하 줄기 ---------- */
