@@ -91,7 +91,7 @@
 
     /* ---------- 중앙 안내 툴팁 ---------- */
     .center-tooltip {
-        position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+        position: fixed; top: auto !important; bottom: 92px !important; left: 50%; transform: translateX(-50%);
         padding: 7px 16px; border-radius: 999px; font-size: 12px; font-weight: 700;
         color: #64748b; pointer-events: none; z-index: 30; white-space: nowrap;
         transition: opacity .4s ease;
@@ -386,11 +386,11 @@
     controls.maxPolarAngle = Math.PI * 0.86;
     controls.rotateSpeed = 0.8;
     controls.zoomSpeed = 0.8;
-    controls.target.set(0, 2.95, 0);
+    controls.target.set(0, 2.90, 0);
 
     /* 화면 비율에 맞춰 모래시계 전체(전자시계 포함)가 들어오는 거리 계산 */
     function fitDistance() {
-        var H = 6.30, W = 3.40;
+        var H = 6.10, W = 3.30;
         var vFov = camera.fov * Math.PI / 180;
         var aspect = camera.aspect || 1;
         var hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
@@ -402,8 +402,8 @@
     var userMoved = false;
     function setDefaultView() {
         var d = fitDistance();
-        camera.position.set(0, 3.55, d);
-        controls.target.set(0, 2.95, 0);
+        camera.position.set(0, 3.50, d);
+        controls.target.set(0, 2.90, 0);
         controls.update();
     }
     controls.addEventListener('start', function () { userMoved = true; });
@@ -537,12 +537,78 @@
     var glassGeo = new THREE.LatheGeometry(glassPts, 72);
     var glassMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff, metalness: 0.0, roughness: 0.045,
-        transparent: true, opacity: 0.22, side: THREE.DoubleSide,
+        transparent: true, opacity: 0.18, side: THREE.DoubleSide,
         clearcoat: 1.0, clearcoatRoughness: 0.04, depthWrite: false
     });
     var glass = new THREE.Mesh(glassGeo, glassMat);
     glass.renderOrder = 6;
     rig.add(glass);
+
+    /* 유리 가장자리(프레넬) — 유리가 투명해도 윤곽이 보이게 */
+    var rimMat = new THREE.ShaderMaterial({
+        uniforms: {
+            uColor: { value: new THREE.Color(0x6f93b5) },
+            uPower: { value: 2.3 },
+            uStrength: { value: 0.62 }
+        },
+        vertexShader: [
+            'varying vec3 vN;',
+            'varying vec3 vV;',
+            'void main(){',
+            '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+            '  vN = normalize(normalMatrix * normal);',
+            '  vV = normalize(-mv.xyz);',
+            '  gl_Position = projectionMatrix * mv;',
+            '}'
+        ].join('\n'),
+        fragmentShader: [
+            'uniform vec3 uColor;',
+            'uniform float uPower;',
+            'uniform float uStrength;',
+            'varying vec3 vN;',
+            'varying vec3 vV;',
+            'void main(){',
+            '  float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), uPower);',
+            '  gl_FragColor = vec4(uColor, f * uStrength);',
+            '}'
+        ].join('\n'),
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide
+    });
+    var glassRim = new THREE.Mesh(glassGeo, rimMat);
+    glassRim.scale.setScalar(1.006);
+    glassRim.renderOrder = 7;
+    rig.add(glassRim);
+
+    /* 유리 반사 하이라이트 */
+    function makeGlowTexture() {
+        var c = document.createElement('canvas');
+        c.width = 128; c.height = 128;
+        var g = c.getContext('2d');
+        var grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+        grd.addColorStop(0, 'rgba(255,255,255,0.95)');
+        grd.addColorStop(0.42, 'rgba(255,255,255,0.34)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 128, 128);
+        var t = new THREE.CanvasTexture(c);
+        t.minFilter = THREE.LinearFilter;
+        return t;
+    }
+    var glowTex = makeGlowTexture();
+    function addHighlight(x, y, z, sw, sh, op) {
+        var sp = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTex, transparent: true, opacity: op, depthWrite: false
+        }));
+        sp.position.set(x, y, z);
+        sp.scale.set(sw, sh, 1);
+        sp.renderOrder = 8;
+        rig.add(sp);
+        return sp;
+    }
+    addHighlight(-0.56, 3.38, 0.5, 0.52, 1.05, 0.55);
+    addHighlight(-0.50, 1.06, 0.5, 0.38, 0.72, 0.42);
 
     /* 목 부분 황동 링 */
     var neckRing = new THREE.Mesh(new THREE.TorusGeometry(0.125, 0.019, 10, 48), brassMat);
@@ -552,12 +618,7 @@
     rig.add(neckRing);
 
     /* 유리 하이라이트 (얇은 반사 띠) */
-    var shineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.30 });
-    var shine = new THREE.Mesh(new THREE.TorusGeometry(1.045, 0.012, 6, 60, Math.PI * 0.55), shineMat);
-    shine.rotation.x = Math.PI / 2;
-    shine.rotation.z = -Math.PI * 0.62;
-    shine.position.y = NECK_Y + HALF_H * 0.78;
-    rig.add(shine);
+
 
     /* =========================================================
        3. 모래 (부피 기반 시뮬레이션)
@@ -707,8 +768,8 @@
     clockTex.magFilter = THREE.LinearFilter;
     var clockMat = new THREE.SpriteMaterial({ map: clockTex, transparent: true, depthWrite: false });
     var clockSprite = new THREE.Sprite(clockMat);
-    clockSprite.scale.set(3.15, 1.48, 1);
-    clockSprite.position.set(0, 5.28, 0);
+    clockSprite.scale.set(2.78, 1.30, 1);
+    clockSprite.position.set(0, 5.12, 0);
     clockSprite.renderOrder = 9;
     scene.add(clockSprite);
 
@@ -815,7 +876,7 @@
 
         g.save();
         g.shadowColor = color;
-        g.shadowBlur = opts.glow != null ? opts.glow : 22;
+        g.shadowBlur = opts.glow != null ? opts.glow : 15;
 
         var chars = text.split('');
         var x = x0;
@@ -865,7 +926,7 @@
             color: color,
             stroke: stroke,
             progress: state.duration > 0 ? state.remaining / state.duration : 0,
-            glow: clockFinishMode ? 34 : 22
+            glow: clockFinishMode ? 26 : 15
         });
     }
 
@@ -1142,15 +1203,15 @@
 
         /* 전자시계 */
         clockTime += dt;
-        clockSprite.position.y = 5.28 + Math.sin(clockTime * 1.4) * 0.035;
+        clockSprite.position.y = 5.12 + Math.sin(clockTime * 1.4) * 0.035;
         if (state.finished) {
             var pulse = 0.55 + 0.45 * Math.abs(Math.sin(clockTime * 3.4));
             clockMat.opacity = pulse;
             var sc = 1 + 0.035 * Math.sin(clockTime * 3.4);
-            clockSprite.scale.set(3.15 * sc, 1.48 * sc, 1);
+            clockSprite.scale.set(2.78 * sc, 1.30 * sc, 1);
         } else {
             clockMat.opacity = flipAnim ? Math.max(0.15, clockMat.opacity) : 1;
-            clockSprite.scale.set(3.15, 1.48, 1);
+            clockSprite.scale.set(2.78, 1.30, 1);
         }
 
         /* 콜론 깜빡임 */
@@ -1245,8 +1306,9 @@
         this.textContent = isDark ? '☀️' : '🌙';
         groundMat.color.setHex(isDark ? 0x1c242e : 0xffffff);
         groundMat.roughness = isDark ? 0.9 : 0.96;
-        shineMat.opacity = isDark ? 0.16 : 0.30;
-        glassMat.opacity = isDark ? 0.16 : 0.22;
+        glassMat.opacity = isDark ? 0.14 : 0.18;
+        rimMat.uniforms.uColor.value.setHex(isDark ? 0xbcdcff : 0x6f93b5);
+        rimMat.uniforms.uStrength.value = isDark ? 0.85 : 0.62;
         sandMat.emissive = sandMat.emissive || new THREE.Color(0x000000);
         sandMat.emissive.setHex(isDark ? 0x140d02 : 0x000000);
     });
@@ -1314,6 +1376,11 @@
     /* =========================================================
        12. 시작
        ========================================================= */
+    setTimeout(function () {
+        var tip = document.getElementById('guide-tooltip');
+        if (tip) tip.style.opacity = '0';
+    }, 9000);
+
     setDefaultView();
     updateSand(true);
     updateStream();
