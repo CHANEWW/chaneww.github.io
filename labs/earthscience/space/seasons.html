@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>지구 자전·공전과 계절 변화 3D</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <link rel="stylesheet" href="../../common/qr-modal.css">
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #04070f; color: #f2f5fa; touch-action: none;
+            transition: background-color .3s ease, color .3s ease;
+        }
+        body.light-mode { background-color: #eaf1f9; color: #1c1c1e; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
+
+        .glass-panel {
+            background: rgba(12, 18, 32, 0.76);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+            z-index: 10;
+        }
+        body.light-mode .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255, 255, 255, 0.75);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            color: #1c1c1e;
+        }
+
+        /* ---------- 상단 좌측 ---------- */
+        .top-left-bar { position: absolute; top: 18px; left: 20px; display: flex; align-items: center; gap: 8px; z-index: 10; }
+        .back-btn {
+            display: flex; align-items: center; gap: 6px; padding: 8px 15px;
+            font-size: 13px; font-weight: bold; color: #eaf1ff; text-decoration: none;
+            cursor: pointer; transition: all .2s ease; font-family: inherit; white-space: nowrap;
+        }
+        body.light-mode .back-btn { color: #1c1c1e; }
+        .back-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.16); }
+        body.light-mode .back-btn:hover { background: rgba(0,0,0,0.06); }
+        .tag-badge { display: flex; align-items: center; gap: 7px; padding: 8px 14px; font-size: 13.5px; font-weight: bold; }
+        .title-text { font-size: 13.5px; font-weight: bold; letter-spacing: -0.35px; white-space: nowrap; }
+        .dept-badge {
+            background: linear-gradient(135deg, rgba(167, 139, 250, .38), rgba(244, 114, 182, .34));
+            color: #e9d5ff; padding: 2px 9px; border-radius: 10px;
+            font-size: 10.5px; font-weight: 800; letter-spacing: .2px; white-space: nowrap;
+            border: 1px solid rgba(233, 213, 255, .35);
+        }
+        body.light-mode .dept-badge { color: #7c3aed; background: linear-gradient(135deg, rgba(167,139,250,.22), rgba(244,114,182,.18)); border-color: rgba(124,58,237,.25); }
+        .vision-badge {
+            background: rgba(10, 132, 255, 0.3); color: #8ecbff; padding: 2px 8px; border-radius: 10px;
+            font-size: 10.5px; font-weight: bold; letter-spacing: .2px; white-space: nowrap;
+        }
+        body.light-mode .vision-badge { background: rgba(0, 122, 255, 0.14); color: #007aff; }
+
+        /* ---------- 상단 우측 ---------- */
+        .top-right-bar { position: absolute; top: 18px; right: 20px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 10; }
+        .data-card { display: flex; align-items: center; gap: 12px; padding: 8px 15px; border-radius: 999px; flex-wrap: nowrap; }
+        .data-item { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 54px; }
+        .data-label { font-size: 10px; color: #9bb0ce; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+        body.light-mode .data-label { color: #64748b; }
+        .data-value { font-size: 13px; font-weight: bold; color: #ffffff; letter-spacing: -0.3px; white-space: nowrap; }
+        body.light-mode .data-value { color: #0f172a; }
+        .data-value.hl-season { color: #f9a8d4; }
+        .data-value.hl-noon { color: #facc15; }
+        .data-value.hl-day { color: #7dd3fc; }
+        .icon-btn {
+            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; cursor: pointer; border: none;
+            background: rgba(30, 40, 60, 0.78); color: #eaf1ff;
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            transition: all .2s; font-size: 16px; font-family: inherit;
+        }
+        body.light-mode .icon-btn { background: rgba(255,255,255,.85); color: #1c1c1e; }
+        .icon-btn:hover { transform: scale(1.05); }
+
+        /* ---------- 상단 중앙 안내 ---------- */
+        .center-tooltip {
+            position: absolute; top: 78px; left: 50%; transform: translateX(-50%);
+            padding: 7px 18px; font-size: 12.5px; font-weight: bold; color: #cbd5e1; border-radius: 30px;
+            pointer-events: none; z-index: 5; transition: opacity .5s ease; white-space: nowrap;
+            background: rgba(10, 16, 28, 0.72); border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        }
+        body.light-mode .center-tooltip { color: #334155; background: rgba(255,255,255,0.86); border-color: rgba(0,0,0,0.08); }
+        .center-tooltip.hide { opacity: 0; }
+
+        /* ---------- 하단 캡슐 바 ---------- */
+        .control-capsule-btn {
+            display: flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 999px; border: none;
+            background: transparent; color: #e6edf9; font-size: 12.5px; font-weight: bold;
+            font-family: inherit; cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        body.light-mode .control-capsule-btn { color: #1c1c1e; }
+        .control-capsule-btn:hover { background: rgba(255, 255, 255, 0.15); }
+        .control-capsule-btn.primary { background: #0a84ff; color: #fff; box-shadow: 0 4px 14px rgba(10, 132, 255, 0.45); }
+        .control-capsule-btn.primary:hover { background: #0077ed; }
+        /* ui-layout.css의 공통 버튼 규칙보다 우선해 시점 전환 버튼을 강조 */
+        body.dark-mode .bottom-control-bar button.primary,
+        body.light-mode .bottom-control-bar button.primary {
+            background: #0a84ff !important; color: #ffffff !important;
+            box-shadow: 0 4px 14px rgba(10, 132, 255, 0.45) !important;
+            border-color: rgba(10, 132, 255, 0.5) !important;
+        }
+        body.dark-mode .bottom-control-bar button.primary:hover,
+        body.light-mode .bottom-control-bar button.primary:hover { background: #0077ed !important; }
+
+        /* ---------- 우측 조절 패널 (고대비 다크 글래스) ---------- */
+        #side-ctrl,
+        body #side-ctrl.side-ctrl-panel,
+        body.dark-mode #side-ctrl.side-ctrl-panel {
+            position: fixed !important; right: 20px !important; bottom: 74px !important;
+            width: 300px !important; padding: 12px 13px !important;
+            display: flex !important; flex-direction: column !important; gap: 9px !important;
+            z-index: 85 !important; max-height: calc(100vh - 150px) !important;
+            overflow-y: auto !important; overflow-x: hidden !important;
+            background: rgba(11, 17, 30, 0.95) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6) !important;
+            color: #ffffff !important; border-radius: 18px !important;
+            backdrop-filter: blur(20px) !important; -webkit-backdrop-filter: blur(20px) !important;
+        }
+        body.light-mode #side-ctrl,
+        body.light-mode #side-ctrl.side-ctrl-panel {
+            background: rgba(255, 255, 255, 0.97) !important;
+            border: 1px solid rgba(0, 0, 0, 0.14) !important;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.12) !important; color: #0f172a !important;
+        }
+        #side-ctrl .panel-header {
+            display: flex !important; align-items: center !important; justify-content: space-between !important;
+            padding-bottom: 7px !important; border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+        }
+        body.light-mode #side-ctrl .panel-header { border-bottom-color: rgba(0, 0, 0, 0.08) !important; }
+        #side-ctrl .panel-title { font-size: 13px !important; font-weight: 800 !important; color: #ffffff !important; letter-spacing: -0.3px !important; }
+        body.light-mode #side-ctrl .panel-title { color: #0f172a !important; }
+        #side-ctrl .panel-mode-tag {
+            font-size: 10px !important; font-weight: 800 !important; padding: 2px 8px !important;
+            border-radius: 8px !important; background: rgba(56, 189, 248, .18) !important; color: #7dd3fc !important;
+        }
+        body.light-mode #side-ctrl .panel-mode-tag { background: rgba(2, 132, 199, .12) !important; color: #0369a1 !important; }
+
+        .ctrl-sec { display: flex; flex-direction: column; gap: 6px; }
+        .ctrl-sec-title { font-size: 10.5px; font-weight: 800; color: #8fa3bf; letter-spacing: -0.2px; }
+        body.light-mode .ctrl-sec-title { color: #64748b; }
+
+        .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .mode-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+            min-height: 50px; padding: 6px 4px; border-radius: 12px; cursor: pointer; font-family: inherit;
+            background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14); color: #e2e8f0;
+            transition: all .18s; line-height: 1.15;
+        }
+        body.light-mode .mode-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.09); color: #334155; }
+        .mode-btn .mb-icon { font-size: 17px; line-height: 1; }
+        .mode-btn .mb-text { font-size: 10.5px; font-weight: 800; letter-spacing: -0.3px; white-space: nowrap; }
+        .mode-btn:hover { background: rgba(255,255,255,0.16); }
+        .mode-btn.active { background: #0a84ff; border-color: #0a84ff; color: #fff; box-shadow: 0 3px 12px rgba(10,132,255,.45); }
+
+        .season-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+        .season-chip {
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            padding: 7px 4px; border-radius: 9px; cursor: pointer; font-family: inherit;
+            background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.12); color: #dbe4f0;
+            font-size: 11.5px; font-weight: 800; letter-spacing: -0.3px; transition: all .15s; white-space: nowrap;
+        }
+        body.light-mode .season-chip { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); color: #334155; }
+        .season-chip em { font-style: normal; font-size: 9.5px; font-weight: 700; color: #93a7c2; }
+        body.light-mode .season-chip em { color: #7a8ba3; }
+        .season-chip:hover { background: rgba(255,255,255,0.16); }
+        .season-chip.active { background: rgba(250, 204, 21, .22); border-color: #facc15; color: #fde68a; }
+        body.light-mode .season-chip.active { background: rgba(250,204,21,.18); color: #92400e; }
+        .season-chip.active em { color: #fde68a; }
+
+        .range-row { display: flex; justify-content: space-between; align-items: center; }
+        .rl { font-size: 11px; font-weight: 700; color: #c3d0e3; }
+        body.light-mode .rl { color: #475569; }
+        .rv { font-size: 12px; font-weight: 800; color: #38bdf8; }
+        .range-slider {
+            width: 100%; height: 5px; border-radius: 999px; background: #334155; outline: none;
+            -webkit-appearance: none; appearance: none; cursor: pointer; margin: 1px 0 2px;
+        }
+        body.light-mode .range-slider { background: #cbd5e1; }
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%;
+            background: #38bdf8; cursor: pointer; box-shadow: 0 2px 6px rgba(56, 189, 248, 0.55);
+            border: 2px solid #0b111e;
+        }
+        .range-slider::-moz-range-thumb {
+            width: 15px; height: 15px; border-radius: 50%; background: #38bdf8; border: 2px solid #0b111e; cursor: pointer;
+        }
+        .lat-quick { display: flex; gap: 4px; }
+        .lat-quick button {
+            flex: 1; padding: 5px 2px; font-size: 10px; font-weight: 800; border-radius: 7px;
+            border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.06);
+            color: #cbd5e1; cursor: pointer; font-family: inherit; transition: all .15s; white-space: nowrap;
+        }
+        body.light-mode .lat-quick button { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); color: #475569; }
+        .lat-quick button:hover { background: rgba(255,255,255,0.16); }
+        .lat-quick button.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+
+        .play-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .play-btn {
+            padding: 8px 4px; border-radius: 9px; cursor: pointer; font-family: inherit;
+            background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.13); color: #e2e8f0;
+            font-size: 11px; font-weight: 800; letter-spacing: -0.3px; transition: all .15s; white-space: nowrap;
+        }
+        body.light-mode .play-btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.09); color: #334155; }
+        .play-btn:hover { background: rgba(255,255,255,0.16); }
+        .play-btn.on { background: rgba(34, 197, 94, .24); border-color: #22c55e; color: #86efac; }
+        body.light-mode .play-btn.on { background: rgba(34,197,94,.16); color: #15803d; }
+
+        .toggle-item {
+            display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px 8px; border-radius: 8px;
+            background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09);
+            color: #b9c6d8; font-size: 10.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+            transition: all .15s; text-align: left;
+        }
+        body.light-mode .toggle-item { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.07); color: #52627a; }
+        .toggle-item .tg-dot {
+            width: 13px; height: 13px; border-radius: 50%; flex: 0 0 auto;
+            border: 1.5px solid rgba(255, 255, 255, 0.35); background: transparent; position: relative;
+        }
+        body.light-mode .toggle-item .tg-dot { border-color: rgba(0,0,0,0.22); }
+        .toggle-item.active { color: #e8f2ff; background: rgba(56, 189, 248, 0.12); border-color: rgba(56,189,248,.4); }
+        body.light-mode .toggle-item.active { color: #0c4a6e; background: rgba(56,189,248,.14); }
+        .toggle-item.active .tg-dot { background: #38bdf8; border-color: #38bdf8; box-shadow: 0 0 7px rgba(56,189,248,.8); }
+
+        .info-card {
+            background: rgba(0, 0, 0, 0.35); border-radius: 12px; padding: 9px 10px;
+            display: flex; flex-direction: column; gap: 5px; border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        body.light-mode .info-card { background: rgba(0, 0, 0, 0.03); border-color: rgba(0, 0, 0, 0.06); }
+        .info-row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; gap: 6px; }
+        .info-title { color: #93a5bd; font-weight: 600; white-space: nowrap; }
+        body.light-mode .info-title { color: #64748b; }
+        .info-desc { font-weight: 800; color: #f1f5f9; text-align: right; }
+        body.light-mode .info-desc { color: #0f172a; }
+        .info-desc.amber { color: #fbbf24; }
+        .info-desc.cyan { color: #67e8f9; }
+
+        .banner-guide {
+            padding: 7px 9px; border-radius: 10px; font-size: 10.5px; line-height: 1.45; font-weight: 600;
+            background: rgba(14, 165, 233, 0.14); border: 1px solid rgba(14, 165, 233, 0.3); color: #7dd3fc;
+        }
+        body.light-mode .banner-guide { background: rgba(14,165,233,.08); border-color: rgba(14,165,233,.25); color: #0369a1; }
+
+        /* ---------- 반응형 ---------- */
+        @media (max-width: 1240px) {
+            .data-card { gap: 9px; padding: 7px 11px; }
+            .data-item { min-width: 48px; }
+            .data-label { font-size: 9.5px; }
+            .data-value { font-size: 12px; }
+            .title-text { font-size: 12.5px; }
+        }
+        @media (max-width: 1120px) {
+            .dept-badge { display: none; }
+        }
+        @media (max-width: 1000px) {
+            .vision-badge { display: none; }
+            .data-item.opt { display: none; }
+        }
+        @media (max-width: 900px) {
+            .top-left-bar { top: 10px; left: 10px; gap: 5px; }
+            .back-btn, .tag-badge { padding: 6px 10px; font-size: 11.5px; }
+            .title-text { font-size: 11.5px; letter-spacing: -0.5px; }
+            .top-right-bar { top: 10px; right: 10px; gap: 6px; }
+            .data-card { padding: 5px 9px; gap: 7px; }
+            .data-item { min-width: 42px; }
+            .data-label { font-size: 8.5px; }
+            .data-value { font-size: 10.5px; }
+            .icon-btn { width: 34px; height: 34px; font-size: 14px; }
+            .center-tooltip { display: none; }
+            #side-ctrl,
+            body #side-ctrl.side-ctrl-panel,
+            body.dark-mode #side-ctrl.side-ctrl-panel {
+                right: 8px !important; bottom: 62px !important;
+                width: min(300px, calc(100vw - 16px)) !important;
+                padding: 10px !important; gap: 7px !important;
+                max-height: 52vh !important;
+            }
+            .control-capsule-btn { padding: 6px 10px; font-size: 11px; }
+            .mode-btn { min-height: 44px; }
+        }
+        @media (max-width: 600px) {
+            .title-text { font-size: 11px; max-width: 128px; overflow: hidden; text-overflow: ellipsis; }
+        }
+    </style>
+</head>
+<body class="dark-mode">
+
+<div id="canvas-container"></div>
+
+<!-- 상단 좌측: 전체 실험실 · 제목 · 배지 · QR -->
+<div class="top-left-bar">
+    <a href="../../../index.html" class="glass-panel back-btn"><span>← 전체 실험실</span></a>
+    <div class="glass-panel tag-badge">
+        <span class="title-text">지구 자전·공전과 계절 변화 3D</span>
+        <span class="dept-badge">지구과학</span>
+        <span class="vision-badge">visionOS</span>
+    </div>
+    <button class="glass-panel back-btn qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span> <span class="qr-btn-label">QR code</span></button>
+</div>
+
+<!-- 상단 우측: 실시간 데이터 카드 + 테마 -->
+<div class="top-right-bar">
+    <div class="tr-util" style="display:flex; align-items:center; gap:8px;">
+        <button class="icon-btn svl-util" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">☀️</button>
+    </div>
+    <div class="glass-panel data-card">
+        <div class="data-item opt">
+            <span class="data-label">절기</span>
+            <span class="data-value hl-season" id="val-season">하지</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">날짜</span>
+            <span class="data-value" id="val-date">6월 21일</span>
+        </div>
+        <div class="data-item opt">
+            <span class="data-label">위도</span>
+            <span class="data-value" id="val-lat">37.5°N</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">남중고도</span>
+            <span class="data-value hl-noon" id="val-noon">76.0°</span>
+        </div>
+        <div class="data-item">
+            <span class="data-label">낮의 길이</span>
+            <span class="data-value hl-day" id="val-day">14시간 36분</span>
+        </div>
+        <div class="data-item opt">
+            <span class="data-label">일사량</span>
+            <span class="data-value" id="val-flux">0.97</span>
+        </div>
+    </div>
+</div>
+
+<!-- 상단 중앙 안내 -->
+<div class="center-tooltip" id="center-hint">🌍 하단 [관측자 시점] 버튼으로 지표면에서 본 하늘로 전환해 보세요!</div>
+
+<!-- 하단 중앙 캡슐 바 -->
+<div class="glass-panel bottom-control-bar">
+    <button class="control-capsule-btn primary" id="btn-mode">🧍 관측자 시점</button>
+    <button class="control-capsule-btn" id="btn-reset">↺ 초기화</button>
+    <button class="control-capsule-btn" id="btn-align">🧭 시점 정렬</button>
+</div>
+
+<!-- 우측 하단 전체화면 -->
+<div class="bottom-right-bar" style="position:fixed; bottom:20px; right:20px; z-index:90;">
+    <button class="icon-btn" id="btn-fullscreen" title="전체화면" aria-label="전체화면">⛶</button>
+</div>
+
+<!-- 우측 조절 패널 -->
+<div class="side-ctrl-panel" id="side-ctrl">
+    <div class="panel-header">
+        <span class="panel-title">🌍 계절 변화 조절</span>
+        <span class="panel-mode-tag" id="panel-mode-tag">우주 시점</span>
+    </div>
+
+    <div class="ctrl-sec">
+        <span class="ctrl-sec-title">시점 전환</span>
+        <div class="mode-grid">
+            <button class="mode-btn active" id="mode-space" data-mode="space"><span class="mb-icon">🌌</span><span class="mb-text">우주 궤도 시점</span></button>
+            <button class="mode-btn" id="mode-ground" data-mode="ground"><span class="mb-icon">🧍</span><span class="mb-text">지표면 관측자</span></button>
+        </div>
+    </div>
+
+    <div class="ctrl-sec">
+        <span class="ctrl-sec-title">절기 프리셋</span>
+        <div class="season-grid">
+            <button class="season-chip" data-day="80">🌸 춘분 <em>3/21</em></button>
+            <button class="season-chip active" data-day="172">☀️ 하지 <em>6/21</em></button>
+            <button class="season-chip" data-day="266">🍁 추분 <em>9/23</em></button>
+            <button class="season-chip" data-day="356">❄️ 동지 <em>12/22</em></button>
+        </div>
+    </div>
+
+    <div class="ctrl-sec">
+        <div class="range-row"><span class="rl">공전 날짜</span><span class="rv" id="lbl-date">6월 21일</span></div>
+        <input type="range" class="range-slider" id="rng-day" min="1" max="365" step="1" value="172">
+        <div class="range-row"><span class="rl">관측 위도</span><span class="rv" id="lbl-lat">37.5°N</span></div>
+        <input type="range" class="range-slider" id="rng-lat" min="-90" max="90" step="0.5" value="37.5">
+        <div class="lat-quick" id="lat-quick">
+            <button data-lat="37.5" class="active">서울</button>
+            <button data-lat="0">적도</button>
+            <button data-lat="23.5">북회귀선</button>
+            <button data-lat="-66.5">남극권</button>
+        </div>
+        <div class="range-row" style="margin-top:2px;"><span class="rl">하루 시간</span><span class="rv" id="lbl-hour">12:00</span></div>
+        <input type="range" class="range-slider" id="rng-hour" min="0" max="24" step="0.05" value="12">
+    </div>
+
+    <div class="ctrl-sec">
+        <div class="play-grid">
+            <button class="play-btn" id="btn-orbit">▶ 공전 재생</button>
+            <button class="play-btn on" id="btn-spin">⏸ 자전 재생</button>
+            <button class="play-btn" id="btn-reset-panel" style="grid-column: 1 / -1;">↺ 초기화 (하지 · 서울 · 정오)</button>
+        </div>
+    </div>
+
+    <div class="ctrl-sec">
+        <span class="ctrl-sec-title">표시</span>
+        <button class="toggle-item active" data-toggle="rays"><span class="tg-dot"></span>태양 광선 표시</button>
+        <button class="toggle-item active" data-toggle="latLines"><span class="tg-dot"></span>위도선 표시</button>
+        <button class="toggle-item active" data-toggle="arc"><span class="tg-dot"></span>천구 일주 궤적 표시</button>
+        <button class="toggle-item active" data-toggle="shadow"><span class="tg-dot"></span>관측자 그림자 표시</button>
+    </div>
+
+    <div class="info-card">
+        <div class="info-row"><span class="info-title">태양 적위 (δ)</span><span class="info-desc cyan" id="in-dec">+23.5°</span></div>
+        <div class="info-row"><span class="info-title">남중고도 (90°−위도+δ)</span><span class="info-desc amber" id="in-noon">76.0°</span></div>
+        <div class="info-row"><span class="info-title">낮 / 밤 길이</span><span class="info-desc" id="in-daylen">14시간 36분</span></div>
+        <div class="info-row"><span class="info-title">일사량 (sin h)</span><span class="info-desc" id="in-flux">0.97</span></div>
+        <div class="info-row"><span class="info-title">남중 시 그림자 배율</span><span class="info-desc" id="in-shadow">0.25배</span></div>
+        <div class="info-row"><span class="info-title">현재 태양 (고도/방위)</span><span class="info-desc" id="in-sun">76.0° / 남 180°</span></div>
+    </div>
+
+    <div class="banner-guide" id="guide-msg">지구 자전축이 23.5° 기울어진 채 공전하므로, 지구의 위치에 따라 태양이 비추는 곳이 달라집니다.</div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    window.__seasonsErrors = [];
+    window.addEventListener('error', function (e) {
+        try { window.__seasonsErrors.push(String(e.message) + ' @line ' + e.lineno); } catch (err) {}
+    });
+
+    /* ============================================================
+       0. 기본 상수 · 상태
+       ============================================================ */
+    var DEG = Math.PI / 180;
+    var TAU = Math.PI * 2;
+    var TILT_DEG = 23.5;              // 자전축 기울기
+    var TILT = TILT_DEG * DEG;
+    var SUN_R = 8;                    // 태양 반지름(표시용)
+    var ORBIT_R = 30;                 // 공전 궤도 반지름(표시용)
+    var EARTH_R = 3.6;                // 지구 반지름(표시용)
+    var GROUND_R = 10;                // 지표면 판 반지름
+    var DOME_R = 9.2;                 // 천구(반구) 반지름
+    var FONT = "'SeoulNamsan', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif";
+
+    var state = {
+        day: 172,          // 공전 위치(1~365)
+        lat: 37.5,         // 관측 위도
+        hour: 12,          // 하루 시간(0~24)
+        mode: 'space',     // 'space' | 'ground'
+        orbit: false,      // 공전 재생
+        spin: true,        // 자전(시간) 재생
+        rays: true,
+        latLines: true,
+        arc: true,
+        shadow: true
+    };
+
+    /* ============================================================
+       1. 천문 계산 (모두 실제 기하에서 유도)
+       ============================================================ */
+    // 날짜(1~365) → 공전 각도 θ
+    //  θ=90°: 춘분(3/21), 180°: 하지(6/21), 270°: 추분(9/23), 360°: 동지(12/22)
+    var ANCHORS = [[80, 90], [172, 180], [266, 270], [356, 360], [445, 450]];
+    function dayToTheta(day) {
+        var d = day < 80 ? day + 365 : day;
+        for (var i = 0; i < ANCHORS.length - 1; i++) {
+            var d0 = ANCHORS[i][0], t0 = ANCHORS[i][1];
+            var d1 = ANCHORS[i + 1][0], t1 = ANCHORS[i + 1][1];
+            if (d >= d0 && d <= d1) {
+                var f = (d - d0) / (d1 - d0);
+                return (t0 + (t1 - t0) * f) * DEG;
+            }
+        }
+        return 90 * DEG;
+    }
+    // 태양 적위(라디안): 자전축이 23.5° 기울고 방향이 우주에 고정된 기하 그대로
+    function declinationRad(theta) {
+        return Math.asin(-Math.sin(TILT) * Math.cos(theta));
+    }
+    function decDegOf(day) {
+        return declinationRad(dayToTheta(day)) / DEG;
+    }
+    // 남중고도 h = 90° − 위도 + 적위
+    function noonAltitude(lat, decDeg) {
+        return 90 - lat + decDeg;
+    }
+    // 낮의 길이: cos H0 = −tanφ·tanδ  (지평선 h=0 기준)
+    function dayLengthHours(lat, decDeg) {
+        var phi = lat * DEG, dec = decDeg * DEG;
+        var cosH = -Math.tan(phi) * Math.tan(dec);
+        if (cosH <= -1) return 24;
+        if (cosH >= 1) return 0;
+        var H = Math.acos(cosH);
+        return 24 * H / Math.PI;
+    }
+    // 태양 고도·방위 (방위: 북 0°, 동 90°, 남 180°, 서 270°)
+    function sunAltAz(lat, decDeg, hourAngleDeg) {
+        var phi = lat * DEG, dec = decDeg * DEG, H = hourAngleDeg * DEG;
+        var sinAlt = Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H);
+        sinAlt = Math.max(-1, Math.min(1, sinAlt));
+        var alt = Math.asin(sinAlt);
+        var cosAlt = Math.cos(alt);
+        var az = 0;
+        if (Math.abs(cosAlt) > 1e-6 && Math.abs(Math.cos(phi)) > 1e-6) {
+            var sinAz = -Math.cos(dec) * Math.sin(H) / cosAlt;
+            var cosAz = (Math.sin(dec) - Math.sin(phi) * sinAlt) / (Math.cos(phi) * cosAlt);
+            az = Math.atan2(sinAz, cosAz);
+        } else if (Math.abs(Math.cos(phi)) <= 1e-6) {
+            az = 0; // 극점에서는 방위를 정의하지 않음
+        }
+        az = (az + TAU) % TAU;
+        return { alt: alt, az: az };
+    }
+
+    var MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    function dayToMD(day) {
+        var d = Math.round(Math.min(365, Math.max(1, day)));
+        for (var m = 0; m < 12; m++) {
+            if (d <= MONTH_DAYS[m]) return { m: m + 1, d: d };
+            d -= MONTH_DAYS[m];
+        }
+        return { m: 12, d: 31 };
+    }
+    function fmtDate(day) {
+        var md = dayToMD(day);
+        return md.m + '월 ' + md.d + '일';
+    }
+    function seasonName(day) {
+        var d = Math.round(day);
+        if (Math.abs(d - 80) <= 1) return '춘분';
+        if (Math.abs(d - 172) <= 1) return '하지';
+        if (Math.abs(d - 266) <= 1) return '추분';
+        if (Math.abs(d - 356) <= 1) return '동지';
+        if (d >= 80 && d < 172) return '봄';
+        if (d >= 172 && d < 266) return '여름';
+        if (d >= 266 && d < 356) return '가을';
+        return '겨울';
+    }
+    function fmtLat(lat) {
+        if (Math.abs(lat) < 0.05) return '0° (적도)';
+        return Math.abs(lat).toFixed(1) + '°' + (lat > 0 ? 'N' : 'S');
+    }
+    function fmtHM(h) {
+        var hh = Math.floor(h + 1e-9);
+        var mm = Math.round((h - hh) * 60);
+        if (mm >= 60) { hh += 1; mm -= 60; }
+        return hh + '시간 ' + (mm < 10 ? '0' + mm : mm) + '분';
+    }
+    function fmtHour(h) {
+        var hh = Math.floor(h) % 24;
+        var mm = Math.floor((h - Math.floor(h)) * 60);
+        return (hh < 10 ? '0' + hh : hh) + ':' + (mm < 10 ? '0' + mm : mm);
+    }
+    function azName(azDeg) {
+        var names = [[0, '북'], [45, '북동'], [90, '동'], [135, '남동'], [180, '남'], [225, '남서'], [270, '서'], [315, '북서'], [360, '북']];
+        var best = names[0], bd = 999;
+        for (var i = 0; i < names.length; i++) {
+            var d = Math.abs(names[i][0] - azDeg);
+            if (d < bd) { bd = d; best = names[i]; }
+        }
+        return best[1];
+    }
+
+    /* ============================================================
+       2. three.js 기본 구성
+       ============================================================ */
+    var container = document.getElementById('canvas-container');
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04070f);
+
+    var camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 3000);
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.maxDistance = 220;
+    controls.minDistance = 4;
+
+    // 조명
+    var ambient = new THREE.AmbientLight(0xffffff, 0.16);
+    scene.add(ambient);
+    var sunLight = new THREE.PointLight(0xfff3d6, 1.45, 0, 0);   // 태양(무한 거리, 감쇠 없음)
+    scene.add(sunLight);
+    var groundSun = new THREE.DirectionalLight(0xfff0cf, 1.0);    // 지표면 시점용 태양광
+    scene.add(groundSun);
+    var hemi = new THREE.HemisphereLight(0x9fd0ff, 0x1b2a38, 0.55);
+    scene.add(hemi);
+
+    function labelTexture(text, color, bg) {
+        var fs = 60;
+        var cv = document.createElement('canvas');
+        var ctx = cv.getContext('2d');
+        var font = 'bold ' + fs + 'px ' + FONT;
+        ctx.font = font;
+        var tw = Math.ceil(ctx.measureText(text).width);
+        cv.width = Math.max(8, tw + 34);
+        cv.height = fs + 26;
+        ctx = cv.getContext('2d');
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (bg) {
+            var r = 16, w = cv.width, h = cv.height;
+            ctx.fillStyle = bg;
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(w - r, 0); ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r); ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h); ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath(); ctx.fill();
+        }
+        ctx.fillStyle = color || '#ffffff';
+        ctx.fillText(text, cv.width / 2, cv.height / 2 + 2);
+        return cv;
+    }
+    function makeLabel(text, color, size, bg) {
+        var cv = labelTexture(text, color, bg);
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+        var sp = new THREE.Sprite(mat);
+        sp.userData.text = text;
+        sp.userData.color = color;
+        sp.userData.bg = bg;
+        sp.userData.wpp = 0.0049 * (size || 1);
+        sp.scale.set(cv.width * sp.userData.wpp, cv.height * sp.userData.wpp, 1);
+        sp.renderOrder = 30;
+        return sp;
+    }
+    function setLabelText(sp, text, color) {
+        if (!sp || sp.userData.text === text) return;
+        sp.userData.text = text;
+        if (color) sp.userData.color = color;
+        var cv = labelTexture(text, sp.userData.color, sp.userData.bg);
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        if (sp.material.map) sp.material.map.dispose();
+        sp.material.map = tex;
+        sp.material.needsUpdate = true;
+        sp.scale.set(cv.width * sp.userData.wpp, cv.height * sp.userData.wpp, 1);
+    }
+    function circlePoints(r, n, mapFn) {
+        var pts = [];
+        for (var i = 0; i <= n; i++) {
+            var a = i / n * TAU;
+            pts.push(mapFn(a, r));
+        }
+        return pts;
+    }
+    function lineFrom(pts, color, opacity) {
+        var geo = new THREE.BufferGeometry().setFromPoints(pts);
+        var mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: opacity, depthWrite: false });
+        return new THREE.Line(geo, mat);
+    }
+    function glowTexture(inner, outer) {
+        var S = 128;
+        var cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        var ctx = cv.getContext('2d');
+        var g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+        g.addColorStop(0, inner);
+        g.addColorStop(0.35, outer);
+        g.addColorStop(1, 'rgba(255,220,150,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, S, S);
+        var tex = new THREE.CanvasTexture(cv);
+        return tex;
+    }
+
+    /* ============================================================
+       3. 별이 빛나는 배경
+       ============================================================ */
+    function buildStars(count, radius) {
+        var pos = new Float32Array(count * 3);
+        var col = new Float32Array(count * 3);
+        var c = new THREE.Color();
+        for (var i = 0; i < count; i++) {
+            var u = Math.random() * 2 - 1;
+            var th = Math.random() * TAU;
+            var r = radius * (0.85 + Math.random() * 0.3);
+            var s = Math.sqrt(1 - u * u);
+            pos[i * 3] = r * s * Math.cos(th);
+            pos[i * 3 + 1] = r * u;
+            pos[i * 3 + 2] = r * s * Math.sin(th);
+            c.setHSL(0.58 + Math.random() * 0.08, 0.25, 0.62 + Math.random() * 0.35);
+            col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+        }
+        var geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        var mat = new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false });
+        return new THREE.Points(geo, mat);
+    }
+    var spaceStars = buildStars(1100, 420);
+    scene.add(spaceStars);
+
+    /* ============================================================
+       4. 우주 시점(공전 · 자전축) 씬
+       ============================================================ */
+    var spaceGroup = new THREE.Group();
+    scene.add(spaceGroup);
+
+    // --- 태양 ---
+    var sunCore = new THREE.Mesh(
+        new THREE.SphereGeometry(SUN_R, 40, 28),
+        new THREE.MeshBasicMaterial({ color: 0xffe08a })
+    );
+    spaceGroup.add(sunCore);
+    var sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture('rgba(255,246,200,1)', 'rgba(255,186,80,0.55)'),
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.95
+    }));
+    sunGlow.scale.set(SUN_R * 7.2, SUN_R * 7.2, 1);
+    spaceGroup.add(sunGlow);
+    var sunLabel = makeLabel('태양', '#ffe9a8', 1.15);
+    sunLabel.position.set(0, SUN_R + 3.2, 0);
+    spaceGroup.add(sunLabel);
+
+    // --- 공전 궤도 ---
+    var orbitLine = lineFrom(circlePoints(ORBIT_R, 180, function (a, r) {
+        return new THREE.Vector3(r * Math.cos(a), 0, -r * Math.sin(a));
+    }), (state.mode === 'space' ? 0x7fa6d8 : 0x7fa6d8), 0.34);
+    spaceGroup.add(orbitLine);
+
+    // --- 4대 절기 마커 ---
+    var seasonMarks = [];
+    var SEASONS = [
+        { day: 80, theta: 90, icon: '🌸', name: '춘분', date: '3월 21일', color: '#f9a8d4' },
+        { day: 172, theta: 180, icon: '☀️', name: '하지', date: '6월 21일', color: '#fbbf24' },
+        { day: 266, theta: 270, icon: '🍁', name: '추분', date: '9월 23일', color: '#fb923c' },
+        { day: 356, theta: 360, icon: '❄️', name: '동지', date: '12월 22일', color: '#93c5fd' }
+    ];
+    SEASONS.forEach(function (s) {
+        var th = s.theta * DEG;
+        var px = ORBIT_R * Math.cos(th), pz = -ORBIT_R * Math.sin(th);
+        var tick = new THREE.Mesh(
+            new THREE.SphereGeometry(0.42, 12, 10),
+            new THREE.MeshBasicMaterial({ color: 0x9fc3ee })
+        );
+        tick.position.set(px, 0, pz);
+        spaceGroup.add(tick);
+        var lb = makeLabel(s.icon + ' ' + s.name + ' ' + s.date, s.color, 0.98, 'rgba(9,14,26,0.66)');
+        var out = new THREE.Vector3(px, 0, pz).normalize().multiplyScalar(6.6);
+        lb.position.set(px + out.x, 1.2, pz + out.z);
+        spaceGroup.add(lb);
+        seasonMarks.push({ data: s, tick: tick, label: lb });
+    });
+
+    // --- 지구 (자전축 23.5° 고정) ---
+    var earthRoot = new THREE.Group();
+    spaceGroup.add(earthRoot);
+
+    var tiltQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -TILT));
+    var tiltGroup = new THREE.Group();
+    tiltGroup.quaternion.copy(tiltQuat);
+    earthRoot.add(tiltGroup);
+
+    var spinGroup = new THREE.Group();
+    tiltGroup.add(spinGroup);
+
+    var earthTex = (function buildEarthTexture() {
+        var W = 1024, H = 512;
+        var cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        var g = cv.getContext('2d');
+        var ocean = g.createLinearGradient(0, 0, 0, H);
+        ocean.addColorStop(0, '#12314f');
+        ocean.addColorStop(0.5, '#17527f');
+        ocean.addColorStop(1, '#12314f');
+        g.fillStyle = ocean;
+        g.fillRect(0, 0, W, H);
+        var LAND = [
+            [[-168,65],[-150,60],[-132,55],[-125,48],[-117,32],[-105,22],[-95,17],[-83,9],[-77,8],[-80,25],[-75,35],[-66,45],[-55,50],[-60,58],[-95,70],[-125,70],[-168,65]],
+            [[-81,8],[-75,10],[-60,10],[-50,0],[-35,-5],[-38,-20],[-48,-25],[-58,-35],[-62,-40],[-65,-55],[-75,-50],[-72,-30],[-70,-18],[-81,-5],[-81,8]],
+            [[-17,15],[0,15],[15,25],[32,30],[40,12],[51,12],[42,-2],[40,-15],[32,-25],[25,-34],[18,-34],[12,-18],[8,4],[-8,5],[-17,15]],
+            [[-10,36],[0,44],[10,45],[20,40],[28,41],[30,45],[40,48],[30,60],[25,70],[5,58],[-5,50],[-10,44],[-10,36]],
+            [[30,45],[40,48],[60,45],[80,45],[100,50],[120,50],[135,55],[140,45],[130,35],[122,31],[120,22],[105,20],[100,10],[95,20],[80,8],[70,20],[60,25],[45,30],[35,35],[30,45]],
+            [[113,-22],[122,-18],[130,-12],[142,-11],[147,-20],[153,-28],[150,-38],[140,-38],[129,-32],[115,-34],[113,-22]],
+            [[-45,60],[-20,70],[-20,82],[-45,83],[-58,76],[-55,65],[-45,60]]
+        ];
+        g.fillStyle = '#2f7d52';
+        g.strokeStyle = '#3f9a68';
+        g.lineWidth = 3;
+        LAND.forEach(function (poly) {
+            g.beginPath();
+            poly.forEach(function (pt, i) {
+                var x = (pt[0] + 180) / 360 * W;
+                var y = (90 - pt[1]) / 180 * H;
+                if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+            });
+            g.closePath();
+            g.fill();
+            g.stroke();
+        });
+        g.fillStyle = 'rgba(223,233,242,0.95)';
+        g.fillRect(0, H * 0.945, W, H * 0.055);
+        g.fillStyle = 'rgba(223,233,242,0.85)';
+        g.fillRect(0, 0, W, H * 0.035);
+        var tex = new THREE.CanvasTexture(cv);
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+        tex.minFilter = THREE.LinearMipMapLinearFilter;
+        return tex;
+    })();
+
+    var earthMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(EARTH_R, 64, 44),
+        new THREE.MeshStandardMaterial({ map: earthTex, roughness: 0.94, metalness: 0.0, emissive: 0x0a1c30, emissiveIntensity: 0.35 })
+    );
+    spinGroup.add(earthMesh);
+
+    // 위도선(적도·회귀선)
+    var latLineGroup = new THREE.Group();
+    tiltGroup.add(latLineGroup);
+    function addLatRing(latDeg, color, opacity, width) {
+        var rr = EARTH_R * Math.cos(latDeg * DEG);
+        var yy = EARTH_R * Math.sin(latDeg * DEG);
+        var geo = new THREE.BufferGeometry().setFromPoints(circlePoints(1, 90, function (a, r) {
+            return new THREE.Vector3(r * Math.cos(a), 0, r * Math.sin(a));
+        }));
+        var mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: opacity, depthWrite: false });
+        var ln = new THREE.Line(geo, mat);
+        ln.scale.set(rr, 1, rr);
+        ln.position.y = yy;
+        return ln;
+    }
+    latLineGroup.add(addLatRing(0, 0xffe066, 0.85));
+    latLineGroup.add(addLatRing(TILT_DEG, 0x8ee6a0, 0.5));
+    latLineGroup.add(addLatRing(-TILT_DEG, 0x8ee6a0, 0.5));
+
+    (function () {
+        var e0 = makeLabel('적도 0°', '#ffe066', 0.72);
+        e0.position.set(0, 0, EARTH_R * 1.09);
+        latLineGroup.add(e0);
+        var t1 = makeLabel('북회귀선 23.5°N', '#8ee6a0', 0.68);
+        var y1 = EARTH_R * Math.sin(TILT), r1 = EARTH_R * Math.cos(TILT);
+        t1.position.set(0, y1, r1 * 1.14);
+        latLineGroup.add(t1);
+        var t2 = makeLabel('남회귀선 23.5°S', '#8ee6a0', 0.68);
+        t2.position.set(0, -y1, r1 * 1.14);
+        latLineGroup.add(t2);
+    })();
+
+    // 관측자 위도선 + 표식 (관측자 위도 슬라이더에 따라 이동)
+    var obsRing = addLatRing(state.lat, 0xffa53d, 0.95);
+    tiltGroup.add(obsRing);
+    var obsRingLabel = makeLabel('관측자 ' + fmtLat(state.lat), '#ffb347', 0.7);
+    tiltGroup.add(obsRingLabel);
+
+    var pinGroup = new THREE.Group();
+    spinGroup.add(pinGroup);
+    var pinDot = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 12), new THREE.MeshBasicMaterial({ color: 0xffa53d }));
+    pinGroup.add(pinDot);
+    var pinStick = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.045, 0.85, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffc266 })
+    );
+    pinGroup.add(pinStick);
+
+    // 자전축 · 기울기 각
+    var axisGroup = new THREE.Group();
+    earthRoot.add(axisGroup);
+    var AXIS_LEN = EARTH_R * 1.95;
+    axisGroup.add(lineFrom([
+        new THREE.Vector3(0, -AXIS_LEN, 0),
+        new THREE.Vector3(0, AXIS_LEN, 0)
+    ], 0xffd166, 0.9));
+    var northCone = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.62, 12), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+    northCone.position.set(0, AXIS_LEN, 0);
+    axisGroup.add(northCone);
+    var axisLabel = makeLabel('자전축 · 북극성 방향', '#ffd166', 0.72);
+    axisLabel.position.set(0, AXIS_LEN + 1.15, 0);
+    axisGroup.add(axisLabel);
+    // 수직 기준선(궤도면의 법선) + 기울기 호
+    axisGroup.add(lineFrom([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, AXIS_LEN * 1.06, 0)
+    ], 0x8fa3c0, 0.42));
+    (function tiltArc() {
+        var pts = [];
+        var R2 = AXIS_LEN * 0.62;
+        for (var i = 0; i <= 24; i++) {
+            var t = TILT * (i / 24);
+            pts.push(new THREE.Vector3(R2 * Math.sin(t), R2 * Math.cos(t), 0));
+        }
+        axisGroup.add(lineFrom(pts, 0xff9f43, 0.95));
+        var lb = makeLabel('23.5°', '#ff9f43', 0.78, 'rgba(9,14,26,0.6)');
+        lb.position.set(R2 * Math.sin(TILT / 2) * 1.5, R2 * Math.cos(TILT / 2) * 1.06, 0);
+        axisGroup.add(lb);
+    })();
+
+    // 태양 광선 · 명암 경계선 · 낮/밤 라벨 (지구를 따라 함께 회전하는 기준틀)
+    var raysAnchor = new THREE.Group();
+    earthRoot.add(raysAnchor);
+    var raysGroup = new THREE.Group();
+    raysAnchor.add(raysGroup);
+    (function buildRays() {
+        var offsets = [-0.85, -0.62, -0.36, 0, 0.36, 0.62, 0.85];
+        var radii = [0.72, 0.9, 0.99, 1.02, 0.99, 0.9, 0.72];
+        for (var i = 0; i < offsets.length; i++) {
+            var oy = offsets[i] * EARTH_R * radii[i];
+            var halfW = Math.sqrt(Math.max(0.05, 1 - offsets[i] * offsets[i])) * EARTH_R * radii[i];
+            var xs = [-halfW * 0.62, 0, halfW * 0.62];
+            for (var j = 0; j < xs.length; j++) {
+                var p0 = new THREE.Vector3(xs[j], oy, EARTH_R + 7.6);
+                var p1 = new THREE.Vector3(xs[j], oy, EARTH_R + 0.45);
+                var ln = lineFrom([p0, p1], 0xffe08a, 0.34);
+                raysGroup.add(ln);
+                var head = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 8), new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.55 }));
+                head.position.copy(p1);
+                head.rotation.x = Math.PI / 2;
+                raysGroup.add(head);
+            }
+        }
+    })();
+    // 명암 경계선(종결선): 태양 방향에 수직인 대원
+    var terminator = lineFrom(circlePoints(1, 120, function (a, r) {
+        return new THREE.Vector3(r * Math.cos(a), r * Math.sin(a), 0);
+    }), 0xffffff, 0.4);
+    terminator.scale.set(EARTH_R * 1.001, EARTH_R * 1.001, 1);
+    raysAnchor.add(terminator);
+    var dayLabel = makeLabel('낮', '#fff2b8', 0.78);
+    dayLabel.position.set(0, EARTH_R * 0.55, EARTH_R + 2.5);
+    raysAnchor.add(dayLabel);
+    var nightLabel = makeLabel('밤', '#9db4d8', 0.78);
+    nightLabel.position.set(0, EARTH_R * 0.55, -(EARTH_R + 2.5));
+    raysAnchor.add(nightLabel);
+
+    // 지구 옆 날짜 라벨
+    var earthDateLabel = makeLabel(fmtDate(state.day), '#dbeafe', 0.86, 'rgba(9,14,26,0.62)');
+    earthRoot.add(earthDateLabel);
+
+    /* ============================================================
+       5. 지표면 관측자 시점 씬
+       ============================================================ */
+    var groundGroup = new THREE.Group();
+    groundGroup.visible = false;
+    scene.add(groundGroup);
+
+    // 하늘 (지표면 시점에서만 보이는 큰 반구)
+    var skyTex = (function () {
+        var cv = document.createElement('canvas');
+        cv.width = 8; cv.height = 256;
+        var g = cv.getContext('2d');
+        var grad = g.createLinearGradient(0, 0, 0, 256);
+        grad.addColorStop(0, '#12468f');
+        grad.addColorStop(0.45, '#5c9ee0');
+        grad.addColorStop(0.72, '#a9d2f2');
+        grad.addColorStop(1, '#dcecf8');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 8, 256);
+        var tex = new THREE.CanvasTexture(cv);
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+        return tex;
+    })();
+    var skyDome = new THREE.Mesh(
+        new THREE.SphereGeometry(500, 32, 20),
+        new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, depthWrite: false })
+    );
+    groundGroup.add(skyDome);
+    var groundStars = buildStars(700, 460);
+    groundGroup.add(groundStars);
+
+    // 지표면 판
+    var groundTex = (function () {
+        var S = 1024;
+        var cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        var g = cv.getContext('2d');
+        var rad = g.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+        rad.addColorStop(0, '#33475a');
+        rad.addColorStop(0.7, '#26394a');
+        rad.addColorStop(1, '#1b2b39');
+        g.fillStyle = rad;
+        g.fillRect(0, 0, S, S);
+        g.strokeStyle = 'rgba(150, 200, 235, 0.22)';
+        g.lineWidth = 2;
+        for (var i = 1; i <= 10; i++) {
+            g.beginPath();
+            g.arc(S / 2, S / 2, (S / 2) * (i / 10), 0, TAU);
+            g.stroke();
+        }
+        for (var k = 0; k < 12; k++) {
+            var a = k / 12 * TAU;
+            g.beginPath();
+            g.moveTo(S / 2, S / 2);
+            g.lineTo(S / 2 + Math.cos(a) * S / 2, S / 2 + Math.sin(a) * S / 2);
+            g.stroke();
+        }
+        var tex = new THREE.CanvasTexture(cv);
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+        return tex;
+    })();
+    var groundDisc = new THREE.Mesh(
+        new THREE.CircleGeometry(GROUND_R, 72),
+        new THREE.MeshStandardMaterial({ map: groundTex, roughness: 0.96, metalness: 0, color: 0xffffff })
+    );
+    groundDisc.rotation.x = -Math.PI / 2;
+    groundGroup.add(groundDisc);
+
+    // 지평선 링
+    var horizonRing = new THREE.Mesh(
+        new THREE.RingGeometry(GROUND_R * 0.988, GROUND_R, 96),
+        new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+    );
+    horizonRing.rotation.x = -Math.PI / 2;
+    horizonRing.position.y = 0.02;
+    groundGroup.add(horizonRing);
+
+    // 방위 표시 (동 +X, 서 −X, 남 +Z, 북 −Z)
+    var dirLabels = {};
+    (function buildCompass() {
+        var defs = [
+            { k: 'E', t: '동 E', x: 1, z: 0, c: '#fbbf24' },
+            { k: 'W', t: '서 W', x: -1, z: 0, c: '#fbbf24' },
+            { k: 'S', t: '남 S', x: 0, z: 1, c: '#f87171' },
+            { k: 'N', t: '북 N', x: 0, z: -1, c: '#93c5fd' }
+        ];
+        defs.forEach(function (d) {
+            var lb = makeLabel(d.t, d.c, 1.05, 'rgba(8,14,24,0.55)');
+            lb.position.set(d.x * (GROUND_R + 1.5), 0.55, d.z * (GROUND_R + 1.5));
+            groundGroup.add(lb);
+            dirLabels[d.k] = lb;
+        });
+        // 방위 눈금
+        for (var a = 0; a < 360; a += 15) {
+            var rad = a * DEG;
+            var long = a % 90 === 0;
+            var r0 = GROUND_R * (long ? 0.94 : 0.968);
+            var x0 = Math.sin(rad) * r0, z0 = -Math.cos(rad) * r0;
+            var x1 = Math.sin(rad) * GROUND_R, z1 = -Math.cos(rad) * GROUND_R;
+            groundGroup.add(lineFrom([new THREE.Vector3(x0, 0.03, z0), new THREE.Vector3(x1, 0.03, z1)], 0xa9d8ff, long ? 0.7 : 0.4));
+        }
+    })();
+
+    // 천구(반구) 격자 · 고도선
+    var domeGroup = new THREE.Group();
+    groundGroup.add(domeGroup);
+    (function buildDome() {
+        var shell = new THREE.Mesh(
+            new THREE.SphereGeometry(DOME_R, 28, 14, 0, TAU, 0, Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0x9ecbff, wireframe: true, transparent: true, opacity: 0.075, depthWrite: false })
+        );
+        domeGroup.add(shell);
+        [30, 60].forEach(function (altDeg) {
+            var rr = DOME_R * Math.cos(altDeg * DEG);
+            var yy = DOME_R * Math.sin(altDeg * DEG);
+            var ring = lineFrom(circlePoints(rr, 72, function (a, r) {
+                return new THREE.Vector3(r * Math.cos(a), yy, r * Math.sin(a));
+            }), 0x9ecbff, 0.28);
+            domeGroup.add(ring);
+            var lb = makeLabel(altDeg + '°', '#9ecbff', 0.66);
+            lb.position.set(0, yy + 0.15, rr * 0.42);
+            domeGroup.add(lb);
+        });
+        // 남북 자오선
+        var meridian = [];
+        for (var i = 0; i <= 60; i++) {
+            var t = Math.PI * (i / 60);
+            meridian.push(new THREE.Vector3(0, DOME_R * Math.sin(t), -DOME_R * Math.cos(t)));
+        }
+        domeGroup.add(lineFrom(meridian, 0x9ecbff, 0.3));
+        var zenith = makeLabel('천정', '#c7ddf7', 0.66);
+        zenith.position.set(0, DOME_R + 0.6, 0);
+        domeGroup.add(zenith);
+        var horizonLb = makeLabel('지평선', '#bfe3ff', 0.78);
+        horizonLb.position.set(GROUND_R * 0.72, 0.5, GROUND_R * 0.72);
+        groundGroup.add(horizonLb);
+    })();
+
+    // 태양 일주 궤적(계절별) 그룹
+    var arcGroup = new THREE.Group();
+    groundGroup.add(arcGroup);
+    var arcLabels = [];
+    var refArcGroup = new THREE.Group();
+    arcGroup.add(refArcGroup);
+    var curArcHolder = new THREE.Group();
+    arcGroup.add(curArcHolder);
+    var noonMarkerGroup = new THREE.Group();
+    arcGroup.add(noonMarkerGroup);
+
+    // 태양
+    var groundSunMesh = new THREE.Mesh(new THREE.SphereGeometry(0.52, 24, 16), new THREE.MeshBasicMaterial({ color: 0xfff0a8 }));
+    groundGroup.add(groundSunMesh);
+    var groundSunGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture('rgba(255,250,220,1)', 'rgba(255,196,90,0.6)'),
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.95
+    }));
+    groundSunGlow.scale.set(4.6, 4.6, 1);
+    groundGroup.add(groundSunGlow);
+    var altitudeArcGroup = new THREE.Group();
+    groundGroup.add(altitudeArcGroup);
+    var sunLabelG = makeLabel('태양', '#fff3c4', 0.8);
+    groundGroup.add(sunLabelG);
+
+    // 관측자(막대)와 그림자
+    var poleHeight = 1.7;
+    var poleMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.075, poleHeight, 10),
+        new THREE.MeshStandardMaterial({ color: 0xffd8a8, roughness: 0.6, metalness: 0.1 })
+    );
+    poleMesh.position.y = poleHeight / 2;
+    groundGroup.add(poleMesh);
+    var poleHead = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshStandardMaterial({ color: 0xffc98a, roughness: 0.5 }));
+    poleHead.position.y = poleHeight;
+    groundGroup.add(poleHead);
+    var poleLabel = makeLabel('관측자', '#ffd8a8', 0.68);
+    poleLabel.position.set(0.9, poleHeight + 0.55, 0);
+    groundGroup.add(poleLabel);
+
+    var shadowGeo = new THREE.PlaneGeometry(1, 1);
+    shadowGeo.rotateX(-Math.PI / 2);
+    shadowGeo.translate(0, 0, 0.5);
+    var shadowMesh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({
+        color: 0x0a1420, transparent: true, opacity: 0.55, depthWrite: false
+    }));
+    shadowMesh.position.y = 0.035;
+    groundGroup.add(shadowMesh);
+
+    /* ============================================================
+       6. 우주 시점 갱신
+       ============================================================ */
+    var Z_AXIS = new THREE.Vector3(0, 0, 1);
+    var AXIS_VEC = new THREE.Vector3(Math.sin(TILT), Math.cos(TILT), 0).normalize();
+    var _s = new THREE.Vector3();
+    var _e1 = new THREE.Vector3();
+    var _e2 = new THREE.Vector3();
+    var _m0 = new THREE.Vector3();
+    var _q = new THREE.Quaternion();
+
+    function currentTheta() { return dayToTheta(state.day); }
+    function sunDirFrom(theta) { return new THREE.Vector3(-Math.cos(theta), 0, Math.sin(theta)); }
+
+    function updateEarth() {
+        var theta = currentTheta();
+        var S = sunDirFrom(theta);
+        earthRoot.position.set(ORBIT_R * Math.cos(theta), 0, -ORBIT_R * Math.sin(theta));
+
+        // 관측자 위치: 위도 state.lat, 시각(H)에 맞도록 지구본을 자전시킨다
+        var latR = state.lat * DEG;
+        var H = (state.hour - 12) * 15 * DEG;
+        _s.copy(S);
+        _e1.copy(_s).addScaledVector(AXIS_VEC, -_s.dot(AXIS_VEC));
+        if (_e1.lengthSq() < 1e-8) _e1.set(1, 0, 0);
+        _e1.normalize();
+        _e2.crossVectors(AXIS_VEC, _e1).normalize();
+        _m0.set(Math.cos(latR), Math.sin(latR), 0).applyQuaternion(tiltQuat).normalize();
+        var psi0 = Math.atan2(_m0.dot(_e2), _m0.dot(_e1));
+        spinGroup.rotation.y = H - psi0;
+
+        // 태양 광선·낮밤 표식 기준틀
+        _q.setFromUnitVectors(Z_AXIS, _s);
+        raysAnchor.quaternion.copy(_q);
+
+        // 관측자 위도선·표식
+        var rr = EARTH_R * Math.cos(latR);
+        var yy = EARTH_R * Math.sin(latR);
+        obsRing.scale.set(rr, 1, rr);
+        obsRing.position.y = yy;
+        obsRingLabel.position.set(0, yy + 0.55, rr * 1.06);
+        setLabelText(obsRingLabel, '관측자 ' + fmtLat(state.lat));
+        pinGroup.position.set(EARTH_R * Math.cos(latR) * 1.0, EARTH_R * Math.sin(latR), 0);
+        pinGroup.quaternion.identity();
+        pinStick.position.set(0, 0.42, 0);
+        pinDot.position.set(0, 0, 0);
+        // 막대를 지표면 법선 방향으로
+        pinStick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.cos(latR), Math.sin(latR), 0).normalize());
+        pinStick.position.set(Math.cos(latR) * 0.42, Math.sin(latR) * 0.42, 0);
+
+        earthDateLabel.position.set(
+            Math.cos(theta) * (EARTH_R + 4.2),
+            0.6,
+            -Math.sin(theta) * (EARTH_R + 4.2)
+        );
+        setLabelText(earthDateLabel, fmtDate(state.day) + ' · ' + seasonName(state.day));
+
+        // 절기 마커 활성 표시
+        seasonMarks.forEach(function (m) {
+            var near = Math.abs(((state.day - m.data.day + 365) % 365)) <= 1.5 || Math.abs(((m.data.day - state.day + 365) % 365)) <= 1.5;
+            m.tick.material.color.setHex(near ? 0xffd166 : 0x8fb2dc);
+            m.tick.scale.setScalar(near ? 1.7 : 1);
+        });
+    }
+
+    /* ============================================================
+       7. 지표면 시점 갱신
+       ============================================================ */
+    function sunDirGround(alt, az) {
+        return new THREE.Vector3(
+            Math.cos(alt) * Math.sin(az),
+            Math.sin(alt),
+            -Math.cos(alt) * Math.cos(az)
+        );
+    }
+    function arcPointsFor(lat, decDeg, radius) {
+        var dl = dayLengthHours(lat, decDeg);
+        if (dl <= 0.01) return null;
+        var H0 = dl / 2 * 15;               // 반일조 시간각(도)
+        var n = 96;
+        var pts = [];
+        for (var i = 0; i <= n; i++) {
+            var H = -H0 + (2 * H0) * (i / n);   // -H0 ~ +H0
+            var r = sunAltAz(lat, decDeg, H);
+            var d = sunDirGround(r.alt, r.az);
+            pts.push(d.multiplyScalar(radius));
+        }
+        return pts;
+    }
+
+    var arcState = { lat: null, day: null, lastBuild: 0, altCache: null, azCache: null };
+    function disposeGroup(g) {
+        for (var i = g.children.length - 1; i >= 0; i--) {
+            var c = g.children[i];
+            if (c.geometry) c.geometry.dispose();
+            if (c.material) {
+                if (c.material.map && c.material.isSpriteMaterial) c.material.map.dispose();
+                c.material.dispose();
+            }
+            g.remove(c);
+        }
+    }
+    function buildReferenceArcs() {
+        disposeGroup(refArcGroup);
+        var refs = [
+            { day: 172, name: '하지', color: 0xffc247 },
+            { day: 80, name: '춘분·추분', color: 0x9be7a4 },
+            { day: 356, name: '동지', color: 0x8ec5ff }
+        ];
+        refs.forEach(function (r) {
+            var dd = decDegOf(r.day);
+            var pts = arcPointsFor(state.lat, dd, DOME_R * 0.9);
+            if (!pts) return;
+            refArcGroup.add(lineFrom(pts, r.color, 0.34));
+            var noon = sunAltAz(state.lat, dd, 0);
+            if (noon.alt > 0) {
+                var p = sunDirGround(noon.alt, noon.az).multiplyScalar(DOME_R * 0.9);
+                var lb = makeLabel(r.name, '#cfe0f5', 0.62);
+                lb.position.set(p.x + 0.9, p.y + 0.35, p.z);
+                refArcGroup.add(lb);
+            }
+        });
+    }
+    function buildCurrentArc() {
+        disposeGroup(curArcHolder);
+        disposeGroup(noonMarkerGroup);
+        var dd = decDegOf(state.day);
+        var pts = arcPointsFor(state.lat, dd, DOME_R);
+        var curArc = null;
+        if (pts) {
+            curArc = lineFrom(pts, 0xffb020, 0.95);
+            curArcHolder.add(curArc);
+            // 일출·일몰 지점 표식
+            var first = pts[0], last = pts[pts.length - 1];
+            [first, last].forEach(function (p) {
+                var m = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+                m.position.copy(p);
+                curArcHolder.add(m);
+            });
+        }
+        // 남중 표시(수직선 + 라벨)
+        var noon = sunAltAz(state.lat, dd, 0);
+        if (noon.alt > 0.1) {
+            var dir = sunDirGround(noon.alt, noon.az);
+            var sunP = dir.clone().multiplyScalar(DOME_R);
+            var groundP = new THREE.Vector3(sunP.x, 0.04, sunP.z);
+            var seg = [];
+            for (var i = 0; i <= 12; i++) {
+                seg.push(new THREE.Vector3().lerpVectors(groundP, sunP, i / 12));
+            }
+            var dashGeo = new THREE.BufferGeometry().setFromPoints(seg);
+            var dashLine = new THREE.Line(dashGeo, new THREE.LineDashedMaterial({
+                color: 0xffd166, transparent: true, opacity: 0.85, dashSize: 0.4, gapSize: 0.28, depthWrite: false
+            }));
+            dashLine.computeLineDistances();
+            noonMarkerGroup.add(dashLine);
+            var mark = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), new THREE.MeshBasicMaterial({ color: 0xfff0a8 }));
+            mark.position.copy(sunP);
+            noonMarkerGroup.add(mark);
+            var lb = makeLabel('남중고도 ' + noon.alt.toFixed(1) + '°', '#ffe28a', 0.82, 'rgba(9,14,26,0.7)');
+            lb.position.set(sunP.x + 1.9, Math.min(sunP.y + 0.5, DOME_R + 0.4), sunP.z);
+            noonMarkerGroup.add(lb);
+        } else if (noon.alt <= 0.1) {
+            var lb2 = makeLabel('☀️ 태양이 지평선 위로 오지 않음 · 극야', '#9db4d8', 0.8, 'rgba(9,14,26,0.7)');
+            lb2.position.set(0, 4.4, 3.2);
+            noonMarkerGroup.add(lb2);
+        }
+    }
+    function updateGroundNeedsRebuild() {
+        var dd = decDegOf(state.day);
+        if (arcState.lat !== state.lat) {
+            arcState.lat = state.lat;
+            buildReferenceArcs();
+            buildCurrentArc();
+            arcState.day = Math.round(state.day);
+            arcState.lastBuild = performance.now();
+            return;
+        }
+        var now = performance.now();
+        if (arcState.day !== Math.round(state.day) && now - arcState.lastBuild > 70) {
+            arcState.day = Math.round(state.day);
+            arcState.lastBuild = now;
+            buildCurrentArc();
+        }
+    }
+
+    var SKY_DAY = new THREE.Color(0xffffff);
+    var SKY_TWILIGHT = new THREE.Color(0xffb27a);
+    var SKY_NIGHT = new THREE.Color(0x0a1024);
+    var _skyCol = new THREE.Color();
+
+    function updateGround() {
+        updateGroundNeedsRebuild();
+        var dd = decDegOf(state.day);
+        var H = (state.hour - 12) * 15;
+        var r = sunAltAz(state.lat, dd, H);
+        var altDeg = r.alt / DEG;
+        var dir = sunDirGround(r.alt, r.az);
+
+        // 태양 위치
+        var sunPos = dir.clone().multiplyScalar(DOME_R);
+        groundSunMesh.position.copy(sunPos);
+        groundSunGlow.position.copy(sunPos);
+        sunLabelG.position.copy(sunPos).add(new THREE.Vector3(0, 1.0, 0));
+
+        var up = altDeg > -0.6;
+        groundSunMesh.visible = up;
+        groundSunGlow.visible = up;
+
+        // 고도각 호 (값이 거의 그대로면 매 프레임 다시 만들지 않는다)
+        if (Math.abs(altDeg - arcState.altCache) > 0.35 || Math.abs(r.az / DEG - arcState.azCache) > 0.35 || arcState.altCache === null) {
+            arcState.altCache = altDeg;
+            arcState.azCache = r.az / DEG;
+            disposeGroup(altitudeArcGroup);
+            if (up) {
+                var pts = [];
+                var steps = 28;
+                for (var i2 = 0; i2 <= steps; i2++) {
+                    var a = r.alt * (i2 / steps);
+                    pts.push(sunDirGround(a, r.az).multiplyScalar(DOME_R));
+                }
+                altitudeArcGroup.add(lineFrom(pts, 0x7dd3fc, 0.55));
+            }
+        }
+        altitudeArcGroup.visible = state.arc;            
+
+        // 그림자
+        if (state.shadow && altDeg > 0.4) {
+            var len = Math.min(GROUND_R * 0.97, poleHeight / Math.tan(r.alt));
+            shadowMesh.visible = true;
+            shadowMesh.rotation.y = -r.az;
+            shadowMesh.scale.set(0.16, 1, len);
+            shadowMesh.material.opacity = Math.min(0.6, 0.22 + len * 0.05);
+        } else {
+            shadowMesh.visible = false;
+        }
+
+        // 하늘 색 (태양 고도에 따라)
+        var sky;
+        if (altDeg >= 12) {
+            sky = _skyCol.copy(SKY_DAY);
+        } else if (altDeg >= 0) {
+            sky = _skyCol.copy(SKY_TWILIGHT).lerp(SKY_DAY, altDeg / 12);
+        } else if (altDeg >= -14) {
+            sky = _skyCol.copy(SKY_NIGHT).lerp(SKY_TWILIGHT, (altDeg + 14) / 14);
+        } else {
+            sky = _skyCol.copy(SKY_NIGHT);
+        }
+        skyDome.material.color.copy(sky);
+        groundStars.visible = altDeg < -2;
+
+        // 지표면 조명(태양 방향)
+        groundSun.position.copy(dir.clone().multiplyScalar(60));
+        groundSun.target.position.set(0, 0, 0);
+        groundSun.target.updateMatrixWorld();
+        groundSun.intensity = altDeg > 0 ? 0.35 + 0.75 * Math.max(0, Math.sin(r.alt)) : 0.0;
+        hemi.intensity = altDeg > 0 ? 0.32 + 0.3 * Math.max(0, Math.sin(r.alt)) : 0.12;
+
+        // 천구 격자/궤적 표시 여부
+        domeGroup.visible = state.arc;
+        arcGroup.visible = state.arc;
+    }
+
+    /* ============================================================
+       8. UI 갱신
+       ============================================================ */
+    var el = {};
+    ['val-season', 'val-date', 'val-lat', 'val-noon', 'val-day', 'val-flux',
+        'in-dec', 'in-noon', 'in-daylen', 'in-flux', 'in-shadow', 'in-sun',
+        'lbl-date', 'lbl-lat', 'lbl-hour', 'panel-mode-tag', 'guide-msg',
+        'rng-day', 'rng-lat', 'rng-hour', 'btn-mode', 'btn-orbit', 'btn-spin',
+        'mode-space', 'mode-ground', 'center-hint'].forEach(function (id) {
+            el[id] = document.getElementById(id);
+        });
+
+    function updateUI() {
+        var dd = decDegOf(state.day);
+        var noon = noonAltitude(state.lat, dd);
+        var dl = dayLengthHours(state.lat, dd);
+        var flux = Math.max(0, Math.sin(noon * DEG));
+        var shadowRatio = noon > 0.05 ? 1 / Math.tan(noon * DEG) : null;
+
+        var seasonTxt = seasonName(state.day);
+        var dateTxt = fmtDate(state.day);
+        var latTxt = fmtLat(state.lat);
+
+        el['val-season'].textContent = seasonTxt;
+        el['val-date'].textContent = dateTxt;
+        el['val-lat'].textContent = latTxt;
+        el['val-noon'].textContent = noon.toFixed(1) + '°';
+        el['val-day'].textContent = dl >= 23.99 ? '24시간' : (dl <= 0.01 ? '0시간' : fmtHM(dl));
+        el['val-flux'].textContent = flux.toFixed(2);
+
+        el['in-dec'].textContent = (dd >= 0 ? '+' : '') + dd.toFixed(1) + '°';
+        el['in-noon'].textContent = noon.toFixed(1) + '°';
+        el['in-daylen'].textContent = dl >= 23.99 ? '24시간 (백야)' : (dl <= 0.01 ? '0시간 (극야)' : fmtHM(dl) + ' / ' + fmtHM(24 - dl));
+        el['in-flux'].textContent = flux.toFixed(2);
+        el['in-shadow'].textContent = shadowRatio === null ? '—' : (shadowRatio > 99 ? '매우 김' : shadowRatio.toFixed(2) + '배');
+
+        var H = (state.hour - 12) * 15;
+        var r = sunAltAz(state.lat, dd, H);
+        el['in-sun'].textContent = (r.alt / DEG >= 0 ? '지평선 위 ' : '지평선 아래 ') + (r.alt / DEG).toFixed(1) + '° / ' + azName(r.az / DEG) + ' ' + Math.round(r.az / DEG) + '°';
+
+        el['lbl-date'].textContent = dateTxt;
+        el['lbl-lat'].textContent = latTxt;
+        el['lbl-hour'].textContent = fmtHour(state.hour);
+
+        el['rng-day'].value = String(Math.round(state.day));
+        el['rng-lat'].value = String(state.lat);
+        el['rng-hour'].value = String(state.hour);
+
+        // 절기 칩 활성
+        var chips = document.querySelectorAll('.season-chip');
+        for (var i = 0; i < chips.length; i++) {
+            chips[i].classList.toggle('active', Math.abs(Number(chips[i].getAttribute('data-day')) - state.day) <= 1);
+        }
+        // 위도 빠른 선택
+        var qs = document.querySelectorAll('#lat-quick button');
+        for (var j = 0; j < qs.length; j++) {
+            qs[j].classList.toggle('active', Math.abs(Number(qs[j].getAttribute('data-lat')) - state.lat) < 0.01);
+        }
+        // 모드 표시
+        var space = state.mode === 'space';
+        el['panel-mode-tag'].textContent = space ? '우주 시점' : '지표면 시점';
+        el['mode-space'].classList.toggle('active', space);
+        el['mode-ground'].classList.toggle('active', !space);
+        el['btn-mode'].textContent = space ? '🧍 관측자 시점' : '🌌 우주 시점';
+        el['btn-orbit'].classList.toggle('on', state.orbit);
+        el['btn-orbit'].textContent = state.orbit ? '⏸ 공전 일시정지' : '▶ 공전 재생';
+        el['btn-spin'].classList.toggle('on', state.spin);
+        el['btn-spin'].textContent = state.spin ? '⏸ 자전 일시정지' : '▶ 자전 재생';
+    }
+
+    /* ============================================================
+       9. 시점 전환 · 카메라
+       ============================================================ */
+    var CAM = {
+        space: { pos: new THREE.Vector3(4, 46, 66), target: new THREE.Vector3(0, 0, 0) },
+        ground: { pos: new THREE.Vector3(0, 7.2, -21.5), target: new THREE.Vector3(0, 3.9, 2.2) }
+    };
+    var camTween = null;
+    function applyCamera(mode, instant) {
+        var c = CAM[mode];
+        if (instant) {
+            camera.position.copy(c.pos);
+            controls.target.copy(c.target);
+            controls.update();
+            return;
+        }
+        camTween = {
+            fromPos: camera.position.clone(), toPos: c.pos.clone(),
+            fromTgt: controls.target.clone(), toTgt: c.target.clone(),
+            t: 0, dur: 720
+        };
+        controls.enabled = false;
+    }
+    function stepCamTween(dt) {
+        if (!camTween) return;
+        camTween.t += dt * 1000;
+        var k = Math.min(1, camTween.t / camTween.dur);
+        var e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+        camera.position.lerpVectors(camTween.fromPos, camTween.toPos, e);
+        controls.target.lerpVectors(camTween.fromTgt, camTween.toTgt, e);
+        controls.update();
+        if (k >= 1) {
+            camTween = null;
+            controls.enabled = true;
+        }
+    }
+
+    function setMode(mode, instant) {
+        state.mode = mode;
+        var space = mode === 'space';
+        spaceGroup.visible = space;
+        groundGroup.visible = !space;
+        spaceStars.visible = space || false;
+        skyDome.visible = !space;
+
+        // 조명 전환
+        ambient.intensity = space ? 0.16 : 0.5;
+        sunLight.intensity = space ? 1.45 : 0.0;
+        hemi.intensity = space ? 0.0 : 0.55;
+        groundSun.intensity = 0;
+
+        applyCamera(mode, instant);
+        updateEarth();
+        updateGround();
+        updateUI();
+    }
+
+    /* ============================================================
+       10. 이벤트 연결
+       ============================================================ */
+    el['rng-day'].addEventListener('input', function (e) {
+        state.day = Number(e.target.value);
+        updateEarth();
+        if (state.mode === 'ground') updateGround();
+        updateUI();
+    });
+    el['rng-lat'].addEventListener('input', function (e) {
+        state.lat = Number(e.target.value);
+        updateEarth();
+        updateGround();
+        updateUI();
+    });
+    el['rng-hour'].addEventListener('input', function (e) {
+        state.hour = Number(e.target.value);
+        updateEarth();
+        if (state.mode === 'ground') updateGround();
+        updateUI();
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.season-chip'), function (btn) {
+        btn.addEventListener('click', function () {
+            state.day = Number(btn.getAttribute('data-day'));
+            state.hour = 12;
+            updateEarth();
+            if (state.mode === 'ground') updateGround();
+            updateUI();
+        });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#lat-quick button'), function (btn) {
+        btn.addEventListener('click', function () {
+            state.lat = Number(btn.getAttribute('data-lat'));
+            updateEarth();
+            updateGround();
+            updateUI();
+        });
+    });
+
+    el['mode-space'].addEventListener('click', function () { if (state.mode !== 'space') setMode('space'); });
+    el['mode-ground'].addEventListener('click', function () { if (state.mode !== 'ground') setMode('ground'); });
+    el['btn-mode'].addEventListener('click', function () { setMode(state.mode === 'space' ? 'ground' : 'space'); });
+
+    el['btn-orbit'].addEventListener('click', function () {
+        state.orbit = !state.orbit;
+        updateUI();
+    });
+    el['btn-spin'].addEventListener('click', function () {
+        state.spin = !state.spin;
+        updateUI();
+    });
+
+    function resetAll() {
+        state.day = 172;
+        state.lat = 37.5;
+        state.hour = 12;
+        state.orbit = false;
+        state.spin = true;
+        setMode('space');
+    }
+    document.getElementById('btn-reset').addEventListener('click', resetAll);
+    document.getElementById('btn-reset-panel').addEventListener('click', resetAll);
+    document.getElementById('btn-align').addEventListener('click', function () {
+        camTween = null;
+        controls.enabled = true;
+        applyCamera(state.mode, true);
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('.toggle-item'), function (btn) {
+        btn.addEventListener('click', function () {
+            var key = btn.getAttribute('data-toggle');
+            state[key] = !state[key];
+            btn.classList.toggle('active', state[key]);
+            if (key === 'rays') raysGroup.visible = state.rays;
+            if (key === 'latLines') latLineGroup.visible = state.latLines;
+            if (key === 'arc') {
+                domeGroup.visible = state.arc;
+                arcGroup.visible = state.arc;
+            }
+            if (key === 'shadow') {
+                if (state.mode === 'ground') updateGround();
+            }
+        });
+    });
+
+    // 테마
+    var themeBtn = document.getElementById('theme-toggle');
+    function applyTheme(isDark, save) {
+        document.body.classList.toggle('dark-mode', isDark);
+        document.body.classList.toggle('light-mode', !isDark);
+        if (themeBtn) {
+            themeBtn.textContent = isDark ? '☀️' : '🌙';
+            themeBtn.setAttribute('title', isDark ? '주간 모드로 전환' : '야간 모드로 전환');
+            themeBtn.setAttribute('aria-label', isDark ? '주간 모드로 전환' : '야간 모드로 전환');
+        }
+        if (state.mode === 'space') {
+            scene.background.setHex(isDark ? 0x04070f : 0xdfeaf8);
+            spaceStars.material.opacity = isDark ? 0.9 : 0.12;
+        }
+        if (save) {
+            try { localStorage.setItem('svlLabTheme', isDark ? 'dark' : 'light'); } catch (e) {}
+        }
+    }
+    themeBtn.addEventListener('click', function () {
+        var nextDark = !document.body.classList.contains('dark-mode');
+        applyTheme(nextDark, true);
+        if (state.mode === 'ground') updateGround();
+    });
+
+    // 전체화면
+    document.getElementById('btn-fullscreen').addEventListener('click', function () {
+        if (!document.fullscreenElement) {
+            var el2 = document.documentElement;
+            if (el2.requestFullscreen) el2.requestFullscreen().catch(function () {});
+            else if (el2.webkitRequestFullscreen) el2.webkitRequestFullscreen();
+        } else {
+            if (document.exitFullscreen) document.exitFullscreen().catch(function () {});
+        }
+    });
+
+    window.addEventListener('resize', function () {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // 안내 툴팁 자동 숨김
+    setTimeout(function () {
+        if (el['center-hint']) el['center-hint'].classList.add('hide');
+    }, 7000);
+
+    /* ============================================================
+       11. 애니메이션 루프
+       ============================================================ */
+    var lastT = performance.now();
+    function animate(now) {
+        requestAnimationFrame(animate);
+        var dt = Math.min(0.1, (now - lastT) / 1000);
+        lastT = now;
+
+        // 공전 재생 (1년 ≈ 42초)
+        if (state.orbit) {
+            state.day += dt * (365 / 42);
+            while (state.day > 365) state.day -= 365;
+            updateEarth();
+            if (state.mode === 'ground') updateGround();
+            updateUI();
+        }
+        // 자전 재생 (하루 ≈ 9초)
+        if (state.spin) {
+            state.hour += dt * (24 / 9);
+            if (state.hour >= 24) {
+                state.hour -= 24;
+                state.day += 1;
+                if (state.day > 365) state.day -= 365;
+            }
+            updateEarth();
+            if (state.mode === 'ground') updateGround();
+            updateUI();
+        }
+
+        // 태양·지구의 미세한 시각 효과
+        var tt = now * 0.001;
+        if (spaceGroup.visible) {
+            sunGlow.scale.setScalar(SUN_R * (7.1 + Math.sin(tt * 1.3) * 0.16));
+            spaceStars.rotation.y = tt * 0.006;
+        } else {
+            var pulse = 4.5 + Math.sin(tt * 2.1) * 0.25;
+            groundSunGlow.scale.set(pulse, pulse, 1);
+        }
+
+        stepCamTween(dt);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* ============================================================
+       12. 시작
+       ============================================================ */
+    raysGroup.visible = state.rays;
+    latLineGroup.visible = state.latLines;
+    setMode('space', true);
+    try {
+        var savedTheme = localStorage.getItem('svlLabTheme');
+        applyTheme(savedTheme !== 'light', false);
+    } catch (e) {
+        applyTheme(true, false);
+    }
+    renderer.render(scene, camera);
+
+    window.__seasonsDebug = {
+        version: '1.0',
+        state: state,
+        set: function (o) {
+            if (o.day !== undefined) state.day = o.day;
+            if (o.lat !== undefined) state.lat = o.lat;
+            if (o.hour !== undefined) state.hour = o.hour;
+            if (o.mode) setMode(o.mode);
+            updateEarth();
+            if (state.mode === 'ground') updateGround();
+            updateUI();
+        },
+        calc: function (day, lat, hour) {
+            var d = decDegOf(day);
+            var rr = sunAltAz(lat, d, (hour - 12) * 15);
+            return {
+                theta: dayToTheta(day) / DEG,
+                dec: d,
+                noonAlt: noonAltitude(lat, d),
+                dayLen: dayLengthHours(lat, d),
+                flux: Math.max(0, Math.sin(noonAltitude(lat, d) * DEG)),
+                alt: rr.alt / DEG,
+                az: rr.az / DEG,
+                date: fmtDate(day),
+                season: seasonName(day)
+            };
+        },
+        errors: window.__seasonsErrors
+    };
+
+    requestAnimationFrame(animate);
+})();
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
