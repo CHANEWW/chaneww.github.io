@@ -2464,7 +2464,7 @@
                 color: 0x5eead4, transparent: true, opacity: 0.95,
                 blending: THREE.AdditiveBlending, depthWrite: false
             });
-            const LEN = 0.2, TH = 0.026, EDGE = 0.6;
+            const LEN = 0.2, TH = 0.026, EDGE = 0.5;
             [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (c) {
                 const gx = c[0], gy = c[1];
                 const hb = new THREE.Mesh(new THREE.PlaneGeometry(LEN, TH), bMat);
@@ -2491,16 +2491,24 @@
             }
             const g = BUILDERS[key]();
             toLinear(g);
-            const box = new THREE.Box3().setFromObject(g);
-            const sph = box.getBoundingSphere(new THREE.Sphere());
+            /* AR에서는 글자 스프라이트(라벨)를 숨긴다 — 크게 뜨고 크기 계산도 흔든다 */
+            g.traverse(function (o) { if (o.isSprite) o.visible = false; });
+            g.updateMatrixWorld(true);
+            const box = new THREE.Box3();
+            g.traverse(function (o) {
+                if (!o.isMesh || !o.geometry) return;
+                if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+                box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+            });
+            const sph = box.isEmpty() ? new THREE.Sphere(new THREE.Vector3(), 1) : box.getBoundingSphere(new THREE.Sphere());
             const radius = Math.max(sph.radius, 0.35);
-            const want = 0.98;                       // QR 한 변 = 1 일 때의 모델 반지름
+            const want = 0.55;                       // QR 한 변 = 1 일 때의 모델 반지름
             const s = want / radius;
             g.scale.setScalar(s);
             g.position.set(-sph.center.x * s, -sph.center.y * s, -sph.center.z * s);
             st.modelG = g;
             st.key = key;
-            st.holdH = want + 0.14;
+            st.holdH = want + 0.32;
             st.holder.add(g);
             currentKey = key;
             updateInfo(key);
@@ -2646,7 +2654,7 @@
            ------------------------------------------------------------------ */
         const sim = {
             renderer: null, scene: null, cam: null, plane: null,
-            ready: false, tilt: 16, yaw: 0, zoom: 165, panX: 0, panY: 3.6
+            ready: false, tilt: 16, yaw: 0, zoom: 165, panX: 0, panY: -3.7
         };
 
         function makeQrCanvas(text, size) {
