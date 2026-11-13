@@ -292,8 +292,8 @@
         .law-modal.open { opacity: 1; visibility: visible; }
         .law-modal-backdrop {
             position: absolute; inset: 0;
-            background: rgba(3, 7, 18, 0.62);
-            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            background: rgba(3, 7, 18, 0.5);
+            backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
         }
         .law-card {
             position: relative;
@@ -1164,8 +1164,9 @@
        8. 카메라 정렬
        ============================================================ */
     let lastFitSpan = 0, lastFitW = 0, lastFitH = 0;
+    let camGoal = null;          // 부드러운 시점 이동용 목표(드래그가 끝날 때 한 번만 맞춘다)
 
-    function fitCamera() {
+    function fitCamera(smooth) {
         const W = window.innerWidth, H = window.innerHeight;
         const aspect = W / H;
         const span = 2 * A3();                 // 장축 길이(월드 단위)
@@ -1192,8 +1193,16 @@
         /* 카메라는 타원 중심 바로 위에 두어 좌우 대칭으로 투영하고,
            우측 조절 패널 자리만큼은 렌즈 시프트(setViewOffset)로 비켜 준다
            (목표점을 옆으로 옮기면 원근이 비뚤어져 궤도가 한쪽으로 더 넓게 보인다) */
-        controls.target.set(cx, shiftY, 0);
-        camera.position.copy(controls.target).addScaledVector(dir, dist);
+        const goalTgt = new THREE.Vector3(cx, shiftY, 0);
+        const goalPos = goalTgt.clone().addScaledVector(dir, dist);
+
+        if (smooth) {
+            camGoal = { pos: goalPos, tgt: goalTgt };
+        } else {
+            camGoal = null;
+            controls.target.copy(goalTgt);
+            camera.position.copy(goalPos);
+        }
 
         const shiftPx = reserve / 2;
         if (shiftPx > 0.5) {
@@ -1322,6 +1331,10 @@
         rebuildAll();
         updatePlanet();
         syncChips();
+    });
+    // 드래그를 놓을 때만 궤도가 화면 안에 들어오도록 부드럽게 한 번 맞춘다
+    rngA.addEventListener('change', function () {
+        fitCamera(true);
     });
     rngE.addEventListener('input', function () {
         const before = -C3();
@@ -1539,6 +1552,17 @@
         if (hudTick % 6 === 0) syncHUD();
 
         if (bgStars.visible) bgStars.rotation.y += 0.006 * dt;
+
+        // 부드러운 시점 이동(궤도 크기 변경을 놓았을 때 한 번만)
+        if (camGoal) {
+            camera.position.lerp(camGoal.pos, 0.14);
+            controls.target.lerp(camGoal.tgt, 0.14);
+            if (camera.position.distanceTo(camGoal.pos) < 0.03) {
+                camera.position.copy(camGoal.pos);
+                controls.target.copy(camGoal.tgt);
+                camGoal = null;
+            }
+        }
 
         controls.update();
         renderer.render(scene, camera);
