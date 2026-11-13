@@ -12,6 +12,7 @@
     <script src="../common/lib/three.min.js"></script>
     <script src="../common/lib/OrbitControls.js"></script>
     <script src="../common/lib/qrcode.min.js"></script>
+    <script src="../common/lib/jsQR.js"></script>
     <link rel="stylesheet" href="../common/ui-layout.css">
     <style>
         @font-face {
@@ -424,9 +425,15 @@
             .bottom-control-bar .control-capsule-btn { padding: 8px 10px; font-size: 11px; }
         }
 
+        @media (max-width: 860px) {
+            /* 좁은 화면에서는 상단 좌측의 📷 버튼 하나로 AR 모드에 들어간다 */
+            #btn-camar { display: none !important; }
+        }
+
         @media (max-width: 460px) {
             .print-btn span { display: none; }
             .print-btn { padding: 0 12px !important; }
+            .camar-entry .camar-entry-label { display: none; }
         }
 
         @media (max-width: 400px) {
@@ -478,6 +485,134 @@
         }
         body.in-ar #ar-hint { display: block; }
 
+        /* ---------- 학습지 AR 진입 버튼 ---------- */
+        .camar-entry {
+            background: linear-gradient(135deg, #14b8a6, #0ea5e9) !important;
+            border-color: rgba(255, 255, 255, 0.45) !important;
+            color: #04211d !important;
+            box-shadow: 0 10px 26px rgba(20, 184, 166, 0.38) !important;
+        }
+        body.light-mode .camar-entry { color: #04211d !important; }
+        .camar-entry .camar-entry-label { font-weight: 900; letter-spacing: -0.2px; }
+        #btn-camar {
+            background: linear-gradient(135deg, #14b8a6, #0ea5e9) !important;
+            color: #04211d !important;
+            border-color: #0d9488 !important;
+            box-shadow: 0 6px 18px rgba(20, 184, 166, 0.35) !important;
+        }
+
+        /* ---------- 실시간 카메라 QR AR (HP Reveal 스타일) ---------- */
+        #camar-video, #camar-sim {
+            position: fixed; inset: 0; width: 100%; height: 100%;
+            display: none; pointer-events: none;
+        }
+        #camar-video { object-fit: cover; z-index: 1; background: #04070c; }
+        #camar-sim { z-index: 2; }
+        body.camar #camar-video { display: block; }
+        body.camar.sim-mode #camar-video { display: none; }
+        body.camar.sim-mode #camar-sim { display: block; }
+        body.camar #canvas-container { z-index: 3; }
+        body.camar { background: #04070c; }
+        body.camar .top-left-bar,
+        body.camar .top-right-bar,
+        body.camar .info-card,
+        body.camar .bottom-control-bar,
+        body.camar .bottom-right-bar,
+        body.camar .center-tooltip,
+        body.camar #ar-exit,
+        body.camar #ar-hint { display: none !important; }
+
+        #camar-ui { position: fixed; inset: 0; z-index: 6; display: none; pointer-events: none; }
+        body.camar #camar-ui { display: block; }
+        #camar-ui button { pointer-events: auto; font-family: inherit; }
+        .camar-topbar {
+            position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 0 10px; flex-wrap: wrap;
+        }
+        .camar-topbar button {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 10px 14px; border-radius: 999px; cursor: pointer;
+            font-size: 12.5px; font-weight: 800; color: #eef4ff;
+            background: rgba(12, 20, 34, 0.72);
+            backdrop-filter: blur(16px) saturate(160%);
+            -webkit-backdrop-filter: blur(16px) saturate(160%);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+            white-space: nowrap;
+        }
+        .camar-topbar button.on {
+            background: linear-gradient(135deg, #14b8a6, #0ea5e9);
+            color: #04211d; border-color: rgba(255, 255, 255, 0.5);
+        }
+        #camar-badge {
+            position: absolute; left: 50%; transform: translateX(-50%);
+            top: calc(66px + env(safe-area-inset-top));
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 9px 15px; border-radius: 999px;
+            font-size: 12.5px; font-weight: 900; letter-spacing: -0.2px;
+            color: #d8fff8; background: rgba(8, 20, 26, 0.72);
+            border: 1px solid rgba(94, 234, 212, 0.45);
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            white-space: nowrap; opacity: 0; transition: opacity .25s ease;
+        }
+        #camar-badge.show { opacity: 1; }
+        #camar-badge i {
+            width: 8px; height: 8px; border-radius: 50%; background: #5eead4;
+            box-shadow: 0 0 10px #5eead4; animation: camarPulse 1.4s ease-in-out infinite;
+        }
+        #camar-badge.idle i { background: #94a3b8; box-shadow: none; animation: none; }
+        @keyframes camarPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.75); } }
+        #camar-hint {
+            position: absolute; left: 50%; transform: translateX(-50%);
+            bottom: calc(120px + env(safe-area-inset-bottom));
+            max-width: 86vw; padding: 10px 16px; border-radius: 14px;
+            font-size: 12px; font-weight: 800; line-height: 1.55; text-align: center;
+            color: #eef4ff; background: rgba(10, 18, 30, 0.78);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            transition: opacity .4s ease; pointer-events: none;
+        }
+        #camar-hint.fade { opacity: 0; }
+        .camar-reticle {
+            position: absolute; left: 50%; top: 50%;
+            width: min(62vw, 300px); height: min(62vw, 300px);
+            transform: translate(-50%, -50%); opacity: .5;
+            transition: opacity .3s ease; pointer-events: none;
+        }
+        .camar-reticle.locked { opacity: 0; }
+        .camar-reticle span {
+            position: absolute; width: 26px; height: 26px;
+            border: 2px solid rgba(94, 234, 212, 0.9); border-radius: 6px;
+        }
+        .camar-reticle span:nth-child(1) { left: 0; top: 0; border-right: none; border-bottom: none; }
+        .camar-reticle span:nth-child(2) { right: 0; top: 0; border-left: none; border-bottom: none; }
+        .camar-reticle span:nth-child(3) { right: 0; bottom: 0; border-left: none; border-top: none; }
+        .camar-reticle span:nth-child(4) { left: 0; bottom: 0; border-right: none; border-top: none; }
+        .camar-simctl {
+            position: absolute; left: 50%; transform: translateX(-50%);
+            bottom: calc(14px + env(safe-area-inset-bottom));
+            display: none; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
+            padding: 10px 14px; border-radius: 16px;
+            background: rgba(10, 18, 30, 0.78); border: 1px solid rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            max-width: 94vw;
+        }
+        body.sim-mode .camar-simctl { display: flex; }
+        .camar-simctl label {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 11.5px; font-weight: 800; color: #cfe3f7; white-space: nowrap;
+        }
+        .camar-simctl input[type="range"] {
+            width: 96px; accent-color: #14b8a6; pointer-events: auto;
+        }
+        .camar-simctl .camar-simtip { font-size: 11px; font-weight: 700; color: #93a9c4; }
+        @media (max-width: 520px) {
+            .camar-simctl { gap: 8px; padding: 8px 10px; }
+            .camar-simctl input[type="range"] { width: 66px; }
+            .camar-simctl .camar-simtip { display: none; }
+            .camar-topbar button { padding: 9px 11px; font-size: 11.5px; }
+        }
+
         /* ---------- 인쇄 ---------- */
         @media print {
             @page { size: A4 portrait; margin: 8mm; }
@@ -512,6 +647,7 @@
         <span class="vision-badge">visionOS</span>
     </div>
     <button class="back-btn qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">📱 <span class="qr-btn-label">QR code</span></button>
+    <button class="back-btn camar-entry" id="camarEntryBtn" type="button" title="학습지 AR 모드 — 학습지 QR에 카메라를 비추면 3D 모델이 떠오릅니다" aria-label="학습지 AR 모드">📷 <span class="camar-entry-label">학습지 AR</span></button>
 </div>
 
 <!-- 우상단: 모델 선택 · 학습지용 QR 인쇄 -->
@@ -554,6 +690,7 @@
 <div class="glass-panel bottom-control-bar">
     <button class="control-capsule-btn on" id="btn-rotate" type="button">🔄 자동 회전</button>
     <button class="control-capsule-btn" id="btn-ar" type="button">🥽 AR로 보기</button>
+    <button class="control-capsule-btn" id="btn-camar" type="button">📷 학습지 AR</button>
     <button class="control-capsule-btn" id="btn-reset" type="button">↺ 초기화</button>
     <button class="control-capsule-btn" id="btn-align" type="button">🧭 시점 정렬</button>
 </div>
@@ -567,6 +704,26 @@
 
 <button id="ar-exit" type="button">✕ AR 종료</button>
 <div id="ar-hint">바닥·책상을 비추고 화면을 한 번 탭하면 그 자리에 3D 모델이 놓입니다</div>
+
+<!-- ===== 학습지 실시간 카메라 QR AR (HP Reveal 스타일) ===== -->
+<video id="camar-video" playsinline muted autoplay aria-hidden="true"></video>
+<canvas id="camar-sim" aria-hidden="true"></canvas>
+<div id="camar-ui">
+    <div class="camar-reticle" id="camar-reticle"><span></span><span></span><span></span><span></span></div>
+    <div class="camar-topbar">
+        <button type="button" id="camar-pin">📌 화면에 고정</button>
+        <button type="button" id="camar-simbtn">📄 가상 학습지</button>
+        <button type="button" id="camar-exit">✕ AR 종료</button>
+    </div>
+    <div id="camar-badge" class="idle"><i></i><span id="camar-badge-text">QR을 찾는 중…</span></div>
+    <div id="camar-hint">학습지의 QR 코드에 카메라를 비추면 3D 모델이 그 위에 떠오릅니다</div>
+    <div class="camar-simctl" id="camar-simctl">
+        <label>기울기<input type="range" id="camar-tilt" min="-42" max="42" value="16"></label>
+        <label>돌리기<input type="range" id="camar-yaw" min="-38" max="38" value="0"></label>
+        <label>확대<input type="range" id="camar-zoom" min="60" max="220" value="100"></label>
+        <span class="camar-simtip">화면을 드래그해 학습지를 움직여 보세요</span>
+    </div>
+</div>
 
 <!-- 모델 QR 모달 -->
 <div class="qr-overlay" id="qrOverlay" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
@@ -598,7 +755,9 @@
                 <span>Science Virtual LAB</span>
             </div>
             <p>아래 QR코드를 스마트폰 카메라(크롬·사파리)로 찍으면 <b>앱 설치 없이</b> 브라우저에서 3D 모델이 바로 열립니다.
-               모델은 손가락으로 돌리고 두 손가락으로 확대할 수 있으며, 상단에서 다른 모델로도 바꿀 수 있습니다.</p>
+               모델은 손가락으로 돌리고 두 손가락으로 확대할 수 있으며, 상단에서 다른 모델로도 바꿀 수 있습니다.<br>
+               <b>학습지 AR</b> — 뷰어에서 <b>📷 학습지 AR</b>을 누르고 인쇄한 학습지의 QR에 카메라를 비추면,
+               분자·화석이 종이 위에 증강현실로 떠오릅니다(카메라 없이도 <b>📄 가상 학습지</b>로 시연 가능).</p>
         </div>
         <div class="sheet-grid" id="sheetGrid"></div>
         <div class="sheet-foot">
@@ -616,6 +775,8 @@
    · ?model=water 처럼 URL 파라미터로 모델을 바로 지정한다.
    · Three.js 회전/핀치 줌/두 손가락 팬/자동 회전
    · WebXR(immersive-ar) 지원 기기에서는 책상 위에 모델을 놓는 AR 모드
+   · 학습지 실시간 카메라 AR(HP Reveal 스타일) — jsQR로 QR을 읽어
+     종이 위에 모델을 고정하고, QR을 바꾸면 모델도 저절로 바뀐다
    · 교사용 학습지 QR 모음 인쇄 시트(로컬 qrcode.min.js — 인터넷 연결 불필요)
    ========================================================================== */
 (function () {
@@ -1506,6 +1667,13 @@
     let rafId = null;
     let currentKey = null;
     let webglOk = true;
+    /* 학습지 실시간 카메라 AR 상태 (섹션 12-B에서 관리) */
+    let camArActive = false;
+    let camArTick = function () {};
+    let camArStart = function () {};
+    let camArStop = function () {};
+    let camArResize = function () {};
+    const AR_FOV = 58;
 
     try {
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
@@ -1640,7 +1808,8 @@
         toLinear(modelRoot);
         modelRoot.traverse(function (o) { o.frustumCulled = true; });
         scene.add(modelRoot);
-        frameModel(modelRoot);
+        if (camArActive) modelRoot.visible = false;
+        else frameModel(modelRoot);
 
         if (opts.spin === false) controls.autoRotate = false;
         updateInfo(key);
@@ -2097,6 +2266,766 @@
     })();
 
     /* =====================================================================
+       12-B. 학습지 실시간 카메라 QR AR (HP Reveal / Aurasma 스타일)
+       ---------------------------------------------------------------------
+       · 후면 카메라 영상 위에 투명 WebGL 캔버스를 겹쳐 3D 모델을 얹는다.
+       · jsQR(로컬 보관)로 축소한 캔버스를 주기적으로 스캔하고, QR 네 꼭짓점으로
+         학습지 평면의 자세(위치·거리·회전·기울기)를 역산해 모델을 QR 위에 고정.
+       · 카메라 권한이 없을 때는 가상 학습지 시뮬레이션으로 같은 흐름을 시연.
+       ===================================================================== */
+    (function camArModule() {
+        const video = document.getElementById('camar-video');
+        const simCanvas = document.getElementById('camar-sim');
+        const badgeEl = document.getElementById('camar-badge');
+        const badgeTextEl = document.getElementById('camar-badge-text');
+        const hintEl = document.getElementById('camar-hint');
+        const reticleEl = document.getElementById('camar-reticle');
+        const pinBtn = document.getElementById('camar-pin');
+        const simBtn = document.getElementById('camar-simbtn');
+        const exitBtn = document.getElementById('camar-exit');
+        const tiltEl = document.getElementById('camar-tilt');
+        const yawEl = document.getElementById('camar-yaw');
+        const zoomEl = document.getElementById('camar-zoom');
+
+        const HOLD_MS = 1500;          // QR이 잠시 가려져도 버티는 시간
+        const SCAN_W = 480;            // 스캔용 축소 캔버스 가로 크기
+        const SCAN_EVERY = 0.11;       // 스캔 주기(초)
+
+        const st = {
+            active: false, mode: 'camera', pinned: false,
+            stream: null, key: null,
+            anchor: null, holder: null, modelG: null, rings: null,
+            curPos: new THREE.Vector3(), curQuat: new THREE.Quaternion(),
+            tgtPos: new THREE.Vector3(), tgtQuat: new THREE.Quaternion(),
+            has: false, init: false, lastSeen: 0, fade: 0,
+            spin: 0, userSpin: 0, userScale: 1, holdH: 1.2,
+            scanAcc: 0, lastTick: 0, scanW: 0, scanH: 0,
+            pinchD: 0, badge: ''
+        };
+
+        const scanCv = document.createElement('canvas');
+        const scanCtx = scanCv.getContext('2d', { willReadFrequently: true });
+        const ONE = new THREE.Vector3(1, 1, 1);
+
+        function clampn(v, a, b) { return v < a ? a : (v > b ? b : v); }
+
+        /* ------------------------------------------------------------------
+           자세 계산 — QR 네 꼭짓점 → 학습지 평면의 3D 자세
+           ------------------------------------------------------------------ */
+        const UNIT_SQ = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+        function solveLinear(A, b) {
+            const n = b.length;
+            const M = [];
+            for (let i = 0; i < n; i++) M.push(A[i].slice().concat([b[i]]));
+            for (let c = 0; c < n; c++) {
+                let p = c;
+                for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+                if (Math.abs(M[p][c]) < 1e-12) return null;
+                if (p !== c) { const t = M[p]; M[p] = M[c]; M[c] = t; }
+                const pv = M[c][c];
+                for (let r = c + 1; r < n; r++) {
+                    const f = M[r][c] / pv;
+                    if (!f) continue;
+                    for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k];
+                }
+            }
+            const x = new Array(n).fill(0);
+            for (let i = n - 1; i >= 0; i--) {
+                let s = M[i][n];
+                for (let j = i + 1; j < n; j++) s -= M[i][j] * x[j];
+                x[i] = s / M[i][i];
+            }
+            return x;
+        }
+
+        /* 화면 좌표 4점 → 카메라 공간의 위치·회전 (QR 한 변 = 1 단위) */
+        function poseFromQuad(corners, W, H) {
+            const tanHalf = Math.tan(DEG(AR_FOV) / 2);
+            const aspect = W / H;
+            const A = [], b = [];
+            for (let i = 0; i < 4; i++) {
+                const u = UNIT_SQ[i][0], v = UNIT_SQ[i][1];
+                const px = (corners[i].x / W) * 2 - 1;
+                const py = 1 - (corners[i].y / H) * 2;
+                A.push([u, v, 1, 0, 0, 0, -px * u, -px * v]); b.push(px);
+                A.push([0, 0, 0, u, v, 1, -py * u, -py * v]); b.push(py);
+            }
+            const h = solveLinear(A, b);
+            if (!h) return null;
+            const Hm = [[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], 1]];
+            const a0 = tanHalf * aspect, a1 = tanHalf;
+            const c0 = [a0 * Hm[0][0], a1 * Hm[1][0], -Hm[2][0]];   // 평면의 x축 방향
+            const c1 = [a0 * Hm[0][1], a1 * Hm[1][1], -Hm[2][1]];   // 평면의 y(아래) 방향
+            const c2 = [a0 * Hm[0][2], a1 * Hm[1][2], -Hm[2][2]];   // 평면의 원점
+            const n1 = Math.hypot(c0[0], c0[1], c0[2]);
+            const n2 = Math.hypot(c1[0], c1[1], c1[2]);
+            if (!(n1 > 1e-9) || !(n2 > 1e-9)) return null;
+            const k = 2 / (n1 + n2);                                 // 한 변의 길이를 1로 고정
+            const C = new THREE.Vector3(
+                (c2[0] + 0.5 * c0[0] + 0.5 * c1[0]) * k,
+                (c2[1] + 0.5 * c0[1] + 0.5 * c1[1]) * k,
+                (c2[2] + 0.5 * c0[2] + 0.5 * c1[2]) * k
+            );
+            if (!(C.z < -0.05)) return null;                        // 카메라 뒤·정면을 벗어난 오인식
+            const X = new THREE.Vector3(c0[0], c0[1], c0[2]).normalize();
+            const Ydown = new THREE.Vector3(c1[0], c1[1], c1[2]).normalize();
+            const Z = new THREE.Vector3().crossVectors(X, Ydown).negate().normalize();
+            if (Z.z < 0.06) return null;                            // 종이 뒷면을 보는 경우
+            const Yup = new THREE.Vector3().crossVectors(Z, X).normalize();
+            X.crossVectors(Yup, Z).normalize();
+            const quat = new THREE.Quaternion().setFromRotationMatrix(
+                new THREE.Matrix4().makeBasis(X, Yup, Z)
+            );
+            return {
+                pos: C, quat: quat,
+                depth: -C.z,
+                side: (n1 * k + n2 * k) / 2,
+                tilt: Math.acos(Math.min(1, Math.abs(Z.z))) * 180 / Math.PI
+            };
+        }
+
+        /* ------------------------------------------------------------------
+           홀로그램 앵커(QR 바닥판 + 모델 + 링)
+           ------------------------------------------------------------------ */
+        function glowTexture() {
+            const c = document.createElement('canvas');
+            c.width = c.height = 128;
+            const x = c.getContext('2d');
+            const gr = x.createRadialGradient(64, 64, 2, 64, 64, 64);
+            gr.addColorStop(0, 'rgba(94,234,212,0.55)');
+            gr.addColorStop(0.45, 'rgba(56,189,248,0.16)');
+            gr.addColorStop(1, 'rgba(0,0,0,0)');
+            x.fillStyle = gr;
+            x.beginPath(); x.arc(64, 64, 64, 0, Math.PI * 2); x.fill();
+            return new THREE.CanvasTexture(c);
+        }
+
+        function buildAnchor() {
+            st.anchor = new THREE.Group();
+            st.anchor.matrixAutoUpdate = false;
+            st.anchor.frustumCulled = false;
+            st.anchor.visible = false;
+            scene.add(st.anchor);
+
+            const rings = new THREE.Group();
+            st.rings = rings;
+
+            const glow = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.9, 2.9),
+                new THREE.MeshBasicMaterial({
+                    map: glowTexture(), transparent: true, opacity: 0.6,
+                    blending: THREE.AdditiveBlending, depthWrite: false
+                })
+            );
+            glow.renderOrder = 1;
+            rings.add(glow);
+
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0x5eead4, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            const ring1 = new THREE.Mesh(new THREE.RingGeometry(0.86, 0.898, 96), ringMat);
+            ring1.renderOrder = 3; rings.add(ring1);
+            const ring2 = new THREE.Mesh(new THREE.RingGeometry(1.0, 1.012, 96), new THREE.MeshBasicMaterial({
+                color: 0x67e8f9, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            }));
+            ring2.renderOrder = 3; rings.add(ring2);
+
+            const ticks = new THREE.Group();
+            rings.userData.ticks = ticks;
+            const tickMat = new THREE.MeshBasicMaterial({
+                color: 0x99f6e4, transparent: true, opacity: 0.75,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            for (let i = 0; i < 36; i++) {
+                const long = i % 3 === 0;
+                const t = new THREE.Mesh(
+                    new THREE.PlaneGeometry(long ? 0.03 : 0.014, long ? 0.14 : 0.07), tickMat
+                );
+                const a = (i / 36) * Math.PI * 2;
+                t.position.set(Math.cos(a) * 1.09, Math.sin(a) * 1.09, 0);
+                t.rotation.z = a - Math.PI / 2;
+                ticks.add(t);
+            }
+            rings.add(ticks);
+
+            /* QR 네 귀퉁이를 표시하는 브래킷 — 종이에 붙은 느낌을 준다 */
+            const bMat = new THREE.MeshBasicMaterial({
+                color: 0x5eead4, transparent: true, opacity: 0.95,
+                blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            const LEN = 0.2, TH = 0.026, EDGE = 0.6;
+            [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (c) {
+                const gx = c[0], gy = c[1];
+                const hb = new THREE.Mesh(new THREE.PlaneGeometry(LEN, TH), bMat);
+                hb.position.set(gx * (EDGE - LEN / 2), gy * EDGE, 0.004);
+                rings.add(hb);
+                const vb = new THREE.Mesh(new THREE.PlaneGeometry(TH, LEN), bMat);
+                vb.position.set(gx * EDGE, gy * (EDGE - LEN / 2), 0.004);
+                rings.add(vb);
+            });
+
+            st.anchor.add(rings);
+
+            st.holder = new THREE.Group();
+            st.anchor.add(st.holder);
+        }
+
+        function arSetModel(key) {
+            key = resolveKey(key) || 'water';
+            if (st.modelG && st.key === key) return;
+            if (st.modelG) {
+                st.holder.remove(st.modelG);
+                disposeGroup(st.modelG);
+                st.modelG = null;
+            }
+            const g = BUILDERS[key]();
+            toLinear(g);
+            const box = new THREE.Box3().setFromObject(g);
+            const sph = box.getBoundingSphere(new THREE.Sphere());
+            const radius = Math.max(sph.radius, 0.35);
+            const want = 0.98;                       // QR 한 변 = 1 일 때의 모델 반지름
+            const s = want / radius;
+            g.scale.setScalar(s);
+            g.position.set(-sph.center.x * s, -sph.center.y * s, -sph.center.z * s);
+            st.modelG = g;
+            st.key = key;
+            st.holdH = want + 0.14;
+            st.holder.add(g);
+            currentKey = key;
+            updateInfo(key);
+            highlightOption(key);
+            try { history.replaceState({ model: key, ar: 1 }, '', '?model=' + encodeURIComponent(key) + '&ar=1'); } catch (e) {}
+            const m = MODELS[key];
+            setBadge(m.icon + ' ' + m.name + ' · ' + m.formula, true);
+        }
+
+        /* ------------------------------------------------------------------
+           QR 데이터 → 모델 키
+           ------------------------------------------------------------------ */
+        function modelFromData(data) {
+            if (!data) return null;
+            const s = String(data).trim();
+            try {
+                const u = new URL(s, window.location.href);
+                const k = resolveKey(u.searchParams.get('model') || u.searchParams.get('m'));
+                if (k) return k;
+            } catch (e) { /* noop */ }
+            const m = s.match(/[?&](?:model|m)=([^&#\s]+)/i);
+            if (m) {
+                const k = resolveKey(decodeURIComponent(m[1]));
+                if (k) return k;
+            }
+            return resolveKey(s);
+        }
+
+        /* ------------------------------------------------------------------
+           스캔 · 추적
+           ------------------------------------------------------------------ */
+        function videoPointToScreen(px, py) {
+            const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+            const W = window.innerWidth, H = window.innerHeight;
+            const s = Math.max(W / vw, H / vh);
+            const dx = (W - vw * s) / 2, dy = (H - vh * s) / 2;
+            return { x: (px * vw / st.scanW) * s + dx, y: (py * vh / st.scanH) * s + dy };
+        }
+        function simPointToScreen(px, py) {
+            const W = window.innerWidth, H = window.innerHeight;
+            return { x: px * W / st.scanW, y: py * H / st.scanH };
+        }
+
+        let lastCodeData = '';
+        let lastCodeAt = 0;
+
+        function handleCode(code) {
+            if (!code || !code.location) return;
+            const loc = code.location;
+            const toS = st.mode === 'sim' ? simPointToScreen : videoPointToScreen;
+            const corners = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
+                .map(function (p) { return toS(p.x, p.y); });
+            const pose = poseFromQuad(corners, window.innerWidth, window.innerHeight);
+            if (!pose || !isFinite(pose.pos.x)) return;
+            const key = modelFromData(code.data);
+            if (key && key !== st.key) {
+                arSetModel(key);
+                const m = MODELS[key];
+                toast(m.icon + ' ' + m.name + ' 인식 — ' + m.formula + ' 모델을 띄웠습니다');
+            }
+            st.tgtPos.copy(pose.pos);
+            st.tgtQuat.copy(pose.quat);
+            if (!st.init) { st.curPos.copy(pose.pos); st.curQuat.copy(pose.quat); st.init = true; }
+            st.has = true;
+            st.lastSeen = performance.now();
+            const now = performance.now();
+            if (code.data !== lastCodeData || now - lastCodeAt > 1600) {
+                lastCodeData = code.data;
+                lastCodeAt = now;
+                if (st.key) {
+                    const m = MODELS[st.key];
+                    setBadge(m.icon + ' ' + m.name + ' · ' + m.formula + '  |  거리 ' + pose.depth.toFixed(1) + ' · 기울기 ' + Math.round(pose.tilt) + '°', true);
+                }
+            }
+        }
+
+        function scanTick() {
+            if (!st.active || st.pinned) return;
+            if (typeof window.jsQR !== 'function') return;
+            let src = null;
+            let vw = 0, vh = 0;
+            if (st.mode === 'sim') {
+                if (!sim.ready) return;
+                src = simCanvas;
+                vw = window.innerWidth; vh = window.innerHeight;
+            } else {
+                if (!video.videoWidth) return;
+                src = video; vw = video.videoWidth; vh = video.videoHeight;
+            }
+            const sw = SCAN_W;
+            const sh = Math.max(2, Math.round(SCAN_W * vh / vw));
+            if (scanCv.width !== sw || scanCv.height !== sh) { scanCv.width = sw; scanCv.height = sh; }
+            st.scanW = sw; st.scanH = sh;
+            try {
+                scanCtx.drawImage(src, 0, 0, sw, sh);
+            } catch (e) { return; }
+            const img = scanCtx.getImageData(0, 0, sw, sh);
+            const code = window.jsQR(img.data, sw, sh, { inversionAttempts: 'dontInvert' });
+            if (code) handleCode(code);
+        }
+
+        /* ------------------------------------------------------------------
+           가상 학습지 시뮬레이션 (카메라 없이도 같은 파이프라인 시연)
+           ------------------------------------------------------------------ */
+        const sim = {
+            renderer: null, scene: null, cam: null, plane: null,
+            ready: false, tilt: 16, yaw: 0, zoom: 165, panX: 0, panY: 0
+        };
+
+        function makeQrCanvas(text, size) {
+            try {
+                if (typeof window.QRCode !== 'function') return null;
+                const holder = document.createElement('div');
+                new window.QRCode(holder, {
+                    text: text, width: size, height: size,
+                    colorDark: '#000000', colorLight: '#ffffff',
+                    correctLevel: window.QRCode.CorrectLevel.M
+                });
+                const cv = holder.querySelector('canvas');
+                if (cv) return cv;
+            } catch (e) { /* noop */ }
+            return null;
+        }
+
+        function roundRect(g, x, y, w, h, r) {
+            g.beginPath();
+            g.moveTo(x + r, y);
+            g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+            g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+            g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
+            g.closePath();
+        }
+
+        let paperCv = null;
+        function paperCanvas() {
+            if (paperCv) return paperCv;
+            const W = 1000, H = 1414;
+            paperCv = document.createElement('canvas');
+            paperCv.width = W; paperCv.height = H;
+            const g = paperCv.getContext('2d');
+            g.fillStyle = '#fbfaf5'; g.fillRect(0, 0, W, H);
+            g.strokeStyle = 'rgba(15,23,42,0.10)'; g.lineWidth = 4;
+            g.strokeRect(16, 16, W - 32, H - 32);
+
+            g.textAlign = 'left';
+            g.fillStyle = '#0f172a';
+            g.font = '800 25px ' + FONT_STACK;
+            g.fillText('Science Virtual LAB · 학습지', 52, 84);
+            g.font = '900 44px ' + FONT_STACK;
+            g.fillText('3. 물질의 구조와 화석', 52, 150);
+            g.font = '700 22px ' + FONT_STACK;
+            g.fillStyle = '#334155';
+            g.fillText('QR 위에 [학습지 AR]의 카메라를 비추면 3D 모델이 그 자리에 떠오릅니다.', 52, 192);
+            g.strokeStyle = '#0f172a'; g.lineWidth = 3;
+            g.beginPath(); g.moveTo(52, 220); g.lineTo(W - 52, 220); g.stroke();
+
+            const cells = [
+                { key: 'water', label: '물 H₂O', note: '굽은형 · 결합각 104.5°', x: 25, y: 258 },
+                { key: 'nh3', label: '암모니아 NH₃', note: '삼각뿔 · 비공유 전자쌍', x: 515, y: 258 },
+                { key: 'trilobite', label: '삼엽충', note: '고생대 표준화석', x: 25, y: 826 }
+            ];
+            const CW = 460, CH = 520, QS = 396;
+            cells.forEach(function (c) {
+                g.strokeStyle = '#cbd5e1'; g.lineWidth = 2;
+                roundRect(g, c.x, c.y, CW, CH, 18); g.stroke();
+                const q = makeQrCanvas('https://chaneww.github.io/labs/test/qr_3d_viewer.html?model=' + c.key, QS);
+                if (q) g.drawImage(q, c.x + 32, c.y + 26, QS, QS);
+                else { g.fillStyle = '#e2e8f0'; g.fillRect(c.x + 32, c.y + 26, QS, QS); }
+                g.textAlign = 'center';
+                g.fillStyle = '#0f172a';
+                g.font = '900 30px ' + FONT_STACK;
+                g.fillText(c.label, c.x + CW / 2, c.y + 26 + QS + 46);
+                g.fillStyle = '#0f766e';
+                g.font = '700 20px ' + FONT_STACK;
+                g.fillText(c.note, c.x + CW / 2, c.y + 26 + QS + 78);
+                g.textAlign = 'left';
+            });
+
+            /* 4번째 칸 — 관찰 기록 */
+            g.strokeStyle = '#cbd5e1'; g.lineWidth = 2;
+            roundRect(g, 515, 826, CW, CH, 18); g.stroke();
+            g.fillStyle = '#0f172a';
+            g.font = '900 28px ' + FONT_STACK;
+            g.fillText('관찰 기록', 545, 878);
+            g.font = '700 21px ' + FONT_STACK;
+            g.fillStyle = '#334155';
+            ['① 물 분자의 결합각은?', '② 암모니아의 비공유 전자쌍은?', '③ 삼엽충이 살았던 시대는?'].forEach(function (t, i) {
+                g.fillText(t, 545, 940 + i * 118);
+                g.strokeStyle = '#cbd5e1'; g.lineWidth = 2;
+                g.beginPath(); g.moveTo(545, 962 + i * 118); g.lineTo(945, 962 + i * 118); g.stroke();
+            });
+
+            g.fillStyle = '#64748b';
+            g.font = '700 19px ' + FONT_STACK;
+            g.fillText('chaneww.github.io · 무료 · 가입 없음', 52, 1378);
+            g.textAlign = 'right';
+            g.fillText('Science Virtual LAB', W - 52, 1378);
+            g.textAlign = 'left';
+            return paperCv;
+        }
+
+        function ensureSim() {
+            if (sim.ready) return true;
+            try {
+                sim.renderer = new THREE.WebGLRenderer({
+                    canvas: simCanvas, antialias: true, alpha: false, preserveDrawingBuffer: true
+                });
+            } catch (e) {
+                return false;
+            }
+            sim.renderer.setPixelRatio(1);
+            sim.renderer.outputEncoding = THREE.sRGBEncoding;
+            sim.renderer.setClearColor(0x0a1119, 1);
+            sim.scene = new THREE.Scene();
+            sim.cam = new THREE.PerspectiveCamera(52, 1, 0.1, 80);
+            sim.cam.position.set(0, 0, 6);
+
+            const tex = new THREE.CanvasTexture(paperCanvas());
+            if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+            tex.anisotropy = 8;
+            sim.plane = new THREE.Mesh(
+                new THREE.PlaneGeometry(1, 1.4142),
+                new THREE.MeshBasicMaterial({ map: tex })
+            );
+            sim.scene.add(sim.plane);
+
+            const desk = new THREE.Mesh(
+                new THREE.PlaneGeometry(60, 60),
+                new THREE.MeshBasicMaterial({ color: 0x121a26 })
+            );
+            desk.position.z = -8;
+            sim.scene.add(desk);
+            sim.ready = true;
+            return true;
+        }
+
+        function renderSim() {
+            if (!sim.ready) return;
+            const W = window.innerWidth, H = window.innerHeight;
+            if (simCanvas.width !== W || simCanvas.height !== H) {
+                simCanvas.width = W; simCanvas.height = H;
+            }
+            sim.cam.aspect = W / H;
+            sim.cam.updateProjectionMatrix();
+            sim.renderer.setSize(W, H, false);
+            sim.plane.rotation.set(DEG(sim.tilt), DEG(sim.yaw), 0);
+            sim.plane.position.set(sim.panX, sim.panY, 0);
+            sim.plane.scale.setScalar(3.05 * sim.zoom / 100);
+            sim.renderer.render(sim.scene, sim.cam);
+        }
+
+        /* ------------------------------------------------------------------
+           모드 · 시작 · 종료
+           ------------------------------------------------------------------ */
+        function setBadge(text, locked) {
+            if (!badgeEl) return;
+            if (text) badgeTextEl.textContent = text;
+            badgeEl.classList.add('show');
+            badgeEl.classList.toggle('idle', !locked);
+            if (reticleEl) reticleEl.classList.toggle('locked', !!locked);
+        }
+        let hintTimer = null;
+        function setHint(text, ms) {
+            if (!hintEl) return;
+            hintEl.textContent = text;
+            hintEl.classList.remove('fade');
+            clearTimeout(hintTimer);
+            hintTimer = setTimeout(function () { hintEl.classList.add('fade'); }, ms || 5200);
+        }
+        function syncControls() {
+            pinBtn.classList.toggle('on', st.pinned);
+            pinBtn.textContent = st.pinned ? '🎯 QR 추적 재개' : '📌 화면에 고정';
+            simBtn.classList.toggle('on', st.mode === 'sim');
+            simBtn.textContent = st.mode === 'sim' ? '📄 가상 학습지 (사용 중)' : '📄 가상 학습지';
+        }
+
+        function stopCamera() {
+            if (st.stream) {
+                st.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+                st.stream = null;
+            }
+            try { video.pause(); } catch (e) {}
+            try { video.srcObject = null; } catch (e) {}
+        }
+
+        function startSim() {
+            stopCamera();
+            st.mode = 'sim';
+            document.body.classList.add('sim-mode');
+            if (!ensureSim()) {
+                toast('가상 학습지 화면을 만들 수 없습니다.');
+                return;
+            }
+            renderSim();
+            setHint('가상 학습지입니다 — 화면을 드래그해 QR로 이동하고, 아래 슬라이더로 종이를 기울여 보세요', 6200);
+            setBadge('가상 학습지 · QR을 찾는 중…', false);
+            syncControls();
+        }
+
+        function enterSim(msg) {
+            startSim();
+            if (msg) toast(msg);
+        }
+
+        function cameraErrorText(err) {
+            const name = (err && err.name) || '';
+            if (name === 'NotAllowedError' || name === 'SecurityError') return '카메라 권한이 거부되었습니다 — 가상 학습지로 시연합니다';
+            if (name === 'NotFoundError' || name === 'OverconstrainedError') return '카메라를 찾지 못했습니다 — 가상 학습지로 시연합니다';
+            if (name === 'NotReadableError') return '다른 앱이 카메라를 쓰고 있습니다 — 가상 학습지로 시연합니다';
+            return '카메라를 열지 못했습니다 — 가상 학습지로 시연합니다';
+        }
+
+        async function startCamera() {
+            st.mode = 'camera';
+            document.body.classList.remove('sim-mode');
+            syncControls();
+            if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+                enterSim('이 브라우저에서는 카메라를 열 수 없습니다 — 가상 학습지로 시연합니다');
+                return;
+            }
+            setBadge('후면 카메라를 여는 중…', false);
+            setHint('학습지의 QR 코드에 카메라를 비추면 3D 모델이 그 위에 떠오릅니다', 5600);
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1280 }, height: { ideal: 720 }
+                    }
+                });
+                st.stream = stream;
+                video.setAttribute('playsinline', '');
+                video.muted = true;
+                video.srcObject = stream;
+                try { await video.play(); } catch (e) {}
+                setBadge('QR을 찾는 중…', false);
+            } catch (err) {
+                enterSim(cameraErrorText(err));
+            }
+        }
+
+        async function beginAR(opts) {
+            opts = opts || {};
+            if (st.active) {
+                if (opts.mode === 'sim' && st.mode !== 'sim') enterSim();
+                else if (opts.mode === 'camera' && st.mode !== 'camera') startCamera();
+                return;
+            }
+            st.active = true;
+            camArActive = true;
+            document.body.classList.add('camar');
+            closeQr();
+            printOverlay.classList.remove('open');
+            controls.enabled = false;
+            controls.autoRotate = false;
+            if (modelRoot) modelRoot.visible = false;
+            if (stage) stage.visible = false;
+            camera.fov = AR_FOV;
+            camera.clearViewOffset();
+            camera.position.set(0, 0, 0);
+            camera.rotation.set(0, 0, 0);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            buildAnchor();
+            st.key = null;
+            arSetModel(currentKey || 'water');
+            st.has = false; st.init = false; st.fade = 0; st.pinned = false;
+            st.userSpin = 0; st.userScale = 1; st.lastTick = 0;
+            syncControls();
+            if (opts.mode === 'sim') enterSim();
+            else await startCamera();
+        }
+
+        function endAR() {
+            if (!st.active) return;
+            st.active = false;
+            camArActive = false;
+            document.body.classList.remove('camar', 'sim-mode');
+            stopCamera();
+            if (st.anchor) {
+                scene.remove(st.anchor);
+                disposeGroup(st.anchor);
+            }
+            st.anchor = null; st.holder = null; st.rings = null; st.modelG = null;
+            st.key = null; st.has = false; st.init = false; st.fade = 0;
+            st.pinned = false; st.userSpin = 0; st.userScale = 1;
+            if (modelRoot) modelRoot.visible = true;
+            if (stage) stage.visible = true;
+            controls.enabled = true;
+            onResize();
+            resetView();
+            try { history.replaceState({ model: currentKey }, '', '?model=' + encodeURIComponent(currentKey)); } catch (e) {}
+        }
+
+        /* ------------------------------------------------------------------
+           프레임 갱신
+           ------------------------------------------------------------------ */
+        camArTick = function (time) {
+            if (!st.active) return;
+            const now = performance.now();
+            const dt = st.lastTick ? Math.min(0.06, (now - st.lastTick) / 1000) : 0.016;
+            st.lastTick = now;
+
+            if (st.mode === 'sim' && sim.ready) renderSim();
+
+            st.scanAcc += dt;
+            if (st.scanAcc >= SCAN_EVERY) { st.scanAcc = 0; scanTick(); }
+
+            st.spin += dt * 0.42;
+            if (st.rings && st.rings.userData.ticks) st.rings.userData.ticks.rotation.z = -st.spin * 0.55;
+
+            const tracking = st.has && (st.pinned || (now - st.lastSeen) < HOLD_MS);
+            if (tracking) {
+                const a = 1 - Math.exp(-dt * 10);
+                st.curPos.lerp(st.tgtPos, a);
+                st.curQuat.slerp(st.tgtQuat, a);
+                st.fade = Math.min(1, st.fade + dt * 5);
+            } else {
+                st.fade = Math.max(0, st.fade - dt * 3.4);
+                if (st.has && !st.pinned && now - st.lastSeen >= HOLD_MS) {
+                    st.has = false;
+                    setBadge('QR을 다시 비춰 주세요', false);
+                }
+            }
+
+            if (st.anchor) {
+                st.anchor.visible = st.fade > 0.01;
+                if (st.anchor.visible) {
+                    st.anchor.matrix.compose(st.curPos, st.curQuat, ONE);
+                    st.anchor.matrixWorldNeedsUpdate = true;
+                }
+            }
+            if (st.holder) {
+                st.holder.rotation.set(Math.PI / 2, st.spin + st.userSpin, 0);
+                st.holder.scale.setScalar(st.userScale * (0.55 + 0.45 * st.fade));
+                st.holder.position.set(0, 0, st.holdH + Math.sin(time * 0.0016) * 0.035);
+            }
+        };
+
+        camArResize = function () {
+            if (!st.active) return;
+            if (st.mode === 'sim' && sim.ready) renderSim();
+        };
+        camArStart = beginAR;
+        camArStop = endAR;
+
+        /* ------------------------------------------------------------------
+           입력 — 고정 상태에서 모델 돌리기 / 가상 학습지 이동
+           ------------------------------------------------------------------ */
+        const pointers = new Map();
+        const surface = renderer ? renderer.domElement : null;
+        if (surface) {
+            surface.addEventListener('pointerdown', function (e) {
+                if (!st.active) return;
+                pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                st.pinchD = 0;
+                try { surface.setPointerCapture(e.pointerId); } catch (err) {}
+            });
+            surface.addEventListener('pointermove', function (e) {
+                if (!st.active || !pointers.has(e.pointerId)) return;
+                const prev = pointers.get(e.pointerId);
+                const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+                pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (pointers.size >= 2) {
+                    const list = Array.from(pointers.values());
+                    const d = Math.hypot(list[0].x - list[1].x, list[0].y - list[1].y);
+                    if (st.pinchD) {
+                        const f = d / st.pinchD;
+                        if (st.pinned) st.userScale = clampn(st.userScale * f, 0.45, 2.8);
+                        else if (st.mode === 'sim') { sim.zoom = clampn(sim.zoom * f, 60, 220); zoomEl.value = sim.zoom; }
+                    }
+                    st.pinchD = d;
+                    return;
+                }
+                if (st.pinned) {
+                    st.userSpin += dx * 0.012;
+                } else if (st.mode === 'sim') {
+                    const visW = 2 * 6 * Math.tan(DEG(52) / 2) * (window.innerWidth / window.innerHeight);
+                    const visH = 2 * 6 * Math.tan(DEG(52) / 2);
+                    sim.panX = clampn(sim.panX + dx * visW / window.innerWidth, -4.5, 4.5);
+                    sim.panY = clampn(sim.panY - dy * visH / window.innerHeight, -5, 5);
+                }
+            });
+            function release(e) {
+                pointers.delete(e.pointerId);
+                if (pointers.size < 2) st.pinchD = 0;
+            }
+            surface.addEventListener('pointerup', release);
+            surface.addEventListener('pointercancel', release);
+            surface.addEventListener('wheel', function (e) {
+                if (!st.active) return;
+                if (st.pinned) {
+                    st.userScale = clampn(st.userScale * (e.deltaY > 0 ? 0.94 : 1.06), 0.45, 2.8);
+                    e.preventDefault();
+                } else if (st.mode === 'sim') {
+                    sim.zoom = clampn(sim.zoom * (e.deltaY > 0 ? 0.94 : 1.06), 60, 220);
+                    zoomEl.value = sim.zoom;
+                    e.preventDefault();
+                }
+            }, { passive: false });
+        }
+
+        pinBtn.addEventListener('click', function () {
+            st.pinned = !st.pinned;
+            if (st.pinned) {
+                toast('화면에 고정했습니다 — 드래그로 돌리고, 두 손가락으로 확대하세요');
+            } else {
+                st.userSpin = 0;
+                st.userScale = 1;
+                st.has = false;
+                st.init = false;
+                toast('QR 추적을 다시 시작합니다');
+            }
+            syncControls();
+        });
+        simBtn.addEventListener('click', function () {
+            if (st.mode === 'sim') startCamera();
+            else { startSim(); toast('가상 학습지로 시연합니다'); }
+        });
+        exitBtn.addEventListener('click', endAR);
+
+        ['camarEntryBtn', 'btn-camar'].forEach(function (id) {
+            const b = document.getElementById(id);
+            if (b) b.addEventListener('click', function () { beginAR(); });
+        });
+
+        tiltEl.addEventListener('input', function () { sim.tilt = +tiltEl.value; });
+        yawEl.addEventListener('input', function () { sim.yaw = +yawEl.value; });
+        zoomEl.addEventListener('input', function () { sim.zoom = +zoomEl.value; });
+    })();
+
+    /* =====================================================================
        13. 렌더 루프 · 반응형
        ===================================================================== */
     function onResize() {
@@ -2107,6 +3036,14 @@
         /* 세로 화면에서는 화면비를 보정해 모델이 잘리지 않게 */
         let fov = 46;
         if (w < h) fov = 46 + Math.min(16, (h / w - 1) * 22);
+        if (camArActive) {
+            /* 카메라 AR — 카메라는 원점·정면 고정, 화면 전체가 영상과 1:1로 겹치게 */
+            fov = AR_FOV;
+            camera.clearViewOffset();
+            camera.position.set(0, 0, 0);
+            camera.rotation.set(0, 0, 0);
+            camArResize();
+        }
         camera.fov = fov;
         camera.updateProjectionMatrix();
     }
@@ -2114,20 +3051,21 @@
     window.addEventListener('resize', function () {
         onResize();
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(function () { if (modelRoot) frameModel(modelRoot); }, 220);
+        resizeTimer = setTimeout(function () { if (modelRoot && !camArActive) frameModel(modelRoot); }, 220);
     });
     window.addEventListener('orientationchange', function () {
-        setTimeout(function () { onResize(); if (modelRoot) frameModel(modelRoot); }, 240);
+        setTimeout(function () { onResize(); if (modelRoot && !camArActive) frameModel(modelRoot); }, 240);
     });
 
     if (renderer) {
         renderer.setAnimationLoop(function (time, frame) {
-            if (controls) controls.update();
+            if (controls && !camArActive) controls.update();
             /* 배경 무대가 모델을 따라 살짝 맥동 */
             if (stage) {
                 stage.material.opacity = 0.85 + Math.sin(time * 0.0011) * 0.12;
             }
             if (window.__SVL_AR_TICK) window.__SVL_AR_TICK(time, frame);
+            camArTick(time);
             renderer.render(scene, camera);
         });
     }
@@ -2144,6 +3082,16 @@
     }
     select.value = currentKey || 'water';
     if (!MODELS[currentKey]) { currentKey = 'water'; updateInfo('water'); select.value = 'water'; }
+
+    /* ?ar=1 — 학습지 AR 모드로 바로 시작 */
+    (function autoAr() {
+        let on = false;
+        try {
+            const p = new URLSearchParams(window.location.search);
+            on = p.get('ar') === '1' || p.get('ar') === 'true' || p.get('ar') === 'camera';
+        } catch (e) { /* noop */ }
+        if (on) setTimeout(function () { camArStart(); }, 80);
+    })();
 
     /* 테마 토글 상태에 맞춰 배경 밝기 동기화 */
     (function themeWatch() {
