@@ -266,6 +266,33 @@
             z-index: 50;
             border-radius: 18px;
         }
+        .mode-row {
+            display: flex;
+            gap: 5px;
+            background: rgba(127, 140, 160, 0.12);
+            padding: 3px;
+            border-radius: 11px;
+        }
+        .mode-btn {
+            flex: 1;
+            padding: 6px 4px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        body.dark-mode .mode-btn { color: #f2f2f7; }
+        .mode-btn.active {
+            background: #0284c7;
+            color: #ffffff !important;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.32);
+        }
         .panel-header {
             display: flex;
             align-items: center;
@@ -607,11 +634,22 @@
 
     <!-- 우측 조절 패널 -->
     <div class="side-ctrl-panel glass-panel">
-        <div class="panel-header">
+        <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
             <span class="panel-title">⚙️ 중화반응 조절</span>
+            <span id="animSpeedBadge" style="font-size:10px; font-weight:800; color:#0284c7; background:rgba(2,132,199,0.12); padding:2px 7px; border-radius:999px;">천천히 관찰</span>
         </div>
-        <button class="drop-action-btn" id="btnDrop1">💧 NaOH 1방울 투입</button>
-        <button class="drop-action-btn" id="btnDrop5" style="background:linear-gradient(135deg, #e0f2fe, #bae6fd); color:#0369a1; border-color:rgba(2,132,199,0.3);">💧💧 5방울 일괄 투입</button>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:800; color:#64748b;">
+                <span>입자 수 모드</span>
+                <span id="modeLabel" style="color:#0284c7;">4개씩 (권장)</span>
+            </div>
+            <div class="mode-row">
+                <button type="button" class="mode-btn active" id="btnModeSimple">간단히 (4개)</button>
+                <button type="button" class="mode-btn" id="btnModeStd">표준 (10개)</button>
+            </div>
+        </div>
+        <button class="drop-action-btn" id="btnDrop1">💧 NaOH 1방울 투입 (반응 관찰)</button>
+        <button class="drop-action-btn" id="btnDrop5" style="background:linear-gradient(135deg, #e0f2fe, #bae6fd); color:#0369a1; border-color:rgba(2,132,199,0.3);">⚡ 다음 단계로 바로 진행</button>
         <div class="ctrl-grid">
             <button class="ctrl-tab-btn active" id="tabSubIon">📊 이온 그래프</button>
             <button class="ctrl-tab-btn" id="tabSubIndicator">🎨 지시약 선택</button>
@@ -679,7 +717,8 @@
 
         /* ---------- 전역 시뮬레이션 상태 ---------- */
         const state = {
-            naohDrops: 0,       // 0 ~ 20 방울 (10방울이 중화점)
+            baseCount: 4,       // 입자 수: 4 (간단히 보기) | 10 (표준)
+            naohDrops: 0,       // 0 ~ (baseCount * 2) 방울 (baseCount 방울이 중화점)
             indicator: 'btb',   // 'btb' | 'phenol'
             temp: 20.0,
             acidity: 'acid',
@@ -855,78 +894,116 @@
         const spriteMatOh = createIonSpriteMat('OH⁻', '#0284c7', 'rgba(3, 105, 161, 0.92)');
         const spriteMatH2o = createIonSpriteMat('H₂O', '#06b6d4', 'rgba(14, 116, 144, 0.92)');
 
+        // 반응 섬광 이펙트 메쉬
+        const sparkGeo = new THREE.RingGeometry(0.12, 0.55, 24);
+        const sparkMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0, side: THREE.DoubleSide });
+        const sparkMesh = new THREE.Mesh(sparkGeo, sparkMat);
+        sparkMesh.visible = false;
+        labGroup.add(sparkMesh);
+
         // 낙하하는 물방울 메쉬
-        const dropGeo = new THREE.SphereGeometry(0.22, 12, 12);
-        const dropMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 });
+        const dropGeo = new THREE.SphereGeometry(0.24, 14, 14);
+        const dropMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.88 });
         const fallingDrop = new THREE.Mesh(dropGeo, dropMat);
         fallingDrop.visible = false;
         labGroup.add(fallingDrop);
 
-        let dropAnim = null; // 방울 애니메이션 타이머
+        // 파티클 데이터베이스: { id, type, mesh, vx, vy, vz, isReacting }
+        let particles = [];
+        let nextParticleId = 1;
+        let isAnimatingReaction = false;
 
-        function rebuildIons() {
-            // 기존 이온 메쉬 제거
+        function createIonMesh(type, pos) {
+            let mat, spriteMat;
+            if (type === 'H') { mat = hMat; spriteMat = spriteMatH; }
+            else if (type === 'Cl') { mat = clMat; spriteMat = spriteMatCl; }
+            else if (type === 'Na') { mat = naMat; spriteMat = spriteMatNa; }
+            else if (type === 'OH') { mat = ohMat; spriteMat = spriteMatOh; }
+            else if (type === 'H2O') { mat = h2oMat; spriteMat = spriteMatH2o; }
+
+            const mesh = new THREE.Mesh(ionGeo, mat);
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(0.72, 0.72, 1);
+            sprite.position.set(0, 0.42, 0);
+            mesh.add(sprite);
+
+            if (pos) {
+                mesh.position.copy(pos);
+            } else {
+                const r = Math.random() * 2.6;
+                const theta = Math.random() * Math.PI * 2;
+                const y = -4.2 + Math.random() * 3.6;
+                mesh.position.set(r * Math.cos(theta), y, r * Math.sin(theta));
+            }
+
+            const p = {
+                id: nextParticleId++,
+                type: type,
+                mesh: mesh,
+                vx: (Math.random() - 0.5) * 0.012,
+                vy: (Math.random() - 0.5) * 0.012,
+                vz: (Math.random() - 0.5) * 0.012,
+                isReacting: false
+            };
+            ionGroup.add(mesh);
+            particles.push(p);
+            return p;
+        }
+
+        function removeParticle(p) {
+            ionGroup.remove(p.mesh);
+            const idx = particles.indexOf(p);
+            if (idx !== -1) particles.splice(idx, 1);
+        }
+
+        function resetParticles() {
             while (ionGroup.children.length > 0) {
                 ionGroup.remove(ionGroup.children[0]);
             }
-            ionMeshes.length = 0;
+            particles = [];
+            isAnimatingReaction = false;
+            sparkMesh.visible = false;
 
-            const n = state.naohDrops;
-            const hCount = Math.max(0, 10 - n);
-            const clCount = 10;
-            const naCount = n;
-            const ohCount = Math.max(0, n - 10);
-            const h2oCount = Math.min(n, 10);
+            const base = state.baseCount;
+            // 초기 HCl: base개의 H+와 base개의 Cl-
+            for (let i = 0; i < base; i++) createIonMesh('H');
+            for (let i = 0; i < base; i++) createIonMesh('Cl');
 
-            function addIon(mat, spriteMat) {
-                const mesh = new THREE.Mesh(ionGeo, mat);
-                const sprite = new THREE.Sprite(spriteMat);
-                sprite.scale.set(0.68, 0.68, 1);
-                sprite.position.set(0, 0.38, 0);
-                mesh.add(sprite);
+            updateUI();
+        }
 
-                // 비커 원통 내부 랜덤 위치
-                const r = Math.random() * 2.8;
-                const theta = Math.random() * Math.PI * 2;
-                const y = -4.5 + Math.random() * 4.2;
-                mesh.position.set(r * Math.cos(theta), y, r * Math.sin(theta));
-                mesh.userData = {
-                    vx: (Math.random() - 0.5) * 0.015,
-                    vy: (Math.random() - 0.5) * 0.015,
-                    vz: (Math.random() - 0.5) * 0.015,
-                    baseY: y
-                };
-                ionGroup.add(mesh);
-                ionMeshes.push(mesh);
-            }
+        function updateUI() {
+            const hCount = particles.filter(p => p.type === 'H').length;
+            const clCount = particles.filter(p => p.type === 'Cl').length;
+            const naCount = particles.filter(p => p.type === 'Na').length;
+            const ohCount = particles.filter(p => p.type === 'OH').length;
+            const h2oCount = particles.filter(p => p.type === 'H2O').length;
 
-            for (let i = 0; i < hCount; i++) addIon(hMat, spriteMatH);
-            for (let i = 0; i < clCount; i++) addIon(clMat, spriteMatCl);
-            for (let i = 0; i < naCount; i++) addIon(naMat, spriteMatNa);
-            for (let i = 0; i < ohCount; i++) addIon(ohMat, spriteMatOh);
-            for (let i = 0; i < h2oCount; i++) addIon(h2oMat, spriteMatH2o);
-
-            // UI 텍스트 & 바 업데이트
             $('cntH').textContent = hCount;
             $('cntCl').textContent = clCount;
             $('cntNa').textContent = naCount;
             $('cntOh').textContent = ohCount;
             $('cntH2o').textContent = h2oCount;
 
-            $('barH').style.width = (hCount * 10) + '%';
-            $('barCl').style.width = (clCount * 10) + '%';
-            $('barNa').style.width = (naCount * 5) + '%';
-            $('barOh').style.width = (ohCount * 10) + '%';
-            $('barH2o').style.width = (h2oCount * 10) + '%';
+            const base = state.baseCount;
+            $('barH').style.width = Math.min(100, (hCount / base) * 100) + '%';
+            $('barCl').style.width = Math.min(100, (clCount / base) * 100) + '%';
+            $('barNa').style.width = Math.min(100, (naCount / (base * 2)) * 100) + '%';
+            $('barOh').style.width = Math.min(100, (ohCount / base) * 100) + '%';
+            $('barH2o').style.width = Math.min(100, (h2oCount / base) * 100) + '%';
 
-            // 온도 계산: 초기 20도 -> 중화점(10방울)에서 32도 최고점 -> 20방울에서 28도
-            if (n <= 10) {
-                state.temp = 20.0 + (n / 10) * 12.0;
+            const n = state.naohDrops;
+            const maxD = state.baseCount * 2;
+            const neut = state.baseCount;
+
+            // 온도 계산: 초기 20도 -> 중화점에서 32도 최고점 -> 끝에서 28도
+            if (n <= neut) {
+                state.temp = 20.0 + (n / neut) * 12.0;
             } else {
-                state.temp = 32.0 - ((n - 10) / 10) * 4.0;
+                state.temp = 32.0 - ((n - neut) / (maxD - neut)) * 4.0;
             }
             $('valTemp').textContent = state.temp.toFixed(1) + ' °C';
-            $('valNaoh').textContent = (n * 1.0) + ' mL';
+            $('valNaoh').textContent = (n * (state.baseCount === 4 ? 2.5 : 1.0)).toFixed(1).replace('.0', '') + ' mL';
 
             // 온도계 높이 업데이트
             const fluidHeight = 1.0 + (state.temp - 20) * 0.35;
@@ -938,16 +1015,17 @@
         }
 
         function updateIndicatorColor() {
+            const neut = state.baseCount;
             const n = state.naohDrops;
             let col = 0xfacc15; // 기본 BTB 산성 노랑
 
             if (state.indicator === 'btb') {
-                if (n < 10) {
+                if (n < neut) {
                     state.acidity = '산성';
                     col = 0xfacc15; // 노랑
                     $('valAcidity').textContent = '산성 (노란색)';
                     $('valAcidity').style.color = '#eab308';
-                } else if (n === 10) {
+                } else if (n === neut) {
                     state.acidity = '중성';
                     col = 0x22c55e; // 초록
                     $('valAcidity').textContent = '중성 (초록색 - 중화점!)';
@@ -960,10 +1038,10 @@
                 }
             } else {
                 // 페놀프탈레인
-                if (n <= 10) {
-                    state.acidity = (n === 10) ? '중성' : '산성';
+                if (n <= neut) {
+                    state.acidity = (n === neut) ? '중성' : '산성';
                     col = 0xf1f5f9; // 무색
-                    $('valAcidity').textContent = (n === 10) ? '중성 (무색)' : '산성 (무색)';
+                    $('valAcidity').textContent = (n === neut) ? '중성 (무색)' : '산성 (무색)';
                     $('valAcidity').style.color = '#64748b';
                 } else {
                     state.acidity = '염기성';
@@ -975,66 +1053,181 @@
             solMat.color.setHex(col);
         }
 
-        /* ---------- 방울 투입 애니메이션 ---------- */
-        function dropNaoh(count = 1) {
-            if (state.naohDrops >= 20) {
-                $('centerTooltip').textContent = '⚠️ 뷰렛의 NaOH를 최대치(20mL)까지 모두 투입했습니다. 초기화 후 다시 탐구해 보세요.';
+        /* ---------- 방울 투입 및 반응 단계별 애니메이션 ---------- */
+        function dropNaoh(fast = false) {
+            const maxDrops = state.baseCount * 2;
+            if (state.naohDrops >= maxDrops) {
+                $('centerTooltip').textContent = '⚠️ 뷰렛의 NaOH 수용액을 모두 투입했습니다. [🔄 초기화] 후 다시 탐구해 보세요.';
+                return;
+            }
+            if (isAnimatingReaction && !fast) {
                 return;
             }
 
+            state.naohDrops++;
+            isAnimatingReaction = true;
+
+            // 1. 뷰렛 끝에서 수면까지 방울 낙하
             fallingDrop.position.set(0, 4.0, 0);
             fallingDrop.visible = true;
 
-            let startTime = performance.now();
-            function animateDrop(now) {
-                const elapsed = (now - startTime) / 1000;
-                if (elapsed < 0.28) {
-                    fallingDrop.position.y = 4.0 - elapsed * 24.0;
-                    requestAnimationFrame(animateDrop);
+            const dropDuration = fast ? 120 : 320;
+            const dropStart = performance.now();
+
+            function animDrop(now) {
+                const elapsed = now - dropStart;
+                const p = Math.min(1, elapsed / dropDuration);
+                fallingDrop.position.y = 4.0 - p * 3.6;
+
+                if (p < 1) {
+                    requestAnimationFrame(animDrop);
                 } else {
                     fallingDrop.visible = false;
-                    state.naohDrops = Math.min(20, state.naohDrops + count);
-                    rebuildIons();
-
-                    if (state.naohDrops === 10) {
-                        $('centerTooltip').textContent = '🎉 중화점 도달! H⁺와 OH⁻가 완전히 반응하여 물이 되었고 온도가 최고점에 도달했습니다!';
-                    } else if (state.naohDrops < 10) {
-                        $('centerTooltip').textContent = `💧 NaOH 투입 중: 남은 H⁺ (${10 - state.naohDrops}개). 용액은 여전히 산성입니다.`;
-                    } else {
-                        $('centerTooltip').textContent = `💧 NaOH 과량 투입: OH⁻ (${state.naohDrops - 10}개) 잔류로 용액이 염기성으로 변했습니다.`;
-                    }
+                    onDropLand(fast);
                 }
             }
-            requestAnimationFrame(animateDrop);
+            requestAnimationFrame(animDrop);
         }
 
-        $('btnDrop1').addEventListener('click', () => dropNaoh(1));
-        $('btnDrop5').addEventListener('click', () => dropNaoh(5));
+        function onDropLand(fast) {
+            // Na+ 생성 (수면 아래로 서서히 침투)
+            const naP = createIonMesh('Na', new THREE.Vector3((Math.random() - 0.5) * 0.8, -0.3, (Math.random() - 0.5) * 0.8));
+            naP.vy = -0.012 - Math.random() * 0.008;
+
+            // OH- 생성 (수면)
+            const ohPos = new THREE.Vector3((Math.random() - 0.5) * 0.6, -0.15, (Math.random() - 0.5) * 0.6);
+            const ohP = createIonMesh('OH', ohPos);
+
+            // 용액 속 반응 가능한 H+ 탐색
+            const availableH = particles.filter(p => p.type === 'H' && !p.isReacting);
+
+            if (availableH.length > 0) {
+                // H+와 OH-가 서로 끌어당겨져 결합하는 과정 시각화
+                availableH.sort((a, b) => a.mesh.position.distanceTo(ohPos) - b.mesh.position.distanceTo(ohPos));
+                const targetH = availableH[0];
+
+                targetH.isReacting = true;
+                ohP.isReacting = true;
+
+                $('centerTooltip').innerHTML = '💧 <b>수산화 이온(OH⁻)</b>이 <b>수소 이온(H⁺)</b>을 향해 서서히 끌어당겨져 결합합니다...';
+
+                const reactDuration = fast ? 350 : 1200; // 천천히 결합 애니메이션
+                const reactStart = performance.now();
+                const startOh = ohP.mesh.position.clone();
+                const startH = targetH.mesh.position.clone();
+                const midPoint = new THREE.Vector3().lerpVectors(startH, startOh, 0.4);
+
+                function animReact(now) {
+                    const elapsed = now - reactStart;
+                    const t = Math.min(1, elapsed / reactDuration);
+                    const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+                    ohP.mesh.position.lerpVectors(startOh, midPoint, ease);
+                    targetH.mesh.position.lerpVectors(startH, midPoint, ease);
+
+                    if (t < 1) {
+                        requestAnimationFrame(animReact);
+                    } else {
+                        // 결합 반응 섬광
+                        sparkMesh.position.copy(midPoint);
+                        sparkMesh.rotation.x = Math.PI / 2;
+                        sparkMesh.scale.set(0.2, 0.2, 0.2);
+                        sparkMat.opacity = 0.9;
+                        sparkMesh.visible = true;
+
+                        let sStart = performance.now();
+                        function animSpark(sNow) {
+                            const se = (sNow - sStart) / 280;
+                            if (se < 1) {
+                                sparkMesh.scale.set(0.2 + se * 1.3, 0.2 + se * 1.3, 1);
+                                sparkMat.opacity = 0.9 * (1 - se);
+                                requestAnimationFrame(animSpark);
+                            } else {
+                                sparkMesh.visible = false;
+                            }
+                        }
+                        requestAnimationFrame(animSpark);
+
+                        // H+와 OH- 소멸 -> H2O 분자 생성
+                        removeParticle(targetH);
+                        removeParticle(ohP);
+                        const h2oP = createIonMesh('H2O', midPoint);
+                        h2oP.vy = -0.004;
+
+                        isAnimatingReaction = false;
+                        updateUI();
+
+                        const remainH = particles.filter(p => p.type === 'H').length;
+                        if (remainH === 0) {
+                            $('centerTooltip').innerHTML = '🎉 <b>[중화점 도달!]</b> 모든 H⁺와 OH⁻가 완전히 반응하여 물(H₂O)이 되었습니다. (최고 온도)';
+                        } else {
+                            $('centerTooltip').innerHTML = `✨ <b>H⁺ + OH⁻ ➔ H₂O</b> 물 분자 생성! (남은 H⁺: ${remainH}개, 산성 유지)`;
+                        }
+                    }
+                }
+                requestAnimationFrame(animReact);
+
+            } else {
+                // 반응할 H+가 없음 (중화점 이후 염기성)
+                ohP.isReacting = false;
+                isAnimatingReaction = false;
+                updateUI();
+                const countOh = particles.filter(p => p.type === 'OH').length;
+                $('centerTooltip').innerHTML = `💧 반응할 H⁺가 없어 <b>수산화 이온(OH⁻ ${countOh}개)</b>이 그대로 남아 용액이 <b>염기성</b>으로 변합니다.`;
+            }
+        }
+
+        $('btnDrop1').addEventListener('click', () => dropNaoh(false));
+        $('btnDrop5').addEventListener('click', () => dropNaoh(true));
+
+        $('btnModeSimple').addEventListener('click', () => {
+            if (state.baseCount === 4) return;
+            state.baseCount = 4;
+            state.naohDrops = 0;
+            $('btnModeSimple').classList.add('active');
+            $('btnModeStd').classList.remove('active');
+            $('modeLabel').textContent = '4개씩 (권장)';
+            resetParticles();
+            $('centerTooltip').textContent = '💡 입자 수가 4개로 간소화되었습니다. 한눈에 들어오는 깔끔한 화면에서 중화반응을 관찰해 보세요.';
+        });
+
+        $('btnModeStd').addEventListener('click', () => {
+            if (state.baseCount === 10) return;
+            state.baseCount = 10;
+            state.naohDrops = 0;
+            $('btnModeStd').classList.add('active');
+            $('btnModeSimple').classList.remove('active');
+            $('modeLabel').textContent = '10개씩 (표준)';
+            resetParticles();
+            $('centerTooltip').textContent = '💡 입자 수가 10개(표준 모드)로 설정되었습니다. 뷰렛에서 NaOH를 떨어뜨려 탐구해 보세요.';
+        });
 
         /* ---------- 렌더 루프 (이온 브라운 운동) ---------- */
         function animate() {
             requestAnimationFrame(animate);
 
             // 비커 내 이온들 부유 모션
-            ionMeshes.forEach(mesh => {
-                mesh.position.x += mesh.userData.vx;
-                mesh.position.y += mesh.userData.vy;
-                mesh.position.z += mesh.userData.vz;
+            particles.forEach(p => {
+                if (!p.isReacting) {
+                    p.mesh.position.x += p.vx;
+                    p.mesh.position.y += p.vy;
+                    p.mesh.position.z += p.vz;
 
-                const dist = Math.sqrt(mesh.position.x ** 2 + mesh.position.z ** 2);
-                if (dist > 3.2) {
-                    mesh.userData.vx *= -1;
-                    mesh.userData.vz *= -1;
-                }
-                if (mesh.position.y > 0.1 || mesh.position.y < -4.8) {
-                    mesh.userData.vy *= -1;
+                    const dist = Math.sqrt(p.mesh.position.x ** 2 + p.mesh.position.z ** 2);
+                    if (dist > 3.1) {
+                        p.vx *= -1;
+                        p.vz *= -1;
+                    }
+                    if (p.mesh.position.y > 0.0 || p.mesh.position.y < -4.6) {
+                        p.vy *= -1;
+                    }
                 }
             });
 
             controls.update();
             renderer.render(scene, camera);
         }
-        rebuildIons();
+        resetParticles();
         animate();
 
         /* ---------- 서브패널 토글 ---------- */
@@ -1080,7 +1273,7 @@
             state.indicator = 'btb';
             $('btnBtb').classList.add('active');
             $('btnPhenol').classList.remove('active');
-            rebuildIons();
+            resetParticles();
             camera.position.set(0, 5, 24);
             controls.target.set(0, 0, 0);
             controls.update();
