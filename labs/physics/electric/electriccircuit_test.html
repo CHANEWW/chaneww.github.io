@@ -2853,8 +2853,8 @@ frame();
 
     c.fillStyle = ink; c.textAlign = 'center'; c.textBaseline = 'top';
     c.fillText('전압 (V)', X + pw / 2, Y + Math.round(fsz * 1.6));
-    c.textAlign = 'left'; c.textBaseline = 'bottom';
-    c.fillText('전류 (' + unit + ')', x0 + Math.round(fsz * 0.1), y0 + Math.round(fsz * 1.05));
+    c.textAlign = 'right'; c.textBaseline = 'bottom';
+    c.fillText('전류 (' + unit + ')', X + pw, y0 + Math.round(fsz * 1.05));
 
     if (rows.length >= 2) {
       let svv = 0, svi = 0;
@@ -2917,7 +2917,7 @@ frame();
     });
     box.textContent = '기울기 ≈ ' + repNf(k, 4) + ' A/V · 합성 저항 ≈ ' + repNf(1 / k, 1) + ' Ω' + (prop ? ' · 전류 ∝ 전압' : '');
   }
-  function repCell(val, step, onChange) {
+  function repCell(val, step, onChange, getVal) {
     const td = document.createElement('td');
     const inp = document.createElement('input');
     inp.type = 'number'; inp.step = step; inp.min = '0'; inp.inputMode = 'decimal';
@@ -2925,6 +2925,10 @@ frame();
     inp.addEventListener('input', function () {
       const v = parseFloat(inp.value);
       if (isFinite(v)) onChange(v);
+    });
+    /* 빈 칸으로 두고 나가면 마지막 정상값으로 되돌린다 */
+    inp.addEventListener('blur', function () {
+      if (!isFinite(parseFloat(inp.value))) inp.value = repNf(getVal ? getVal() : val, 3);
     });
     td.appendChild(inp);
     return td;
@@ -2936,8 +2940,10 @@ frame();
     repState.rows.forEach(function (r, i) {
       const tr = document.createElement('tr');
       const td0 = document.createElement('td'); td0.textContent = String(i + 1); tr.appendChild(td0);
-      tr.appendChild(repCell(r.v, '0.1', function (v) { r.v = Math.max(0, v); repSaveSoon(); repChart(); }));
-      tr.appendChild(repCell(r.r, '1', function (v) { r.r = Math.max(0, v); repSaveSoon(); repChart(); }));
+      tr.appendChild(repCell(r.v, '0.1', function (v) { r.v = Math.max(0, v); repSaveSoon(); repChart(); },
+        function () { return r.v; }));
+      tr.appendChild(repCell(r.r, '1', function (v) { r.r = Math.max(0, v); repSaveSoon(); repChart(); },
+        function () { return r.r; }));
       const tdi = document.createElement('td');
       const inp = document.createElement('input');
       inp.type = 'number'; inp.step = '0.001'; inp.min = '0'; inp.inputMode = 'decimal';
@@ -2952,6 +2958,9 @@ frame();
           u.textContent = repNf(r.i * 1000, 1) + ' mA';
           repSaveSoon(); repChart();
         }
+      });
+      inp.addEventListener('blur', function () {
+        if (!isFinite(parseFloat(inp.value))) { inp.value = repNf(r.i, 4); u.textContent = repNf(r.i * 1000, 1) + ' mA'; }
       });
       tdi.appendChild(inp); tdi.appendChild(u); tr.appendChild(tdi);
       const tdd = document.createElement('td');
