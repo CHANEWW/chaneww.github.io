@@ -485,6 +485,89 @@
         #btn-fullscreen:hover { transform: translateY(-1px) scale(1.04); }
         #btn-fullscreen:active { transform: scale(0.95); }
 
+        /* ---------- 우하단 버튼 묶음 (DNA 변화 토글 + 전체화면) ---------- */
+        #br-stack {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 110;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
+        }
+        #br-stack #btn-fullscreen { position: static; right: auto; bottom: auto; }
+        #btn-dna {
+            height: 46px;
+            padding: 0 16px;
+            border-radius: 9999px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+            font-weight: 700;
+            font-family: inherit;
+            color: #0f172a;
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            white-space: nowrap;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            transition: transform .15s ease, background .2s ease, border-color .2s ease, color .2s ease;
+        }
+        body.dark-mode #btn-dna {
+            background: rgba(22, 30, 48, 0.9);
+            border-color: rgba(255, 255, 255, 0.14);
+            color: #f8fafc;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        #btn-dna:hover { transform: translateY(-1px) scale(1.04); }
+        #btn-dna:active { transform: scale(0.95); }
+        #btn-dna.active {
+            background: linear-gradient(135deg, #2563eb, #3b82f6);
+            border-color: rgba(191, 219, 254, 0.85);
+            color: #ffffff;
+            box-shadow: 0 10px 26px rgba(37, 99, 235, 0.42);
+        }
+
+        /* ---------- 좌측 DNA 상대량 그래프 오버레이 ---------- */
+        #dna-overlay {
+            position: fixed;
+            left: 18px;
+            top: 74px;
+            width: 300px;
+            max-width: calc(100vw - 36px);
+            z-index: 70;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            animation: dnaIn .22s ease;
+        }
+        #dna-overlay.hidden { display: none; }
+        @keyframes dnaIn {
+            from { opacity: 0; transform: translateX(-12px); }
+            to { opacity: 1; transform: none; }
+        }
+        #dna-overlay .dna-graph-box {
+            margin-top: 0;
+            padding: 11px 12px 9px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.74);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            display: none;
+        }
+        #dna-overlay .dna-graph-box.active { display: block; }
+        body.dark-mode #dna-overlay .dna-graph-box {
+            background: rgba(16, 24, 40, 0.78);
+            border-color: rgba(255, 255, 255, 0.14);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
         /* ---------- DNA 상대량 변화 그래프 ---------- */
         .dna-graph-box {
             margin-top: 10px;
@@ -554,14 +637,21 @@
         }
 
         @media (max-width: 768px) {
+            #br-stack { right: 12px; bottom: 14px; gap: 6px; }
             #btn-fullscreen {
-                right: 12px;
-                bottom: 14px;
                 height: 40px;
                 padding: 0 12px;
                 font-size: 12px;
             }
             #btn-fullscreen .fs-label { display: none; }
+            #btn-dna { height: 40px; padding: 0 12px; font-size: 12px; gap: 5px; }
+            #dna-overlay {
+                left: 8px;
+                right: 8px;
+                width: auto;
+                max-width: none;
+                top: calc(max(8px, env(safe-area-inset-top)) + 118px);
+            }
             #top-nav { left: 10px; gap: 6px; }
             .title-badge { display: none; }
             .vision-badge { display: none; }
@@ -660,8 +750,48 @@
     <button class="cbtn" id="btn-align" type="button">🧭<span class="lbl-full">시점 정렬</span></button>
 </div>
 
-<!-- 우하단 고정 전체화면 버튼 -->
-<button id="btn-fullscreen" class="glass-card" title="전체화면" aria-label="전체화면으로 전환"><span class="fs-icon" id="fs-icon">⛶</span><span class="fs-label" id="fs-label">전체화면</span></button>
+<!-- 좌측 DNA 상대량 변화 그래프 오버레이 (📊 DNA 변화 버튼으로 켜고 끄기) -->
+<aside id="dna-overlay" class="hidden" aria-hidden="true" aria-label="핵 1개당 DNA 상대량 변화 그래프">
+    <div class="dna-graph-box active" data-pane="mitosis">
+        <div class="dna-graph-header">
+            <span class="dna-graph-title">📈 핵 1개당 DNA 상대량 변화</span>
+            <span class="dna-cur-badge" id="mit-dna-badge">간기: 2</span>
+        </div>
+        <canvas id="canvas-dna-mit" class="dna-canvas" width="280" height="94"></canvas>
+        <div class="dna-axis-labels">
+            <span>G1</span><span>S(복제)</span><span>G2·전·중·후</span><span>말기(딸세포)</span>
+        </div>
+    </div>
+    <div class="dna-graph-box" data-pane="meiosis">
+        <div class="dna-graph-header">
+            <span class="dna-graph-title">📈 핵 1개당 DNA 상대량 변화</span>
+            <span class="dna-cur-badge" id="mei-dna-badge">간기: 2</span>
+        </div>
+        <canvas id="canvas-dna-mei" class="dna-canvas" width="280" height="94"></canvas>
+        <div class="dna-axis-labels">
+            <span>G1</span><span>S(복제)</span><span>감수 1분열</span><span>감수 2분열</span>
+        </div>
+    </div>
+    <div class="dna-graph-box" data-pane="compare">
+        <div class="dna-graph-header">
+            <span class="dna-graph-title">📈 두 분열 DNA 곡선 비교</span>
+            <div class="dna-cmp-legend">
+                <span style="color:#2f7bf6; font-size:10px; font-weight:700;">● 체세포</span>
+                <span style="color:#ec4899; font-size:10px; font-weight:700;">● 감수</span>
+            </div>
+        </div>
+        <canvas id="canvas-dna-cmp" class="dna-canvas" width="280" height="106"></canvas>
+        <div class="dna-axis-labels">
+            <span>간기(복제)</span><span>1차 분열</span><span>2차 분열</span>
+        </div>
+    </div>
+</aside>
+
+<!-- 우하단 버튼 묶음: DNA 변화 토글 + 전체화면 -->
+<div id="br-stack">
+    <button id="btn-dna" type="button" aria-pressed="false" title="핵 1개당 DNA 상대량 변화 그래프" aria-label="DNA 변화 그래프 켜기/끄기"><span aria-hidden="true">📊</span><span>DNA 변화</span></button>
+    <button id="btn-fullscreen" class="glass-card" title="전체화면" aria-label="전체화면으로 전환"><span class="fs-icon" id="fs-icon">⛶</span><span class="fs-label" id="fs-label">전체화면</span></button>
+</div>
 
 <!-- 우측 조절 패널 -->
 <div class="side-ctrl-panel" id="side-ctrl">
@@ -692,17 +822,6 @@
             <button class="tgl active" type="button" id="tgl-labels">2n·n 라벨</button>
             <button class="tgl" type="button" id="tgl-zoom">염색체 확대</button>
         </div>
-        <!-- 📈 DNA 상대량 변화 그래프 -->
-        <div class="dna-graph-box">
-            <div class="dna-graph-header">
-                <span class="dna-graph-title">📈 핵 1개당 DNA 상대량 변화</span>
-                <span class="dna-cur-badge" id="mit-dna-badge">간기: 2</span>
-            </div>
-            <canvas id="canvas-dna-mit" class="dna-canvas" width="280" height="94"></canvas>
-            <div class="dna-axis-labels">
-                <span>G1</span><span>S(복제)</span><span>G2·전·중·후</span><span>말기(딸세포)</span>
-            </div>
-        </div>
         <div class="stage-hint" id="mit-hint">핵막 안에서 염색사가 복제되어 DNA량이 2배가 됩니다.</div>
         <div class="legend">
             <span><i style="background:#2f7bf6"></i>부계 염색체</span>
@@ -727,17 +846,6 @@
             <button class="tgl active" type="button" id="tgl-labels2">2n·n 라벨</button>
             <button class="tgl" type="button" id="tgl-zoom2">염색체 확대</button>
         </div>
-        <!-- 📈 DNA 상대량 변화 그래프 -->
-        <div class="dna-graph-box">
-            <div class="dna-graph-header">
-                <span class="dna-graph-title">📈 핵 1개당 DNA 상대량 변화</span>
-                <span class="dna-cur-badge" id="mei-dna-badge">간기: 2</span>
-            </div>
-            <canvas id="canvas-dna-mei" class="dna-canvas" width="280" height="94"></canvas>
-            <div class="dna-axis-labels">
-                <span>G1</span><span>S(복제)</span><span>감수 1분열</span><span>감수 2분열</span>
-            </div>
-        </div>
         <div class="stage-hint" id="mei-hint">염색사가 복제됩니다. 아직 2n = 4입니다.</div>
         <div class="legend">
             <span><i style="background:#2f7bf6"></i>부계 염색체</span>
@@ -758,20 +866,6 @@
             <button class="seg-btn active" type="button" data-view="both">둘 다</button>
             <button class="seg-btn" type="button" data-view="mit">체세포</button>
             <button class="seg-btn" type="button" data-view="mei">감수</button>
-        </div>
-        <!-- 📈 두 분열 DNA 상대량 비교 곡선 -->
-        <div class="dna-graph-box">
-            <div class="dna-graph-header">
-                <span class="dna-graph-title">📈 두 분열 DNA 곡선 비교</span>
-                <div class="dna-cmp-legend">
-                    <span style="color:#2f7bf6; font-size:10px; font-weight:700;">● 체세포</span>
-                    <span style="color:#ec4899; font-size:10px; font-weight:700;">● 감수</span>
-                </div>
-            </div>
-            <canvas id="canvas-dna-cmp" class="dna-canvas" width="280" height="106"></canvas>
-            <div class="dna-axis-labels">
-                <span>간기(복제)</span><span>1차 분열</span><span>2차 분열</span>
-            </div>
         </div>
         <div class="stage-hint" id="cmp-hint">왼쪽은 체세포 분열(2n → 2n), 오른쪽은 감수 분열(2n → n)입니다. 슬라이더로 두 과정을 같은 비율로 진행시켜 보세요.</div>
         <button class="wide-btn" type="button" id="btn-table">📊 비교 요약표 보기</button>
@@ -1721,8 +1815,9 @@
             push(p1, p2);
             for (let i = 0; i < sd.targets.length; i++) {
                 const tp = chromPos(st, sd.targets[i]);
-                push(p1, tp);
-                push(p2, tp);
+                // 염색분체 하나에는 자기 쪽 극에서 뻗은 방추사 1줄만 연결한다
+                // (양쪽 극이 같은 염색분체에 2줄씩 붙던 구조 오류 교정)
+                push(p1.distanceToSquared(tp) <= p2.distanceToSquared(tp) ? p1 : p2, tp);
             }
             o.geo.attributes.position.needsUpdate = true;
             o.geo.setDrawRange(0, vi * 2);
@@ -1764,7 +1859,8 @@
         showSpindle: true,
         showLabels: true,
         chromBoost: 1,
-        tableOpen: false
+        tableOpen: false,
+        dnaOpen: false
     };
 
     const STAGE_DUR = 2.9;
@@ -2351,6 +2447,30 @@
     /* =========================================================
        10. 이벤트 바인딩
        ========================================================= */
+    /* ---------- 좌측 DNA 상대량 그래프 오버레이 토글 ---------- */
+    function syncDnaPane() {
+        const box = $('dna-overlay');
+        if (!box) return;
+        box.querySelectorAll('.dna-graph-box').forEach(b => {
+            b.classList.toggle('active', b.dataset.pane === state.mode);
+        });
+    }
+
+    function setDnaOpen(on) {
+        const box = $('dna-overlay');
+        const btn = $('btn-dna');
+        if (!box || !btn) return;
+        state.dnaOpen = !!on;
+        box.classList.toggle('hidden', !on);
+        box.setAttribute('aria-hidden', on ? 'false' : 'true');
+        btn.classList.toggle('active', !!on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        if (on) {
+            syncDnaPane();
+            drawDnaGraphs();
+        }
+    }
+
     function setMode(mode) {
         if (mode === state.mode) return;
         state.mode = mode;
@@ -2361,6 +2481,7 @@
             const pane = $('pane-' + m);
             if (pane) pane.classList.toggle('active', m === mode);
         });
+        syncDnaPane();
         $('compare-card').classList.toggle('hidden', !(mode === 'compare' && state.tableOpen));
         lastHudKey = '';
         layoutProcesses();
@@ -2374,6 +2495,9 @@
             btn.addEventListener('click', () => setMode(btn.dataset.tab));
         });
 
+        const dnaBtn = $('btn-dna');
+        if (dnaBtn) dnaBtn.addEventListener('click', () => setDnaOpen(!state.dnaOpen));
+        syncDnaPane();
         $('btn-prev').addEventListener('click', () => {
             if (state.mode === 'compare') {
                 state.compareP = Math.max(0, state.compareP - 0.1);
