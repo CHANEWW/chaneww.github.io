@@ -727,6 +727,38 @@
         return { line: line, mid: a.clone().applyAxisAngle(axis, angle / 2) };
     }
 
+    /* 결합각 표시 — 호(굵은 관) + 지시선 + 각도 라벨을 한 번에 */
+    function angleAnnotation(g, center, dirA, dirB, radius, text, opts) {
+        opts = opts || {};
+        const a = dirA.clone().normalize();
+        const b = dirB.clone().normalize();
+        const angle = a.angleTo(b);
+        let axis = new THREE.Vector3().crossVectors(a, b);
+        if (axis.length() < 1e-6) axis = (opts.axis || new THREE.Vector3(0, 0, 1)).clone();
+        axis.normalize();
+        const pts = [];
+        const seg = 48;
+        for (let i = 0; i <= seg; i++) {
+            pts.push(a.clone().applyAxisAngle(axis, angle * (i / seg)).multiplyScalar(radius).add(center));
+        }
+        const curve = new THREE.CatmullRomCurve3(pts);
+        const tube = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 48, 0.012, 8, false),
+            new THREE.MeshBasicMaterial({ color: opts.color || 0x67e8f9 })
+        );
+        tube.renderOrder = 6;
+        g.add(tube);
+
+        const mid = a.clone().applyAxisAngle(axis, angle / 2);
+        g.add(dashedLine(
+            [center.clone().addScaledVector(mid, radius + 0.02), center.clone().addScaledVector(mid, radius + 0.4)],
+            0x67e8f9, 0.045, 0.05, 0.7
+        ));
+        addLabel(g, text, center.clone().addScaledVector(mid, radius + 0.66), {
+            color: '#a5f3fc', fs: 56, scale: opts.scale || 0.86
+        });
+    }
+
     function addLabel(group, text, pos, opts) {
         const s = labelSprite(text, opts);
         s.position.copy(pos);
@@ -765,12 +797,10 @@
         g.add(bondMesh(O, h1, 0.115, C.bond));
         g.add(bondMesh(O, h2, 0.115, C.bond));
 
-        const arc = angleArc(O, h1, h2, 0.62, C.guide);
-        g.add(arc.line);
-        addLabel(g, '104.5°', arc.mid.clone().multiplyScalar(1.02), { color: '#7dd3fc', fs: 60 });
-        addLabel(g, 'O', O.clone().add(new THREE.Vector3(0, -0.86, 0)), { color: '#fca5a5', fs: 46, pad: 18, bg: null });
-        addLabel(g, 'H', h1.clone().multiplyScalar(1.36).add(new THREE.Vector3(0.06, 0.1, 0)), { color: '#e2e8f0', fs: 44, pad: 16, bg: null });
-        addLabel(g, 'H', h2.clone().multiplyScalar(1.36).add(new THREE.Vector3(-0.06, 0.1, 0)), { color: '#e2e8f0', fs: 44, pad: 16, bg: null });
+        angleAnnotation(g, O, h1, h2, 0.66, '104.5°');
+        addLabel(g, 'O', O.clone().add(new THREE.Vector3(0, -0.9, 0)), { color: '#fca5a5', fs: 46, pad: 18, bg: null });
+        addLabel(g, 'H', h1.clone().multiplyScalar(1.42).add(new THREE.Vector3(0.02, 0.16, 0)), { color: '#e2e8f0', fs: 44, pad: 16, bg: null });
+        addLabel(g, 'H', h2.clone().multiplyScalar(1.42).add(new THREE.Vector3(-0.02, 0.16, 0)), { color: '#e2e8f0', fs: 44, pad: 16, bg: null });
         g.position.y = -0.36;
         return g;
     };
@@ -793,9 +823,7 @@
             g.add(bondMesh(cPos.clone().setZ(off), o2.clone().setZ(off), 0.072, C.bond));
         });
 
-        const arc = angleArc(cPos, o1, o2, 0.72, C.guide, new THREE.Vector3(0, 0, 1));
-        g.add(arc.line);
-        addLabel(g, '180°', arc.mid.clone().multiplyScalar(1.45), { color: '#7dd3fc', fs: 60 });
+        angleAnnotation(g, cPos, o1, o2, 0.78, '180°', { axis: new THREE.Vector3(0, 0, 1) });
         addLabel(g, 'C', new THREE.Vector3(0, -0.82, 0), { color: '#cbd5e1', fs: 46, pad: 18, bg: null });
         addLabel(g, 'O', o1.clone().add(new THREE.Vector3(0, 0.92, 0)), { color: '#fca5a5', fs: 46, pad: 18, bg: null });
         addLabel(g, 'O', o2.clone().add(new THREE.Vector3(0, 0.92, 0)), { color: '#fca5a5', fs: 46, pad: 18, bg: null });
@@ -826,10 +854,7 @@
             }
         }
 
-        const arc = angleArc(cPos, hp[0], hp[1], 0.68, C.guide);
-        g.add(arc.line);
-        addLabel(g, '109.5°', arc.mid.clone().multiplyScalar(1.25), { color: '#7dd3fc', fs: 58 });
-        addLabel(g, 'C', new THREE.Vector3(0, -0.72, 0), { color: '#cbd5e1', fs: 44, pad: 16, bg: null });
+        angleAnnotation(g, cPos, hp[0], hp[1], 0.7, '109.5°');
         return g;
     };
 
@@ -867,11 +892,8 @@
         ]);
         g.add(new THREE.Line(pairGeo, new THREE.LineBasicMaterial({ color: 0xfde68a })));
 
-        const arc = angleArc(nPos, hp[0], hp[1], 0.6, C.guide);
-        g.add(arc.line);
-        addLabel(g, '107°', arc.mid.clone().multiplyScalar(1.35), { color: '#7dd3fc', fs: 58 });
-        addLabel(g, '비공유 전자쌍', new THREE.Vector3(0.05, 1.32, 0), { color: '#fde68a', fs: 44, pad: 20 });
-        addLabel(g, 'N', new THREE.Vector3(0, 0.1, 0.72), { color: '#93c5fd', fs: 44, pad: 16, bg: null });
+        angleAnnotation(g, nPos, hp[0], hp[1], 0.62, '107°');
+        addLabel(g, '비공유 전자쌍', new THREE.Vector3(0.7, 1.18, 0), { color: '#fde68a', fs: 42, pad: 18, scale: 0.92 });
         g.position.y = 0.24;
         return g;
     };
@@ -1526,10 +1548,15 @@
         const radius = Math.max(sphere.radius, 0.7);
         fitInfo = { center: center, radius: radius };
 
+        /* 휴대폰 세로 화면: 아래쪽 정보 카드에 모델이 가리지 않도록 화면 중심을 살짝 내린다 */
+        const w = window.innerWidth, h = window.innerHeight;
+        if (w <= 860) camera.setViewOffset(w, h, 0, Math.round(h * 0.085), w, h);
+        else camera.setViewOffset(null);
+
         const vFov = DEG(camera.fov);
         const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
         const fitAngle = Math.min(vFov, hFov) * 0.5;
-        const dist = radius / Math.sin(fitAngle) * 1.06;
+        const dist = radius / Math.sin(fitAngle) * 1.16;
         const dir = new THREE.Vector3(0.34, 0.3, 1).normalize();
         camera.position.copy(center).addScaledVector(dir, dist);
         controls.target.copy(center);
@@ -2006,8 +2033,15 @@
         camera.fov = fov;
         camera.updateProjectionMatrix();
     }
-    window.addEventListener('resize', onResize);
-    window.addEventListener('orientationchange', function () { setTimeout(onResize, 220); });
+    let resizeTimer = null;
+    window.addEventListener('resize', function () {
+        onResize();
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function () { if (modelRoot) frameModel(modelRoot); }, 220);
+    });
+    window.addEventListener('orientationchange', function () {
+        setTimeout(function () { onResize(); if (modelRoot) frameModel(modelRoot); }, 240);
+    });
 
     if (renderer) {
         renderer.setAnimationLoop(function (time, frame) {
