@@ -12,7 +12,7 @@
   4) 이 실험실 주소 뒤에 ?hook=복사한URL 을 붙여 한 번 열면 학생 기기에 저장되어 이후 자동 전송됩니다.
      예) .../electriccircuit_test.html?hook=https://script.google.com/macros/s/AKfy.../exec
      (주소창에 ?school=OO중학교 를 붙이면 입력 모달의 학교 칸이 미리 채워집니다.)
-  5) 시트는 [1반]~[12반] 탭으로 나뉘어 있고, 학생이 고른 반의 탭에 한 줄씩 쌓입니다.
+  5) 시트는 [1반]~[14반] 탭으로 나뉘어 있고, 학생이 고른 반의 탭에 한 줄씩 쌓입니다.
      칸 순서는  A: 번호 | B: 이름 | C: 제출한 사진 | D: 제출날짜 및 시간 | E: 점수 | F: 회로 요약(비고)
 
   ---- 아래 [Apps Script 코드] 블록 전체를 붙여넣으세요 ----
@@ -1734,7 +1734,10 @@ function simulate(){
       p.dv = p.V - Math.abs(p.I) * batteryInternalR;
       p.closed = Math.abs(p.I) > 1e-4;
       
-      if(p.closed && Math.abs(p.I) >= 3.0) {
+      /* 단락 판정: 부하 저항이 거의 없는 직결 루프이거나, 부하 없이 과도한 전류가 흐를 때만.
+         정상적인 옴의 법칙 실험(1~3Ω + 6~12V)에서 3A를 넘는다고 단락으로 오인하지 않는다. */
+      const rLoad = Math.abs(p.dv / (p.I || 1e-9));
+      if(p.closed && (rLoad < 0.2 || Math.abs(p.I) >= 25.0)) {
         p.isShort = true;
       }
     } else {
@@ -2557,7 +2560,7 @@ frame();
   (function () {
     const frag = document.createDocumentFragment();
     const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '반 선택'; frag.appendChild(o0);
-    for (let i = 1; i <= 12; i++) { const o = document.createElement('option'); o.value = String(i); o.textContent = i + '반'; frag.appendChild(o); }
+    for (let i = 1; i <= 14; i++) { const o = document.createElement('option'); o.value = String(i); o.textContent = i + '반'; frag.appendChild(o); }
     clsSel.appendChild(frag);
   })();
   if (params.get('teacher') === '1') cfgBtn.style.display = 'block';
@@ -2738,9 +2741,21 @@ frame();
   /* ---------- 현재 회로 측정값 ---------- */
   function repMeasure() {
     const bats = parts.filter(function (p) { return p.type === 'batt'; });
-    const V = bats.reduce(function (s, p) { return s + (p.V || 0); }, 0);
+    /* 전류계가 연결되어 있으면 계측기 눈금값을 그대로 쓴다 (단락 표시와 무관하게 실제 계산값) */
+    const iMeters = parts.filter(function (p) { return p.type === 'iMeter' && Math.abs(p.I || 0) > 1e-4; });
     let I = 0;
-    bats.forEach(function (p) { const a = Math.abs(p.I || 0); if (a > I) I = a; });
+    if (iMeters.length) {
+      iMeters.forEach(function (p) { const a = Math.abs(p.I); if (a > I) I = a; });
+    } else {
+      bats.forEach(function (p) { const a = Math.abs(p.I || 0); if (a > I) I = a; });
+    }
+    /* 전압계가 연결되어 있으면 계측기 눈금값, 없으면 전지의 단자전압(p.dv) 합 */
+    let V = 0;
+    parts.filter(function (p) { return p.type === 'vMeter' && Math.abs(p.dv || 0) > 1e-4; })
+      .forEach(function (p) { const a = Math.abs(p.dv); if (a > V) V = a; });
+    if (!(V > 1e-3)) {
+      V = bats.reduce(function (s, p) { return s + Math.abs(p.dv || 0); }, 0);
+    }
     const extR = parts.filter(function (p) { return p.type === 'resist' || p.type === 'bulb'; })
       .reduce(function (s, p) { return s + (p.R || 0); }, 0);
     const flowing = I > 1e-4;
@@ -2993,7 +3008,7 @@ frame();
     if (ei) ei.textContent = repITxt(m.I);
     if (fl) {
       fl.className = 'svl-rb-flow' + (m.short ? ' warn' : (m.flowing ? ' on' : ''));
-      fl.textContent = m.short ? '⚠️ 단락' : (m.flowing ? '⚡ 전류 흐름' : '전류 없음');
+      fl.textContent = m.short ? '⚠️ 단락 · ' + (m.flowing ? '전류 흐름' : '전류 없음') : (m.flowing ? '⚡ 전류 흐름' : '전류 없음');
     }
     if (add) add.disabled = !(m.flowing && m.bats > 0);
   }
