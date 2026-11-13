@@ -720,7 +720,7 @@
     <div class="camar-simctl" id="camar-simctl">
         <label>기울기<input type="range" id="camar-tilt" min="-42" max="42" value="16"></label>
         <label>돌리기<input type="range" id="camar-yaw" min="-38" max="38" value="0"></label>
-        <label>확대<input type="range" id="camar-zoom" min="60" max="220" value="100"></label>
+        <label>확대<input type="range" id="camar-zoom" min="60" max="220" value="165"></label>
         <span class="camar-simtip">화면을 드래그해 학습지를 움직여 보세요</span>
     </div>
 </div>
@@ -786,6 +786,14 @@
        0. 공통 설정
        ===================================================================== */
     const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+    /* ?ar=1 로 들어왔는지 — model 파라미터로 주소가 바뀌기 전에 먼저 붙잡아 둔다 */
+    const START_AR = (function () {
+        try {
+            const p = new URLSearchParams(window.location.search);
+            const v = p.get('ar');
+            return v === '1' || v === 'true' || v === 'camera' || v === 'sim';
+        } catch (e) { return false; }
+    })();
     const DEG = THREE.MathUtils.degToRad;
     const FONT_STACK = "'SeoulNamsan', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
 
@@ -2523,28 +2531,35 @@
 
         /* ------------------------------------------------------------------
            스캔 · 추적
+           · 화면 전체를 480px로 줄이면 먼 QR은 모듈이 1~2px 밖에 안 남아
+             읽히지 않는다. 그래서 가운데 부분(중앙 46%)을 먼저 480px로
+             확대해 읽고(가까이서 비춘 QR), 안 되면 3회에 한 번 전체 화면을
+             읽어 화면 구석의 QR까지 잡는다.
            ------------------------------------------------------------------ */
-        function videoPointToScreen(px, py) {
+        function sourceToScreen(px, py) {
+            if (st.mode === 'sim') return { x: px, y: py };
             const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
             const W = window.innerWidth, H = window.innerHeight;
             const s = Math.max(W / vw, H / vh);
             const dx = (W - vw * s) / 2, dy = (H - vh * s) / 2;
-            return { x: (px * vw / st.scanW) * s + dx, y: (py * vh / st.scanH) * s + dy };
-        }
-        function simPointToScreen(px, py) {
-            const W = window.innerWidth, H = window.innerHeight;
-            return { x: px * W / st.scanW, y: py * H / st.scanH };
+            return { x: px * s + dx, y: py * s + dy };
         }
 
         let lastCodeData = '';
         let lastCodeAt = 0;
+        let scanPass = 0;
+        let simHintAt = 0;
 
         function handleCode(code) {
             if (!code || !code.location) return;
             const loc = code.location;
-            const toS = st.mode === 'sim' ? simPointToScreen : videoPointToScreen;
             const corners = [loc.topLeftCorner, loc.topRightCorner, loc.bottomRightCorner, loc.bottomLeftCorner]
-                .map(function (p) { return toS(p.x, p.y); });
+                .map(function (p) {
+                    /* 스캔 캔버스 좌표 → 원본(영상·가상 학습지) 좌표 → 화면 좌표 */
+                    const sx = st.scanOX + p.x * st.scanSW / st.scanW;
+                    const sy = st.scanOY + p.y * st.scanSH / st.scanH;
+                    return sourceToScreen(sx, sy);
+                });
             const pose = poseFromQuad(corners, window.innerWidth, window.innerHeight);
             if (!pose || !isFinite(pose.pos.x)) return;
             const key = modelFromData(code.data);
@@ -2569,11 +2584,26 @@
             }
         }
 
+        function readRegion(src, r) {
+            const ow = SCAN_W;
+            const oh = Math.max(2, Math.round(SCAN_W * r.sh / r.sw));
+            if (scanCv.width !== ow || scanCv.height !== oh) { scanCv.width = ow; scanCv.height = oh; }
+            try {
+                scanCtx.drawImage(src, r.sx, r.sy, r.sw, r.sh, 0, 0, ow, oh);
+            } catch (e) { return null; }
+            const img = scanCtx.getImageData(0, 0, ow, oh);
+            const code = window.jsQR(img.data, ow, oh, { inversionAttempts: 'dontInvert' });
+            if (!code) return null;
+            st.scanW = ow; st.scanH = oh;
+            st.scanOX = r.sx; st.scanOY = r.sy;
+            st.scanSW = r.sw; st.scanSH = r.sh;
+            return code;
+        }
+
         function scanTick() {
             if (!st.active || st.pinned) return;
             if (typeof window.jsQR !== 'function') return;
-            let src = null;
-            let vw = 0, vh = 0;
+            let src = null, vw = 0, vh = 0;
             if (st.mode === 'sim') {
                 if (!sim.ready) return;
                 src = simCanvas;
@@ -2582,16 +2612,22 @@
                 if (!video.videoWidth) return;
                 src = video; vw = video.videoWidth; vh = video.videoHeight;
             }
-            const sw = SCAN_W;
-            const sh = Math.max(2, Math.round(SCAN_W * vh / vw));
-            if (scanCv.width !== sw || scanCv.height !== sh) { scanCv.width = sw; scanCv.height = sh; }
-            st.scanW = sw; st.scanH = sh;
-            try {
-                scanCtx.drawImage(src, 0, 0, sw, sh);
-            } catch (e) { return; }
-            const img = scanCtx.getImageData(0, 0, sw, sh);
-            const code = window.jsQR(img.data, sw, sh, { inversionAttempts: 'dontInvert' });
-            if (code) handleCode(code);
+            scanPass++;
+            const regions = [{
+                sx: vw * 0.27, sy: vh * 0.27, sw: vw * 0.46, sh: vh * 0.46
+            }];
+            if (scanPass % 3 === 0) regions.push({ sx: 0, sy: 0, sw: vw, sh: vh });
+
+            for (let i = 0; i < regions.length; i++) {
+                const code = readRegion(src, regions[i]);
+                if (code) { handleCode(code); return; }
+            }
+            /* 한동안 아무것도 못 찾았을 때 한 번만 도움말 */
+            const now = performance.now();
+            if (!st.has && now - simHintAt > 7000) {
+                simHintAt = now;
+                if (st.mode === 'sim') setHint('QR 하나가 화면에 꽉 차게 보이도록 드래그해 이동해 보세요', 4200);
+            }
         }
 
         /* ------------------------------------------------------------------
@@ -2599,7 +2635,7 @@
            ------------------------------------------------------------------ */
         const sim = {
             renderer: null, scene: null, cam: null, plane: null,
-            ready: false, tilt: 16, yaw: 0, zoom: 165, panX: 0, panY: 0
+            ready: false, tilt: 16, yaw: 0, zoom: 165, panX: 1.23, panY: -1.13
         };
 
         function makeQrCanvas(text, size) {
@@ -3084,14 +3120,7 @@
     if (!MODELS[currentKey]) { currentKey = 'water'; updateInfo('water'); select.value = 'water'; }
 
     /* ?ar=1 — 학습지 AR 모드로 바로 시작 */
-    (function autoAr() {
-        let on = false;
-        try {
-            const p = new URLSearchParams(window.location.search);
-            on = p.get('ar') === '1' || p.get('ar') === 'true' || p.get('ar') === 'camera';
-        } catch (e) { /* noop */ }
-        if (on) setTimeout(function () { camArStart(); }, 80);
-    })();
+    if (START_AR) setTimeout(function () { camArStart(); }, 90);
 
     /* 테마 토글 상태에 맞춰 배경 밝기 동기화 */
     (function themeWatch() {
