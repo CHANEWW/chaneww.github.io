@@ -2613,10 +2613,21 @@
                 src = video; vw = video.videoWidth; vh = video.videoHeight;
             }
             scanPass++;
-            const regions = [{
-                sx: vw * 0.27, sy: vh * 0.27, sw: vw * 0.46, sh: vh * 0.46
-            }];
-            if (scanPass % 3 === 0) regions.push({ sx: 0, sy: 0, sw: vw, sh: vh });
+            /* QR 하나만 들어오는 작은 창을 먼저 본다(중앙 → 사분면 순회).
+               QR 두 개가 한 창에 걸리면 jsQR이 엉뚱한 파인더를 묶어 실패한다. */
+            const cw = vw * 0.42, ch = vh * 0.42;
+            const cx = (vw - cw) / 2, cy = (vh - ch) / 2;
+            const regions = [{ sx: cx, sy: cy, sw: cw, sh: ch }];
+            const tracking = st.has && (performance.now() - st.lastSeen) < HOLD_MS;
+            if (!tracking) {
+                const q = [[-1, -1], [1, -1], [-1, 1], [1, 1]][scanPass % 4];
+                regions.push({
+                    sx: Math.max(0, Math.min(vw - cw, cx + q[0] * cw * 0.62)),
+                    sy: Math.max(0, Math.min(vh - ch, cy + q[1] * ch * 0.62)),
+                    sw: cw, sh: ch
+                });
+                if (scanPass % 9 === 0) regions.push({ sx: 0, sy: 0, sw: vw, sh: vh });
+            }
 
             for (let i = 0; i < regions.length; i++) {
                 const code = readRegion(src, regions[i]);
@@ -2635,7 +2646,7 @@
            ------------------------------------------------------------------ */
         const sim = {
             renderer: null, scene: null, cam: null, plane: null,
-            ready: false, tilt: 16, yaw: 0, zoom: 165, panX: 1.23, panY: -1.13
+            ready: false, tilt: 16, yaw: 0, zoom: 165, panX: 0, panY: 3.6
         };
 
         function makeQrCanvas(text, size) {
@@ -2664,9 +2675,11 @@
         }
 
         let paperCv = null;
+        /* 가상 학습지 — QR을 한 줄에 하나씩 크게 두어, 카메라를 그 QR 하나에
+           맞춘 상황을 그대로 재현한다(QR 두 개가 한 화면에 걸리면 인식이 흔들림). */
         function paperCanvas() {
             if (paperCv) return paperCv;
-            const W = 1000, H = 1414;
+            const W = 1000, H = 2400;
             paperCv = document.createElement('canvas');
             paperCv.width = W; paperCv.height = H;
             const g = paperCv.getContext('2d');
@@ -2684,49 +2697,41 @@
             g.fillStyle = '#334155';
             g.fillText('QR 위에 [학습지 AR]의 카메라를 비추면 3D 모델이 그 자리에 떠오릅니다.', 52, 192);
             g.strokeStyle = '#0f172a'; g.lineWidth = 3;
-            g.beginPath(); g.moveTo(52, 220); g.lineTo(W - 52, 220); g.stroke();
+            g.beginPath(); g.moveTo(52, 224); g.lineTo(W - 52, 224); g.stroke();
 
             const cells = [
-                { key: 'water', label: '물 H₂O', note: '굽은형 · 결합각 104.5°', x: 25, y: 258 },
-                { key: 'nh3', label: '암모니아 NH₃', note: '삼각뿔 · 비공유 전자쌍', x: 515, y: 258 },
-                { key: 'trilobite', label: '삼엽충', note: '고생대 표준화석', x: 25, y: 826 }
+                { key: 'water', label: '물 H₂O', note: '굽은형 · 결합각 104.5°', q: '물 분자의 결합각은 몇 도일까?' },
+                { key: 'nh3', label: '암모니아 NH₃', note: '삼각뿔 · 비공유 전자쌍 1쌍', q: '질소의 비공유 전자쌍은 몇 쌍일까?' },
+                { key: 'trilobite', label: '삼엽충', note: '고생대 표준화석', q: '삼엽충이 살았던 시대는?' }
             ];
-            const CW = 460, CH = 520, QS = 396;
-            cells.forEach(function (c) {
+            const QS = 380, TOP = 268, STEP = 700;
+            cells.forEach(function (c, i) {
+                const y = TOP + i * STEP;
                 g.strokeStyle = '#cbd5e1'; g.lineWidth = 2;
-                roundRect(g, c.x, c.y, CW, CH, 18); g.stroke();
+                roundRect(g, 40, y - 24, W - 80, 620, 20); g.stroke();
                 const q = makeQrCanvas('https://chaneww.github.io/labs/test/qr_3d_viewer.html?model=' + c.key, QS);
-                if (q) g.drawImage(q, c.x + 32, c.y + 26, QS, QS);
-                else { g.fillStyle = '#e2e8f0'; g.fillRect(c.x + 32, c.y + 26, QS, QS); }
+                if (q) g.drawImage(q, 310, y, QS, QS);
+                else { g.fillStyle = '#e2e8f0'; g.fillRect(310, y, QS, QS); }
                 g.textAlign = 'center';
                 g.fillStyle = '#0f172a';
-                g.font = '900 30px ' + FONT_STACK;
-                g.fillText(c.label, c.x + CW / 2, c.y + 26 + QS + 46);
+                g.font = '900 32px ' + FONT_STACK;
+                g.fillText(c.label, W / 2, y + QS + 54);
                 g.fillStyle = '#0f766e';
-                g.font = '700 20px ' + FONT_STACK;
-                g.fillText(c.note, c.x + CW / 2, c.y + 26 + QS + 78);
-                g.textAlign = 'left';
-            });
-
-            /* 4번째 칸 — 관찰 기록 */
-            g.strokeStyle = '#cbd5e1'; g.lineWidth = 2;
-            roundRect(g, 515, 826, CW, CH, 18); g.stroke();
-            g.fillStyle = '#0f172a';
-            g.font = '900 28px ' + FONT_STACK;
-            g.fillText('관찰 기록', 545, 878);
-            g.font = '700 21px ' + FONT_STACK;
-            g.fillStyle = '#334155';
-            ['① 물 분자의 결합각은?', '② 암모니아의 비공유 전자쌍은?', '③ 삼엽충이 살았던 시대는?'].forEach(function (t, i) {
-                g.fillText(t, 545, 940 + i * 118);
+                g.font = '700 21px ' + FONT_STACK;
+                g.fillText(c.note, W / 2, y + QS + 88);
+                g.fillStyle = '#334155';
+                g.font = '700 22px ' + FONT_STACK;
+                g.fillText('Q. ' + c.q, W / 2, y + QS + 140);
                 g.strokeStyle = '#cbd5e1'; g.lineWidth = 2;
-                g.beginPath(); g.moveTo(545, 962 + i * 118); g.lineTo(945, 962 + i * 118); g.stroke();
+                g.beginPath(); g.moveTo(260, y + QS + 172); g.lineTo(W - 260, y + QS + 172); g.stroke();
+                g.textAlign = 'left';
             });
 
             g.fillStyle = '#64748b';
             g.font = '700 19px ' + FONT_STACK;
-            g.fillText('chaneww.github.io · 무료 · 가입 없음', 52, 1378);
+            g.fillText('chaneww.github.io · 무료 · 가입 없음', 52, 2366);
             g.textAlign = 'right';
-            g.fillText('Science Virtual LAB', W - 52, 1378);
+            g.fillText('Science Virtual LAB', W - 52, 2366);
             g.textAlign = 'left';
             return paperCv;
         }
@@ -2751,7 +2756,7 @@
             if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
             tex.anisotropy = 8;
             sim.plane = new THREE.Mesh(
-                new THREE.PlaneGeometry(1, 1.4142),
+                new THREE.PlaneGeometry(1, 2.4),
                 new THREE.MeshBasicMaterial({ map: tex })
             );
             sim.scene.add(sim.plane);
@@ -3009,8 +3014,8 @@
                 } else if (st.mode === 'sim') {
                     const visW = 2 * 6 * Math.tan(DEG(52) / 2) * (window.innerWidth / window.innerHeight);
                     const visH = 2 * 6 * Math.tan(DEG(52) / 2);
-                    sim.panX = clampn(sim.panX + dx * visW / window.innerWidth, -4.5, 4.5);
-                    sim.panY = clampn(sim.panY - dy * visH / window.innerHeight, -5, 5);
+                    sim.panX = clampn(sim.panX + dx * visW / window.innerWidth, -6, 6);
+                    sim.panY = clampn(sim.panY - dy * visH / window.innerHeight, -9, 9);
                 }
             });
             function release(e) {
