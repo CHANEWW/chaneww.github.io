@@ -693,6 +693,7 @@
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.anisotropy = 4;
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
         tex.minFilter = THREE.LinearFilter;
         const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
             map: tex, transparent: true, depthTest: false, depthWrite: false
@@ -756,6 +757,27 @@
         ));
         addLabel(g, text, center.clone().addScaledVector(mid, radius + 0.66), {
             color: '#a5f3fc', fs: 56, scale: opts.scale || 0.86
+        });
+    }
+
+    /* 캔버스 텍스처는 sRGB로 표시한다(라벨 색이 바래지 않도록) */
+    function markSRGB(tex) {
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+        return tex;
+    }
+
+    /* renderer.outputEncoding=sRGB 환경에서 색을 의도한 값으로 보이게 한다 */
+    function toLinear(group) {
+        const seen = [];
+        group.traverse(function (o) {
+            if (!o.material) return;
+            const mats = Array.isArray(o.material) ? o.material : [o.material];
+            mats.forEach(function (m) {
+                if (seen.indexOf(m) !== -1) return;
+                seen.push(m);
+                if (m.color && m.color.convertSRGBToLinear) m.color.convertSRGBToLinear();
+                if (m.emissive && m.emissive.convertSRGBToLinear) m.emissive.convertSRGBToLinear();
+            });
         });
     }
 
@@ -1000,80 +1022,81 @@
     BUILDERS.trilobite = function () {
         const g = new THREE.Group();
         const body = new THREE.Group();
-
-        const stoneMat = new THREE.MeshStandardMaterial({ color: C.stone, roughness: 0.72, metalness: 0.05 });
-        const darkMat = new THREE.MeshStandardMaterial({ color: C.stoneDark, roughness: 0.8, metalness: 0.03 });
+        const stoneMat = new THREE.MeshStandardMaterial({ color: 0xb5a486, roughness: 0.66, metalness: 0.04 });
+        const ridgeMat = new THREE.MeshStandardMaterial({ color: 0x8a7c63, roughness: 0.76, metalness: 0.03 });
+        const grooveMat = new THREE.MeshStandardMaterial({ color: 0x4a4234, roughness: 0.9, metalness: 0.02 });
 
         /* 화석이 놓인 암석 판 */
-        const slab = new THREE.Mesh(new THREE.CylinderGeometry(2.45, 2.35, 0.22, 48), new THREE.MeshStandardMaterial({
-            color: C.rock, roughness: 0.92, metalness: 0.02
-        }));
-        slab.scale.set(1, 1, 0.82);
-        slab.position.y = -0.22;
+        const slab = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 1.85, 0.16, 48), grooveMat);
+        slab.scale.set(1, 1, 0.88);
+        slab.position.y = -0.2;
         g.add(slab);
 
-        /* 몸 전체 윤곽 */
-        const outline = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), stoneMat);
-        outline.scale.set(0.92, 0.26, 1.52);
-        outline.position.set(0, 0.06, 0);
+        /* 몸 바닥 윤곽 */
+        const outline = new THREE.Mesh(new THREE.SphereGeometry(1, 44, 28), ridgeMat);
+        outline.scale.set(0.86, 0.14, 1.46);
+        outline.position.y = 0.02;
         body.add(outline);
 
-        /* 축엽(가운데 융기) */
-        const axial = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), darkMat);
-        axial.scale.set(0.3, 0.24, 1.36);
-        axial.position.set(0, 0.2, 0.02);
-        body.add(axial);
-
-        /* 흉부 마디 — 늑엽을 가로지르는 홈 */
+        /* 흉부 9마디 — 판을 살짝 띄워 사이 홈이 보이게 */
         for (let i = 0; i < 9; i++) {
-            const z = -0.78 + i * 0.2;
-            const rib = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.055, 8, 30, Math.PI * 1.12), darkMat);
-            rib.rotation.x = -Math.PI / 2;
-            rib.rotation.z = Math.PI / 2 + (Math.PI - Math.PI * 1.12) / 2;
-            rib.scale.set(1.1 - Math.abs(i - 4) * 0.02, 1, 1);
-            rib.position.set(0, 0.16, z);
-            body.add(rib);
+            const z = -0.74 + i * 0.185;
+            const w = 0.84 * (1 - Math.abs(i - 4) * 0.021);
+            const seg = new THREE.Mesh(new THREE.SphereGeometry(1, 36, 18), stoneMat);
+            seg.scale.set(w, 0.19, 0.074);
+            seg.position.set(0, 0.11, z);
+            body.add(seg);
         }
 
-        /* 두부(머리) */
-        const ceph = new THREE.Mesh(new THREE.SphereGeometry(1, 44, 28), stoneMat);
-        ceph.scale.set(0.88, 0.28, 0.62);
-        ceph.position.set(0, 0.2, -1.32);
-        body.add(ceph);
-        const glabella = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), darkMat);
-        glabella.scale.set(0.31, 0.26, 0.4);
-        glabella.position.set(0, 0.34, -1.3);
-        body.add(glabella);
+        /* 축엽 — 가운데 솟은 마루 */
+        const axial = new THREE.Mesh(new THREE.SphereGeometry(1, 36, 22), stoneMat);
+        axial.scale.set(0.24, 0.2, 1.3);
+        axial.position.set(0, 0.2, -0.02);
+        body.add(axial);
+        for (let i = 0; i < 9; i++) {
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.235, 0.016, 6, 22), grooveMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.scale.set(1, 1, 0.62);
+            ring.position.set(0, 0.3, -0.74 + i * 0.185);
+            body.add(ring);
+        }
 
-        /* 겹눈 */
+        /* 두부(머리) — 반원 방패와 눈, 가운데 융기 */
+        const ceph = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 26), stoneMat);
+        ceph.scale.set(0.84, 0.22, 0.58);
+        ceph.position.set(0, 0.1, -1.26);
+        body.add(ceph);
+        const glabella = new THREE.Mesh(new THREE.SphereGeometry(1, 30, 20), ridgeMat);
+        glabella.scale.set(0.3, 0.24, 0.42);
+        glabella.position.set(0, 0.24, -1.24);
+        body.add(glabella);
         [-1, 1].forEach(function (sx) {
-            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 16), new THREE.MeshStandardMaterial({
-                color: 0x2b2b2b, roughness: 0.25, metalness: 0.35, emissive: 0x0b0b0b
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.105, 18, 14), new THREE.MeshStandardMaterial({
+                color: 0x2b2620, roughness: 0.25, metalness: 0.35
             }));
-            eye.position.set(sx * 0.42, 0.36, -1.06);
-            eye.scale.set(1, 0.9, 1.2);
+            eye.position.set(sx * 0.38, 0.3, -1.06);
+            eye.scale.set(1, 0.85, 1.15);
             body.add(eye);
         });
 
         /* 미부(꼬리 방패)와 가시 */
-        const pyg = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 26), stoneMat);
-        pyg.scale.set(0.78, 0.24, 0.5);
-        pyg.position.set(0, 0.16, 1.26);
+        const pyg = new THREE.Mesh(new THREE.SphereGeometry(1, 36, 24), stoneMat);
+        pyg.scale.set(0.66, 0.2, 0.46);
+        pyg.position.set(0, 0.11, 1.16);
         body.add(pyg);
         [-1, 1].forEach(function (sx) {
-            const spine = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.66, 12), stoneMat);
-            spine.position.set(sx * 0.5, 0.2, 1.72);
-            spine.rotation.set(DEG(78), 0, sx * DEG(-16));
+            const spine = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.62, 12), stoneMat);
+            spine.position.set(sx * 0.42, 0.14, 1.6);
+            spine.rotation.set(DEG(84), 0, sx * DEG(-14));
             body.add(spine);
         });
 
         g.add(body);
 
-        addLabel(g, '두부', new THREE.Vector3(-1.05, 0.85, -1.3), { color: '#e2e8f0', fs: 42, pad: 18 });
-        addLabel(g, '축엽', new THREE.Vector3(0, 1.0, 0.1), { color: '#fde68a', fs: 42, pad: 18 });
-        addLabel(g, '흉부 마디', new THREE.Vector3(1.15, 0.8, 0.55), { color: '#e2e8f0', fs: 40, pad: 16 });
-        addLabel(g, '미부', new THREE.Vector3(0.95, 0.8, 1.55), { color: '#e2e8f0', fs: 42, pad: 18 });
-        g.position.y = -0.1;
+        addLabel(g, '두부', new THREE.Vector3(-1.28, 0.72, -1.16), { color: '#f5e9d0', fs: 42, pad: 18, scale: 0.86 });
+        addLabel(g, '축엽', new THREE.Vector3(0, 1.02, -0.18), { color: '#fde68a', fs: 42, pad: 18, scale: 0.86 });
+        addLabel(g, '미부', new THREE.Vector3(1.24, 0.66, 1.18), { color: '#f5e9d0', fs: 42, pad: 18, scale: 0.86 });
+        g.position.y = -0.06;
         return g;
     };
 
@@ -1582,6 +1605,7 @@
         }
         currentKey = key;
         modelRoot = BUILDERS[key]();
+        toLinear(modelRoot);
         modelRoot.traverse(function (o) { o.frustumCulled = true; });
         scene.add(modelRoot);
         frameModel(modelRoot);
