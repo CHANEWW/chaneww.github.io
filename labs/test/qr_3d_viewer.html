@@ -1,0 +1,2032 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>학습지 연동 3D 뷰어</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+    <script src="../../common/lib/three.min.js"></script>
+    <script src="../../common/lib/OrbitControls.js"></script>
+    <script src="../../common/lib/qrcode.min.js"></script>
+    <link rel="stylesheet" href="../../common/ui-layout.css">
+    <style>
+        @font-face {
+            font-family: 'SeoulNamsan';
+            src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+                 url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+            font-weight: 400; font-style: normal; font-display: swap;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+        :root {
+            --ink: #eef4ff;
+            --muted: #9db0cb;
+            --line: rgba(255, 255, 255, 0.14);
+            --glass: rgba(13, 21, 38, 0.78);
+            --accent: #5eead4;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
+            font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(1100px 720px at 50% 8%, #17253f 0%, #0b1526 46%, #05080f 100%);
+            touch-action: none;
+            transition: background-color .3s ease, color .3s ease;
+        }
+        body.light-mode {
+            color: #16202e;
+            background: radial-gradient(1100px 720px at 50% 8%, #f6fbff 0%, #e6eef8 50%, #d8e3ef 100%);
+        }
+
+        #canvas-container { position: absolute; inset: 0; z-index: 1; touch-action: none; }
+        #canvas-container canvas { display: block; }
+
+        .glass-panel {
+            background: var(--glass);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
+        }
+        body.light-mode .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 10px 26px rgba(23, 42, 66, 0.12);
+        }
+
+        /* ---------- 좌상단: 메인 이동 · 제목 · QR ---------- */
+        .top-left-bar {
+            position: absolute; top: 18px; left: 20px;
+            display: flex; align-items: center; gap: 10px;
+            z-index: 30;
+        }
+        .back-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 10px 15px;
+            font-family: inherit; font-size: 13.5px; font-weight: 800;
+            color: var(--ink); text-decoration: none; line-height: 1;
+            cursor: pointer; transition: transform .16s ease;
+
+            background: var(--glass);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line); border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
+        }
+        .back-btn > span:first-child { display: inline-block; margin-right: 2px; }
+        .back-btn:hover { transform: translateY(-1px); }
+        body.light-mode .back-btn { color: #16202e; background: rgba(255, 255, 255, 0.9); border-color: #ffffffcc; }
+
+        .tag-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 9px 14px;
+            font-size: 13.5px; font-weight: 900; letter-spacing: -0.2px;
+            white-space: nowrap;
+
+            background: var(--glass);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line); border-radius: 18px;
+        }
+        body.light-mode .tag-badge { background: rgba(255, 255, 255, 0.9); border-color: #ffffffcc; }
+        .vision-badge {
+            font-size: 9.5px; font-weight: 900; letter-spacing: .3px;
+            padding: 3px 7px; border-radius: 999px;
+            background: linear-gradient(135deg, #ff6ec7, #b06bff);
+            color: #fff; text-transform: none;
+        }
+        .qr-btn-label { font-size: 12.5px; }
+
+        /* ---------- 우상단: 모델 선택 · QR 인쇄 ---------- */
+        .top-right-bar {
+            position: absolute; top: 18px; right: 20px;
+            display: flex; align-items: center; gap: 9px;
+            z-index: 30;
+        }
+        .model-picker {
+            position: relative;
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 0 14px 0 13px;
+            height: 42px;
+            background: var(--glass);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line); border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
+        }
+        body.light-mode .model-picker { background: rgba(255, 255, 255, 0.9); border-color: #ffffffcc; }
+        .model-picker select {
+            appearance: none; -webkit-appearance: none;
+            background: transparent; border: none; outline: none;
+            color: var(--ink); font-family: inherit; font-size: 13.5px; font-weight: 800;
+            padding: 0 20px 0 0; height: 100%; cursor: pointer;
+            max-width: 46vw;
+        }
+        body.light-mode .model-picker select { color: #16202e; }
+        .model-picker select option { background: #101a2c; color: #eef4ff; }
+        body.light-mode .model-picker select option { background: #fff; color: #16202e; }
+        .model-picker::after {
+            content: '⌄'; position: absolute; right: 12px; top: 50%;
+            transform: translateY(-58%); font-size: 14px; color: var(--muted);
+            pointer-events: none;
+        }
+        .print-btn {
+            display: inline-flex; align-items: center; gap: 7px;
+            height: 42px; padding: 0 15px;
+            font-family: inherit; font-size: 13px; font-weight: 800; color: var(--ink);
+            cursor: pointer; white-space: nowrap;
+            background: var(--glass);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line); border-radius: 18px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
+            transition: transform .16s ease;
+        }
+        .print-btn:hover { transform: translateY(-1px); }
+        body.light-mode .print-btn { color: #16202e; background: rgba(255, 255, 255, 0.9); border-color: #ffffffcc; }
+
+        /* ---------- 좌측 정보 카드 ---------- */
+        .info-card {
+            position: absolute; top: 78px; left: 20px;
+            width: 318px; max-height: calc(100vh - 210px);
+            padding: 15px 16px 14px;
+            overflow-y: auto; overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+            z-index: 25;
+        }
+        .info-card::-webkit-scrollbar { width: 0; }
+        .info-head { display: flex; align-items: center; gap: 10px; }
+        .info-emoji {
+            flex: 0 0 auto; width: 40px; height: 40px; border-radius: 13px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; background: rgba(94, 234, 212, 0.14);
+            border: 1px solid rgba(94, 234, 212, 0.28);
+        }
+        .info-title { flex: 1 1 auto; min-width: 0; }
+        .info-title h2 {
+            margin: 0; font-size: 17px; font-weight: 900; letter-spacing: -0.3px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .info-title p { margin: 2px 0 0; font-size: 12.5px; font-weight: 800; color: var(--accent); }
+        .info-toggle {
+            display: none; flex: 0 0 auto;
+            width: 30px; height: 30px; border-radius: 10px;
+            border: 1px solid var(--line); background: rgba(255, 255, 255, 0.06);
+            color: var(--ink); font-size: 13px; cursor: pointer;
+        }
+        .info-tag {
+            margin: 10px 0 0; font-size: 12px; font-weight: 700; color: #a8e9df;
+            line-height: 1.5;
+        }
+        body.light-mode .info-tag { color: #0f766e; }
+        .info-body { margin-top: 12px; }
+        .info-row { display: flex; gap: 8px; font-size: 12px; line-height: 1.6; }
+        .info-row .k { flex: 0 0 62px; color: var(--muted); font-weight: 700; }
+        body.light-mode .info-row .k { color: #64748b; }
+        .info-row .v { flex: 1 1 auto; font-weight: 700; }
+        .info-desc {
+            margin: 10px 0 0; font-size: 12.5px; line-height: 1.68;
+            color: #d7e3f5; font-weight: 500;
+        }
+        body.light-mode .info-desc { color: #33415c; }
+        .info-facts { list-style: none; margin: 11px 0 0; padding: 0; }
+        .info-facts li {
+            position: relative; padding-left: 14px; margin-bottom: 6px;
+            font-size: 11.5px; line-height: 1.6; color: #c3d3e8;
+        }
+        body.light-mode .info-facts li { color: #44536b; }
+        .info-facts li::before {
+            content: ''; position: absolute; left: 2px; top: 7px;
+            width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+        }
+        .info-actions { display: flex; gap: 7px; margin-top: 12px; }
+        .info-actions button {
+            flex: 1 1 0; min-width: 0;
+            padding: 9px 6px; border-radius: 12px; cursor: pointer;
+            font-family: inherit; font-size: 11.5px; font-weight: 800;
+            color: var(--ink); background: rgba(255, 255, 255, 0.07);
+            border: 1px solid var(--line);
+            white-space: nowrap;
+        }
+        body.light-mode .info-actions button { color: #16202e; background: #eef3f9; border-color: #dbe4ee; }
+        .info-actions button:hover { background: rgba(94, 234, 212, 0.16); }
+
+        /* ---------- 하단 컨트롤 ---------- */
+        .bottom-control-bar .control-capsule-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            padding: 9px 13px; border-radius: 999px;
+            font-family: inherit; font-size: 12px; font-weight: 800;
+            color: #14202f; background: rgba(255, 255, 255, 0.92);
+            border: 1px solid rgba(0, 0, 0, 0.08); cursor: pointer;
+            white-space: nowrap; transition: background .16s ease, transform .16s ease;
+        }
+        .bottom-control-bar .control-capsule-btn:active { transform: scale(0.97); }
+        .bottom-control-bar .control-capsule-btn.on {
+            background: #14b8a6; color: #04211d; border-color: #0d9488;
+        }
+        body.dark-mode .bottom-control-bar .control-capsule-btn { background: rgba(38, 48, 66, 0.94); color: #eef4ff; border-color: rgba(255, 255, 255, 0.12); }
+        body.dark-mode .bottom-control-bar .control-capsule-btn.on { background: #14b8a6; color: #04211d; }
+
+        /* ---------- 우하단 전체화면 ---------- */
+        .bottom-right-bar { position: absolute; right: 24px; bottom: 24px; z-index: 40; }
+        #btn-fullscreen {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 9px 14px; cursor: pointer;
+            font-family: inherit; font-size: 12.5px; font-weight: 800; color: var(--ink);
+            background: var(--glass);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line); border-radius: 999px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+        }
+        body.light-mode #btn-fullscreen { color: #16202e; background: rgba(255, 255, 255, 0.92); border-color: #ffffffcc; }
+
+        /* ---------- 안내 툴팁 ---------- */
+        .center-tooltip {
+            position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+            padding: 8px 16px; border-radius: 999px;
+            font-size: 12px; font-weight: 700; color: var(--ink);
+            background: var(--glass);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid var(--line);
+            z-index: 20; white-space: nowrap; pointer-events: none;
+            transition: opacity .5s ease;
+        }
+        body.light-mode .center-tooltip { color: #16202e; background: rgba(255, 255, 255, 0.92); }
+        .center-tooltip.hide { opacity: 0; }
+
+        /* ---------- 토스트 ---------- */
+        #ux-toast {
+            position: fixed; left: 50%; bottom: calc(86px + env(safe-area-inset-bottom));
+            transform: translateX(-50%) translateY(8px);
+            max-width: 84vw; padding: 10px 16px; border-radius: 14px;
+            background: rgba(18, 28, 44, 0.94); color: #eef4ff;
+            font-size: 12.5px; font-weight: 700; line-height: 1.5; text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+            opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease;
+            z-index: 3000;
+        }
+        #ux-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ---------- 모델 QR 모달 ---------- */
+        .qr-overlay {
+            position: fixed; inset: 0; z-index: 2100;
+            display: none; align-items: center; justify-content: center;
+            padding: 18px; background: rgba(4, 8, 16, 0.82);
+            backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        }
+        .qr-overlay.open { display: flex; }
+        .qr-card {
+            width: min(360px, 92vw); padding: 20px 20px 16px;
+            border-radius: 24px; text-align: center;
+            background: #0e1828; border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+            color: #eef4ff;
+        }
+        .qr-card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 900; }
+        .qr-card .qr-sub { margin: 0 0 14px; font-size: 12px; color: #9db0cb; }
+        .qr-card .qr-box {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 12px; border-radius: 18px; background: #fff;
+        }
+        .qr-card .qr-box canvas, .qr-card .qr-box img { display: block; width: 210px; height: 210px; }
+        .qr-card .qr-url {
+            margin: 12px 0 0; font-size: 10.5px; color: #8fa3bf;
+            word-break: break-all; line-height: 1.5;
+        }
+        .qr-card .qr-actions { display: flex; gap: 8px; margin-top: 14px; }
+        .qr-card .qr-actions button {
+            flex: 1 1 0; padding: 11px 8px; border-radius: 13px; cursor: pointer;
+            font-family: inherit; font-size: 12.5px; font-weight: 800;
+            color: #eef4ff; background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+        }
+        .qr-card .qr-actions button.primary { background: #14b8a6; color: #04211d; border-color: #0d9488; }
+
+        /* ---------- 학습지용 QR 인쇄 시트 ---------- */
+        .print-overlay {
+            position: fixed; inset: 0; z-index: 2200;
+            display: none; overflow: auto;
+            background: #20272f;
+        }
+        .print-overlay.open { display: block; }
+        .print-bar {
+            position: sticky; top: 0; z-index: 5;
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 12px 16px; background: rgba(12, 20, 32, 0.96);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            color: #eef4ff; font-size: 13px; font-weight: 800;
+        }
+        .print-bar .pb-actions { display: flex; gap: 8px; }
+        .print-bar button {
+            padding: 9px 14px; border-radius: 11px; cursor: pointer;
+            font-family: inherit; font-size: 12.5px; font-weight: 800;
+            color: #eef4ff; background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .print-bar button.primary { background: #14b8a6; color: #04211d; border-color: #0d9488; }
+
+        .sheet {
+            width: 210mm; min-height: 297mm; margin: 18px auto 40px;
+            padding: 12mm 11mm 10mm;
+            background: #fff; color: #111;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            font-family: 'SeoulNamsan', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+        }
+        .sheet-head { border-bottom: 2px solid #111; padding-bottom: 6mm; margin-bottom: 6mm; }
+        .sheet-head h1 { margin: 0 0 4px; font-size: 19px; font-weight: 900; letter-spacing: -0.4px; }
+        .sheet-head p { margin: 0; font-size: 11px; line-height: 1.6; color: #333; }
+        .sheet-head .sheet-brand {
+            display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+        }
+        .sheet-head .sheet-brand span { font-size: 9.5px; color: #666; letter-spacing: .5px; }
+
+        .sheet-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 5mm 4mm;
+        }
+        .qr-cell {
+            border: 1px solid #c9c9c9; border-radius: 3mm;
+            padding: 3.5mm 3mm 3mm; text-align: center; page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .qr-cell .qr-holder { display: flex; justify-content: center; }
+        .qr-cell .qr-holder canvas, .qr-cell .qr-holder img { width: 27mm !important; height: 27mm !important; display: block; }
+        .qr-cell h3 { margin: 2.5mm 0 0; font-size: 11.5px; font-weight: 900; letter-spacing: -0.2px; }
+        .qr-cell .qr-formula { margin: 0.6mm 0 0; font-size: 10px; font-weight: 800; color: #0f766e; }
+        .qr-cell .qr-line { margin: 1mm 0 0; font-size: 8.6px; line-height: 1.45; color: #444; }
+
+        .sheet-foot {
+            display: flex; justify-content: space-between; gap: 8mm;
+            margin-top: 6mm; padding-top: 4mm; border-top: 1px dashed #bbb;
+            font-size: 8.6px; color: #555; line-height: 1.6;
+        }
+
+        /* ---------- 모바일 ---------- */
+        @media (max-width: 860px) {
+            .top-left-bar { top: 10px; left: 10px; gap: 6px; }
+            .back-btn { padding: 8px 11px; font-size: 12px; border-radius: 14px; }
+            .tag-badge { padding: 7px 10px; font-size: 11.5px; border-radius: 14px; gap: 6px; }
+            .vision-badge { font-size: 8.5px; padding: 2px 5px; }
+            .qr-btn-label { display: none; }
+            .top-right-bar {
+                top: 54px; left: 10px; right: 10px;
+                justify-content: space-between; gap: 8px;
+            }
+            .model-picker { flex: 1 1 auto; height: 40px; border-radius: 14px; }
+            .model-picker select { font-size: 13px; max-width: none; flex: 1 1 auto; }
+            .print-btn { height: 40px; padding: 0 12px; font-size: 12px; border-radius: 14px; }
+            .center-tooltip { display: none; }
+
+            .info-card {
+                top: auto; left: 10px; right: 10px; width: auto;
+                bottom: calc(66px + env(safe-area-inset-bottom));
+                max-height: 42vh; padding: 11px 13px 12px;
+                border-radius: 16px;
+            }
+            .info-title h2 { font-size: 15.5px; }
+            .info-emoji { width: 34px; height: 34px; font-size: 17px; border-radius: 11px; }
+            .info-toggle { display: block; }
+            .info-tag { margin-top: 7px; font-size: 11.5px; }
+            .info-body {
+                max-height: 0; overflow: hidden; margin-top: 0;
+                transition: max-height .28s ease, margin-top .28s ease;
+            }
+            .info-card.expanded .info-body {
+                max-height: 40vh; overflow-y: auto; margin-top: 10px;
+            }
+            .bottom-right-bar { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+            #btn-fullscreen { padding: 8px 11px; font-size: 11.5px; border-radius: 12px; }
+            .bottom-right-bar #fs-label { display: none; }
+            .bottom-control-bar .control-capsule-btn { padding: 8px 10px; font-size: 11px; }
+        }
+
+        @media (max-width: 380px) {
+            .tag-badge .title-text { font-size: 10.5px; }
+            .bottom-control-bar .control-capsule-btn { padding: 7px 8px; font-size: 10.5px; }
+        }
+
+        /* 가로로 짧은 화면(폰 가로모드) */
+        @media (max-height: 520px) and (min-width: 700px) {
+            .info-card { top: 62px; width: 268px; max-height: calc(100vh - 132px); padding: 11px 13px; }
+            .info-desc, .info-facts { font-size: 11px; }
+            .top-right-bar { top: 12px; }
+            .top-left-bar { top: 12px; }
+            .bottom-control-bar .control-capsule-btn { padding: 7px 10px; font-size: 11px; }
+        }
+
+        /* AR 모드에서는 3D 화면만 보이게 */
+        body.in-ar .top-left-bar,
+        body.in-ar .top-right-bar,
+        body.in-ar .info-card,
+        body.in-ar .bottom-control-bar,
+        body.in-ar .bottom-right-bar,
+        body.in-ar .center-tooltip { display: none !important; }
+        #ar-exit {
+            display: none; position: fixed; z-index: 2600;
+            left: 50%; bottom: calc(24px + env(safe-area-inset-bottom));
+            transform: translateX(-50%);
+            padding: 12px 22px; border-radius: 999px;
+            font-family: inherit; font-size: 13px; font-weight: 800;
+            background: rgba(18, 28, 44, 0.9); color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }
+        body.in-ar #ar-exit { display: block; }
+        #ar-hint {
+            display: none; position: fixed; z-index: 2600;
+            left: 50%; top: calc(20px + env(safe-area-inset-top));
+            transform: translateX(-50%);
+            padding: 10px 16px; border-radius: 14px;
+            font-size: 12px; font-weight: 800; text-align: center; line-height: 1.5;
+            background: rgba(18, 28, 44, 0.86); color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        body.in-ar #ar-hint { display: block; }
+
+        /* ---------- 인쇄 ---------- */
+        @media print {
+            @page { size: A4 portrait; margin: 8mm; }
+            html, body {
+                background: #fff !important; overflow: visible !important;
+                height: auto !important; color: #000 !important;
+            }
+            body > *:not(.print-overlay) { display: none !important; }
+            .print-overlay {
+                position: static !important; display: block !important;
+                overflow: visible !important; background: #fff !important;
+            }
+            .print-bar { display: none !important; }
+            .sheet {
+                width: auto; min-height: 0; margin: 0; padding: 0;
+                box-shadow: none; background: #fff;
+            }
+            .sheet-grid { gap: 4mm 3.5mm; }
+            .qr-cell { border-color: #999; }
+        }
+    </style>
+</head>
+<body class="dark-mode">
+
+<div id="canvas-container"></div>
+
+<!-- 좌상단: 메인 이동 · 실험 제목 · QR -->
+<div class="top-left-bar">
+    <a href="../../index.html" class="back-btn" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge">
+        <span class="title-text">학습지 연동 3D 뷰어</span>
+        <span class="vision-badge">visionOS</span>
+    </div>
+    <button class="back-btn qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">📱 <span class="qr-btn-label">QR code</span></button>
+</div>
+
+<!-- 우상단: 모델 선택 · 학습지용 QR 인쇄 -->
+<div class="top-right-bar">
+    <div class="model-picker">
+        <label for="modelSelect" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">3D 모델 선택</label>
+        <select id="modelSelect"></select>
+    </div>
+    <button class="print-btn" id="printBtn" type="button" title="학습지용 QR 모음 인쇄">🖨️ <span>학습지용 QR 인쇄</span></button>
+</div>
+
+<!-- 안내 툴팁 -->
+<div class="center-tooltip" id="guide-tooltip">👆 손가락으로 돌리고, 두 손가락으로 확대·이동해 보세요</div>
+
+<!-- 좌측 정보 카드 -->
+<div class="glass-panel info-card" id="infoCard">
+    <div class="info-head">
+        <div class="info-emoji" id="infoEmoji">💧</div>
+        <div class="info-title">
+            <h2 id="infoName">물</h2>
+            <p id="infoFormula">H₂O</p>
+        </div>
+        <button class="info-toggle" id="infoToggle" type="button" aria-label="설명 펼치기" aria-expanded="false">⌄</button>
+    </div>
+    <p class="info-tag" id="infoTag">굽은형 분자 · 결합각 104.5°</p>
+    <div class="info-body" id="infoBody">
+        <div class="info-row"><span class="k">구성 원소</span><span class="v" id="infoElements">산소 O · 수소 H</span></div>
+        <p class="info-desc" id="infoDesc"></p>
+        <ul class="info-facts" id="infoFacts"></ul>
+        <div class="info-actions">
+            <button type="button" id="qrModelBtn">📱 이 모델 QR</button>
+            <button type="button" id="copyLinkBtn">🔗 링크 복사</button>
+        </div>
+    </div>
+</div>
+
+<!-- 하단 컨트롤 -->
+<div class="glass-panel bottom-control-bar">
+    <button class="control-capsule-btn on" id="btn-rotate" type="button">🔄 자동 회전</button>
+    <button class="control-capsule-btn" id="btn-ar" type="button">🥽 AR로 보기</button>
+    <button class="control-capsule-btn" id="btn-reset" type="button">↺ 초기화</button>
+    <button class="control-capsule-btn" id="btn-align" type="button">🧭 시점 정렬</button>
+</div>
+
+<!-- 우하단 전체화면 -->
+<div class="bottom-right-bar">
+    <button id="btn-fullscreen" type="button" title="전체화면" aria-label="전체화면으로 전환">
+        <span id="fs-icon">⛶</span><span id="fs-label">전체화면</span>
+    </button>
+</div>
+
+<button id="ar-exit" type="button">✕ AR 종료</button>
+<div id="ar-hint">바닥·책상을 비추고 화면을 한 번 탭하면 그 자리에 3D 모델이 놓입니다</div>
+
+<!-- 모델 QR 모달 -->
+<div class="qr-overlay" id="qrOverlay" role="dialog" aria-modal="true" aria-labelledby="qrTitle">
+    <div class="qr-card">
+        <h3 id="qrTitle">물 H₂O</h3>
+        <p class="qr-sub">스마트폰 카메라로 찍으면 이 모델이 바로 열립니다</p>
+        <div class="qr-box" id="qrBox"></div>
+        <p class="qr-url" id="qrUrl"></p>
+        <div class="qr-actions">
+            <button type="button" class="primary" id="qrPrintBtn">🖨️ 학습지용 QR 인쇄</button>
+            <button type="button" id="qrCloseBtn">닫기</button>
+        </div>
+    </div>
+</div>
+
+<!-- 학습지용 QR 인쇄 시트 -->
+<div class="print-overlay" id="printOverlay">
+    <div class="print-bar">
+        <span>🖨️ 학습지용 QR 모음 · A4 세로</span>
+        <div class="pb-actions">
+            <button type="button" class="primary" id="doPrint">인쇄하기</button>
+            <button type="button" id="printClose">닫기</button>
+        </div>
+    </div>
+    <div class="sheet" id="sheet">
+        <div class="sheet-head">
+            <div class="sheet-brand">
+                <h1>학습지에 붙이는 3D 모델 QR</h1>
+                <span>Science Virtual LAB</span>
+            </div>
+            <p>아래 QR코드를 스마트폰 카메라(크롬·사파리)로 찍으면 <b>앱 설치 없이</b> 브라우저에서 3D 모델이 바로 열립니다.
+               모델은 손가락으로 돌리고 두 손가락으로 확대할 수 있으며, 상단에서 다른 모델로도 바꿀 수 있습니다.</p>
+        </div>
+        <div class="sheet-grid" id="sheetGrid"></div>
+        <div class="sheet-foot">
+            <span>찍는 방법 · 카메라 앱 실행 → QR에 비추기 → 화면에 뜨는 링크 누르기</span>
+            <span>chaneww.github.io · 무료 · 가입 없음</span>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ============================================================================
+   Science Virtual LAB — 학습지 연동 WebXR / 모바일 3D 뷰어
+   ----------------------------------------------------------------------------
+   학습지 구석의 QR을 찍으면 별도 앱 없이 브라우저에서 분자·화석 3D 모델이 열린다.
+   · ?model=water 처럼 URL 파라미터로 모델을 바로 지정한다.
+   · Three.js 회전/핀치 줌/두 손가락 팬/자동 회전
+   · WebXR(immersive-ar) 지원 기기에서는 책상 위에 모델을 놓는 AR 모드
+   · 교사용 학습지 QR 모음 인쇄 시트(로컬 qrcode.min.js — 인터넷 연결 불필요)
+   ========================================================================== */
+(function () {
+    'use strict';
+
+    /* =====================================================================
+       0. 공통 설정
+       ===================================================================== */
+    const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+    const DEG = THREE.MathUtils.degToRad;
+    const FONT_STACK = "'SeoulNamsan', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif";
+
+    const C = {
+        H: 0xf2f6fc, O: 0xef4444, N: 0x3b82f6, C: 0x3f4a5c,
+        Na: 0xa855f7, Cl: 0x34d399,
+        bond: 0x9aa8bd, guide: 0x38bdf8, gold: 0xfbbf24,
+        stone: 0xcfc0a5, stoneDark: 0x9d8f77, rock: 0x5b5245,
+        dnaA: 0xf87171, dnaT: 0x60a5fa, dnaG: 0x34d399, dnaC: 0xfbbf24,
+        backbone: 0x7dd3fc
+    };
+
+    /* =====================================================================
+       1. 3D 모델 제작 도우미
+       ===================================================================== */
+    function atomMesh(r, color, opts) {
+        const mesh = new THREE.Mesh(
+            new THREE.SphereGeometry(r, 36, 26),
+            new THREE.MeshStandardMaterial(Object.assign({
+                color: color, roughness: 0.34, metalness: 0.06, envMapIntensity: 0.8
+            }, opts || {}))
+        );
+        return mesh;
+    }
+
+    function bondMesh(a, b, radius, color, opts) {
+        const dir = new THREE.Vector3().subVectors(b, a);
+        const len = dir.length();
+        if (len < 1e-5) return new THREE.Object3D();
+        const mesh = new THREE.Mesh(
+            new THREE.CylinderGeometry(radius, radius, len, 20, 1, false),
+            new THREE.MeshStandardMaterial(Object.assign({
+                color: color, roughness: 0.5, metalness: 0.25
+            }, opts || {}))
+        );
+        mesh.position.copy(a).addScaledVector(dir, 0.5);
+        mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        return mesh;
+    }
+
+    /* 글자 스프라이트 — 3D 캔버스 라벨도 사이트 표준 글꼴을 쓴다 */
+    function labelSprite(text, opts) {
+        opts = opts || {};
+        const fs = opts.fs || 64;
+        const pad = opts.pad || 26;
+        const color = opts.color || '#ffffff';
+        const bg = opts.bg === null ? null : (opts.bg || 'rgba(9,16,28,0.78)');
+        const weight = opts.weight || 800;
+        const canvas = document.createElement('canvas');
+        let ctx = canvas.getContext('2d');
+        const font = weight + ' ' + fs + 'px ' + FONT_STACK;
+        ctx.font = font;
+        const tw = Math.ceil(ctx.measureText(text).width);
+        const w = tw + pad * 2;
+        const h = Math.ceil(fs * 1.5) + pad;
+        canvas.width = w; canvas.height = h;
+        ctx = canvas.getContext('2d');
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        if (bg) {
+            const r = h * 0.32;
+            ctx.beginPath();
+            ctx.moveTo(r, 0); ctx.lineTo(w - r, 0); ctx.quadraticCurveTo(w, 0, w, r);
+            ctx.lineTo(w, h - r); ctx.quadraticCurveTo(w, h, w - r, h);
+            ctx.lineTo(r, h); ctx.quadraticCurveTo(0, h, 0, h - r);
+            ctx.lineTo(0, r); ctx.quadraticCurveTo(0, 0, r, 0);
+            ctx.closePath();
+            ctx.fillStyle = bg; ctx.fill();
+            if (opts.border) { ctx.strokeStyle = opts.border; ctx.lineWidth = 3; ctx.stroke(); }
+        }
+        ctx.fillStyle = color;
+        ctx.fillText(text, w / 2, h / 2 + 2);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.anisotropy = 4;
+        tex.minFilter = THREE.LinearFilter;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: tex, transparent: true, depthTest: false, depthWrite: false
+        }));
+        const unit = (opts.scale || 1) * 0.0088;      // 캔버스 px → 월드 단위
+        sprite.scale.set(w * unit, h * unit, 1);
+        sprite.renderOrder = 30;
+        return sprite;
+    }
+
+    /* 두 결합 방향 사이의 각도 호 */
+    function angleArc(center, dirA, dirB, radius, color, axisHint) {
+        const a = dirA.clone().normalize();
+        const b = dirB.clone().normalize();
+        const angle = a.angleTo(b);
+        let axis = new THREE.Vector3().crossVectors(a, b);
+        if (axis.length() < 1e-6) axis = (axisHint || new THREE.Vector3(0, 0, 1)).clone();
+        axis.normalize();
+        const pts = [];
+        const seg = 56;
+        for (let i = 0; i <= seg; i++) {
+            const v = a.clone().applyAxisAngle(axis, angle * (i / seg)).multiplyScalar(radius).add(center);
+            pts.push(v);
+        }
+        const line = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineBasicMaterial({ color: color || C.guide, transparent: true, opacity: 0.95 })
+        );
+        line.renderOrder = 5;
+        return { line: line, mid: a.clone().applyAxisAngle(axis, angle / 2) };
+    }
+
+    function addLabel(group, text, pos, opts) {
+        const s = labelSprite(text, opts);
+        s.position.copy(pos);
+        group.add(s);
+        return s;
+    }
+
+    function dashedLine(points, color, dashSize, gapSize, opacity) {
+        const geo = new THREE.BufferGeometry().setFromPoints(points);
+        const mat = new THREE.LineDashedMaterial({
+            color: color, dashSize: dashSize || 0.09, gapSize: gapSize || 0.07,
+            transparent: true, opacity: opacity === undefined ? 0.55 : opacity
+        });
+        const line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        return line;
+    }
+
+    /* =====================================================================
+       2. 모델 빌더
+       ===================================================================== */
+    const BUILDERS = {};
+
+    /* ---- 물 H₂O : 굽은형 104.5° ---- */
+    BUILDERS.water = function () {
+        const g = new THREE.Group();
+        const L = 1.42;
+        const half = DEG(104.5 / 2);
+        const O = new THREE.Vector3(0, 0, 0);
+        const h1 = new THREE.Vector3(Math.sin(half), Math.cos(half), 0).multiplyScalar(L);
+        const h2 = new THREE.Vector3(-Math.sin(half), Math.cos(half), 0).multiplyScalar(L);
+
+        const o = atomMesh(0.56, C.O); o.position.copy(O); g.add(o);
+        const a1 = atomMesh(0.31, C.H); a1.position.copy(h1); g.add(a1);
+        const a2 = atomMesh(0.31, C.H); a2.position.copy(h2); g.add(a2);
+        g.add(bondMesh(O, h1, 0.115, C.bond));
+        g.add(bondMesh(O, h2, 0.115, C.bond));
+
+        const arc = angleArc(O, h1, h2, 0.62, C.guide);
+        g.add(arc.line);
+        addLabel(g, '104.5°', arc.mid.clone().multiplyScalar(1.02), { color: '#7dd3fc', fs: 60 });
+        addLabel(g, 'O', O.clone().add(new THREE.Vector3(0, -0.86, 0)), { color: '#fca5a5', fs: 46, pad: 18, bg: null });
+        addLabel(g, 'H', h1.clone().multiplyScalar(1.36).add(new THREE.Vector3(0.06, 0.1, 0)), { color: '#e2e8f0', fs: 44, pad: 16, bg: null });
+        addLabel(g, 'H', h2.clone().multiplyScalar(1.36).add(new THREE.Vector3(-0.06, 0.1, 0)), { color: '#e2e8f0', fs: 44, pad: 16, bg: null });
+        g.position.y = -0.36;
+        return g;
+    };
+
+    /* ---- 이산화 탄소 CO₂ : 직선형 180° ---- */
+    BUILDERS.co2 = function () {
+        const g = new THREE.Group();
+        const d = 1.66;
+        const cPos = new THREE.Vector3(0, 0, 0);
+        const o1 = new THREE.Vector3(d, 0, 0);
+        const o2 = new THREE.Vector3(-d, 0, 0);
+
+        const c = atomMesh(0.46, C.C); g.add(c);
+        const a1 = atomMesh(0.54, C.O); a1.position.copy(o1); g.add(a1);
+        const a2 = atomMesh(0.54, C.O); a2.position.copy(o2); g.add(a2);
+
+        /* 이중 결합 — 두 줄로 나란히 */
+        [0.15, -0.15].forEach(function (off) {
+            g.add(bondMesh(cPos.clone().setZ(off), o1.clone().setZ(off), 0.072, C.bond));
+            g.add(bondMesh(cPos.clone().setZ(off), o2.clone().setZ(off), 0.072, C.bond));
+        });
+
+        const arc = angleArc(cPos, o1, o2, 0.72, C.guide, new THREE.Vector3(0, 0, 1));
+        g.add(arc.line);
+        addLabel(g, '180°', arc.mid.clone().multiplyScalar(1.45), { color: '#7dd3fc', fs: 60 });
+        addLabel(g, 'C', new THREE.Vector3(0, -0.82, 0), { color: '#cbd5e1', fs: 46, pad: 18, bg: null });
+        addLabel(g, 'O', o1.clone().add(new THREE.Vector3(0, 0.92, 0)), { color: '#fca5a5', fs: 46, pad: 18, bg: null });
+        addLabel(g, 'O', o2.clone().add(new THREE.Vector3(0, 0.92, 0)), { color: '#fca5a5', fs: 46, pad: 18, bg: null });
+        return g;
+    };
+
+    /* ---- 메테인 CH₄ : 정사면체 109.5° ---- */
+    BUILDERS.ch4 = function () {
+        const g = new THREE.Group();
+        const L = 1.5;
+        const dirs = [
+            new THREE.Vector3(1, 1, 1), new THREE.Vector3(-1, -1, 1),
+            new THREE.Vector3(-1, 1, -1), new THREE.Vector3(1, -1, -1)
+        ].map(function (v) { return v.normalize(); });
+        const cPos = new THREE.Vector3(0, 0, 0);
+        g.add(atomMesh(0.44, C.C));
+
+        const hp = dirs.map(function (d) { return d.clone().multiplyScalar(L); });
+        hp.forEach(function (p) {
+            const h = atomMesh(0.27, C.H); h.position.copy(p); g.add(h);
+            g.add(bondMesh(cPos, p, 0.1, C.bond));
+        });
+
+        /* 정사면체 가이드 — 수소 원자를 잇는 면 */
+        for (let i = 0; i < hp.length; i++) {
+            for (let j = i + 1; j < hp.length; j++) {
+                g.add(dashedLine([hp[i], hp[j]], 0x60a5fa, 0.08, 0.07, 0.5));
+            }
+        }
+
+        const arc = angleArc(cPos, hp[0], hp[1], 0.68, C.guide);
+        g.add(arc.line);
+        addLabel(g, '109.5°', arc.mid.clone().multiplyScalar(1.25), { color: '#7dd3fc', fs: 58 });
+        addLabel(g, 'C', new THREE.Vector3(0, -0.72, 0), { color: '#cbd5e1', fs: 44, pad: 16, bg: null });
+        return g;
+    };
+
+    /* ---- 암모니아 NH₃ : 삼각뿔 107° ---- */
+    BUILDERS.nh3 = function () {
+        const g = new THREE.Group();
+        const L = 1.3;
+        const theta = Math.acos(Math.sqrt((Math.cos(DEG(107)) + 0.5) / 1.5)); // 축과의 각
+        const dirs = [0, 1, 2].map(function (i) {
+            const phi = i * Math.PI * 2 / 3;
+            return new THREE.Vector3(
+                Math.sin(theta) * Math.cos(phi),
+                -Math.cos(theta),
+                Math.sin(theta) * Math.sin(phi)
+            );
+        });
+        const nPos = new THREE.Vector3(0, 0, 0);
+        g.add(atomMesh(0.5, C.N));
+
+        const hp = dirs.map(function (d) { return d.clone().multiplyScalar(L); });
+        hp.forEach(function (p) {
+            const h = atomMesh(0.26, C.H); h.position.copy(p); g.add(h);
+            g.add(bondMesh(nPos, p, 0.095, C.bond));
+        });
+
+        /* 비공유 전자쌍 */
+        const lone = atomMesh(0.3, C.gold, {
+            transparent: true, opacity: 0.42, roughness: 0.9, emissive: 0x8a5a00, emissiveIntensity: 0.4
+        });
+        lone.scale.set(1, 0.78, 1);
+        lone.position.set(0, 0.86, 0);
+        g.add(lone);
+        const pairGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-0.1, 0.84, 0.06), new THREE.Vector3(0.1, 0.84, 0.06)
+        ]);
+        g.add(new THREE.Line(pairGeo, new THREE.LineBasicMaterial({ color: 0xfde68a })));
+
+        const arc = angleArc(nPos, hp[0], hp[1], 0.6, C.guide);
+        g.add(arc.line);
+        addLabel(g, '107°', arc.mid.clone().multiplyScalar(1.35), { color: '#7dd3fc', fs: 58 });
+        addLabel(g, '비공유 전자쌍', new THREE.Vector3(0.05, 1.32, 0), { color: '#fde68a', fs: 44, pad: 20 });
+        addLabel(g, 'N', new THREE.Vector3(0, 0.1, 0.72), { color: '#93c5fd', fs: 44, pad: 16, bg: null });
+        g.position.y = 0.24;
+        return g;
+    };
+
+    /* ---- 염화 나트륨 NaCl : 면심입방격자 ---- */
+    BUILDERS.nacl = function () {
+        const g = new THREE.Group();
+        const n = 3, s = 1.08;
+        const NA_R = 0.27, CL_R = 0.41;
+        const nodes = [];
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                for (let k = 0; k < n; k++) {
+                    const isNa = ((i + j + k) % 2 === 0);
+                    const p = new THREE.Vector3((i - 1) * s, (j - 1) * s, (k - 1) * s);
+                    const m = atomMesh(isNa ? NA_R : CL_R, isNa ? C.Na : C.Cl, {
+                        roughness: isNa ? 0.25 : 0.4, metalness: isNa ? 0.25 : 0.05
+                    });
+                    m.position.copy(p);
+                    g.add(m);
+                    nodes.push({ p: p, i: i, j: j, k: k });
+                }
+            }
+        }
+        const bondMat = new THREE.MeshStandardMaterial({
+            color: 0x7c8ba3, roughness: 0.7, metalness: 0.1, transparent: true, opacity: 0.5
+        });
+        const up = new THREE.Vector3(0, 1, 0);
+        nodes.forEach(function (a) {
+            [[1, 0, 0], [0, 1, 0], [0, 0, 1]].forEach(function (d) {
+                const ni = a.i + d[0], nj = a.j + d[1], nk = a.k + d[2];
+                if (ni >= n || nj >= n || nk >= n) return;
+                const b = new THREE.Vector3((ni - 1) * s, (nj - 1) * s, (nk - 1) * s);
+                const dir = new THREE.Vector3().subVectors(b, a.p);
+                const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, dir.length(), 8), bondMat);
+                mesh.position.copy(a.p).addScaledVector(dir, 0.5);
+                mesh.quaternion.setFromUnitVectors(up, dir.clone().normalize());
+                g.add(mesh);
+            });
+        });
+
+        addLabel(g, 'Na⁺', new THREE.Vector3(-1.08, 1.55, 0), { color: '#d8b4fe', fs: 44, pad: 18 });
+        addLabel(g, 'Cl⁻', new THREE.Vector3(1.08, 1.55, 0), { color: '#6ee7b7', fs: 44, pad: 18 });
+        g.rotation.y = DEG(-18);
+        return g;
+    };
+
+    /* ---- 다이아몬드 C : 정사면체 공유 결합 그물망 ---- */
+    BUILDERS.diamond = function () {
+        const g = new THREE.Group();
+        const a = 2.05;
+        const basis = [
+            [0, 0, 0], [0, .5, .5], [.5, 0, .5], [.5, .5, 0],
+            [.25, .25, .25], [.25, .75, .75], [.75, .25, .75], [.75, .75, .25]
+        ];
+        const key = function (x, y, z) {
+            return [Math.round(x * 1000), Math.round(y * 1000), Math.round(z * 1000)].join('_');
+        };
+        const seen = {};
+        const pts = [];
+        for (let cx = 0; cx < 2; cx++) {
+            for (let cy = 0; cy < 2; cy++) {
+                for (let cz = 0; cz < 2; cz++) {
+                    basis.forEach(function (b) {
+                        const x = (cx + b[0] - 1) * a;
+                        const y = (cy + b[1] - 1) * a;
+                        const z = (cz + b[2] - 1) * a;
+                        const k = key(x, y, z);
+                        if (seen[k]) return;
+                        seen[k] = 1;
+                        pts.push(new THREE.Vector3(x, y, z));
+                    });
+                }
+            }
+        }
+
+        const atomGeo = new THREE.SphereGeometry(0.155, 20, 16);
+        const atomMat = new THREE.MeshStandardMaterial({ color: 0xa8b6c8, roughness: 0.28, metalness: 0.3 });
+        const bondGeo = new THREE.CylinderGeometry(0.048, 0.048, 1, 10);
+        const bondMat = new THREE.MeshStandardMaterial({ color: 0x8fa3bf, roughness: 0.45, metalness: 0.35 });
+        const target = a * Math.sqrt(3) / 4;
+        const up = new THREE.Vector3(0, 1, 0);
+
+        for (let i = 0; i < pts.length; i++) {
+            const m = new THREE.Mesh(atomGeo, atomMat);
+            m.position.copy(pts[i]);
+            g.add(m);
+            for (let j = i + 1; j < pts.length; j++) {
+                const d = pts[i].distanceTo(pts[j]);
+                if (Math.abs(d - target) > 0.02) continue;
+                const dir = new THREE.Vector3().subVectors(pts[j], pts[i]);
+                const bm = new THREE.Mesh(bondGeo, bondMat);
+                bm.position.copy(pts[i]).addScaledVector(dir, 0.5);
+                bm.quaternion.setFromUnitVectors(up, dir.clone().normalize());
+                bm.scale.y = d;
+                g.add(bm);
+            }
+        }
+        g.rotation.set(DEG(12), DEG(22), 0);
+        return g;
+    };
+
+    /* ---- 삼엽충 화석 ---- */
+    BUILDERS.trilobite = function () {
+        const g = new THREE.Group();
+        const body = new THREE.Group();
+
+        const stoneMat = new THREE.MeshStandardMaterial({ color: C.stone, roughness: 0.72, metalness: 0.05 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: C.stoneDark, roughness: 0.8, metalness: 0.03 });
+
+        /* 화석이 놓인 암석 판 */
+        const slab = new THREE.Mesh(new THREE.CylinderGeometry(2.45, 2.35, 0.22, 48), new THREE.MeshStandardMaterial({
+            color: C.rock, roughness: 0.92, metalness: 0.02
+        }));
+        slab.scale.set(1, 1, 0.82);
+        slab.position.y = -0.22;
+        g.add(slab);
+
+        /* 몸 전체 윤곽 */
+        const outline = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), stoneMat);
+        outline.scale.set(0.92, 0.26, 1.52);
+        outline.position.set(0, 0.06, 0);
+        body.add(outline);
+
+        /* 축엽(가운데 융기) */
+        const axial = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), darkMat);
+        axial.scale.set(0.3, 0.24, 1.36);
+        axial.position.set(0, 0.2, 0.02);
+        body.add(axial);
+
+        /* 흉부 마디 — 늑엽을 가로지르는 홈 */
+        for (let i = 0; i < 9; i++) {
+            const z = -0.78 + i * 0.2;
+            const rib = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.055, 8, 30, Math.PI * 1.12), darkMat);
+            rib.rotation.x = -Math.PI / 2;
+            rib.rotation.z = Math.PI / 2 + (Math.PI - Math.PI * 1.12) / 2;
+            rib.scale.set(1.1 - Math.abs(i - 4) * 0.02, 1, 1);
+            rib.position.set(0, 0.16, z);
+            body.add(rib);
+        }
+
+        /* 두부(머리) */
+        const ceph = new THREE.Mesh(new THREE.SphereGeometry(1, 44, 28), stoneMat);
+        ceph.scale.set(0.88, 0.28, 0.62);
+        ceph.position.set(0, 0.2, -1.32);
+        body.add(ceph);
+        const glabella = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), darkMat);
+        glabella.scale.set(0.31, 0.26, 0.4);
+        glabella.position.set(0, 0.34, -1.3);
+        body.add(glabella);
+
+        /* 겹눈 */
+        [-1, 1].forEach(function (sx) {
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 16), new THREE.MeshStandardMaterial({
+                color: 0x2b2b2b, roughness: 0.25, metalness: 0.35, emissive: 0x0b0b0b
+            }));
+            eye.position.set(sx * 0.42, 0.36, -1.06);
+            eye.scale.set(1, 0.9, 1.2);
+            body.add(eye);
+        });
+
+        /* 미부(꼬리 방패)와 가시 */
+        const pyg = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 26), stoneMat);
+        pyg.scale.set(0.78, 0.24, 0.5);
+        pyg.position.set(0, 0.16, 1.26);
+        body.add(pyg);
+        [-1, 1].forEach(function (sx) {
+            const spine = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.66, 12), stoneMat);
+            spine.position.set(sx * 0.5, 0.2, 1.72);
+            spine.rotation.set(DEG(78), 0, sx * DEG(-16));
+            body.add(spine);
+        });
+
+        g.add(body);
+
+        addLabel(g, '두부', new THREE.Vector3(-1.05, 0.85, -1.3), { color: '#e2e8f0', fs: 42, pad: 18 });
+        addLabel(g, '축엽', new THREE.Vector3(0, 1.0, 0.1), { color: '#fde68a', fs: 42, pad: 18 });
+        addLabel(g, '흉부 마디', new THREE.Vector3(1.15, 0.8, 0.55), { color: '#e2e8f0', fs: 40, pad: 16 });
+        addLabel(g, '미부', new THREE.Vector3(0.95, 0.8, 1.55), { color: '#e2e8f0', fs: 42, pad: 18 });
+        g.position.y = -0.1;
+        return g;
+    };
+
+    /* ---- 암모나이트 : 나선 껍데기 ---- */
+    BUILDERS.ammonite = function () {
+        const g = new THREE.Group();
+        const turns = 2.15;
+        const steps = 300;
+        const radial = 22;
+        const thetaMax = Math.PI * 2 * turns;
+        const k = Math.log(8.6) / thetaMax;
+        const R0 = 0.18;
+
+        const R = function (t) { return R0 * Math.exp(k * thetaMax * t); };
+        const tube = function (t) { return 0.84 * R(t) + 0.004; };
+
+        const pos = [];
+        const idx = [];
+        const centerAt = function (t) {
+            const th = thetaMax * t;
+            const r = R(t);
+            return new THREE.Vector3(r * Math.cos(th), r * Math.sin(th), 0);
+        };
+
+        for (let s = 0; s <= steps; s++) {
+            const t = s / steps;
+            const th = thetaMax * t;
+            const c = centerAt(t);
+            const nrm = new THREE.Vector3(Math.cos(th), Math.sin(th), 0);
+            const bin = new THREE.Vector3(0, 0, 1);
+            const tr = tube(t);
+            for (let r = 0; r < radial; r++) {
+                const phi = (r / radial) * Math.PI * 2;
+                const p = c.clone()
+                    .addScaledVector(nrm, Math.cos(phi) * tr)
+                    .addScaledVector(bin, Math.sin(phi) * tr);
+                /* 나선이 감길수록 살짝 납작해지는 단면 */
+                pos.push(p.x, p.y, p.z);
+            }
+        }
+        for (let s = 0; s < steps; s++) {
+            for (let r = 0; r < radial; r++) {
+                const a = s * radial + r;
+                const b = s * radial + (r + 1) % radial;
+                const c2 = (s + 1) * radial + r;
+                const d = (s + 1) * radial + (r + 1) % radial;
+                idx.push(a, c2, b, b, c2, d);
+            }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setIndex(idx);
+        geo.computeVertexNormals();
+
+        const shellMat = new THREE.MeshStandardMaterial({
+            color: 0xe2d3b4, roughness: 0.62, metalness: 0.08, side: THREE.DoubleSide,
+            flatShading: false
+        });
+        g.add(new THREE.Mesh(geo, shellMat));
+
+        /* 봉합선(성장선) */
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x8d7250, transparent: true, opacity: 0.65 });
+        for (let s = 6; s < steps; s += 16) {
+            const t = s / steps;
+            const th = thetaMax * t;
+            const c = centerAt(t);
+            const nrm = new THREE.Vector3(Math.cos(th), Math.sin(th), 0);
+            const bin = new THREE.Vector3(0, 0, 1);
+            const tr = tube(t) * 1.008;
+            const pts = [];
+            for (let r = 0; r <= 40; r++) {
+                const phi = (r / 40) * Math.PI * 2;
+                pts.push(c.clone().addScaledVector(nrm, Math.cos(phi) * tr).addScaledVector(bin, Math.sin(phi) * tr));
+            }
+            g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+        }
+
+        addLabel(g, '봉합선', new THREE.Vector3(-1.35, 0.2, 0.9), { color: '#fde68a', fs: 40, pad: 16 });
+        addLabel(g, '나선 껍데기', new THREE.Vector3(1.45, -1.45, 0.9), { color: '#e2e8f0', fs: 40, pad: 16 });
+        g.rotation.y = DEG(-14);
+        g.scale.setScalar(1.02);
+        return g;
+    };
+
+    /* ---- DNA 이중나선 ---- */
+    BUILDERS.dna = function () {
+        const g = new THREE.Group();
+        const rungs = 22;
+        const rise = 0.34;
+        const twist = Math.PI * 2 / 10.5;
+        const R = 1.18;
+        const seq = ['A', 'T', 'G', 'C', 'C', 'G', 'T', 'A', 'G', 'C', 'A', 'T', 'T', 'A', 'C', 'G', 'G', 'C', 'A', 'T', 'A', 'T'];
+        const colOf = { A: C.dnaA, T: C.dnaT, G: C.dnaG, C: C.dnaC };
+
+        const backboneMat = new THREE.MeshStandardMaterial({ color: C.backbone, roughness: 0.4, metalness: 0.2 });
+        const beadGeo = new THREE.SphereGeometry(0.155, 18, 14);
+        const up = new THREE.Vector3(0, 1, 0);
+
+        let prevA = null, prevB = null;
+        for (let i = 0; i < rungs; i++) {
+            const th = i * twist;
+            const y = (i - (rungs - 1) / 2) * rise;
+            const pA = new THREE.Vector3(Math.cos(th) * R, y, Math.sin(th) * R);
+            const pB = new THREE.Vector3(Math.cos(th + Math.PI) * R, y, Math.sin(th + Math.PI) * R);
+
+            const bA = new THREE.Mesh(beadGeo, backboneMat); bA.position.copy(pA); g.add(bA);
+            const bB = new THREE.Mesh(beadGeo, backboneMat); bB.position.copy(pB); g.add(bB);
+
+            if (prevA) {
+                g.add(bondMesh(prevA, pA, 0.075, C.backbone, { roughness: 0.35, metalness: 0.3 }));
+                g.add(bondMesh(prevB, pB, 0.075, C.backbone, { roughness: 0.35, metalness: 0.3 }));
+            }
+            prevA = pA; prevB = pB;
+
+            /* 염기쌍 — A–T, G–C 는 두 조각(수소 결합 자리)으로 나눠 그린다 */
+            const base = seq[i % seq.length];
+            const pair = { A: 'T', T: 'A', G: 'C', C: 'G' }[base];
+            const midA = pA.clone().lerp(pB, 0.47);
+            const midB = pA.clone().lerp(pB, 0.53);
+            g.add(bondMesh(pA, midA, 0.062, colOf[base], { roughness: 0.45 }));
+            g.add(bondMesh(pB, midB, 0.062, colOf[pair], { roughness: 0.45 }));
+        }
+
+        addLabel(g, '당-인산 골격', new THREE.Vector3(0, 3.55, 0), { color: '#a5f3fc', fs: 40, pad: 16 });
+        addLabel(g, 'A–T · G–C 염기쌍', new THREE.Vector3(0, -3.6, 0), { color: '#fde68a', fs: 40, pad: 16 });
+        g.scale.setScalar(0.62);
+        return g;
+    };
+
+    /* ---- 공룡 발자국 화석 ---- */
+    BUILDERS.dinotrack = function () {
+        const g = new THREE.Group();
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x6b6152, roughness: 0.95, metalness: 0.02 });
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.42, 3.3), rockMat);
+        slab.position.y = -0.2;
+        g.add(slab);
+
+        const printMat = new THREE.MeshStandardMaterial({ color: 0x2f2a22, roughness: 0.9, metalness: 0.05 });
+
+        /* 세 발가락 발자국 하나 */
+        function footprint(x, z, rotY, s) {
+            const f = new THREE.Group();
+            const pad = new THREE.Mesh(new THREE.SphereGeometry(0.34, 24, 16), printMat);
+            pad.scale.set(1, 0.16, 0.9);
+            f.add(pad);
+            [-26, 0, 26].forEach(function (a, i) {
+                const len = i === 1 ? 0.52 : 0.44;
+                const toeGeo = THREE.CapsuleGeometry ? new THREE.CapsuleGeometry(0.085, len, 6, 10) : new THREE.CylinderGeometry(0.085, 0.085, len + 0.17, 10);
+                const toe = new THREE.Mesh(toeGeo, printMat);
+                const rad = DEG(a);
+                toe.position.set(Math.sin(rad) * (len * 0.5 + 0.14), 0.02, Math.cos(rad) * (len * 0.5 + 0.14));
+                toe.rotation.set(Math.PI / 2, 0, -rad);
+                toe.scale.set(1, 1, 0.4);
+                f.add(toe);
+                /* 발톱 자국 */
+                const claw = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 8), printMat);
+                claw.position.set(Math.sin(rad) * (len + 0.2), 0.02, Math.cos(rad) * (len + 0.2));
+                claw.rotation.set(DEG(70), -rad, 0);
+                f.add(claw);
+            });
+            f.position.set(x, 0.02, z);
+            f.rotation.y = rotY;
+            f.scale.setScalar(s);
+            return f;
+        }
+
+        g.add(footprint(-1.0, 0.55, DEG(18), 1.0));
+        g.add(footprint(0.15, -0.1, DEG(24), 0.94));
+        g.add(footprint(1.25, -0.75, DEG(30), 0.88));
+
+        /* 지나간 길 안내 점선 */
+        g.add(dashedLine([
+            new THREE.Vector3(-1.5, 0.08, 0.95), new THREE.Vector3(-0.4, 0.08, 0.3),
+            new THREE.Vector3(0.75, 0.08, -0.35), new THREE.Vector3(1.75, 0.08, -1.05)
+        ], 0xfbbf24, 0.1, 0.09, 0.5));
+
+        addLabel(g, '세 발가락 발자국 (수각류)', new THREE.Vector3(0, 0.95, 1.35), { color: '#fde68a', fs: 40, pad: 16 });
+        addLabel(g, '보행렬 → 이동 방향', new THREE.Vector3(-1.65, 0.62, 1.05), { color: '#e2e8f0', fs: 38, pad: 14 });
+        g.rotation.y = DEG(-12);
+        return g;
+    };
+
+    /* ---- 암석 단면(지층) ---- */
+    BUILDERS.rock = function () {
+        const g = new THREE.Group();
+        const layers = [
+            { h: 0.42, c: 0x8d7f6a, t: '사암' },
+            { h: 0.3, c: 0xc2b19a, t: '셰일' },
+            { h: 0.5, c: 0x7a6a55, t: '역암' },
+            { h: 0.26, c: 0xb9a98f, t: '석회암' },
+            { h: 0.44, c: 0x6c5f4c, t: '사암' },
+            { h: 0.34, c: 0xa8987f, t: '셰일' }
+        ];
+        const W = 3.6, D = 2.4;
+        let y = -1.1;
+        layers.forEach(function (L) {
+            const geo = new THREE.BoxGeometry(W, L.h, D);
+            const pos = geo.attributes.position;
+            /* 층마다 조금씩 흔들어 자연스러운 층리로 */
+            for (let i = 0; i < pos.count; i++) {
+                const px = pos.getX(i);
+                const zz = pos.getZ(i);
+                pos.setZ(i, zz + Math.sin(px * 2.1) * 0.06);
+            }
+            geo.computeVertexNormals();
+            const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+                color: L.c, roughness: 0.95, metalness: 0.02, flatShading: true
+            }));
+            mesh.position.y = y + L.h / 2;
+            g.add(mesh);
+            addLabel(g, L.t, new THREE.Vector3(W / 2 + 0.55, y + L.h / 2, D / 2), { color: '#e2e8f0', fs: 36, pad: 14, scale: 0.95 });
+            y += L.h;
+        });
+
+        /* 위로 갈수록 젊은 지층임을 알려 주는 화살표 */
+        const arrow = new THREE.Group();
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.9, 10), new THREE.MeshStandardMaterial({ color: 0x5eead4 }));
+        shaft.position.y = 0;
+        arrow.add(shaft);
+        const head = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 14), new THREE.MeshStandardMaterial({ color: 0x5eead4 }));
+        head.position.y = 1.05;
+        arrow.add(head);
+        arrow.position.set(-W / 2 - 0.55, 0.1, D / 2);
+        g.add(arrow);
+        addLabel(g, '↑ 지층 누중의 법칙', new THREE.Vector3(-W / 2 - 1.35, 1.35, D / 2), { color: '#99f6e4', fs: 36, pad: 14 });
+        g.rotation.y = DEG(-16);
+        return g;
+    };
+
+    /* =====================================================================
+       3. 모델 정보(카드 · QR 시트에서 함께 사용)
+       ===================================================================== */
+    const MODELS = {
+        water: {
+            name: '물', formula: 'H₂O', icon: '💧', group: '분자 구조',
+            tag: '굽은형 분자 · 결합각 104.5°',
+            elements: '산소 O · 수소 H',
+            desc: '산소 원자 하나에 수소 원자 두 개가 104.5°의 굽은 각으로 공유 결합한 분자입니다. 산소 쪽이 부분적으로 음전하를 띠는 극성 분자여서 물 분자끼리 수소 결합을 만듭니다.',
+            facts: [
+                '결합각 104.5° — 전자쌍 반발 때문에 정사면체각 109.5°보다 작아짐',
+                '극성 분자 — 다른 물 분자와 수소 결합',
+                '수소 결합이 육각 구조를 만들어 얼음이 물보다 부피가 큼'
+            ],
+            line: '산소 1개에 수소 2개가 104.5°로 굽은 극성 분자'
+        },
+        co2: {
+            name: '이산화 탄소', formula: 'CO₂', icon: '🫧', group: '분자 구조',
+            tag: '직선형 분자 · 결합각 180°',
+            elements: '탄소 C · 산소 O',
+            desc: '탄소 원자 하나를 중심으로 산소 원자 두 개가 180° 일직선으로 배열된 무극성 분자입니다. 탄소와 산소 사이에는 이중 결합이 있습니다.',
+            facts: [
+                '직선형 · 결합각 180°',
+                '탄소–산소 이중 결합 두 개',
+                '무극성이라 분자 사이 힘이 약해 상온에서 기체'
+            ],
+            line: '탄소 중심에 산소 둘이 180° 일직선, 이중 결합'
+        },
+        ch4: {
+            name: '메테인', formula: 'CH₄', icon: '🔥', group: '분자 구조',
+            tag: '정사면체형 · 결합각 109.5°',
+            elements: '탄소 C · 수소 H',
+            desc: '탄소 원자 하나에 수소 원자 네 개가 정사면체의 네 꼭짓점 방향으로 결합한 분자입니다. 수소–탄소–수소가 이루는 결합각은 109.5°입니다.',
+            facts: [
+                '정사면체형 · 결합각 109.5°',
+                '전자쌍 네 쌍이 서로 가장 멀어지려는 배열',
+                '천연가스의 주성분 — 완전 연소하면 CO₂와 H₂O'
+            ],
+            line: '탄소 하나에 수소 넷이 정사면체로 결합 (109.5°)'
+        },
+        nh3: {
+            name: '암모니아', formula: 'NH₃', icon: '💨', group: '분자 구조',
+            tag: '삼각뿔형 · 결합각 107°',
+            elements: '질소 N · 수소 H',
+            desc: '질소 원자 하나에 수소 원자 세 개가 삼각뿔 모양으로 결합하고, 위쪽에 비공유 전자쌍 한 쌍이 남아 있습니다. 결합각은 107°로 정사면체각보다 작습니다.',
+            facts: [
+                '삼각뿔형 · 결합각 107°',
+                '비공유 전자쌍이 결합 전자쌍을 밀어내 각이 줄어듦',
+                '물에 잘 녹아 염기성을 띠고 비료 원료로 쓰임'
+            ],
+            line: '질소 하나에 수소 셋, 비공유 전자쌍이 남은 삼각뿔'
+        },
+        nacl: {
+            name: '염화 나트륨', formula: 'NaCl', icon: '🧂', group: '결정 구조',
+            tag: '면심입방격자 · 배위수 6',
+            elements: '나트륨 Na · 염소 Cl',
+            desc: '나트륨 이온(Na⁺)과 염화 이온(Cl⁻)이 3차원으로 번갈아 배열된 결정 구조입니다. 각 이온 주위에 반대 전하를 띤 이온 6개가 정팔면체로 둘러쌉니다.',
+            facts: [
+                '이온 결합 — 전자를 주고받아 생긴 정전기적 인력',
+                '배위수 6 (정팔면체 배위)',
+                '물에 녹으면 이온으로 나뉘어 전기가 통함'
+            ],
+            line: 'Na⁺와 Cl⁻가 번갈아 쌓인 정육면체 결정'
+        },
+        diamond: {
+            name: '다이아몬드', formula: 'C', icon: '💎', group: '결정 구조',
+            tag: '정사면체 공유 결합 그물망',
+            elements: '탄소 C',
+            desc: '탄소 원자 하나가 이웃한 탄소 네 개와 정사면체 방향으로 공유 결합해 끝없이 이어지는 그물망 구조입니다. 모든 결합이 같아 매우 단단하고 녹는점이 높습니다.',
+            facts: [
+                'sp³ 공유 결합 그물망 · 결합각 109.5°',
+                '결합이 끊어지지 않아 굳기 10으로 가장 단단함',
+                '전자가 결합에 묶여 있어 전기가 통하지 않음'
+            ],
+            line: '탄소가 정사면체로 이어진 그물망 결정'
+        },
+        trilobite: {
+            name: '삼엽충', formula: 'Trilobita', icon: '🦐', group: '화석',
+            tag: '고생대 표준화석 · 두부·흉부·미부',
+            elements: '절지동물 · 고생대 캄브리아기~페름기',
+            desc: '고생대 캄브리아기부터 페름기까지 바다에서 살던 절지동물입니다. 몸이 두부·흉부·미부 세 부분으로 나뉘고, 가운데 축엽과 좌우 늑엽에 마디가 있습니다.',
+            facts: [
+                '고생대 표준화석 — 지층의 시대를 알려 줌',
+                '겹눈을 가진 초기 절지동물',
+                '페름기 대멸종 때 모두 사라짐'
+            ],
+            line: '고생대 바다의 절지동물, 세로로 나뉜 몸'
+        },
+        ammonite: {
+            name: '암모나이트', formula: 'Ammonoidea', icon: '🐚', group: '화석',
+            tag: '중생대 표준화석 · 나선 껍데기',
+            elements: '두족류 · 중생대',
+            desc: '중생대 바다에 살던 두족류로, 나선형으로 감긴 껍데기 안을 여러 방으로 나누어 살았습니다. 껍데기 표면의 봉합선 모양이 복잡할수록 진화한 형태입니다.',
+            facts: [
+                '중생대 표준화석 — 암모나이트 층은 중생대',
+                '나선 껍데기 방에 공기를 넣어 부력을 조절',
+                '공룡과 함께 중생대 끝 대멸종 때 사라짐'
+            ],
+            line: '중생대 바다의 나선 껍데기 두족류'
+        },
+        dna: {
+            name: 'DNA 이중나선', formula: 'DNA', icon: '🧬', group: '생명 구조',
+            tag: '상보적 염기쌍 · A–T / G–C',
+            elements: '당 · 인산 · 염기(A·T·G·C)',
+            desc: '두 개의 당-인산 골격이 나선으로 감기고, 안쪽에서 염기 A는 T와, G는 C와 수소 결합으로 짝을 이룹니다. 한 바퀴에 약 10.5염기쌍이 들어갑니다.',
+            facts: [
+                '이중나선 — 1953년 왓슨과 크릭이 밝힘',
+                'A는 T와, G는 C와만 짝지음(상보적 결합)',
+                '한 바퀴 10.5염기쌍 · 지름 약 2nm'
+            ],
+            line: '당-인산 골격 두 줄이 감긴 이중나선'
+        },
+        dinotrack: {
+            name: '공룡 발자국 화석', formula: 'Grallator', icon: '🦕', group: '화석',
+            tag: '흔적 화석 · 세 발가락 보행렬',
+            elements: '수각류 공룡 · 중생대 퇴적암',
+            desc: '쪼개진 퇴적암 면에 남은 수각류 공룡의 세 발가락 발자국입니다. 발자국의 크기와 보폭으로 몸집과 걸음걸이를 추정할 수 있습니다.',
+            facts: [
+                '세 발가락 발자국 — 수각류의 특징',
+                '보행렬을 따라가면 이동 방향과 속도를 알 수 있음',
+                '몸체가 아니라 흔적이 남은 흔적 화석'
+            ],
+            line: '중생대 수각류의 세 발가락 발자국 보행렬'
+        },
+        rock: {
+            name: '암석 단면', formula: 'Stratigraphy', icon: '🪨', group: '지층',
+            tag: '퇴적암 층리 · 누중의 법칙',
+            elements: '사암 · 셰일 · 역암 · 석회암',
+            desc: '퇴적암 단면에 드러난 층리입니다. 아래층이 먼저 쌓이고 위층이 나중에 쌓이므로, 아래에서 위로 갈수록 시대가 젊어집니다.',
+            facts: [
+                '층리 — 퇴적물이 쌓여 만들어진 줄무늬',
+                '아래층일수록 오래된 지층(지층 누중의 법칙)',
+                '입자 크기와 색으로 퇴적 환경을 추정'
+            ],
+            line: '퇴적암의 층리 — 아래가 오래된 지층'
+        }
+    };
+
+    const MODEL_ORDER = ['water', 'co2', 'ch4', 'nh3', 'nacl', 'diamond',
+        'trilobite', 'ammonite', 'dinotrack', 'rock', 'dna'];
+
+    /* =====================================================================
+       4. Three.js 장면
+       ===================================================================== */
+    const container = document.getElementById('canvas-container');
+    let renderer, scene, camera, controls, modelRoot = null, stage = null;
+    let rafId = null;
+    let currentKey = null;
+    let webglOk = true;
+
+    try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    } catch (e) {
+        webglOk = false;
+    }
+
+    if (!webglOk) {
+        container.innerHTML = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
+            'font-size:14px;font-weight:700;color:#9db0cb;text-align:center;line-height:1.7;padding:24px;">' +
+            '이 브라우저에서는 3D 화면을 표시할 수 없습니다.<br>크롬·사파리 최신 버전에서 다시 열어 주세요.</div>';
+    } else {
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.06;
+        renderer.xr.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.05, 300);
+        camera.position.set(0, 1.1, 7.4);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.075;
+        controls.rotateSpeed = 0.92;
+        controls.zoomSpeed = 0.9;
+        controls.panSpeed = 0.8;
+        controls.minDistance = 1.4;
+        controls.maxDistance = 26;
+        controls.enablePan = true;
+        controls.screenSpacePanning = true;
+        /* 한 손가락 회전 / 두 손가락 확대·이동 */
+        controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+        controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 1.5;
+        controls.target.set(0, 0, 0);
+
+        /* 조명 — 정면 키 라이트 + 반대편 필 + 위쪽 확산 */
+        scene.add(new THREE.HemisphereLight(0xbcd6ff, 0x1b2436, 1.05));
+        const key = new THREE.DirectionalLight(0xffffff, 1.35); key.position.set(4.2, 6.2, 6.4); scene.add(key);
+        const fill = new THREE.DirectionalLight(0x8fb6ff, 0.75); fill.position.set(-6, -1.6, -3.4); scene.add(fill);
+        const rim = new THREE.DirectionalLight(0x7ef2d8, 0.62); rim.position.set(-2.6, 4.4, -6.2); scene.add(rim);
+        const under = new THREE.PointLight(0x2dd4bf, 0.42, 24); under.position.set(0, -5, 1); scene.add(under);
+
+        /* 모델 아래 은은한 무대 조명 */
+        (function buildStage() {
+            const cvs = document.createElement('canvas');
+            cvs.width = cvs.height = 256;
+            const ctx = cvs.getContext('2d');
+            const grd = ctx.createRadialGradient(128, 128, 4, 128, 128, 126);
+            grd.addColorStop(0, 'rgba(94,234,212,0.5)');
+            grd.addColorStop(0.45, 'rgba(56,189,248,0.16)');
+            grd.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grd;
+            ctx.beginPath(); ctx.arc(128, 128, 126, 0, Math.PI * 2); ctx.fill();
+            const tex = new THREE.CanvasTexture(cvs);
+            const mat = new THREE.MeshBasicMaterial({
+                map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+            });
+            stage = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), mat);
+            stage.rotation.x = -Math.PI / 2;
+            stage.position.y = -2.4;
+            stage.renderOrder = -2;
+            scene.add(stage);
+        })();
+    }
+
+    /* =====================================================================
+       5. 모델 전환 · 카메라 정렬
+       ===================================================================== */
+    let fitInfo = { center: new THREE.Vector3(), radius: 2 };
+
+    function disposeGroup(g) {
+        g.traverse(function (o) {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material) {
+                const mats = Array.isArray(o.material) ? o.material : [o.material];
+                mats.forEach(function (m) {
+                    if (m.map) m.map.dispose();
+                    m.dispose();
+                });
+            }
+        });
+    }
+
+    function frameModel(g) {
+        const box = new THREE.Box3().setFromObject(g);
+        const sphere = box.getBoundingSphere(new THREE.Sphere());
+        const center = sphere.center.clone();
+        const radius = Math.max(sphere.radius, 0.7);
+        fitInfo = { center: center, radius: radius };
+
+        const vFov = DEG(camera.fov);
+        const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+        const fitAngle = Math.min(vFov, hFov) * 0.5;
+        const dist = radius / Math.sin(fitAngle) * 1.06;
+        const dir = new THREE.Vector3(0.34, 0.3, 1).normalize();
+        camera.position.copy(center).addScaledVector(dir, dist);
+        controls.target.copy(center);
+        controls.minDistance = Math.max(0.6, radius * 0.85);
+        controls.maxDistance = Math.max(9, radius * 7);
+        controls.update();
+
+        if (stage) {
+            stage.position.y = box.min.y - 0.22;
+            const s = Math.max(2.2, radius * 1.9);
+            stage.scale.setScalar(s / 4.5);
+        }
+    }
+
+    function setModel(key, opts) {
+        opts = opts || {};
+        if (!MODELS[key]) key = 'water';
+        if (modelRoot && currentKey === key) return;
+        if (modelRoot) {
+            scene.remove(modelRoot);
+            disposeGroup(modelRoot);
+            modelRoot = null;
+        }
+        currentKey = key;
+        modelRoot = BUILDERS[key]();
+        modelRoot.traverse(function (o) { o.frustumCulled = true; });
+        scene.add(modelRoot);
+        frameModel(modelRoot);
+
+        if (opts.spin === false) controls.autoRotate = false;
+        updateInfo(key);
+        updateUrl(key);
+        highlightOption(key);
+        hideGuideSoon();
+    }
+
+    function resetView() {
+        if (!modelRoot) return;
+        frameModel(modelRoot);
+        hideGuideSoon();
+    }
+
+    /* =====================================================================
+       6. 정보 카드
+       ===================================================================== */
+    const infoCard = document.getElementById('infoCard');
+    const infoEmoji = document.getElementById('infoEmoji');
+    const infoName = document.getElementById('infoName');
+    const infoFormula = document.getElementById('infoFormula');
+    const infoTag = document.getElementById('infoTag');
+    const infoElements = document.getElementById('infoElements');
+    const infoDesc = document.getElementById('infoDesc');
+    const infoFacts = document.getElementById('infoFacts');
+    const infoToggle = document.getElementById('infoToggle');
+
+    function updateInfo(key) {
+        const m = MODELS[key];
+        infoEmoji.textContent = m.icon;
+        infoName.textContent = m.name;
+        infoFormula.textContent = m.formula;
+        infoTag.textContent = m.tag;
+        infoElements.textContent = m.elements;
+        infoDesc.textContent = m.desc;
+        infoFacts.innerHTML = m.facts.map(function (f) { return '<li>' + f + '</li>'; }).join('');
+        infoCard.scrollTop = 0;
+    }
+
+    infoToggle.addEventListener('click', function () {
+        const on = infoCard.classList.toggle('expanded');
+        infoToggle.setAttribute('aria-expanded', on ? 'true' : 'false');
+        infoToggle.textContent = on ? '⌃' : '⌄';
+    });
+
+    /* =====================================================================
+       7. 모델 선택 드롭다운
+       ===================================================================== */
+    const select = document.getElementById('modelSelect');
+    MODEL_ORDER.forEach(function (key) {
+        const m = MODELS[key];
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = m.icon + ' ' + m.name + (m.formula && m.formula !== m.name ? ' (' + m.formula + ')' : '');
+        select.appendChild(opt);
+    });
+    function highlightOption(key) { select.value = key; }
+    select.addEventListener('change', function () {
+        setModel(select.value);
+        if (window.innerWidth <= 860) infoCard.classList.remove('expanded');
+    });
+
+    /* =====================================================================
+       8. URL · 공유
+       ===================================================================== */
+    const BASE_URL = (function () {
+        const loc = window.location;
+        const host = (loc.hostname || '').toLowerCase();
+        const isLocal = !host || host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || loc.protocol === 'file:';
+        const origin = isLocal ? 'https://chaneww.github.io' : loc.origin;
+        return origin + loc.pathname;
+    })();
+
+    function modelUrl(key) { return BASE_URL + '?model=' + encodeURIComponent(key); }
+
+    function updateUrl(key) {
+        try {
+            const url = '?model=' + encodeURIComponent(key);
+            history.replaceState({ model: key }, '', url);
+        } catch (e) { /* file:// 등에서는 무시 */ }
+    }
+
+    function initialModel() {
+        try {
+            const p = new URLSearchParams(window.location.search);
+            const k = p.get('model') || p.get('m');
+            if (k && MODELS[k]) return k;
+        } catch (e) { /* noop */ }
+        return 'water';
+    }
+
+    /* =====================================================================
+       9. 토스트 · 안내
+       ===================================================================== */
+    let toastEl = document.getElementById('ux-toast');
+    if (!toastEl) {
+        toastEl = document.createElement('div');
+        toastEl.id = 'ux-toast';
+        document.body.appendChild(toastEl);
+    }
+    let toastTimer = null;
+    function toast(msg) {
+        toastEl.textContent = msg;
+        toastEl.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2800);
+    }
+    const guide = document.getElementById('guide-tooltip');
+    let guideTimer = null;
+    function hideGuideSoon() {
+        clearTimeout(guideTimer);
+        guide.classList.remove('hide');
+        guideTimer = setTimeout(function () { guide.classList.add('hide'); }, IS_TOUCH ? 4200 : 6500);
+    }
+
+    /* =====================================================================
+       10. 버튼 — 자동 회전 · 초기화 · 시점 정렬 · 전체화면
+       ===================================================================== */
+    const rotateBtn = document.getElementById('btn-rotate');
+    function syncRotateLabel() {
+        rotateBtn.classList.toggle('on', !!controls.autoRotate);
+        rotateBtn.textContent = controls.autoRotate ? '🔄 자동 회전' : '✋ 직접 돌리기';
+    }
+    rotateBtn.addEventListener('click', function () {
+        controls.autoRotate = !controls.autoRotate;
+        syncRotateLabel();
+        toast(controls.autoRotate ? '자동 회전 켜짐' : '자동 회전 꺼짐 — 직접 돌려 보세요');
+    });
+    syncRotateLabel();
+
+    document.getElementById('btn-reset').addEventListener('click', function () {
+        resetView();
+        controls.autoRotate = rotateBtn.classList.contains('on');
+        toast('처음 상태로 되돌렸습니다');
+    });
+    document.getElementById('btn-align').addEventListener('click', function () {
+        resetView();
+        toast('시점을 정렬했습니다');
+    });
+
+    (function fullscreen() {
+        const btn = document.getElementById('btn-fullscreen');
+        const icon = document.getElementById('fs-icon');
+        const text = document.getElementById('fs-label');
+        const docEl = document.documentElement;
+        function isFs() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                document.mozFullScreenElement || document.msFullscreenElement) ||
+                docEl.classList.contains('pseudo-fs');
+        }
+        function sync() {
+            const on = isFs();
+            if (icon) icon.textContent = on ? '🗗' : '⛶';
+            if (text) text.textContent = on ? '창모드' : '전체화면';
+        }
+        btn.addEventListener('click', function () {
+            const el = docEl;
+            if (!isFs()) {
+                const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+                if (req) {
+                    try { req.call(el); } catch (e) { docEl.classList.add('pseudo-fs'); }
+                } else {
+                    docEl.classList.add('pseudo-fs');
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+            } else {
+                if (docEl.classList.contains('pseudo-fs')) docEl.classList.remove('pseudo-fs');
+                const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                if (exit) { try { exit.call(document); } catch (e) {} }
+            }
+            setTimeout(sync, 120);
+        });
+        ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+            .forEach(function (ev) { document.addEventListener(ev, sync); });
+        sync();
+    })();
+
+    /* =====================================================================
+       11. QR — 현재 모델 · 학습지용 인쇄 시트
+       ===================================================================== */
+    const qrOverlay = document.getElementById('qrOverlay');
+    const qrBox = document.getElementById('qrBox');
+    const qrUrlEl = document.getElementById('qrUrl');
+    const qrTitle = document.getElementById('qrTitle');
+
+    function renderQr(container, text, size) {
+        container.innerHTML = '';
+        if (typeof window.QRCode !== 'function') {
+            container.innerHTML = '<div style="width:' + size + 'px;height:' + size + 'px;display:flex;' +
+                'align-items:center;justify-content:center;font-size:11px;color:#555;text-align:center;padding:8px;">' +
+                'QR을 만들 수 없습니다</div>';
+            return;
+        }
+        new window.QRCode(container, {
+            text: text,
+            width: size,
+            height: size,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
+            correctLevel: window.QRCode.CorrectLevel.M
+        });
+    }
+
+    function openQr() {
+        const m = MODELS[currentKey];
+        qrTitle.textContent = m.icon + ' ' + m.name + ' · ' + m.formula;
+        qrUrlEl.textContent = modelUrl(currentKey);
+        renderQr(qrBox, modelUrl(currentKey), 210);
+        qrOverlay.classList.add('open');
+    }
+    function closeQr() { qrOverlay.classList.remove('open'); }
+
+    document.getElementById('qrBtn').addEventListener('click', openQr);
+    document.getElementById('qrModelBtn').addEventListener('click', openQr);
+    document.getElementById('qrCloseBtn').addEventListener('click', closeQr);
+    qrOverlay.addEventListener('click', function (e) { if (e.target === qrOverlay) closeQr(); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeQr();
+            document.getElementById('printOverlay').classList.remove('open');
+        }
+    });
+
+    document.getElementById('copyLinkBtn').addEventListener('click', function () {
+        const url = modelUrl(currentKey);
+        const done = function () { toast('이 모델 링크를 복사했습니다'); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done, function () { toast(url); });
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) { toast(url); }
+            document.body.removeChild(ta);
+        }
+    });
+
+    /* --- 인쇄 시트 --- */
+    const printOverlay = document.getElementById('printOverlay');
+    const sheetGrid = document.getElementById('sheetGrid');
+    let sheetBuilt = false;
+
+    function buildSheet() {
+        if (sheetBuilt) return;
+        sheetBuilt = true;
+        const frag = document.createDocumentFragment();
+        MODEL_ORDER.forEach(function (key) {
+            const m = MODELS[key];
+            const cell = document.createElement('div');
+            cell.className = 'qr-cell';
+            const holder = document.createElement('div');
+            holder.className = 'qr-holder';
+            cell.appendChild(holder);
+            const h3 = document.createElement('h3');
+            h3.textContent = m.icon + ' ' + m.name;
+            cell.appendChild(h3);
+            const fem = document.createElement('p');
+            fem.className = 'qr-formula';
+            fem.textContent = m.formula;
+            cell.appendChild(fem);
+            const line = document.createElement('p');
+            line.className = 'qr-line';
+            line.textContent = m.line;
+            cell.appendChild(line);
+            frag.appendChild(cell);
+            /* 레이아웃이 끝난 뒤 QR 생성 (숨김 상태에서도 크기는 고정) */
+            setTimeout(function () { renderQr(holder, modelUrl(key), 200); }, 0);
+        });
+        sheetGrid.appendChild(frag);
+    }
+
+    function openPrint() {
+        buildSheet();
+        printOverlay.classList.add('open');
+        printOverlay.scrollTop = 0;
+    }
+    document.getElementById('printBtn').addEventListener('click', openPrint);
+    document.getElementById('qrPrintBtn').addEventListener('click', function () {
+        closeQr();
+        openPrint();
+    });
+    document.getElementById('printClose').addEventListener('click', function () {
+        printOverlay.classList.remove('open');
+    });
+    document.getElementById('doPrint').addEventListener('click', function () {
+        buildSheet();
+        setTimeout(function () { window.print(); }, 120);
+    });
+
+    /* =====================================================================
+       12. WebXR (AR) — 책상 위에 모델 놓기
+       ===================================================================== */
+    (function arModule() {
+        const arBtn = document.getElementById('btn-ar');
+        const arExit = document.getElementById('ar-exit');
+        let session = null, hitSource = null, viewerSpace = null, refSpace = null;
+        let reticle = null, placed = null;
+
+        function arSupported() {
+            return !!(navigator.xr && navigator.xr.isSessionSupported);
+        }
+
+        if (!arSupported()) {
+            arBtn.textContent = '🥽 AR (미지원)';
+            arBtn.addEventListener('click', function () {
+                toast('이 기기·브라우저는 AR을 지원하지 않습니다. 3D 터치 뷰를 사용해 주세요.');
+            });
+            return;
+        }
+        navigator.xr.isSessionSupported('immersive-ar').then(function (ok) {
+            if (!ok) {
+                arBtn.textContent = '🥽 AR (미지원)';
+                arBtn.addEventListener('click', function () {
+                    toast('이 기기·브라우저는 AR을 지원하지 않습니다. 3D 터치 뷰를 사용해 주세요.');
+                });
+            }
+        }).catch(function () {
+            arBtn.textContent = '🥽 AR (미지원)';
+        });
+
+        function buildReticle() {
+            const g = new THREE.Group();
+            const ring = new THREE.Mesh(
+                new THREE.RingGeometry(0.09, 0.115, 40),
+                new THREE.MeshBasicMaterial({ color: 0x5eead4, transparent: true, opacity: 0.95, side: THREE.DoubleSide })
+            );
+            ring.rotation.x = -Math.PI / 2;
+            g.add(ring);
+            const dot = new THREE.Mesh(new THREE.CircleGeometry(0.032, 24),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }));
+            dot.rotation.x = -Math.PI / 2;
+            g.add(dot);
+            g.matrixAutoUpdate = false;
+            g.visible = false;
+            return g;
+        }
+
+        async function enterAR() {
+            try {
+                session = await navigator.xr.requestSession('immersive-ar', {
+                    requiredFeatures: ['hit-test'],
+                    optionalFeatures: ['dom-overlay', 'light-estimation'],
+                    domOverlay: { root: document.body }
+                });
+            } catch (err) {
+                toast('AR을 시작할 수 없습니다. 카메라 권한과 HTTPS 연결을 확인해 주세요.');
+                return;
+            }
+
+            renderer.xr.setReferenceSpaceType('local');
+            await renderer.xr.setSession(session);
+
+            document.body.classList.add('in-ar');
+            controls.autoRotate = false;
+
+            viewerSpace = await session.requestReferenceSpace('viewer');
+            refSpace = await session.requestReferenceSpace('local');
+            try {
+                hitSource = await session.requestHitTestSource({ space: viewerSpace });
+            } catch (e) { hitSource = null; }
+
+            reticle = buildReticle();
+            scene.add(reticle);
+            placed = null;
+
+            session.addEventListener('end', onEnd);
+            session.addEventListener('select', onSelect);
+        }
+
+        function onSelect() {
+            if (placed) {
+                scene.remove(placed);
+                placed = null;
+            }
+            if (!modelRoot) return;
+            const clone = modelRoot.clone(true);
+            clone.traverse(function (o) { if (o.isSprite) o.visible = false; });
+            const target = reticle && reticle.visible ? reticle.position.clone() : null;
+            const pos = target || new THREE.Vector3(
+                camera.position.x * 0.2, camera.position.y - 0.3, camera.position.z - 0.9
+            );
+            clone.position.copy(pos);
+            const scale = fitInfo.radius > 0 ? (0.34 / fitInfo.radius) : 0.16;
+            clone.scale.setScalar(scale);
+            /* 카메라 쪽을 바라보게 */
+            const dir = new THREE.Vector3().subVectors(camera.position, pos);
+            clone.rotation.y = Math.atan2(dir.x, dir.z);
+            scene.add(clone);
+            placed = clone;
+        }
+
+        function onEnd() {
+            document.body.classList.remove('in-ar');
+            if (hitSource && hitSource.cancel) hitSource.cancel();
+            hitSource = null;
+            session = null;
+            if (reticle) { scene.remove(reticle); reticle = null; }
+            if (placed) { scene.remove(placed); placed = null; }
+            modelRoot.visible = true;
+            resetView();
+        }
+
+        arBtn.addEventListener('click', function () {
+            if (!navigator.xr) {
+                toast('이 브라우저는 WebXR를 지원하지 않습니다. 3D 터치 뷰를 사용해 주세요.');
+                return;
+            }
+            enterAR();
+        });
+        arExit.addEventListener('click', function () {
+            if (session) session.end().catch(function () {});
+        });
+
+        /* 렌더 루프에서 호출되는 AR 갱신 */
+        window.__SVL_AR_TICK = function (time, frame) {
+            if (!frame || !renderer.xr.isPresenting) return;
+            if (hitSource) {
+                const results = frame.getHitTestResults(hitSource);
+                if (results.length) {
+                    const pose = results[0].getPose(refSpace);
+                    if (pose) {
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(pose.transform.matrix);
+                    }
+                } else if (reticle) {
+                    reticle.visible = false;
+                }
+            }
+            /* AR 중에는 원래 모델을 숨기고, 놓은 복제본만 보이게 */
+            if (modelRoot) modelRoot.visible = false;
+        };
+    })();
+
+    /* =====================================================================
+       13. 렌더 루프 · 반응형
+       ===================================================================== */
+    function onResize() {
+        if (!renderer) return;
+        const w = window.innerWidth, h = window.innerHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        /* 세로 화면에서는 화면비를 보정해 모델이 잘리지 않게 */
+        let fov = 46;
+        if (w < h) fov = 46 + Math.min(16, (h / w - 1) * 22);
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', function () { setTimeout(onResize, 220); });
+
+    if (renderer) {
+        renderer.setAnimationLoop(function (time, frame) {
+            if (controls) controls.update();
+            /* 배경 무대가 모델을 따라 살짝 맥동 */
+            if (stage) {
+                stage.material.opacity = 0.85 + Math.sin(time * 0.0011) * 0.12;
+            }
+            if (window.__SVL_AR_TICK) window.__SVL_AR_TICK(time, frame);
+            renderer.render(scene, camera);
+        });
+    }
+
+    /* =====================================================================
+       14. 시작
+       ===================================================================== */
+    if (renderer) {
+        onResize();
+        setModel(initialModel(), { spin: true });
+        hideGuideSoon();
+    } else {
+        updateInfo('water');
+    }
+    select.value = currentKey || 'water';
+    if (!MODELS[currentKey]) { currentKey = 'water'; updateInfo('water'); select.value = 'water'; }
+
+    /* 테마 토글 상태에 맞춰 배경 밝기 동기화 */
+    (function themeWatch() {
+        const body = document.body;
+        function sync() {
+            const light = body.classList.contains('light-mode');
+            document.documentElement.style.setProperty('--glass', light ? 'rgba(255,255,255,0.9)' : 'rgba(13,21,38,0.78)');
+        }
+        new MutationObserver(sync).observe(body, { attributes: true, attributeFilter: ['class'] });
+        sync();
+    })();
+})();
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+</body>
+</html>
