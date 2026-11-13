@@ -1111,82 +1111,86 @@
     /* ---- 암모나이트 : 나선 껍데기 ---- */
     BUILDERS.ammonite = function () {
         const g = new THREE.Group();
-        const turns = 2.15;
-        const steps = 300;
-        const radial = 22;
+        const turns = 3.2;              // 보이는 나선 수
+        const steps = 340;
+        const radial = 24;
+        const expand = 1.92;            // 한 바퀴마다 커지는 비율
         const thetaMax = Math.PI * 2 * turns;
-        const k = Math.log(8.6) / thetaMax;
-        const R0 = 0.18;
-
-        const R = function (t) { return R0 * Math.exp(k * thetaMax * t); };
-        const tube = function (t) { return 0.84 * R(t) + 0.004; };
-
-        const pos = [];
-        const idx = [];
+        const k = Math.log(expand) / (Math.PI * 2);
+        const Rmax = 2.0;
+        const R = function (t) { return Rmax * Math.exp(k * (thetaMax * t - thetaMax)); };
+        const tube = function (t) { return 0.46 * R(t) + 0.004; };
         const centerAt = function (t) {
             const th = thetaMax * t;
             const r = R(t);
             return new THREE.Vector3(r * Math.cos(th), r * Math.sin(th), 0);
         };
 
-        for (let s = 0; s <= steps; s++) {
-            const t = s / steps;
+        const pos = [];
+        const idx = [];
+        for (let sIdx = 0; sIdx <= steps; sIdx++) {
+            const t = sIdx / steps;
             const th = thetaMax * t;
             const c = centerAt(t);
-            const nrm = new THREE.Vector3(Math.cos(th), Math.sin(th), 0);
-            const bin = new THREE.Vector3(0, 0, 1);
+            const nrm = new THREE.Vector3(Math.cos(th), Math.sin(th), 0);   // 바깥 방향
+            const bin = new THREE.Vector3(0, 0, 1);                          // 나선 축 방향
             const tr = tube(t);
-            for (let r = 0; r < radial; r++) {
-                const phi = (r / radial) * Math.PI * 2;
+            for (let rIdx = 0; rIdx < radial; rIdx++) {
+                const phi = (rIdx / radial) * Math.PI * 2;
                 const p = c.clone()
                     .addScaledVector(nrm, Math.cos(phi) * tr)
                     .addScaledVector(bin, Math.sin(phi) * tr);
-                /* 나선이 감길수록 살짝 납작해지는 단면 */
                 pos.push(p.x, p.y, p.z);
             }
         }
-        for (let s = 0; s < steps; s++) {
-            for (let r = 0; r < radial; r++) {
-                const a = s * radial + r;
-                const b = s * radial + (r + 1) % radial;
-                const c2 = (s + 1) * radial + r;
-                const d = (s + 1) * radial + (r + 1) % radial;
+        for (let sIdx = 0; sIdx < steps; sIdx++) {
+            for (let rIdx = 0; rIdx < radial; rIdx++) {
+                const a = sIdx * radial + rIdx;
+                const b = sIdx * radial + (rIdx + 1) % radial;
+                const c2 = (sIdx + 1) * radial + rIdx;
+                const d = (sIdx + 1) * radial + (rIdx + 1) % radial;
                 idx.push(a, c2, b, b, c2, d);
             }
         }
+        /* 껍데기 입구(배출구) 막기 */
+        const lastCenter = centerAt(1);
+        const capIndex = pos.length / 3;
+        pos.push(lastCenter.x, lastCenter.y, lastCenter.z);
+        const base = steps * radial;
+        for (let rIdx = 0; rIdx < radial; rIdx++) {
+            idx.push(base + rIdx, capIndex, base + (rIdx + 1) % radial);
+        }
+
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
         geo.setIndex(idx);
         geo.computeVertexNormals();
 
         const shellMat = new THREE.MeshStandardMaterial({
-            color: 0xe2d3b4, roughness: 0.62, metalness: 0.08, side: THREE.DoubleSide,
-            flatShading: false
+            color: 0xdccdae, roughness: 0.58, metalness: 0.06, side: THREE.DoubleSide
         });
         g.add(new THREE.Mesh(geo, shellMat));
 
-        /* 봉합선(성장선) */
-        const lineMat = new THREE.LineBasicMaterial({ color: 0x8d7250, transparent: true, opacity: 0.65 });
-        for (let s = 6; s < steps; s += 16) {
-            const t = s / steps;
+        /* 봉합선(성장선) — 껍데기 표면의 가는 홈 */
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x8a6f4c, transparent: true, opacity: 0.55 });
+        for (let sIdx = 8; sIdx < steps; sIdx += 14) {
+            const t = sIdx / steps;
             const th = thetaMax * t;
             const c = centerAt(t);
             const nrm = new THREE.Vector3(Math.cos(th), Math.sin(th), 0);
             const bin = new THREE.Vector3(0, 0, 1);
-            const tr = tube(t) * 1.008;
+            const tr = tube(t) * 1.005;
             const pts = [];
-            for (let r = 0; r <= 40; r++) {
-                const phi = (r / 40) * Math.PI * 2;
+            for (let rIdx = 0; rIdx <= 32; rIdx++) {
+                const phi = (rIdx / 32) * Math.PI * 2;
                 pts.push(c.clone().addScaledVector(nrm, Math.cos(phi) * tr).addScaledVector(bin, Math.sin(phi) * tr));
             }
             g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
         }
 
-        addLabel(g, '봉합선', new THREE.Vector3(-1.35, 0.2, 0.9), { color: '#fde68a', fs: 40, pad: 16 });
-        addLabel(g, '나선 껍데기', new THREE.Vector3(1.45, -1.45, 0.9), { color: '#e2e8f0', fs: 40, pad: 16 });
-        g.rotation.y = DEG(-14);
-        g.scale.setScalar(1.02);
-        g.userData.viewDir = new THREE.Vector3(0.06, 0.28, 1);
+        addLabel(g, '봉합선(성장선)', new THREE.Vector3(-0.15, 2.62, 0.7), { color: '#fde68a', fs: 38, pad: 16, scale: 0.82 });
+        g.rotation.y = DEG(-12);
+        g.userData.viewDir = new THREE.Vector3(0.05, 0.24, 1);
         return g;
     };
 
