@@ -4180,7 +4180,15 @@ function errText_(err) {
   return String(err.message || err);
 }
 function nowHms_() {
-  return Utilities.formatDate(new Date(), TZ, 'HH:mm:ss');
+  return Utilities.formatDate(new Date(), tz_(), 'HH:mm:ss');
+}
+/* 시트 자체의 시간대(기본 Asia/Seoul) — 셀에 직접 입력한 시각을 같은 기준으로 읽는다 */
+var __SS_TZ = null;
+function tz_() {
+  if (__SS_TZ) return __SS_TZ;
+  try { __SS_TZ = SpreadsheetApp.openById(SHEET_ID).getSpreadsheetTimeZone() || TZ; }
+  catch (e) { __SS_TZ = TZ; }
+  return __SS_TZ;
 }
 
 /* ------------------------------------------------------- 시트 접근 도우미 ---- */
@@ -4229,9 +4237,13 @@ function parseDeadline_(v) {
   if (v === null || v === undefined || v === '') return { kind: 'none' };
   if (Object.prototype.toString.call(v) === '[object Date]') {
     if (isNaN(v.getTime())) return { kind: 'none' };
-    var y = Number(Utilities.formatDate(v, TZ, 'yyyy'));
-    if (y < 1900) return { kind: 'time', hm: Utilities.formatDate(v, TZ, 'HH:mm') };
-    return { kind: 'date', key: Utilities.formatDate(v, TZ, 'yyyy-MM-dd HH:mm') };
+    var y = Number(Utilities.formatDate(v, tz_(), 'yyyy'));
+    if (y < 1900) return { kind: 'time', hm: Utilities.formatDate(v, tz_(), 'HH:mm') };
+    return {
+      kind: 'moment',
+      ms: v.getTime(),
+      text: Utilities.formatDate(v, tz_(), 'yyyy-MM-dd HH:mm')
+    };
   }
   var raw = str_(v);
   if (!raw) return { kind: 'none' };
@@ -4250,16 +4262,18 @@ function parseDeadline_(v) {
 function deadlinePassed_(v) {
   var d = parseDeadline_(v);
   if (d.kind === 'none') return false;
+  if (d.kind === 'moment') return Date.now() >= d.ms;
   var now = new Date();
   if (d.kind === 'time') {
-    return Utilities.formatDate(now, TZ, 'HH:mm') >= d.hm;
+    return Utilities.formatDate(now, tz_(), 'HH:mm') >= d.hm;
   }
-  return Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm') >= d.key;
+  return Utilities.formatDate(now, tz_(), 'yyyy-MM-dd HH:mm') >= d.key;
 }
 /* 교사 화면에 보여줄 정규화 문자열 */
 function deadlineText_(v) {
   var d = parseDeadline_(v);
   if (d.kind === 'none') return '';
+  if (d.kind === 'moment') return d.text;
   return d.kind === 'time' ? d.hm : d.key;
 }
 
