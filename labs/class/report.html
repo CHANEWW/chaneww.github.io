@@ -490,7 +490,7 @@ body.dark .attach-box {
         color: #000000 !important; font-size: 11pt !important;
     }
     .top-nav, .mobile-segment, .editor-panel, #btn-fullscreen, .svl-feedback-btn,
-    .top-right-bar, .qr-modal, .svl-feedback-modal {
+    .top-right-bar, .qr-modal, .svl-feedback-modal, .fs-toast, #fs-toast {
         display: none !important;
     }
     .workspace {
@@ -619,6 +619,89 @@ body.dark .smc-preview-box {
 .smc-status.loading { background: #e0f2fe; color: #0369a1; }
 .smc-actions {
     display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px;
+}
+
+/* ---------- 전체화면 / 창모드 버튼 (우하단 고정 알약) ---------- */
+#btn-fullscreen {
+    position: fixed;
+    right: 20px;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+    z-index: 95;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 16px; border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+    color: inherit; font-family: inherit; font-size: 12.5px; font-weight: 800;
+    letter-spacing: -0.2px; white-space: nowrap; line-height: 1;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+}
+#btn-fullscreen:hover {
+    background: rgba(255, 255, 255, 0.97); transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.2);
+}
+#btn-fullscreen:active { transform: scale(0.97); }
+#btn-fullscreen:focus-visible { outline: 2px solid #007aff; outline-offset: 2px; }
+body.dark #btn-fullscreen {
+    background: rgba(44, 44, 46, 0.9);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #f2f2f7;
+}
+body.dark #btn-fullscreen:hover { background: rgba(58, 58, 60, 0.96); }
+
+/* ---------- 몰입(가상) 전체화면: iPadOS·태블릿 Safari 폴백 ---------- */
+/* 브라우저 전체화면 API가 막힌 기기에서도 상단 바를 걷어내고 화면을 넓게 쓴다. */
+.top-nav { transition: transform .26s ease, opacity .26s ease; }
+body.pseudo-fullscreen .top-nav {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+}
+body.pseudo-fullscreen .workspace { top: 0; }
+body.pseudo-fullscreen .mobile-segment { top: max(8px, env(safe-area-inset-top, 0px)); }
+/* 상단 바가 사라지면 그 자리에 떠 있던 제안하기 버튼도 함께 걷어낸다(몰입 모드). */
+body.pseudo-fullscreen #feedback-btn,
+body.pseudo-fullscreen .svl-fb-btn { display: none !important; }
+
+/* 전체화면 안내 토스트 */
+.fs-toast {
+    position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    transform: translate(-50%, 8px); z-index: 2050;
+    max-width: 86vw; padding: 10px 16px; border-radius: 14px;
+    background: rgba(28, 28, 30, 0.92); color: #fff;
+    font-size: 12.5px; font-weight: 700; line-height: 1.45; text-align: center;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
+    opacity: 0; pointer-events: none;
+    transition: opacity .26s ease, transform .26s ease;
+}
+.fs-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 768px) {
+    #btn-fullscreen {
+        right: 10px;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        padding: 8px 13px; font-size: 12px;
+    }
+    body.pseudo-fullscreen .workspace {
+        top: calc(44px + max(8px, env(safe-area-inset-top, 0px)));
+    }
+    .fs-toast { bottom: calc(64px + env(safe-area-inset-bottom, 0px)); font-size: 12px; }
+}
+
+@media (max-width: 430px) {
+    #btn-fullscreen { padding: 8px 12px; font-size: 11.5px; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    #btn-fullscreen {
+        right: 8px;
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        padding: 7px 12px; font-size: 11.5px;
+    }
+    .fs-toast { bottom: calc(48px + env(safe-area-inset-bottom, 0px)); font-size: 11.5px; }
 }
 </style>
 </head>
@@ -999,6 +1082,12 @@ body.dark .smc-preview-box {
         </article>
     </section>
 </main>
+
+<!-- 전체화면 / 창모드 전환 버튼 -->
+<button type="button" id="btn-fullscreen" aria-label="전체화면으로 전환" aria-pressed="false" title="브라우저 전체화면으로 넓게 봅니다.">
+    <span class="fs-icon" aria-hidden="true">⛶</span>
+    <span class="fs-text">전체화면</span>
+</button>
 
 <!-- 학생 보고서 온라인 제출 모달 -->
 <div id="reportSubmitMask" class="submit-modal-mask" style="display:none;" onclick="if(event.target===this)closeSubmitModal()">
@@ -2179,6 +2268,114 @@ function downloadReportImage(dataUrl, filename) {
     a.click();
     document.body.removeChild(a);
 }
+</script>
+
+<script>
+/* ---------- 전체화면 / 창모드 전환 (표준 Fullscreen API + iPadOS·태블릿 몰입 모드 폴백) ---------- */
+(function () {
+    var btn = document.getElementById('btn-fullscreen');
+    if (!btn) return;
+    var iconEl = btn.querySelector('.fs-icon');
+    var textEl = btn.querySelector('.fs-text');
+    var root = document.documentElement;
+    var PSEUDO = 'pseudo-fullscreen';
+
+    function isRealFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function isPseudo() { return document.body.classList.contains(PSEUDO); }
+    function isOn() { return isRealFs() || isPseudo(); }
+
+    function syncUI() {
+        var on = isOn();
+        if (iconEl) iconEl.textContent = on ? '🗗' : '⛶';
+        if (textEl) textEl.textContent = on ? '창모드' : '전체화면';
+        btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.title = on ? '창모드로 돌아갑니다.' : '브라우저 전체화면으로 넓게 봅니다.';
+    }
+
+    var toastEl = null, toastTimer = null;
+    function toast(msg) {
+        if (!toastEl) {
+            toastEl = document.createElement('div');
+            toastEl.className = 'fs-toast';
+            toastEl.id = 'fs-toast';
+            toastEl.setAttribute('role', 'status');
+            document.body.appendChild(toastEl);
+        }
+        toastEl.textContent = msg;
+        void toastEl.offsetWidth;
+        toastEl.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+    }
+
+    function enterPseudo(hint) {
+        if (isRealFs()) return;
+        document.body.classList.add(PSEUDO);
+        syncUI();
+        if (hint) toast('이 브라우저는 브라우저 전체화면 대신 상단 바를 숨긴 몰입 모드로 표시합니다');
+    }
+    function exitPseudo() {
+        document.body.classList.remove(PSEUDO);
+        syncUI();
+    }
+
+    function requestReal() {
+        var req = root.requestFullscreen || root.webkitRequestFullscreen ||
+                  root.mozRequestFullScreen || root.msRequestFullscreen;
+        if (!req) return false;
+        try {
+            var p = req.call(root);
+            if (p && typeof p.then === 'function') {
+                p.then(syncUI, function () { enterPseudo(true); });
+            } else {
+                setTimeout(function () {
+                    if (!isRealFs() && !isPseudo()) enterPseudo(true);
+                    else syncUI();
+                }, 500);
+            }
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    btn.addEventListener('click', function () {
+        if (isRealFs()) {
+            var exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                       document.mozCancelFullScreen || document.msExitFullscreen;
+            try {
+                if (exit) {
+                    var q = exit.call(document);
+                    if (q && typeof q.catch === 'function') q.catch(function () { });
+                }
+            } catch (err) { }
+            syncUI();
+            return;
+        }
+        if (isPseudo()) { exitPseudo(); return; }
+        if (!requestReal()) enterPseudo(true);
+        syncUI();
+    });
+
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, function () {
+            if (isRealFs()) document.body.classList.remove(PSEUDO);
+            syncUI();
+        });
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if ((e.key === 'Escape' || e.key === 'Esc') && isPseudo() && !isRealFs()) exitPseudo();
+    });
+
+    window.addEventListener('orientationchange', function () { setTimeout(syncUI, 260); });
+    window.addEventListener('resize', syncUI);
+    syncUI();
+})();
 </script>
 
 <script src="../common/feedback.js" defer></script>
