@@ -1247,7 +1247,7 @@ body.dark .svl-t-act button{ background:rgba(255,255,255,.09);color:#e2e8f0;bord
       <label for="svlName">이름</label>
       <input id="svlName" type="text" maxlength="20" placeholder="이름을 입력하세요" autocomplete="off" enterkeyhint="done">
     </div>
-    <button class="svl-btn svl-btn-primary" id="svlGateBtn" type="button" disabled>🔓 입장하기</button>
+    <button class="svl-btn svl-btn-primary" id="svlGateBtn" type="button">🔓 입장하기</button>
     <div class="svl-status" id="svlGateStatus"></div>
     <div class="svl-gate-help" id="svlGateHelp" hidden>
       <b>⚠️ 서버 보안 스크립트(Apps Script v2) 배포가 필요합니다</b>
@@ -2785,8 +2785,10 @@ frame();
   }
   function setGateStatus(kind, msg) { gateStatus.className = 'svl-status' + (kind ? ' ' + kind : ''); gateStatus.textContent = msg || ''; }
   function syncGate() {
-    const n = parseInt(numIn.value, 10);
-    gateBtn.disabled = !(schoolIn.value.trim() && gradeSel.value && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim() && pinIn.value.trim());
+    /* 버튼을 입력칸 상태로 잠그지 않는다.
+       iOS Safari 자동완성·한글 조합 입력은 input 이벤트를 쏘지 않아 버튼이 영구히
+       비활성으로 남는 사고가 있었다. 항목 검사는 클릭 시점(gateEnter)에 직접 한다. */
+    gateBtn.disabled = gateBusy;
   }
   function openGate() {
     schoolIn.value = st.school || prefill.school || DEF_SCHOOL;
@@ -2865,7 +2867,7 @@ frame();
       return { ok: false, code: 'NET', reason: '서버에 연결하지 못했습니다.' };
     }
   }
-  async function apiCall(q) {
+  async function apiCallOnce(q) {
     const r = await jsonpCall(q);
     if (r && (r.code === 'NET' || r.code === 'NOT_V2')) {
       const r2 = await fetchCall(q);
@@ -2874,16 +2876,48 @@ frame();
     }
     return r;
   }
+  async function apiCall(q) {
+    const r = await apiCallOnce(q);
+    if (!r || r.ok) return r;
+    const code = r.code || '';
+    const stale = (code === 'NOT_V2' || code === 'BAD_ACTION' || code === 'NET' || code === 'SERVER');
+    const saved = (readLS(LS.hook) || '').trim();
+    const fallback = (SUBMIT_WEBHOOK_URL || '').trim();
+    /* 기기에 예전 웹앱 주소(svl_circuit_hook)가 남아 실패하면 지우고 기본 주소로 1회 재시도 */
+    if (stale && saved && fallback && saved !== fallback) {
+      try { localStorage.removeItem(LS.hook); } catch (e) {}
+      const r2 = await apiCallOnce(q);
+      return (r2 && (r2.ok || r2.code)) ? r2 : r;
+    }
+    return r;
+  }
 
   /* ---------- 입장 ---------- */
   async function gateEnter() {
     if (gateBusy) return;
-    const n = parseInt(numIn.value, 10);
-    if (!(schoolIn.value.trim() && gradeSel.value && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim() && pinIn.value.trim())) return;
+    /* 자동완성·한글 조합으로 input 이벤트가 누락돼도 클릭 시점의 값을 그대로 읽어 검사한다. */
+    const schoolV = String(schoolIn.value || '').trim();
+    const gradeV = String(gradeSel.value || '').trim();
+    const clsV = String(clsSel.value || '').trim();
+    const numRaw = String(numIn.value || '').trim();
+    const n = parseInt(numRaw, 10);
+    const nameV = String(nameIn.value || '').trim();
+    const pinV = String(pinIn.value || '').trim();
+    const need = function (field, msg) {
+      setGateStatus('err', '⚠️ ' + msg);
+      try { if (field && field.focus) field.focus(); } catch (e) {}
+      return false;
+    };
+    if (!schoolV) { need(schoolIn, '학교명을 입력해 주세요.'); return; }
+    if (!gradeV) { need(gradeSel, '학년을 선택해 주세요.'); return; }
+    if (!clsV) { need(clsSel, '반을 선택해 주세요.'); return; }
+    if (!(numRaw && n >= 1 && n <= 40)) { need(numIn, '번호(1~40)를 입력해 주세요.'); return; }
+    if (!pinV) { need(pinIn, '입장 코드를 입력해 주세요.'); return; }
+    if (!nameV) { need(nameIn, '이름을 입력해 주세요.'); return; }
     gateBusy = true;
     gateBtn.disabled = true; gateBtn.textContent = '🔎 응시 자격 확인 중…';
     setGateStatus('info', '서버에서 응시 자격을 확인하고 있습니다…');
-    const q = { action: 'enter', school: schoolIn.value.trim(), grade: gradeSel.value, cls: clsSel.value, num: String(n), name: nameIn.value.trim(), pin: pinIn.value.trim() };
+    const q = { action: 'enter', school: schoolV, grade: gradeV, cls: clsV, num: String(n), name: nameV, pin: pinV };
     let r = null;
     try { r = await apiCall(q); } catch (e) { r = { ok: false, code: 'NOT_V2' }; }
     gateBusy = false;
