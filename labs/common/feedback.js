@@ -62,7 +62,8 @@
     function themeBtn() {
         return document.getElementById('theme-toggle')
             || document.getElementById('bTheme')
-            || document.getElementById('themeBtn');
+            || document.getElementById('themeBtn')
+            || document.getElementById('btnTheme');
     }
 
     /* 우측 상단 유틸 행(.tr-util)에 인라인으로 끼워 넣는다.
