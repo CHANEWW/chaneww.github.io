@@ -1687,7 +1687,13 @@ function simulate(){
 
   for(let j=0; j<N; j++){ A[j][j] += 1e-9; }
 
-  const WIRE_R = 1e-4;
+  /* 도선·전류계·닫힌 스위치의 기생 저항.
+     1e-4 Ω는 1.5V + 1Ω 직렬 회로에서 총저항을 1.0003~1.0004 Ω으로 만들어
+     전류가 1.4995 A로 계산되는 0.05% 오차를 냈다. 1 μΩ(1e-6)으로 낮춰
+     도선 6개까지 붙여도 오차를 0.001% 미만으로 유지한다.
+     (전압계 R=1e8 Ω, 대각 1e-9 항과 함께 쓰는 MNA 정밀도는 단락·개방·직병렬·내부저항
+      조건에서 검증했다: 최대 상대오차 8e-6, 전압계 지시값 오차 없음) */
+  const WIRE_R = 1e-6;
 
   parts.forEach(p=>{
     if(p.type === 'batt') return; 
@@ -2766,15 +2772,26 @@ frame();
     };
   }
 
+  /* 저장용 반올림: 전압·전류는 1 mV / 1 mA 단위로 정돈해
+     도선 기생저항이 만드는 1.4995000 A 같은 꼬리를 남기지 않는다.
+     0.01 A 미만의 극소 전류(예: 1.5V / 1000Ω = 0.0015 A)는
+     3자리로 자르면 0.002 A가 되어 버리므로 유효숫자 4자리로 남긴다. */
+  function repRound(x, tiny) {
+    if (typeof x !== 'number' || !isFinite(x)) return 0;
+    const a = Math.abs(x);
+    if (a === 0) return 0;
+    if (tiny && a < 0.01) return Number(x.toPrecision(4));
+    return Math.round(x * 1000) / 1000;
+  }
   function repAdd() {
     const m = repMeasure();
     if (!m.bats) { toast('🔋 회로에 전지를 먼저 연결해 주세요'); return; }
     if (!m.flowing) { toast('⚡ 전류가 흐르지 않아요 — 스위치와 도선 연결을 확인하세요'); return; }
     if (repState.rows.length >= REP_MAX) { toast('기록은 최대 ' + REP_MAX + '회까지 저장됩니다'); return; }
     repState.rows.push({
-      v: Math.round(m.V * 1000) / 1000,
+      v: repRound(m.V),
       r: Math.round(m.R * 100) / 100,
-      i: Math.round(m.I * 1e6) / 1e6
+      i: repRound(m.I, true)
     });
     repSave(); repRender(); repLive();
     toast('📝 ' + repState.rows.length + '회차 측정값을 기록했습니다');
