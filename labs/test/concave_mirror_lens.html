@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="1.12">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>오목렌즈·거울의 상 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<script src="../common/lib/three.min.js"></script>
+<script>if(!window.THREE){document.write('<scr'+'ipt src="../common/lib/three.min.js"><\/scr'+'ipt>');}</script>
+<script src="../common/lib/OrbitControls.js"></script>
+<script>if(!(window.THREE&&THREE.OrbitControls)){document.write('<scr'+'ipt src="../common/lib/OrbitControls.js"><\/scr'+'ipt>');}</script>
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+
+@font-face{
+  font-family:'SeoulNamsan';
+  src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+  font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+  font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color:#16202e;
+  background:linear-gradient(180deg,#f8fbff 0%,#e9f1fa 52%,#dbe6f2 100%);
+  transition:background .35s ease,color .35s ease;
+  touch-action:none;
+}
+body.dark-mode{color:#eef4ff;background:linear-gradient(180deg,#1a2740 0%,#101a2c 50%,#060a12 100%)}
+#canvas-container{position:absolute;inset:0;z-index:1;touch-action:none}
+#canvas-container canvas{display:block}
+
+/* ---------- 유리 카드 ---------- */
+.glass-panel{
+  background:rgba(255,255,255,.80);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(255,255,255,.62);
+  border-radius:18px;
+  box-shadow:0 10px 28px rgba(15,23,42,.10);
+  transition:background .35s ease,border-color .35s ease,color .35s ease;
+}
+body.dark-mode .glass-panel{background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+
+/* ---------- 좌상단 : 메인 / 제목 ---------- */
+.top-left-bar{position:fixed;top:16px;left:18px;display:flex;align-items:center;gap:10px;z-index:40;max-width:calc(100vw - 112px)}
+.back-btn{
+  display:flex;align-items:center;gap:6px;padding:9px 16px;font-size:14px;font-weight:700;font-family:inherit;
+  color:#16202e;text-decoration:none;border:none;border-radius:999px;cursor:pointer;white-space:nowrap;
+  background:rgba(255,255,255,.80);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.62);box-shadow:0 10px 28px rgba(15,23,42,.10);transition:transform .18s,background .35s;
+}
+body.dark-mode .back-btn{color:#eef4ff;background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13)}
+.back-btn:active{transform:scale(.97)}
+.tag-badge{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:14px;font-weight:700;border-radius:999px;min-width:0;overflow:hidden}
+.tag-badge .title-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vision-badge{flex:0 0 auto;background:linear-gradient(135deg,#0a84ff,#5e5ce6);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.2px}
+
+/* ---------- 우상단 : 유틸 + 데이터 ---------- */
+.icon-btn{
+  width:38px;height:38px;min-width:38px;border-radius:50%;border:1px solid rgba(255,255,255,.62);
+  display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+  color:#16202e;background:rgba(255,255,255,.80);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 8px 22px rgba(15,23,42,.10);transition:background .35s,border-color .35s;
+}
+body.dark-mode .icon-btn{color:#eef4ff;background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13)}
+.data-card{display:flex;align-items:center;gap:14px;padding:9px 16px;border-radius:16px}
+.data-item{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.data-label{font-size:10.5px;font-weight:700;color:#64748b;white-space:nowrap;line-height:1.2}
+body.dark-mode .data-label{color:#9db0cb}
+.data-value{font-size:14px;font-weight:800;color:#16202e;white-space:nowrap;line-height:1.25}
+body.dark-mode .data-value{color:#eef4ff}
+
+/* ---------- 중앙 안내 ---------- */
+.center-tooltip{
+  position:fixed;top:78px;left:50%;transform:translateX(-50%);padding:8px 18px;border-radius:999px;
+  font-size:12.5px;font-weight:700;color:#475569;pointer-events:none;z-index:15;white-space:nowrap;
+  max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;
+  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+body.dark-mode .center-tooltip{color:#cbd5e1;background:rgba(18,28,46,.78);border-color:rgba(255,255,255,.12)}
+
+/* ---------- 우측 조절 패널 ---------- */
+body #side-ctrl.side-ctrl-panel{width:250px !important;padding:12px !important;gap:9px !important}
+.panel-header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-bottom:6px;border-bottom:1px solid rgba(15,23,42,.08);width:100%}
+body.dark-mode .panel-header{border-bottom-color:rgba(255,255,255,.12)}
+.ctrl-block{display:flex;flex-direction:column;gap:7px;width:100%}
+.ctrl-row{display:flex;flex-direction:column;gap:3px;width:100%}
+.ctrl-row-header{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.ctrl-label{font-size:11.5px;font-weight:700;color:#475569;white-space:nowrap;line-height:1.25}
+body.dark-mode .ctrl-label{color:#cbd5e1}
+.ctrl-val{font-size:12px;font-weight:800;color:#0a84ff;white-space:nowrap;line-height:1.25}
+.ctrl-slider{
+  width:100%;height:6px;border-radius:999px;background:#dbe4ef;outline:none;
+  -webkit-appearance:none;appearance:none;cursor:pointer;margin:4px 0;
+}
+body.dark-mode .ctrl-slider{background:#334155}
+.ctrl-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#0a84ff;box-shadow:0 2px 6px rgba(10,132,255,.45);cursor:pointer}
+.ctrl-slider::-moz-range-thumb{width:15px;height:15px;border:none;border-radius:50%;background:#0a84ff}
+.panel-note{font-size:10.5px;font-weight:700;color:#64748b;line-height:1.45;letter-spacing:-.1px;word-break:keep-all}
+body.dark-mode .panel-note{color:#9db0cb}
+.seg-toggle{display:flex;gap:3px;background:rgba(15,23,42,.06);padding:3px;border-radius:11px;width:100%}
+body.dark-mode .seg-toggle{background:rgba(0,0,0,.3)}
+.seg-btn{
+  flex:1 1 0;min-width:0;padding:7px 2px;border:none;border-radius:8px;background:transparent;
+  color:#64748b;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;transition:all .18s;
+}
+body.dark-mode .seg-btn{color:#94a3b8}
+.seg-btn.active{background:#0a84ff;color:#fff;box-shadow:0 2px 8px rgba(10,132,255,.35)}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+.mode-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:44px;padding:6px 3px;
+  border-radius:12px;border:1px solid rgba(15,23,42,.09);background:rgba(255,255,255,.9);color:#334155;
+  font-family:inherit;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer;transition:all .18s;
+}
+body.dark-mode .mode-btn{background:rgba(30,42,62,.9);border-color:rgba(255,255,255,.12);color:#cbd5e1}
+.mode-btn .mb-icon{font-size:14px;line-height:1}
+.mode-btn.active{background:#0a84ff;border-color:#0a84ff;color:#fff;box-shadow:0 4px 12px rgba(10,132,255,.35)}
+
+/* ---------- 좌측 보조 패널 (그래프 · 정보) ---------- */
+.side-left-panel{position:fixed;left:18px;bottom:76px;width:252px;padding:12px;z-index:20;border-radius:18px}
+.side-left-panel .panel-title{font-size:12px;font-weight:800;color:#334155;margin:0 0 6px;letter-spacing:-.2px}
+body.dark-mode .side-left-panel .panel-title{color:#cbd5e1}
+.side-left-panel canvas{display:block;width:100%;height:auto;border-radius:10px}
+
+/* ---------- 하단 ---------- */
+.bottom-right-bar{position:fixed;right:18px;bottom:18px;display:flex;align-items:center;gap:10px;z-index:40}
+
+/* ---------- 모바일 세로 ---------- */
+@media (max-width:900px){
+  .top-left-bar{top:max(8px,env(safe-area-inset-top));left:8px;gap:6px;max-width:calc(100vw - 66px)}
+  .back-btn{padding:7px 11px;font-size:12px}
+  .tag-badge{padding:7px 11px;font-size:12px}
+  .vision-badge{display:none}
+  .icon-btn{width:32px;height:32px;min-width:32px;font-size:14px}
+  .data-card{gap:9px;padding:6px 10px;border-radius:14px}
+  .data-label{font-size:9px}
+  .data-value{font-size:12px}
+  .center-tooltip{display:none}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(64px + env(safe-area-inset-bottom)) !important;
+    max-height:min(56vh,420px) !important;padding:9px !important;gap:6px !important;
+  }
+  .ctrl-label{font-size:10.5px}
+  .ctrl-val{font-size:11px}
+  .panel-note{font-size:9.5px}
+  .mode-btn{min-height:40px;font-size:10px}
+  .seg-btn{font-size:10.5px;padding:6px 2px}
+  .bottom-right-bar{right:8px;bottom:calc(8px + env(safe-area-inset-bottom))}
+  #fullscreenText{display:none}
+  .side-left-panel{left:8px;right:auto;top:calc(env(safe-area-inset-top) + 112px);bottom:auto;width:212px;padding:8px;max-height:none;overflow:hidden}
+  .side-left-panel .panel-title{font-size:10.5px;margin-bottom:4px}
+  .side-left-panel canvas{max-height:106px}
+}
+
+/* ---------- 모바일 가로 ---------- */
+@media (max-height:520px) and (orientation:landscape){
+  .top-left-bar{top:max(6px,env(safe-area-inset-top));left:6px;gap:5px;max-width:46vw}
+  .back-btn{padding:5px 9px;font-size:11px}
+  .tag-badge{padding:5px 9px;font-size:11px}
+  .vision-badge{display:none}
+  .icon-btn{width:28px;height:28px;min-width:28px;font-size:13px}
+  .data-card{gap:8px;padding:4px 9px;border-radius:12px}
+  .data-label{font-size:8.5px}
+  .data-value{font-size:11px}
+  .center-tooltip{display:none}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(46px + env(safe-area-inset-bottom)) !important;
+    max-height:calc(100vh - 108px) !important;padding:8px !important;gap:5px !important;
+  }
+  .ctrl-label{font-size:10px}
+  .ctrl-val{font-size:10.5px}
+  .panel-note{display:none}
+  .mode-btn{min-height:34px;font-size:9.5px}
+  .mode-btn .mb-icon{font-size:12px}
+  .seg-btn{font-size:10px;padding:5px 2px}
+  .side-left-panel{left:6px;bottom:calc(46px + env(safe-area-inset-bottom));width:176px;padding:6px}
+  .side-left-panel .panel-title{font-size:9.5px;margin-bottom:3px}
+  .bottom-right-bar{right:8px;bottom:calc(6px + env(safe-area-inset-bottom))}
+}
+
+/* ===== page ===== */
+.ray-legend{display:flex;gap:7px;flex-wrap:wrap;font-size:10px;font-weight:800;color:#475569;width:100%}
+body.dark-mode .ray-legend{color:#cbd5e1}
+.ray-legend span{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.ray-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+  <a href="../../index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+  <div class="glass-panel tag-badge">
+    <span class="title-text">오목렌즈·거울의 상 3D</span>
+    <span class="vision-badge">visionOS</span>
+  </div>
+</div>
+
+<div class="top-right-bar">
+  <div class="tr-util">
+    <button class="icon-btn" id="theme-toggle" type="button" title="주간/야간 모드" aria-label="주간/야간 모드 전환">🌙</button>
+  </div>
+  <div class="glass-panel data-card">
+    <div class="data-item"><span class="data-label">상의 거리</span><span class="data-value" id="val-b" style="color:#0a84ff">—</span></div>
+    <div class="data-item"><span class="data-label">배율</span><span class="data-value" id="val-m" style="color:#f59e0b">—</span></div>
+    <div class="data-item"><span class="data-label">상의 종류</span><span class="data-value" id="val-type" style="color:#0a84ff">—</span></div>
+    <div class="data-item"><span class="data-label">상의 방향</span><span class="data-value" id="val-dir" style="color:#16a34a">—</span></div>
+  </div>
+</div>
+
+<div class="glass-panel center-tooltip" id="guide-tooltip">💡 세 가지 광선이 만나는 곳이 상의 위치입니다</div>
+
+<div class="glass-panel bottom-control-bar">
+  <button class="control-tab-btn" id="btn-reset" type="button"><span>🔄</span><span>초기화</span></button>
+  <button class="control-tab-btn" id="btn-cam" type="button"><span>🎥</span><span>시점정렬</span></button>
+</div>
+
+<div class="glass-panel side-ctrl-panel" id="side-ctrl">
+  <div class="panel-header"><span class="panel-title">🔎 상의 결정 조절</span></div>
+  <div class="ctrl-block">
+    <div class="mode-grid" id="mode-grid">
+      <button class="mode-btn" type="button" data-mode="concaveLens"><span class="mb-icon">🔍</span><span>오목렌즈</span></button>
+      <button class="mode-btn" type="button" data-mode="convexMirror"><span class="mb-icon">🪞</span><span>볼록거울</span></button>
+      <button class="mode-btn active" type="button" data-mode="concaveMirror"><span class="mb-icon">🥄</span><span>오목거울</span></button>
+      <button class="mode-btn" type="button" data-mode="planeMirror"><span class="mb-icon">🖼️</span><span>평면거울</span></button>
+    </div>
+    <div class="ray-legend">
+      <span><i style="background:#ef4444"></i>평행광</span>
+      <span><i style="background:#10b981"></i>중심광</span>
+      <span><i style="background:#3b82f6"></i>초점광</span>
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">물체 거리</span><span class="ctrl-val" id="txt-a">36 cm</span></div>
+      <input type="range" class="ctrl-slider" id="sld-a" min="6" max="40" step="1" value="36">
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">초점 거리</span><span class="ctrl-val" id="txt-f">12 cm</span></div>
+      <input type="range" class="ctrl-slider" id="sld-f" min="6" max="24" step="1" value="12">
+    </div>
+    <div class="panel-note" id="note">오목거울: 초점 밖의 물체 → 초점과 곡률중심 사이에 거꾸로 된 실상이 맺힙니다.</div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   오목렌즈·거울의 상 3D  —  lab script
+   ===================================================================== */
+(function () {
+'use strict';
+
+var $ = function (s) { return document.querySelector(s); };
+
+/* ---------------- 상수 ---------------- */
+var S = 0.15;          // cm -> world
+var OBJ_H = 9;         // 물체 높이 (cm)
+var ELEM_R = 2.05;     // 렌즈·거울 반지름 (world)
+var FLOOR_Y = -2.75;
+var CAM_DIST = 13.6;
+var UP = new THREE.Vector3(0, 1, 0);
+
+var MODES = {
+    concaveLens:  { name: '오목렌즈', mirror: false, fSign: -1,
+        note: '오목렌즈: 빛을 퍼지게 하는 렌즈. 물체가 어디에 있든 항상 물체와 같은 쪽에 작고 바로 선 허상이 생깁니다.' },
+    convexMirror: { name: '볼록거울', mirror: true,  fSign: -1,
+        note: '볼록거울: 초점이 거울 뒤(허초점)에 있습니다. 상은 항상 거울 뒤에 작고 바로 선 허상입니다.' },
+    concaveMirror:{ name: '오목거울', mirror: true,  fSign: 1,
+        note: '오목거울: 초점 밖의 물체는 초점과 곡률중심 사이에 거꾸로 된 실상을, 초점 안쪽 물체는 크고 바로 선 허상을 만듭니다.' },
+    planeMirror:  { name: '평면거울', mirror: true,  fSign: 0,
+        note: '평면거울: 초점이 없습니다. 상은 항상 거울 뒤 같은 거리에, 물체와 같은 크기·같은 방향의 허상입니다.' }
+};
+
+var state = { mode: 'concaveMirror', a: 36, f: 12 };
+
+/* ---------------- 렌더러 · 씬 ---------------- */
+var container = $('#canvas-container');
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 400);
+var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+
+var controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 5;
+controls.maxDistance = 34;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.target.set(-2.6, -0.12, 0);
+
+camera.position.set(-0.5, 4.0, 11.2);
+
+/* ---------------- 조명 ---------------- */
+var hemi = new THREE.HemisphereLight(0xffffff, 0xd6e0ee, 0.95);
+scene.add(hemi);
+
+var key = new THREE.DirectionalLight(0xffffff, 0.82);
+key.position.set(6, 13, 9);
+key.castShadow = true;
+key.shadow.mapSize.width = 1024;
+key.shadow.mapSize.height = 1024;
+key.shadow.camera.left = -12;
+key.shadow.camera.right = 12;
+key.shadow.camera.top = 12;
+key.shadow.camera.bottom = -8;
+key.shadow.camera.near = 1;
+key.shadow.camera.far = 42;
+key.shadow.radius = 3;
+scene.add(key);
+
+var fill = new THREE.DirectionalLight(0xc2d9ff, 0.30);
+fill.position.set(-8, 6, -7);
+scene.add(fill);
+
+/* ---------------- 바닥 · 광학대 ---------------- */
+var floorMat = new THREE.MeshStandardMaterial({ color: 0xeef3f9, roughness: 0.96, metalness: 0 });
+var floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 60), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = FLOOR_Y;
+floor.receiveShadow = true;
+scene.add(floor);
+
+var railMat = new THREE.MeshStandardMaterial({ color: 0x3b4a60, metalness: 0.5, roughness: 0.42 });
+var rail = new THREE.Mesh(new THREE.BoxGeometry(26, 0.18, 0.8), railMat);
+rail.position.set(0, FLOOR_Y + 0.09, 0);
+rail.castShadow = true;
+rail.receiveShadow = true;
+scene.add(rail);
+
+/* 광축 (점선) */
+var axisGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-13, 0, 0), new THREE.Vector3(11, 0, 0)
+]);
+var axisLine = new THREE.Line(axisGeo, new THREE.LineDashedMaterial({
+    color: 0x8b99ad, dashSize: 0.20, gapSize: 0.16, transparent: true, opacity: 0.9
+}));
+axisLine.computeLineDistances();
+scene.add(axisLine);
+
+/* ---------------- 공용 지오메트리 · 재질 ---------------- */
+var unitCyl = new THREE.CylinderGeometry(0.026, 0.026, 1, 8, 1, false);
+unitCyl.__shared = true;
+var coneGeo = new THREE.ConeGeometry(0.095, 0.26, 10);
+coneGeo.__shared = true;
+
+var rayMat = {
+    r: new THREE.MeshBasicMaterial({ color: 0xef4444 }),
+    g: new THREE.MeshBasicMaterial({ color: 0x10b981 }),
+    b: new THREE.MeshBasicMaterial({ color: 0x3b82f6 })
+};
+rayMat.r.__shared = true; rayMat.g.__shared = true; rayMat.b.__shared = true;
+
+function clearGroup(g) {
+    while (g.children.length) {
+        var ch = g.children.pop();
+        if (ch.geometry && !ch.geometry.__shared) ch.geometry.dispose();
+        if (ch.material && !ch.material.__shared) {
+            if (ch.material.map) ch.material.map.dispose();
+            ch.material.dispose();
+        }
+    }
+}
+
+/* ---------------- 라벨(스프라이트) ---------------- */
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function makeLabel(text, opts) {
+    opts = opts || {};
+    var fs = opts.fontSize || 42;
+    var color = opts.color || '#16202e';
+    var bg = opts.bg || 'rgba(255,255,255,0.90)';
+    var border = opts.border || 'rgba(15,23,42,0.12)';
+    var padX = 26, padY = 16;
+    var font = '700 ' + fs + 'px "SeoulNamsan", -apple-system, "Malgun Gothic", sans-serif';
+
+    var cv = document.createElement('canvas');
+    var ctx = cv.getContext('2d');
+    ctx.font = font;
+    var tw = ctx.measureText(text).width;
+    cv.width = Math.ceil(tw + padX * 2);
+    cv.height = Math.ceil(fs + padY * 2);
+
+    var tex = new THREE.CanvasTexture(cv);
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+
+    function draw() {
+        var c2 = cv.getContext('2d');
+        c2.clearRect(0, 0, cv.width, cv.height);
+        var r = Math.min(cv.height / 2, 22);
+        roundRect(c2, 2, 2, cv.width - 4, cv.height - 4, r);
+        c2.fillStyle = bg;
+        c2.fill();
+        c2.lineWidth = 3;
+        c2.strokeStyle = border;
+        c2.stroke();
+        c2.font = font;
+        c2.fillStyle = color;
+        c2.textAlign = 'center';
+        c2.textBaseline = 'middle';
+        c2.fillText(text, cv.width / 2, cv.height / 2 + 1);
+        tex.needsUpdate = true;
+    }
+    draw();
+
+    var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, depthTest: false, depthWrite: false
+    }));
+    var hWorld = opts.h || 0.44;
+    sprite.scale.set(hWorld * cv.width / cv.height, hWorld, 1);
+    sprite.renderOrder = 900;
+
+    if (document.fonts && document.fonts.load) {
+        document.fonts.load('700 ' + fs + 'px "SeoulNamsan"').then(function () {
+            var c3 = cv.getContext('2d');
+            c3.font = font;
+            var tw2 = c3.measureText(text).width;
+            if (Math.abs(tw2 - tw) > 1) {
+                cv.width = Math.ceil(tw2 + padX * 2);
+                cv.height = Math.ceil(fs + padY * 2);
+                sprite.scale.set(hWorld * cv.width / cv.height, hWorld, 1);
+            }
+            draw();
+        }, function () {});
+    }
+    return sprite;
+}
+
+/* ---------------- 광선 그리기 ---------------- */
+var rayGroup = new THREE.Group();
+scene.add(rayGroup);
+
+function V(x, y) { return new THREE.Vector3(x, y, 0); }
+
+function solid(p1, p2, mat) {
+    var dir = new THREE.Vector3().subVectors(p2, p1);
+    var len = dir.length();
+    if (len < 0.004) return;
+    var m = new THREE.Mesh(unitCyl, mat);
+    m.position.copy(p1).addScaledVector(dir, 0.5);
+    m.quaternion.setFromUnitVectors(UP, dir.clone().normalize());
+    m.scale.set(1, len, 1);
+    m.renderOrder = 6;
+    rayGroup.add(m);
+}
+
+function cone(pos, dirVec, mat) {
+    var d = dirVec.clone().normalize();
+    var m = new THREE.Mesh(coneGeo, mat);
+    m.position.copy(pos);
+    m.quaternion.setFromUnitVectors(UP, d);
+    m.renderOrder = 7;
+    rayGroup.add(m);
+}
+
+function dashed(p1, p2, colorHex, opacity) {
+    var g = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    var line = new THREE.Line(g, new THREE.LineDashedMaterial({
+        color: colorHex, dashSize: 0.17, gapSize: 0.13,
+        transparent: true, opacity: opacity === undefined ? 0.85 : opacity
+    }));
+    line.computeLineDistances();
+    line.renderOrder = 5;
+    rayGroup.add(line);
+}
+
+/* ---------------- 물체 · 상 화살표 ---------------- */
+var objectArrow = new THREE.Group();
+var imageArrow = new THREE.Group();
+var stands = new THREE.Group();
+scene.add(objectArrow, imageArrow, stands);
+
+function buildArrow(group, x, height, color, opacity) {
+    clearGroup(group);
+    if (!isFinite(height) || Math.abs(height) < 0.03) return;
+    var len = Math.abs(height);
+    var sgn = height > 0 ? 1 : -1;
+    var headLen = Math.min(len * 0.34, 0.42);
+    var shaftLen = Math.max(len - headLen, 0.001);
+    var mat = new THREE.MeshStandardMaterial({
+        color: color, roughness: 0.42, metalness: 0.08,
+        transparent: opacity < 1, opacity: opacity
+    });
+    var shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, shaftLen, 12), mat);
+    shaft.position.set(x, sgn * shaftLen / 2, 0);
+    shaft.castShadow = false;
+    var head = new THREE.Mesh(new THREE.ConeGeometry(0.145, headLen, 18), mat);
+    head.position.set(x, sgn * (shaftLen + headLen / 2), 0);
+    group.add(shaft, head);
+}
+
+function buildStand(x, topY, color) {
+    var g = new THREE.Group();
+    var poleH = Math.max(topY - (FLOOR_Y + 0.16), 0.2);
+    var mat = new THREE.MeshStandardMaterial({ color: color || 0x8593a8, metalness: 0.75, roughness: 0.3 });
+    var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, poleH, 12), mat);
+    pole.position.set(x, FLOOR_Y + 0.16 + poleH / 2, 0);
+    pole.castShadow = true;
+    var foot = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.24, 0.10, 20),
+        new THREE.MeshStandardMaterial({ color: 0x3b4a60, roughness: 0.55, metalness: 0.2 }));
+    foot.position.set(x, FLOOR_Y + 0.21, 0);
+    foot.castShadow = true;
+    g.add(pole, foot);
+    return g;
+}
+
+/* ---------------- 렌즈 · 거울 ---------------- */
+var elemGroup = new THREE.Group();
+scene.add(elemGroup);
+var elemKey = '';
+
+function mirrorGeometry(R, sag) {
+    var geo = new THREE.CircleGeometry(R, 64);
+    var pos = geo.attributes.position;
+    for (var i = 0; i < pos.count; i++) {
+        var x = pos.getX(i), y = pos.getY(i);
+        var rr = Math.min(1, Math.sqrt(x * x + y * y) / R);
+        pos.setZ(i, sag * (1 - rr * rr));
+    }
+    geo.computeVertexNormals();
+    return geo;
+}
+
+function lensGeometry(R, edgeT, centerT) {
+    var pts = [], n = 16, i, r, y;
+    for (i = 0; i <= n; i++) {
+        r = R * i / n;
+        y = centerT / 2 + (edgeT / 2 - centerT / 2) * Math.pow(r / R, 2);
+        pts.push(new THREE.Vector2(r, y));
+    }
+    for (i = n; i >= 0; i--) {
+        r = R * i / n;
+        y = -(centerT / 2 + (edgeT / 2 - centerT / 2) * Math.pow(r / R, 2));
+        pts.push(new THREE.Vector2(r, y));
+    }
+    return new THREE.LatheGeometry(pts, 56);
+}
+
+function buildElement() {
+    clearGroup(elemGroup);
+    var M = MODES[state.mode];
+    var fw = state.f * S;
+
+    if (!M.mirror) {
+        var lensMat = new THREE.MeshPhysicalMaterial({
+            color: 0x9ed2ff, transparent: true, opacity: 0.46, roughness: 0.05,
+            metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.05,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+        var mesh = new THREE.Mesh(lensGeometry(ELEM_R, 0.98, 0.26), lensMat);
+        mesh.rotation.z = -Math.PI / 2;
+        elemGroup.add(mesh);
+
+        var rimMat = new THREE.MeshStandardMaterial({ color: 0xcdd9e6, metalness: 0.6, roughness: 0.3 });
+        var rim = new THREE.Mesh(new THREE.TorusGeometry(ELEM_R, 0.05, 12, 64), rimMat);
+        rim.rotation.y = Math.PI / 2;
+        elemGroup.add(rim);
+    } else if (M.fSign === 0) {
+        var plateMat = new THREE.MeshStandardMaterial({
+            color: 0xf2f7fd, metalness: 0.45, roughness: 0.06, side: THREE.DoubleSide
+        });
+        var plate = new THREE.Mesh(new THREE.CylinderGeometry(ELEM_R, ELEM_R, 0.13, 72), plateMat);
+        plate.rotation.z = Math.PI / 2;
+        plate.castShadow = true;
+        elemGroup.add(plate);
+        var plateRim = new THREE.Mesh(new THREE.TorusGeometry(ELEM_R, 0.055, 12, 72),
+            new THREE.MeshStandardMaterial({ color: 0xa9b8ca, metalness: 0.7, roughness: 0.28 }));
+        plateRim.rotation.y = Math.PI / 2;
+        elemGroup.add(plateRim);
+    } else {
+        var sagSign = 1;
+        var Rp = Math.max(2 * fw, 0.5);
+        var sag = sagSign === 0 ? 0 : Math.min(1.05, (ELEM_R * ELEM_R) / (2 * Rp));
+        if (fw < 0) {
+            Rp = Math.max(2 * Math.abs(fw), 0.5);
+            sag = Math.min(1.05, (ELEM_R * ELEM_R) / (2 * Rp));
+        }
+        sag = sagSign * sag;
+
+        var mirrorMat = new THREE.MeshStandardMaterial({
+            color: 0xf0f6fd, metalness: 0.38, roughness: 0.07, side: THREE.DoubleSide
+        });
+        var surf = new THREE.Mesh(mirrorGeometry(ELEM_R, sag), mirrorMat);
+        surf.rotation.y = Math.PI / 2;
+        surf.castShadow = true;
+        elemGroup.add(surf);
+
+        var backMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.3, roughness: 0.6, side: THREE.DoubleSide });
+        var back = new THREE.Mesh(mirrorGeometry(ELEM_R, sag), backMat);
+        back.rotation.y = Math.PI / 2;
+        back.position.x = -0.085;
+        elemGroup.add(back);
+
+        var rim2 = new THREE.Mesh(new THREE.TorusGeometry(ELEM_R, 0.055, 12, 64),
+            new THREE.MeshStandardMaterial({ color: 0xb8c6d6, metalness: 0.7, roughness: 0.28 }));
+        rim2.rotation.y = Math.PI / 2;
+        elemGroup.add(rim2);
+    }
+
+    var stand = buildStand(0, -ELEM_R, 0x8593a8);
+    elemGroup.add(stand);
+
+    var nameLbl = makeLabel(M.name, { color: '#0f172a', h: 0.46 });
+    nameLbl.position.set(0, ELEM_R + 0.55, 0);
+    elemGroup.add(nameLbl);
+}
+
+/* ---------------- 초점 · 곡률중심 표시 ---------------- */
+var marks = new THREE.Group();
+scene.add(marks);
+
+function buildMarks() {
+    clearGroup(marks);
+    var M = MODES[state.mode];
+    if (M.fSign === 0) return;
+    var fw = M.fSign * state.f * S;
+    var xF = -fw;                     // 거울: -f, 렌즈: f  (부호 포함 f)
+    if (!M.mirror) xF = fw;
+
+    var dotMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+    var dot = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 12), dotMat);
+    dot.position.set(xF, 0, 0);
+    marks.add(dot);
+
+    var tickGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(xF, -0.18, 0), new THREE.Vector3(xF, 0.18, 0)
+    ]);
+    var tick = new THREE.Line(tickGeo, new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.9 }));
+    marks.add(tick);
+
+    var lbl = makeLabel('F ' + state.f + 'cm', { color: '#b45309', h: 0.40 });
+    lbl.position.set(xF, -1.02, 0);
+    marks.add(lbl);
+
+    if (state.mode === 'concaveMirror') {
+        var xC = -2 * fw;
+        var dot2 = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), dotMat.clone());
+        dot2.position.set(xC, 0, 0);
+        marks.add(dot2);
+        var lbl2 = makeLabel('C ' + (state.f * 2) + 'cm', { color: '#b45309', h: 0.38 });
+        lbl2.position.set(xC, 0.55, 0);
+        marks.add(lbl2);
+    }
+}
+
+/* ---------------- 이동 라벨 ---------------- */
+var objLabel = makeLabel('물체', { color: '#c2410c', h: 0.44 });
+var imgLabel = makeLabel('상', { color: '#1d4ed8', h: 0.44 });
+scene.add(objLabel, imgLabel);
+
+/* ---------------- 계산 ---------------- */
+function computeModel() {
+    var M = MODES[state.mode];
+    var a = state.a;
+    var hw = OBJ_H * S;
+    var b = 0, mag = 1, real = false, exists = true;
+
+    if (M.fSign === 0) {
+        b = -a; mag = 1; real = false;
+    } else {
+        var f = M.fSign * state.f;
+        if (Math.abs(a - f) < 1.05) {
+            exists = false; b = Infinity; mag = NaN; real = false;
+        } else {
+            b = a * f / (a - f);
+            mag = Math.abs(b / a);
+            real = b > 0;
+        }
+    }
+    var xI = exists ? (M.mirror ? -b : b) * S : 0;
+    var yI = exists ? (real ? -1 : 1) * mag * hw : 0;
+    return { a: a, b: b, mag: mag, real: real, exists: exists, xI: xI, yI: yI, hw: hw };
+}
+
+/* ---------------- 광선 3가닥 ---------------- */
+var RBOX = { xmin: -7.8, xmax: 3.4, ymin: -2.35, ymax: 3.2 };
+
+function clipLen(from, dir, maxLen) {
+    var t = maxLen;
+    if (dir.x > 1e-4) t = Math.min(t, (RBOX.xmax - from.x) / dir.x);
+    if (dir.x < -1e-4) t = Math.min(t, (RBOX.xmin - from.x) / dir.x);
+    if (dir.y > 1e-4) t = Math.min(t, (RBOX.ymax - from.y) / dir.y);
+    if (dir.y < -1e-4) t = Math.min(t, (RBOX.ymin - from.y) / dir.y);
+    return Math.max(0.35, t);
+}
+
+function outRay(from, dir, maxLen, mat) {
+    var d = dir.clone().normalize();
+    var L = clipLen(from, d, maxLen);
+    var to = from.clone().addScaledVector(d, L);
+    solid(from, to, mat);
+    if (L > 0.7) cone(from.clone().addScaledVector(d, L * 0.66), d, mat);
+    return to;
+}
+
+function buildRays(m) {
+    clearGroup(rayGroup);
+    var xa = -state.a * S;
+    var hw = m.hw;
+    var P = V(xa, hw);          // 물체 끝
+    var O = V(0, 0);            // 렌즈 중심 · 거울 꼭대기점
+    var img = V(m.xI, m.yI);
+    var showVirtual = m.exists && !m.real;
+    var realCase = m.exists && m.real;
+
+    /* ===== 오목렌즈 ===== */
+    if (state.mode === 'concaveLens') {
+        var fl = state.f * S;
+        var y3 = hw * fl / (Math.abs(xa) + fl);
+        /* 1) 평행광 → 초점에서 나오는 것처럼 퍼짐 */
+        solid(P, V(0, hw), rayMat.r);
+        outRay(V(0, hw), new THREE.Vector3(fl, hw), 3.0, rayMat.r);
+        if (showVirtual) dashed(V(0, hw), img, 0xef4444);
+        /* 2) 중심광 → 렌즈 중심에서 꺾이지 않음 */
+        solid(P, O, rayMat.g);
+        outRay(O, new THREE.Vector3(-xa, -hw), 3.0, rayMat.g);
+        if (showVirtual) dashed(O, img, 0x10b981);
+        /* 3) 초점광 → 반대쪽 초점을 향해 들어가면 평행하게 나감 */
+        solid(P, V(0, y3), rayMat.b);
+        outRay(V(0, y3), new THREE.Vector3(1, 0), 3.0, rayMat.b);
+        if (showVirtual) dashed(V(0, y3), V(m.xI, y3), 0x3b82f6);
+        return;
+    }
+
+    /* ===== 평면거울 ===== */
+    if (state.mode === 'planeMirror') {
+        /* 1) 평행광 → 그대로 되돌아옴 */
+        solid(P, V(0, hw), rayMat.r);
+        outRay(V(0, hw), new THREE.Vector3(-1, 0), Math.abs(xa) * 0.86, rayMat.r);
+        dashed(V(0, hw), img, 0xef4444);
+        /* 2) 거울 꼭대기점으로 가는 광선 → 축에 대해 대칭으로 반사 */
+        solid(P, O, rayMat.g);
+        outRay(O, new THREE.Vector3(xa, -hw), 3.4, rayMat.g);
+        dashed(O, img, 0x10b981);
+        /* 3) 아래쪽 광선 → 같은 법칙으로 반사 */
+        var hy = -hw * 0.55;
+        solid(P, V(0, hy), rayMat.b);
+        outRay(V(0, hy), new THREE.Vector3(xa, hy - hw), 3.2, rayMat.b);
+        dashed(V(0, hy), img, 0x3b82f6);
+        return;
+    }
+
+    /* ===== 오목거울 · 볼록거울 ===== */
+    var M = MODES[state.mode];
+    var fw = M.fSign * state.f * S;         // +: 오목, -: 볼록
+    var aW = Math.abs(xa);
+
+    /* 1) 평행광 */
+    solid(P, V(0, hw), rayMat.r);
+    var d1 = (M.fSign > 0)
+        ? new THREE.Vector3(-fw - 0, -hw)                        // 초점을 향해 반사
+        : new THREE.Vector3(-Math.abs(fw), hw);                  // 초점에서 나오는 것처럼
+    if (realCase) {
+        solid(V(0, hw), img, rayMat.r);
+        outRay(img, d1, 1.5, rayMat.r);
+    } else {
+        outRay(V(0, hw), d1, 3.6, rayMat.r);
+        if (showVirtual) dashed(V(0, hw), img, 0xef4444);
+    }
+
+    /* 2) 중심광 (거울 꼭대기점) */
+    solid(P, O, rayMat.g);
+    var d2 = new THREE.Vector3(xa, -hw);
+    if (realCase) {
+        solid(O, img, rayMat.g);
+        outRay(img, d2, 1.5, rayMat.g);
+    } else {
+        outRay(O, d2, 3.4, rayMat.g);
+        if (showVirtual) dashed(O, img, 0x10b981);
+    }
+
+    /* 3) 초점광 */
+    var y3m = (M.fSign > 0)
+        ? hw * fw / (fw - aW)                                    // 오목거울
+        : hw * Math.abs(fw) / (aW + Math.abs(fw));               // 볼록거울
+    if (isFinite(y3m) && Math.abs(y3m) < 4.2) {
+        solid(P, V(0, y3m), rayMat.b);
+        if (realCase) {
+            solid(V(0, y3m), V(m.xI, y3m), rayMat.b);
+            outRay(V(m.xI, y3m), new THREE.Vector3(-1, 0), 1.5, rayMat.b);
+        } else {
+            outRay(V(0, y3m), new THREE.Vector3(-1, 0), 3.6, rayMat.b);
+            if (showVirtual) dashed(V(0, y3m), V(m.xI, y3m), 0x3b82f6);
+        }
+    }
+}
+
+/* ---------------- HUD · 씬 갱신 ---------------- */
+var lastModel = null;
+
+function updateScene() {
+    var M = MODES[state.mode];
+    var m = computeModel();
+
+    if (elemKey !== state.mode + '|' + state.f) {
+        elemKey = state.mode + '|' + state.f;
+        buildElement();
+        buildMarks();
+    }
+
+    var xa = -state.a * S;
+    var hw = m.hw;
+
+    /* 물체 */
+    buildArrow(objectArrow, xa, hw, 0xf97316, 1);
+    clearGroup(stands);
+    stands.add(buildStand(xa, 0, 0x8593a8));
+    objLabel.position.set(xa, hw + 0.45, 0);
+
+    /* 상 */
+    if (m.exists) {
+        var rh = m.yI;
+        var capped = false;
+        if (Math.abs(rh) > 4.6) { rh = (rh > 0 ? 1 : -1) * 4.6; capped = true; }
+        buildArrow(imageArrow, m.xI, rh, 0x0a84ff, m.real ? 0.95 : 0.62);
+        if (m.real) stands.add(buildStand(m.xI, 0, 0x5b7fb0));
+        imgLabel.position.set(m.xI, (rh >= 0 ? rh + 0.5 : rh - 0.5), 0);
+        imgLabel.visible = true;
+        imageArrow.visible = true;
+    } else {
+        clearGroup(imageArrow);
+        imageArrow.visible = false;
+        imgLabel.visible = false;
+    }
+
+    buildRays(m);
+
+    lastModel = m;
+    /* 카메라 중심 이동 */
+    frameTarget(false);
+
+    /* HUD */
+    var bEl = $('#val-b'), mEl = $('#val-m'), tEl = $('#val-type'), dEl = $('#val-dir');
+    if (!m.exists) {
+        bEl.textContent = '∞';
+        mEl.textContent = '—';
+        tEl.textContent = '상 없음';
+        tEl.style.color = '#64748b';
+        dEl.textContent = '—';
+        dEl.style.color = '#64748b';
+    } else {
+        bEl.textContent = Math.abs(m.b).toFixed(1) + ' cm';
+        mEl.textContent = (m.mag < 100 ? m.mag.toFixed(2) : m.mag.toFixed(0)) + '배';
+        tEl.textContent = m.real ? '실상' : '허상';
+        tEl.style.color = m.real ? '#0a84ff' : '#16a34a';
+        dEl.textContent = m.real ? '도립' : '정립';
+        dEl.style.color = m.real ? '#f97316' : '#16a34a';
+    }
+    bEl.style.color = m.exists && !m.real ? '#16a34a' : '#0a84ff';
+
+    var note = M.note;
+    if (!m.exists) {
+        note = '물체가 초점 위에 있으면 반사(굴절)된 빛이 나란히 진행해 상이 맺히지 않습니다.';
+    } else if (capped) {
+        note = M.note + ' (배율이 매우 커 상의 길이는 줄여 그렸습니다)';
+    }
+    $('#note').textContent = note;
+}
+
+function contentBox() {
+    var xa = -state.a * S;
+    var box = { xMin: xa - 0.95, xMax: 1.05 };
+    if (lastModel && lastModel.exists) {
+        box.xMax = Math.max(box.xMax, lastModel.xI + 0.95);
+        box.xMin = Math.min(box.xMin, lastModel.xI - 0.95);
+    }
+    return box;
+}
+
+function frameTarget(withDistance) {
+    var box = contentBox();
+    var halfContent = Math.max((box.xMax - box.xMin) / 2, 2.3);
+    var fill = camera.aspect < 0.85 ? 0.88 : 0.72;
+    var halfW = halfContent / fill;
+    var cx = (box.xMin + box.xMax) / 2 + halfW * 0.085;
+    var dx = cx - controls.target.x;
+    if (Math.abs(dx) > 0.0005) {
+        controls.target.x += dx;
+        camera.position.x += dx;
+    }
+    controls.target.y = -0.12;
+    if (withDistance) {
+        var vfov = camera.fov * Math.PI / 180;
+        var dH = FIT_H / Math.tan(vfov / 2);
+        var dW = halfW / (Math.tan(vfov / 2) * Math.max(camera.aspect, 0.2));
+        var d = Math.max(dH, dW);
+        var dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+        if (dir.lengthSq() < 0.0001) dir.set(0.15, 0.36, 1);
+        dir.normalize();
+        camera.position.copy(controls.target).addScaledVector(dir, d);
+    }
+    controls.update();
+}
+
+/* ---------------- UI ---------------- */
+document.querySelectorAll('#mode-grid .mode-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        var mo = btn.getAttribute('data-mode');
+        if (!MODES[mo] || state.mode === mo) return;
+        state.mode = mo;
+        document.querySelectorAll('#mode-grid .mode-btn').forEach(function (b) {
+            b.classList.toggle('active', b === btn);
+        });
+        updateScene();
+        frameTarget(true);
+    });
+});
+
+$('#sld-a').addEventListener('input', function (e) {
+    state.a = parseFloat(e.target.value);
+    $('#txt-a').textContent = state.a + ' cm';
+    updateScene();
+});
+
+$('#sld-f').addEventListener('input', function (e) {
+    state.f = parseFloat(e.target.value);
+    $('#txt-f').textContent = state.f + ' cm';
+    updateScene();
+});
+
+function resetAll() {
+    state.mode = 'concaveMirror';
+    state.a = 36;
+    state.f = 12;
+    $('#sld-a').value = 36;
+    $('#sld-f').value = 12;
+    $('#txt-a').textContent = '36 cm';
+    $('#txt-f').textContent = '12 cm';
+    document.querySelectorAll('#mode-grid .mode-btn').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-mode') === 'concaveMirror');
+    });
+    controls.target.set(-2.6, -0.12, 0);
+    camera.position.copy(controls.target).add(new THREE.Vector3(0.18, 0.37, 1).normalize().multiplyScalar(11));
+    frameTarget(true);
+    updateScene();
+}
+
+$('#btn-reset').addEventListener('click', resetAll);
+
+$('#btn-cam').addEventListener('click', function () {
+    var t = controls.target;
+    var dirA = new THREE.Vector3(0.18, 0.37, 1).normalize();
+    camera.position.copy(t).addScaledVector(dirA, 10);
+    frameTarget(true);
+});
+
+/* ---------------- 테마 ---------------- */
+var isDark = false;
+$('#theme-toggle').addEventListener('click', function (e) {
+    isDark = !isDark;
+    document.body.classList.toggle('dark-mode', isDark);
+    e.currentTarget.textContent = isDark ? '☀️' : '🌙';
+    floorMat.color.setHex(isDark ? 0x101a2b : 0xeef3f9);
+    hemi.intensity = isDark ? 0.45 : 0.95;
+    hemi.groundColor.setHex(isDark ? 0x0b1220 : 0xd6e0ee);
+    key.intensity = isDark ? 0.55 : 0.82;
+    fill.intensity = isDark ? 0.18 : 0.30;
+    railMat.color.setHex(isDark ? 0x1e2a3d : 0x3b4a60);
+});
+
+/* ---------------- 리사이즈 · 루프 ---------------- */
+var FIT_H = 3.15;
+
+function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    frameTarget(true);
+}
+window.addEventListener('resize', resize);
+window.__LAB_CAM__ = camera;
+resize();
+
+var clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    clock.getElapsedTime();
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+updateScene();
+animate();
+
+})();
+
+</script>
+
+<!-- Fullscreen / Windowed Mode Button -->
+<div class="bottom-right-bar">
+  <button id="fullscreenBtn" class="glass-panel back-btn" type="button" aria-label="전체화면으로 전환">
+    <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+  </button>
+</div>
+
+<script>
+/* ============ 전체화면 / 창모드 (표준 + 모바일 몰입 모드 폴백) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            try {
+                if (!wasReal) {
+                    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen ||
+                              docEl.webkitRequestFullScreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                    if (req) req.call(docEl);
+                } else {
+                    var exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                               document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                    if (exit) exit.call(document);
+                }
+            } catch (e) {}
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+                if (!realFs()) {
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 420);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, function () { setUI(); refit(); });
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓힌다 */
+    function theCam() {
+        try { if (window.__LAB_CAM__ && window.__LAB_CAM__.isPerspectiveCamera) return window.__LAB_CAM__; } catch (e) {}
+        return null;
+    }
+    function mobileFit() {
+        var cam = theCam();
+        if (!cam) return;
+        try {
+            if (!cam.userData) cam.userData = {};
+            if (!cam.userData.baseFov) cam.userData.baseFov = cam.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = docEl.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 520) f = 1 + k * 0.18;
+            cam.fov = Math.min(88, cam.userData.baseFov * f);
+            cam.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+    setUI();
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+</body>
+</html>

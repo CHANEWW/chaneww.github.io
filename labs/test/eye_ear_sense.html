@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="1.0">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>눈의 원근 조절·귀의 평형감각 3D</title>
+<meta name="description" content="눈의 수정체·동공·망막 결상과 근시·원시 교정을 3D로 확인하고, 머리의 회전과 기울임에 따라 반고리관 림프액과 이석이 움직이는 모습을 관찰하는 가상실험입니다.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../common/lib/three.min.js"></script>
+<script src="../common/lib/OrbitControls.js"></script>
+<style>
+/* ============================================================
+   Science Virtual LAB — 공통 기반 스타일 (base.css)
+   ============================================================ */
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eef2f8;
+    color: #1c1c1e;
+    transition: background-color 0.35s ease, color 0.35s ease;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+/* ---------- visionOS 글래스모피즘 ---------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* ---------- 상단 좌측 ---------- */
+.top-left-bar {
+    position: absolute;
+    top: 16px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 10;
+}
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 15px;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #1c1c1e;
+    font-weight: bold;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+    border: none;
+    font-family: inherit;
+    white-space: nowrap;
+}
+.back-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    font-weight: bold;
+    font-size: 14px;
+    white-space: nowrap;
+}
+.tag-pill {
+    background: rgba(0, 122, 255, 0.14);
+    color: #007aff;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+}
+.qr-btn-icon { font-size: 14px; line-height: 1; }
+.qr-btn-label { font-size: 12.5px; }
+
+/* ---------- 상단 우측 ---------- */
+.top-right-bar {
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 10;
+}
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    line-height: 1;
+    flex: 0 0 40px;
+    border: none;
+    color: #1c1c1e;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.data-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 7px 16px;
+    border-radius: 16px;
+}
+.data-item { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.data-label { font-size: 9.5px; color: #64748b; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value {
+    font-size: 13.5px;
+    font-weight: 900;
+    color: #0284c7;
+    margin-top: 1px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+
+/* ---------- 중앙 힌트 ---------- */
+.center-tooltip {
+    position: absolute;
+    top: 84px;
+    left: 46%;
+    transform: translateX(-50%);
+    padding: 8px 18px;
+    border-radius: 16px;
+    font-size: 11.5px;
+    font-weight: bold;
+    color: #334155;
+    pointer-events: none;
+    z-index: 10;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.5;
+    letter-spacing: -0.2px;
+    transition: opacity 0.35s ease;
+    max-width: min(700px, calc(100vw - 460px));
+    word-break: keep-all;
+}
+.center-tooltip.hidden { opacity: 0; }
+
+/* ---------- 하단 중앙 ---------- */
+.bottom-ctrl-bar {
+    position: absolute;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    z-index: 40;
+}
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.92);
+    color: #1c1c1e;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.action-btn:hover { background: #fff; transform: translateY(-1px); }
+
+/* ---------- 우측 하단 전체화면 ---------- */
+.bottom-right-bar { position: absolute; bottom: 22px; right: 20px; z-index: 45; }
+.fullscreen-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    color: #1c1c1e;
+    white-space: nowrap;
+}
+
+/* ---------- 우측 조절 패널 ---------- */
+.side-ctrl-panel {
+    position: absolute;
+    right: 20px;
+    bottom: 76px;
+    width: 232px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 60;
+    border-radius: 18px;
+    max-height: calc(100vh - 150px);
+}
+.panel-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: #475569;
+    letter-spacing: -0.2px;
+    text-align: center;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    flex: 0 0 auto;
+}
+.panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    overflow-y: auto;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch;
+}
+.tab-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+.tab-row.three { grid-template-columns: repeat(3, 1fr); }
+.ctrl-tab-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 7px 1px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9);
+    color: #334155;
+    font-family: inherit;
+    font-size: 9.5px;
+    font-weight: 800;
+    line-height: 1.15;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: -0.3px;
+    transition: all 0.2s ease;
+}
+.ctrl-tab-btn .t-ico { font-size: 14px; line-height: 1; }
+.ctrl-tab-btn:hover { background: #ffffff; }
+.ctrl-tab-btn.active {
+    background: #007aff;
+    border-color: #007aff;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.28);
+}
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg-btn {
+    padding: 8px 1px;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9);
+    color: #334155;
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: -0.3px;
+    transition: all 0.2s ease;
+}
+.seg-btn:hover { background: #ffffff; }
+.seg-btn.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.btn-start {
+    width: 100%;
+    padding: 11px 8px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 900;
+    letter-spacing: -0.2px;
+    cursor: pointer;
+    box-shadow: 0 5px 16px rgba(37, 99, 235, 0.28);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.btn-start:hover { transform: translateY(-1px); }
+.btn-start.on { background: linear-gradient(135deg, #22c55e, #0d9488); box-shadow: 0 5px 16px rgba(13, 148, 136, 0.26); }
+.btn-start.off { background: linear-gradient(135deg, #94a3b8, #64748b); box-shadow: 0 5px 16px rgba(100, 116, 139, 0.24); }
+.ctrl-row { display: flex; align-items: center; gap: 4px; }
+.ctrl-row .lbl {
+    flex: 0 0 30px;
+    font-size: 9.5px;
+    font-weight: 800;
+    color: #64748b;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
+}
+.mini {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 0;
+    border-radius: 9px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9);
+    color: #334155;
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.18s ease;
+}
+.mini:hover { background: #ffffff; }
+.mini.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.slider-row { display: flex; flex-direction: column; gap: 3px; }
+.slider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.slider-name { font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.slider-val {
+    font-size: 10.5px;
+    font-weight: 900;
+    color: #2563eb;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+input[type="range"].ctrl-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    outline: none;
+    cursor: pointer;
+    margin: 0;
+}
+input[type="range"].ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3b82f6;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+    border: 2px solid #fff;
+}
+input[type="range"].ctrl-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #fff;
+    cursor: pointer;
+}
+.state-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 7px 8px;
+    border-radius: 12px;
+    background: rgba(2, 132, 199, 0.09);
+    border: 1px dashed rgba(2, 132, 199, 0.28);
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #0369a1;
+    letter-spacing: -0.3px;
+    text-align: center;
+    overflow: hidden;
+}
+.state-badge .sb-note { font-size: 8.5px; font-weight: 700; opacity: 0.8; white-space: nowrap; }
+
+/* ---------- 도킹 서브 패널 ---------- */
+.sub-panel {
+    position: absolute;
+    right: 264px;
+    bottom: 76px;
+    width: 340px;
+    max-height: 78vh;
+    overflow-y: auto;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    padding: 13px 15px;
+    border-radius: 18px;
+    z-index: 55;
+    -webkit-overflow-scrolling: touch;
+}
+.sub-panel.show { display: flex; }
+@media (min-width: 901px) {
+    body .sub-panel.left { left: 20px !important; right: auto !important; top: auto !important; bottom: 76px !important; width: 330px !important; max-width: 330px !important; max-height: 58vh !important; }
+}
+.sub-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+.sub-panel-title { font-size: 12.5px; font-weight: 800; color: #1e293b; letter-spacing: -0.3px; }
+.sub-close {
+    background: rgba(0, 0, 0, 0.06);
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    color: #64748b;
+    font-family: inherit;
+    flex: 0 0 24px;
+}
+.graph-canvas {
+    width: 100%;
+    height: 190px;
+    display: block;
+    border-radius: 12px;
+    background: rgba(248, 250, 252, 0.9);
+}
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 9.5px; font-weight: 800; color: #64748b; }
+.legend i { display: inline-block; width: 14px; height: 8px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.note { font-size: 9.5px; color: #7c8899; line-height: 1.45; letter-spacing: -0.2px; }
+
+/* ---------- 다크 모드 ---------- */
+body.dark-mode { background-color: #0b1220; color: #e2e8f0; }
+body.dark-mode .glass-panel {
+    background-color: rgba(22, 30, 45, 0.92);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+body.dark-mode .sub-panel, body.dark-mode .side-ctrl-panel { background-color: rgba(22, 30, 45, 0.94); }
+body.dark-mode .back-btn, body.dark-mode .tag-badge, body.dark-mode .icon-btn { color: #e2e8f0; }
+body.dark-mode .data-label { color: #94a3b8; }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.12); }
+body.dark-mode .panel-title { color: #94a3b8; border-bottom-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .ctrl-tab-btn, body.dark-mode .seg-btn, body.dark-mode .mini {
+    background: rgba(44, 54, 74, 0.92);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+}
+body.dark-mode .ctrl-tab-btn.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+body.dark-mode .seg-btn.active { background: #e2e8f0; border-color: #e2e8f0; color: #0f172a; }
+body.dark-mode .mini.active { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+body.dark-mode .state-badge { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3); }
+body.dark-mode .action-btn, body.dark-mode .fullscreen-btn {
+    background: rgba(44, 54, 74, 0.92);
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+body.dark-mode .sub-panel-title { color: #f1f5f9; }
+body.dark-mode .sub-close { background: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+body.dark-mode .graph-canvas { background: rgba(15, 23, 42, 0.9); }
+body.dark-mode .legend, body.dark-mode .note { color: #94a3b8; }
+body.dark-mode .center-tooltip { color: #cbd5e1; }
+body.dark-mode input[type="range"].ctrl-slider { background: #334155; }
+
+
+/* ---------- 이 실험 전용 ---------- */
+.tab-row.two { grid-template-columns: 1fr 1fr; }
+.tab-row.two .ctrl-tab-btn { flex-direction: row; gap: 5px; padding: 9px 2px; font-size: 10.5px; }
+.tab-row.two .ctrl-tab-btn .t-ico { font-size: 13px; }
+.vision-line { display: flex; align-items: center; justify-content: space-between; font-size: 9.5px; font-weight: 800; color: #64748b; }
+.vision-line b { font-variant-numeric: tabular-nums; color: #0284c7; }
+.blur-bar { height: 8px; border-radius: 999px; background: rgba(148, 163, 184, 0.26); overflow: hidden; }
+.blur-bar i { display: block; height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #34d399, #fbbf24, #ef4444); transition: width 0.15s linear; }
+.ear-only, .eye-only { display: flex; flex-direction: column; gap: 7px; }
+body.tab-ear .eye-only { display: none; }
+body.tab-eye .ear-only { display: none; }
+body.dark-mode .vision-line { color: #94a3b8; }
+body.dark-mode .vision-line b { color: #7dd3fc; }
+
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 공통 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn, .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .qr-btn-label { display: none !important; }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        right: 8px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 0 1 auto;
+        min-width: 0;
+        gap: 7px !important;
+        padding: 5px 9px !important;
+        overflow: hidden;
+    }
+    .data-item { min-width: 0; }
+    .data-label { font-size: 8.5px !important; line-height: 1.2; letter-spacing: -0.4px; }
+    .data-value { font-size: 12px !important; line-height: 1.25; }
+    .data-sep { height: 18px; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 34px; }
+
+    /* 3D 실험실: 전체화면 버튼은 1행 우측 아이콘으로 */
+    body.is-3d .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    body .bottom-right-bar button { padding: 7px 10px !important; font-size: 14px !important; gap: 4px !important; line-height: 1; }
+    body .bottom-right-bar #fullscreenText { display: none !important; }
+    .bottom-ctrl-bar { right: 56px !important; }
+
+    .center-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 78px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11px !important;
+        padding: 6px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+        text-overflow: clip;
+    }
+
+    .bottom-ctrl-bar {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(6px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        border-radius: 16px !important;
+        padding: 6px !important;
+        gap: 5px !important;
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+    }
+    .action-btn { padding: 7px 12px !important; font-size: 11.5px !important; }
+
+    .side-ctrl-panel {
+        right: 8px !important;
+        left: auto !important;
+        bottom: calc(60px + env(safe-area-inset-bottom)) !important;
+        width: min(212px, calc(100vw - 16px)) !important;
+        padding: 8px !important;
+        gap: 6px !important;
+        max-height: 46vh !important;
+    }
+    .panel-title { font-size: 10.5px !important; padding-bottom: 4px !important; }
+    .ctrl-tab-btn { padding: 6px 1px !important; font-size: 9px !important; }
+    .ctrl-tab-btn .t-ico { font-size: 13px !important; }
+    .seg-btn { padding: 7px 1px !important; font-size: 9.5px !important; }
+    .btn-start { padding: 9px 6px !important; font-size: 11.5px !important; }
+    .ctrl-row .lbl { font-size: 9px !important; flex-basis: 28px !important; }
+    .mini { padding: 5px 0 !important; font-size: 9.5px !important; }
+    .slider-name { font-size: 9.5px !important; }
+    .slider-val { font-size: 10px !important; }
+    .state-badge { font-size: 9.5px !important; padding: 6px 6px !important; }
+
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(66px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 42vh !important;
+        padding: 10px 12px !important;
+        gap: 7px !important;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .graph-canvas { height: 150px !important; }
+    .legend { font-size: 8.5px !important; gap: 7px !important; }
+    .note { font-size: 8.5px !important; }
+}
+
+@media (max-width: 430px) {
+    .tag-pill { display: none !important; }
+    .data-label { font-size: 8px !important; }
+    .data-value { font-size: 11px !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn, .top-left-bar > a, .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 72px !important;
+        left: auto !important;
+        gap: 5px !important;
+        flex-direction: column !important;
+        align-items: flex-end !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; flex: 0 0 28px; }
+
+    body.is-3d .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    body.is-3d .bottom-right-bar button { padding: 4px 8px !important; font-size: 13px !important; }
+    body.is-3d .bottom-right-bar #fullscreenText { display: none !important; }
+
+    .center-tooltip {
+        top: auto !important;
+        bottom: 48px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 46vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+        white-space: nowrap !important;
+    }
+
+    .side-ctrl-panel {
+        top: 44px !important;
+        right: 8px !important;
+        left: auto !important;
+        bottom: auto !important;
+        width: 196px !important;
+        max-height: calc(100vh - 56px) !important;
+        padding: 7px 8px !important;
+        gap: 5px !important;
+        overflow-y: auto !important;
+    }
+    .panel-title { font-size: 9.5px !important; padding-bottom: 3px !important; }
+    .ctrl-tab-btn { padding: 4px 1px !important; font-size: 8px !important; }
+    .ctrl-tab-btn .t-ico { font-size: 11px !important; }
+    .seg-btn { padding: 5px 1px !important; font-size: 9px !important; }
+    .btn-start { padding: 6px 4px !important; font-size: 10px !important; }
+    .ctrl-row .lbl { font-size: 8px !important; flex-basis: 22px !important; }
+    .mini { padding: 3px 0 !important; font-size: 8.5px !important; }
+    .slider-name { font-size: 8.5px !important; }
+    .slider-val { font-size: 9px !important; }
+    .state-badge { font-size: 8.5px !important; padding: 4px 4px !important; }
+
+    .bottom-ctrl-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .action-btn { padding: 5px 11px !important; font-size: 10px !important; }
+
+    .sub-panel {
+        left: auto !important;
+        right: 8px !important;
+        top: 44px !important;
+        bottom: auto !important;
+        width: min(320px, calc(100vw - 220px)) !important;
+        max-width: none !important;
+        max-height: calc(100vh - 56px) !important;
+        padding: 8px 10px !important;
+        gap: 6px !important;
+    }
+    .graph-canvas { height: 128px !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .center-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar .back-btn { display: none !important; }
+html.pseudo-fs .top-right-bar { display: flex !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
+
+</style>
+<link rel="stylesheet" href="../common/qr-modal.css">
+<link rel="stylesheet" href="../common/ui-layout.css">
+</head>
+<body class="is-3d tab-eye">
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>눈의 원근 조절·귀의 평형감각 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+        <div class="data-item"><span class="data-label" id="lblA">대상 거리</span><span class="data-value" id="valA">먼 곳</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label" id="lblB">흐림 정도</span><span class="data-value" id="valB">0 %</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label" id="lblC">동공</span><span class="data-value" id="valC">보통</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip glass-panel" id="centerTooltip">💡 표시등의 빛이 수정체에서 굴절되어 망막에 상을 맺습니다.</div>
+
+<div class="bottom-ctrl-bar glass-panel">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+    <div class="panel-title" id="panelTitle">⚙️ 눈의 원근 조절</div>
+    <div class="tab-row two">
+        <button class="ctrl-tab-btn active" id="tabEye" type="button"><span class="t-ico">👁</span><span>눈</span></button>
+        <button class="ctrl-tab-btn" id="tabEar" type="button"><span class="t-ico">👂</span><span>귀</span></button>
+    </div>
+
+    <!-- 눈 조절 -->
+    <div class="panel-body eye-only">
+        <div class="seg">
+            <button class="seg-btn active" id="btnFar" type="button">🏔 먼 곳</button>
+            <button class="seg-btn" id="btnNear" type="button">📖 가까운 곳</button>
+        </div>
+        <div class="seg">
+            <button class="seg-btn active" id="btnBright" type="button">☀️ 밝음</button>
+            <button class="seg-btn" id="btnDark" type="button">🌑 어두움</button>
+        </div>
+        <div class="seg three">
+            <button class="seg-btn active" id="btnNormal" type="button">정상</button>
+            <button class="seg-btn" id="btnMyopia" type="button">근시</button>
+            <button class="seg-btn" id="btnHyper" type="button">원시</button>
+        </div>
+        <div class="seg three">
+            <button class="seg-btn active" id="btnNoGlass" type="button">안경 없음</button>
+            <button class="seg-btn" id="btnConcave" type="button">오목렌즈</button>
+            <button class="seg-btn" id="btnConvex" type="button">볼록렌즈</button>
+        </div>
+        <div class="vision-line"><span>망막 결상 흐림</span><b id="blurPct">0 %</b></div>
+        <div class="blur-bar"><i id="blurBar"></i></div>
+        <div class="state-badge" id="stateBadge">
+            <span id="sbName">또렷하게 보임</span>
+            <span class="sb-note" id="sbNote">망막에 정확히 상이 맺힘</span>
+        </div>
+    </div>
+
+    <!-- 귀 조절 -->
+    <div class="panel-body ear-only">
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">🔄 머리 회전</span><span class="slider-val" id="yawVal">0°</span></div>
+            <input type="range" class="ctrl-slider" id="yawRange" min="-90" max="90" step="5" value="0">
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">↔️ 머리 기울임</span><span class="slider-val" id="tiltVal">0°</span></div>
+            <input type="range" class="ctrl-slider" id="tiltRange" min="-35" max="35" step="5" value="0">
+        </div>
+        <button class="btn-start" id="btnShake" type="button">🔄 머리 흔들기</button>
+        <div class="state-badge" id="earBadge">
+            <span id="earName">림프액 정지</span>
+            <span class="sb-note" id="earNote">머리를 움직이면 림프액이 흐릅니다</span>
+        </div>
+        <div class="note">회전은 수평반고리관이, 기울임은 수직반고리관과 이석이 감지합니다.</div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var $ = function (id) { return document.getElementById(id); };
+    function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    var LIGHT_BG = 0xeef2f8;
+    var DARK_BG = 0x0b1220;
+
+    /* ============================================================
+       상태
+       ============================================================ */
+    var state = {
+        tab: 'eye',
+        far: true,
+        bright: true,
+        vision: 'normal',
+        glass: 'none',
+        dark: false,
+        yawTarget: 0,
+        tiltTarget: 0,
+        yaw: 0,
+        tilt: 0,
+        shake: 0,
+        blurPct: 0,
+        v: 1.85,
+        flowH: 0,
+        flowHv: 0,
+        flowA: 0,
+        flowAv: 0,
+        flowP: 0,
+        flowPv: 0,
+        eyeObjZ: 6.2,
+        pupil: 0.26
+    };
+
+    /* ============================================================
+       Three.js
+       ============================================================ */
+    var container = $('canvas-container');
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(LIGHT_BG);
+
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / Math.max(1, window.innerHeight), 0.1, 300);
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 1.8;
+    controls.maxDistance = 22;
+    controls.minPolarAngle = Math.PI * 0.08;
+    controls.maxPolarAngle = Math.PI * 0.56;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    if (THREE.TOUCH) { controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; }
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0xd9e3ee, 0.9);
+    scene.add(hemi);
+    var key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(4, 9, 7);
+    scene.add(key);
+    var fill = new THREE.DirectionalLight(0xffffff, 0.32);
+    fill.position.set(-6, 3, -4);
+    scene.add(fill);
+
+    function makeLabel(text, color, w) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 128;
+        var g = cv.getContext('2d');
+        g.clearRect(0, 0, 512, 128);
+        g.font = "bold 56px 'SeoulNamsan', -apple-system, sans-serif";
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        var tw = Math.min(480, g.measureText(text).width + 40);
+        var x0 = (512 - tw) / 2;
+        g.fillStyle = 'rgba(255,255,255,0.93)';
+        var r = 30;
+        g.beginPath();
+        g.moveTo(x0 + r, 20);
+        g.lineTo(x0 + tw - r, 20);
+        g.quadraticCurveTo(x0 + tw, 20, x0 + tw, 20 + r);
+        g.lineTo(x0 + tw, 108 - r);
+        g.quadraticCurveTo(x0 + tw, 108, x0 + tw - r, 108);
+        g.lineTo(x0 + r, 108);
+        g.quadraticCurveTo(x0, 108, x0, 108 - r);
+        g.lineTo(x0, 20 + r);
+        g.quadraticCurveTo(x0, 20, x0 + r, 20);
+        g.closePath();
+        g.fill();
+        g.fillStyle = color;
+        g.fillText(text, 256, 66);
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+        spr.scale.set(w, w * 0.25, 1);
+        return spr;
+    }
+
+    /* ============================================================
+       A. 눈 모형
+       ============================================================ */
+    var groupEye = new THREE.Group();
+    scene.add(groupEye);
+
+    var LZ = 0.35;                 // 수정체 위치
+    var RETINA = { normal: 1.85, myopia: 1.97, hyperopia: 1.73 };
+    var EYE_R = { normal: 1.60, myopia: 1.70, hyperopia: 1.50 };
+
+    var scleraMat = new THREE.MeshPhysicalMaterial({
+        color: 0xf2fbff, transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0,
+        clearcoat: 1, clearcoatRoughness: 0.03, side: THREE.DoubleSide, depthWrite: false
+    });
+    var sclera = new THREE.Mesh(new THREE.SphereGeometry(1, 56, 40), scleraMat);
+    sclera.position.set(0, 0, 0);
+    groupEye.add(sclera);
+
+    var irisGroup = new THREE.Group();
+    var irisMat = new THREE.MeshStandardMaterial({ color: 0x6b4a2f, roughness: 0.5, metalness: 0.05, side: THREE.DoubleSide });
+    var iris = new THREE.Mesh(new THREE.RingGeometry(0.26, 0.62, 44), irisMat);
+    irisGroup.add(iris);
+    var pupilMat = new THREE.MeshBasicMaterial({ color: 0x05070c });
+    var pupil = new THREE.Mesh(new THREE.CircleGeometry(0.26, 40), pupilMat);
+    pupil.position.z = -0.004;
+    irisGroup.add(pupil);
+    var corneaMat = new THREE.MeshPhysicalMaterial({ color: 0xd9f4ff, transparent: true, opacity: 0.28, roughness: 0.03, clearcoat: 1, depthWrite: false });
+    var cornea = new THREE.Mesh(new THREE.SphereGeometry(0.66, 30, 20, 0, Math.PI * 2, 0, Math.PI * 0.42), corneaMat);
+    cornea.rotation.x = Math.PI / 2;
+    cornea.position.z = 0.02;
+    irisGroup.add(cornea);
+    irisGroup.position.set(0, 0, 1.28);
+    groupEye.add(irisGroup);
+
+    var lensMat = new THREE.MeshPhysicalMaterial({
+        color: 0xa9e3ff, transparent: true, opacity: 0.55, roughness: 0.08, metalness: 0,
+        clearcoat: 1, depthWrite: false
+    });
+    var lensMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 22), lensMat);
+    lensMesh.scale.set(0.40, 0.44, 0.15);
+    lensMesh.position.set(0, 0, LZ);
+    groupEye.add(lensMesh);
+
+    /* 망막 (캔버스 텍스처) */
+    var retinaCv = document.createElement('canvas');
+    retinaCv.width = 256; retinaCv.height = 256;
+    var retinaCtx = retinaCv.getContext('2d');
+    var retinaTex = new THREE.CanvasTexture(retinaCv);
+    var retinaMat = new THREE.MeshBasicMaterial({ map: retinaTex, transparent: true, side: THREE.DoubleSide });
+    var retinaScreen = new THREE.Mesh(new THREE.CircleGeometry(0.62, 44), retinaMat);
+    groupEye.add(retinaScreen);
+
+    var retinaBack = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 32, 24),
+        new THREE.MeshStandardMaterial({ color: 0xd98da0, roughness: 0.85, side: THREE.BackSide, transparent: true, opacity: 0.16, depthWrite: false })
+    );
+    groupEye.add(retinaBack);
+
+    /* 결상점 */
+    var focusDot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffd166 }));
+    groupEye.add(focusDot);
+    var focusGlow = new THREE.PointLight(0xffd166, 0.9, 2.4);
+    groupEye.add(focusGlow);
+
+    /* 광선 */
+    var rayMatA = new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.95 });
+    var rayMatB = new THREE.LineBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.75 });
+    var rayMatC = new THREE.LineBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.45 });
+    function makeRay(mat) {
+        var geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(4 * 3), 3));
+        var line = new THREE.Line(geo, mat);
+        line.frustumCulled = false;
+        groupEye.add(line);
+        return line;
+    }
+    var ray1 = makeRay(rayMatA);
+    var ray2 = makeRay(rayMatB);
+    var ray0 = makeRay(rayMatC);
+
+    /* 보는 대상(화살표) */
+    var eyeObj = new THREE.Group();
+    var arrowMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5 });
+    var arrowBody = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.7, 12), arrowMat);
+    arrowBody.position.y = 0.35;
+    eyeObj.add(arrowBody);
+    var arrowHead = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.3, 16), arrowMat);
+    arrowHead.position.y = 0.85;
+    eyeObj.add(arrowHead);
+    var objLabel = makeLabel('보는 물체', '#1d4ed8', 1.35);
+    objLabel.position.set(0, 1.25, 0);
+    eyeObj.add(objLabel);
+    groupEye.add(eyeObj);
+
+    /* 안경 렌즈 */
+    var glassMat = new THREE.MeshPhysicalMaterial({
+        color: 0xbfe6ff, transparent: true, opacity: 0.30, roughness: 0.03, metalness: 0,
+        clearcoat: 1, side: THREE.DoubleSide, depthWrite: false
+    });
+    var glassLens = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 18), glassMat);
+    glassLens.scale.set(0.52, 0.58, 0.09);
+    glassLens.position.set(0, 0, 1.92);
+    glassLens.visible = false;
+    groupEye.add(glassLens);
+    var glassLabelCv = makeLabel('오목렌즈', '#0284c7', 1.4);
+    glassLabelCv.position.set(0, 1.05, 1.95);
+    glassLabelCv.visible = false;
+    groupEye.add(glassLabelCv);
+    var glassLabelCx = makeLabel('볼록렌즈', '#0e7490', 1.4);
+    glassLabelCx.position.set(0, 1.05, 1.95);
+    glassLabelCx.visible = false;
+    groupEye.add(glassLabelCx);
+
+    var eyeLabel = makeLabel('망막', '#be123c', 1.0);
+    groupEye.add(eyeLabel);
+    var lensLabel = makeLabel('수정체', '#0891b2', 1.0);
+    lensLabel.position.set(0, 0.72, LZ);
+    groupEye.add(lensLabel);
+
+    /* ============================================================
+       B. 귀 모형
+       ============================================================ */
+    var groupEar = new THREE.Group();
+    groupEar.visible = false;
+    scene.add(groupEar);
+
+    var headGroup = new THREE.Group();
+    groupEar.add(headGroup);
+
+    var headMat = new THREE.MeshPhysicalMaterial({
+        color: 0xdfe9f5, transparent: true, opacity: 0.07, roughness: 0.3, clearcoat: 1,
+        side: THREE.DoubleSide, depthWrite: false
+    });
+    var head = new THREE.Mesh(new THREE.SphereGeometry(1.34, 44, 30), headMat);
+    head.scale.set(1.0, 1.1, 1.02);
+    headGroup.add(head);
+
+    var skinMat = new THREE.MeshStandardMaterial({ color: 0xe9cbb8, roughness: 0.6 });
+    var nose = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 14), skinMat);
+    nose.rotation.x = Math.PI / 2;
+    nose.position.set(0, -0.05, 1.32);
+    headGroup.add(nose);
+
+    var earShell = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.075, 10, 22, Math.PI * 1.55), skinMat);
+    earShell.position.set(0.6, -0.06, 0.05);
+    earShell.rotation.y = Math.PI / 2;
+    earShell.rotation.z = 0.5;
+    headGroup.add(earShell);
+    var earShell2 = earShell.clone();
+    earShell2.position.x = -0.6;
+    headGroup.add(earShell2);
+
+    var innerEar = new THREE.Group();
+    innerEar.position.set(0.38, 0.06, -0.06);
+    headGroup.add(innerEar);
+
+    var CANAL_R = 0.62;
+    var canalMatH = new THREE.MeshPhysicalMaterial({
+        color: 0x7cc4e8, transparent: true, opacity: 0.75, roughness: 0.15, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false
+    });
+    var canalMatV = new THREE.MeshPhysicalMaterial({
+        color: 0xeba7b8, transparent: true, opacity: 0.72, roughness: 0.15, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false
+    });
+
+    var canals = [];
+    function buildCanal(rotX, rotY, axis, mat) {
+        var g = new THREE.Group();
+        g.rotation.x = rotX;
+        g.rotation.y = rotY;
+        var tube = new THREE.Mesh(new THREE.TorusGeometry(CANAL_R, 0.1, 10, 56, Math.PI * 1.58), mat);
+        g.add(tube);
+
+        var parts = [];
+        var pGeo = new THREE.SphereGeometry(0.026, 8, 6);
+        var pMat = new THREE.MeshBasicMaterial({ color: 0x1d6fd8 });
+        for (var i = 0; i < 24; i++) {
+            var pt = new THREE.Mesh(pGeo, pMat);
+            g.add(pt);
+            parts.push({ mesh: pt, base: (i / 24) * Math.PI * 1.58 });
+        }
+        innerEar.add(g);
+        canals.push({ group: g, axis: axis, particles: parts, flow: 0, vel: 0 });
+        return g;
+    }
+    var cH = buildCanal(Math.PI / 2 - 0.22, 0, 'H', canalMatH);   // 수평반고리관
+    cH.position.set(0, -0.12, 0);
+    var cA = buildCanal(0.12, 0, 'A', canalMatV);                 // 수직반고리관(앞)
+    cA.position.set(0, 0.04, -0.05);
+    var cP = buildCanal(0.1, Math.PI / 2, 'P', canalMatV);        // 수직반고리관(뒤)
+    cP.position.set(0, 0.02, 0.05);
+
+    /* 전정기관 · 이석 */
+    var vestibule = new THREE.Mesh(new THREE.SphereGeometry(0.2, 26, 18), new THREE.MeshPhysicalMaterial({
+        color: 0xfbe4ea, transparent: true, opacity: 0.75, roughness: 0.12, clearcoat: 1, depthWrite: false
+    }));
+    vestibule.position.set(0, -0.04, 0);
+    innerEar.add(vestibule);
+
+    var macula = new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), new THREE.MeshStandardMaterial({ color: 0xf0a6b8, roughness: 0.7, side: THREE.DoubleSide }));
+    macula.rotation.x = -Math.PI / 2;
+    macula.position.set(0, -0.17, 0);
+    innerEar.add(macula);
+
+    var otoliths = [];
+    var otGeo = new THREE.SphereGeometry(0.042, 10, 8);
+    var otMat = new THREE.MeshStandardMaterial({ color: 0xf3c14b, roughness: 0.3, metalness: 0.3 });
+    for (var oi = 0; oi < 7; oi++) {
+        var o = new THREE.Mesh(otGeo, otMat);
+        var ang = (oi / 7) * Math.PI * 2;
+        var rr = 0.05 + (oi % 3) * 0.035;
+        o.userData.base = new THREE.Vector3(Math.cos(ang) * rr, 0, Math.sin(ang) * rr);
+        o.position.copy(o.userData.base);
+        innerEar.add(o);
+        otoliths.push(o);
+    }
+
+    /* 달팽이관 */
+    (function buildCochlea() {
+        var pts = [];
+        for (var i = 0; i <= 90; i++) {
+            var t = i / 90;
+            var ang = t * Math.PI * 3.6;
+            var rad = 0.30 * (1 - t * 0.78);
+            pts.push(new THREE.Vector3(Math.cos(ang) * rad, -0.06 - t * 0.14, Math.sin(ang) * rad + 0.4));
+        }
+        var curve = new THREE.CatmullRomCurve3(pts);
+        var geo = new THREE.TubeGeometry(curve, 110, 0.055, 8, false);
+        var cochlea = new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+            color: 0xf6b26b, transparent: true, opacity: 0.8, roughness: 0.2, clearcoat: 1, depthWrite: false
+        }));
+        innerEar.add(cochlea);
+    })();
+
+    var lblH = makeLabel('수평반고리관', '#0369a1', 1.15);
+    lblH.position.set(-0.85, -0.8, 0.3);
+    innerEar.add(lblH);
+    var lblA = makeLabel('수직반고리관', '#9d174d', 1.15);
+    lblA.position.set(0.15, 1.0, 0);
+    innerEar.add(lblA);
+    var lblOt = makeLabel('이석', '#b45309', 0.52);
+    lblOt.position.set(0.92, -0.22, 0.3);
+    innerEar.add(lblOt);
+    var lblCoc = makeLabel('달팽이관', '#c2410c', 0.8);
+    lblCoc.position.set(0.8, -0.72, 0.5);
+    innerEar.add(lblCoc);
+
+    /* ============================================================
+       카메라
+       ============================================================ */
+    var CAM_TARGET = new THREE.Vector3(0, 0.1, 0);
+    function fitCamera() {
+        var aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        var portrait = aspect < 1;
+        var vfov = camera.fov * Math.PI / 180;
+        var needW, needH;
+        if (state.tab === 'eye') {
+            CAM_TARGET.set(portrait ? 0 : 0.78, 0.05, 1.55);
+            needW = portrait ? 7.8 : 9.8;
+            needH = portrait ? 6.4 : 5.0;
+        } else {
+            CAM_TARGET.set(0.34, 0.1, 0.1);
+            needW = portrait ? 5.2 : 5.6;
+            needH = portrait ? 5.0 : 5.0;
+        }
+        var dW = (needW / 2) / (Math.tan(vfov / 2) * aspect);
+        var dH = (needH / 2) / Math.tan(vfov / 2);
+        var dist = Math.max(dW, dH);
+        var mz = parseFloat(document.documentElement.getAttribute('data-mzoom')) || 1;
+        dist = clamp(dist / mz, 1.8, 22);
+        var dir = new THREE.Vector3(state.tab === 'eye' ? 0.88 : 0, state.tab === 'eye' ? 0.34 : 0.22, state.tab === 'eye' ? 0.72 : 1).normalize().multiplyScalar(dist);
+        camera.position.copy(CAM_TARGET).add(dir);
+        controls.target.copy(CAM_TARGET);
+        controls.update();
+    }
+    window.svlFitCamera = fitCamera;
+
+    /* ============================================================
+       눈 계산 · 렌더
+       ============================================================ */
+    function retinaLen() { return RETINA[state.vision]; }
+    function eyeRadius() { return EYE_R[state.vision]; }
+
+    function optics() {
+        var d = state.far ? 60 : 3.2;
+        var rl = retinaLen();
+        var pMin = 1 / 1.85;
+        var pMax = 1 / 1.85 + 1 / 3.2;
+        var pReq = 1 / d + 1 / rl;
+        var pg = 0;
+        if (state.glass === 'concave') pg = -0.0162;
+        else if (state.glass === 'convex') pg = 0.0375;
+        var pEye = clamp(pReq - pg, pMin, pMax);
+        var pSys = pEye + pg;
+        var denom = pSys - 1 / d;
+        if (denom <= 0.0001) denom = 0.0001;
+        var v = 1 / denom;
+        var blur = Math.abs(v - rl);
+        return { d: d, rl: rl, v: v, blur: blur, pMin: pMin, pMax: pMax, pEye: pEye, pg: pg };
+    }
+
+    function drawRetina(blurPx) {
+        var w = retinaCv.width, h = retinaCv.height;
+        retinaCtx.clearRect(0, 0, w, h);
+        // 망막 바탕
+        retinaCtx.fillStyle = 'rgba(214,122,146,0.35)';
+        retinaCtx.beginPath();
+        retinaCtx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
+        retinaCtx.fill();
+
+        // 상(화살표) — 초점이 맞으면 선명, 아니면 번짐
+        retinaCtx.save();
+        retinaCtx.translate(w / 2, h / 2);
+        retinaCtx.strokeStyle = 'rgba(255,238,170,' + (blurPx > 40 ? 0.55 : 0.96) + ')';
+        retinaCtx.fillStyle = retinaCtx.strokeStyle;
+        retinaCtx.lineWidth = 8;
+        retinaCtx.lineCap = 'round';
+        if (blurPx > 1) {
+            retinaCtx.shadowColor = 'rgba(255,238,170,0.9)';
+            retinaCtx.shadowBlur = blurPx * 2.2;
+        }
+        retinaCtx.beginPath();
+        retinaCtx.moveTo(0, 44);
+        retinaCtx.lineTo(0, -30);
+        retinaCtx.stroke();
+        retinaCtx.beginPath();
+        retinaCtx.moveTo(-20, -12);
+        retinaCtx.lineTo(0, -40);
+        retinaCtx.lineTo(20, -12);
+        retinaCtx.stroke();
+        retinaCtx.restore();
+        retinaTex.needsUpdate = true;
+    }
+
+    function setRayPoints(line, pts) {
+        var arr = line.geometry.attributes.position.array;
+        for (var i = 0; i < 4; i++) {
+            var p = pts[i] || pts[pts.length - 1];
+            arr[i * 3] = p.x;
+            arr[i * 3 + 1] = p.y;
+            arr[i * 3 + 2] = p.z;
+        }
+        line.geometry.attributes.position.needsUpdate = true;
+        line.geometry.computeBoundingSphere();
+    }
+
+    function updateEyeModel() {
+        var o = optics();
+        state.v = o.v;
+        state.blurPct = clamp(o.blur * 640, 0, 100);
+
+        var r = eyeRadius();
+        sclera.scale.setScalar(r);
+        var retinaZ = LZ - o.rl;
+        retinaScreen.position.set(0, 0, retinaZ);
+        retinaBack.scale.setScalar(r * 0.95);
+        eyeLabel.position.set(0, -0.78, retinaZ + 0.1);
+
+        // 동공 크기
+        var pupilR = state.bright ? 0.20 : 0.44;
+        state.pupil = pupilR;
+        pupil.geometry.dispose();
+        pupil.geometry = new THREE.CircleGeometry(pupilR, 40);
+        var irisInner = pupilR + 0.02;
+        iris.geometry.dispose();
+        iris.geometry = new THREE.RingGeometry(irisInner, 0.62, 44);
+        irisGroup.position.z = r * 0.80;
+        irisGroup.scale.setScalar(r / 1.6 * 1.0);
+
+        // 수정체 두께(가까운 곳 → 두꺼움)
+        var accom = clamp((o.pEye - (1 / 1.85)) / (1 / 3.2), 0, 1);
+        lensMesh.scale.set(0.40, 0.44, 0.13 + 0.06 * accom);
+
+        // 대상 위치
+        var visZ = state.far ? 2.9 : 1.8;
+        eyeObj.position.set(0, 0, visZ);
+        var hObj = 1.0;
+
+        // 안경
+        var hasGlass = state.glass !== 'none';
+        glassLens.visible = hasGlass;
+        glassLabelCv.visible = state.glass === 'concave';
+        glassLabelCx.visible = state.glass === 'convex';
+        if (hasGlass) {
+            glassLens.scale.set(0.52, 0.58, state.glass === 'concave' ? 0.05 : 0.14);
+        }
+
+        // 결상점
+        var imgZ = LZ - o.v;
+        focusDot.position.set(0, 0, imgZ);
+        focusGlow.position.set(0, 0, imgZ);
+
+        // 망막 상의 흐림 표현
+        drawRetina(clamp(o.blur * 900, 1, 110));
+
+        // 광선 3개
+        var A = new THREE.Vector3(-0.32, 0, LZ);
+        var B = new THREE.Vector3(0.32, 0, LZ);
+        var tip = new THREE.Vector3(0, hObj, visZ);
+        var I = new THREE.Vector3(0, 0, imgZ);
+
+        function rayThrough(lensPt) {
+            var dirZ = imgZ - lensPt.z;
+            if (Math.abs(dirZ) < 0.0001) dirZ = -0.0001;
+            var k = (retinaZ - imgZ) / dirZ;
+            var hit = new THREE.Vector3(lensPt.x + (0 - lensPt.x) * k, 0, retinaZ);
+            return hit;
+        }
+        setRayPoints(ray1, [tip, A, I, rayThrough(A)]);
+        setRayPoints(ray2, [tip, B, I, rayThrough(B)]);
+        setRayPoints(ray0, [tip, new THREE.Vector3(0, 0, LZ), new THREE.Vector3(0, 0, retinaZ), new THREE.Vector3(0, 0, retinaZ)]);
+
+        if (document.body.classList.contains('tab-eye')) {
+            $('valA').textContent = state.far ? '먼 곳' : '가까운 곳';
+            $('valB').textContent = Math.round(state.blurPct) + ' %';
+            $('valC').textContent = state.bright ? '작음' : '큼';
+            $('blurPct').textContent = Math.round(state.blurPct) + ' %';
+            $('blurBar').style.width = state.blurPct + '%';
+
+            var name = $('sbName'), note = $('sbNote');
+            if (state.blurPct < 12) {
+                name.textContent = '또렷하게 보임';
+                note.textContent = '망막에 정확히 상이 맺힘';
+            } else {
+                var where = o.v < o.rl ? '망막 앞' : '망막 뒤';
+                name.textContent = '흐리게 보임';
+                note.textContent = '상이 ' + where + '에 맺힘 · ' + Math.round(state.blurPct) + '%';
+            }
+        }
+        return o;
+    }
+
+    /* ============================================================
+       귀 계산 · 렌더
+       ============================================================ */
+    function updateEarModel(dt) {
+        // 목표 회전으로 부드럽게 이동
+        var ty = state.yawTarget + Math.sin(state.shake) * 26;
+        var tt = state.tiltTarget;
+        var prevYaw = state.yaw, prevTilt = state.tilt;
+        state.yaw = lerp(state.yaw, ty, clamp(dt * 9, 0, 1));
+        state.tilt = lerp(state.tilt, tt, clamp(dt * 9, 0, 1));
+
+        var dYaw = (state.yaw - prevYaw) * Math.PI / 180;
+        var dTilt = (state.tilt - prevTilt) * Math.PI / 180;
+
+        headGroup.rotation.y = state.yaw * Math.PI / 180;
+        headGroup.rotation.z = state.tilt * Math.PI / 180;
+
+        // 림프액 흐름(관성)
+        canals[0].vel -= dYaw * 20;     // 수평관: 좌우 회전
+        canals[1].vel -= dTilt * 20;    // 수직관(앞): 기울임
+        canals[2].vel -= dTilt * 20;    // 수직관(뒤)
+
+        var maxFlow = 0;
+        for (var c = 0; c < canals.length; c++) {
+            var cn = canals[c];
+            cn.vel += (-cn.flow * 16 - cn.vel * 5) * dt;
+            cn.flow += cn.vel * dt;
+            cn.flow = clamp(cn.flow, -0.7, 0.7);
+            maxFlow = Math.max(maxFlow, Math.abs(cn.flow));
+            for (var i = 0; i < cn.particles.length; i++) {
+                var p = cn.particles[i];
+                var a = p.base + cn.flow;
+                p.mesh.position.set(Math.cos(a) * CANAL_R, Math.sin(a) * CANAL_R, 0);
+            }
+        }
+
+        // 이석: 기울면 낮은 쪽으로 쏠림
+        var gx = Math.sin(state.tilt * Math.PI / 180) * 0.13;
+        var gz = 0;
+        for (var k = 0; k < otoliths.length; k++) {
+            var o = otoliths[k];
+            var bx = o.userData.base.x + gx;
+            var bz = o.userData.base.z + gz;
+            o.position.x = lerp(o.position.x, bx, clamp(dt * 6, 0, 1));
+            o.position.z = lerp(o.position.z, bz, clamp(dt * 6, 0, 1));
+            o.position.y = -0.2 + Math.abs(gx) * 0.05;
+        }
+
+        var flowPct = clamp(maxFlow * 140, 0, 100);
+        if (document.body.classList.contains('tab-ear')) {
+            $('valA').textContent = Math.round(state.yaw) + '°';
+            $('valB').textContent = Math.round(state.tilt) + '°';
+            $('valC').textContent = Math.round(flowPct) + ' %';
+            $('yawVal').textContent = Math.round(state.yaw) + '°';
+            $('tiltVal').textContent = Math.round(state.tilt) + '°';
+
+            var name = $('earName'), note = $('earNote');
+            var held = Math.abs(state.yaw) > 6 || Math.abs(state.tilt) > 6;
+            if (flowPct < 6) {
+                if (held) {
+                    name.textContent = '머리 고정';
+                    note.textContent = '림프액은 멈추고 이석이 기울기를 감지합니다';
+                } else {
+                    name.textContent = '림프액 정지';
+                    note.textContent = '머리를 움직이면 림프액이 흐릅니다';
+                }
+            } else if (Math.abs(dYaw) > Math.abs(dTilt) || Math.abs(state.yaw) > 20) {
+                name.textContent = '수평반고리관 감지';
+                note.textContent = '좌우 회전을 감지합니다';
+            } else {
+                name.textContent = '수직반고리관·이석 감지';
+                note.textContent = '기울어진 방향을 감지합니다';
+            }
+        }
+    }
+
+    /* ============================================================
+       탭 전환 · UI
+       ============================================================ */
+    function setTab(tab) {
+        state.tab = tab;
+        var isEye = tab === 'eye';
+        groupEye.visible = isEye;
+        groupEar.visible = !isEye;
+        document.body.classList.toggle('tab-eye', isEye);
+        document.body.classList.toggle('tab-ear', !isEye);
+        $('tabEye').classList.toggle('active', isEye);
+        $('tabEar').classList.toggle('active', !isEye);
+        $('panelTitle').textContent = isEye ? '⚙️ 눈의 원근 조절' : '⚙️ 귀의 평형감각';
+        $('lblA').textContent = isEye ? '대상 거리' : '머리 회전';
+        $('lblB').textContent = isEye ? '흐림 정도' : '기울임';
+        $('lblC').textContent = isEye ? '동공' : '림프액 흐름';
+        $('valC').textContent = isEye ? (state.bright ? '작음' : '큼') : '0 %';
+        if (isEye) {
+            updateEyeModel();
+            setHint('💡 먼 곳과 가까운 곳을 오가며 수정체 두께와 망막 상의 변화를 살펴보세요.');
+        } else {
+            setHint('💡 머리를 좌우로 돌리면 수평반고리관의 림프액이, 기울이면 이석이 움직입니다.');
+        }
+        fitCamera();
+    }
+    $('tabEye').addEventListener('click', function () { setTab('eye'); });
+    $('tabEar').addEventListener('click', function () { setTab('ear'); });
+
+    function setFar(far) {
+        state.far = far;
+        $('btnFar').classList.toggle('active', far);
+        $('btnNear').classList.toggle('active', !far);
+        updateEyeModel();
+        setHint(far ? '🏔 먼 곳을 볼 때는 수정체가 얇아집니다.' : '📖 가까운 곳을 볼 때는 모양체근이 수축해 수정체가 두꺼워집니다.');
+    }
+    $('btnFar').addEventListener('click', function () { setFar(true); });
+    $('btnNear').addEventListener('click', function () { setFar(false); });
+
+    function setBright(b) {
+        state.bright = b;
+        $('btnBright').classList.toggle('active', b);
+        $('btnDark').classList.toggle('active', !b);
+        updateEyeModel();
+        setHint(b ? '☀️ 밝을 때는 홍채가 동공을 좁힙니다.' : '🌑 어두울 때는 동공이 커져 더 많은 빛을 받아들입니다.');
+    }
+    $('btnBright').addEventListener('click', function () { setBright(true); });
+    $('btnDark').addEventListener('click', function () { setBright(false); });
+
+    function setVision(v) {
+        state.vision = v;
+        $('btnNormal').classList.toggle('active', v === 'normal');
+        $('btnMyopia').classList.toggle('active', v === 'myopia');
+        $('btnHyper').classList.toggle('active', v === 'hyperopia');
+        updateEyeModel();
+        if (v === 'myopia') setHint('👁 근시: 안구가 길어 상이 망막 앞에 맺힙니다. 먼 곳이 흐립니다.');
+        else if (v === 'hyperopia') setHint('👁 원시: 안구가 짧아 상이 망막 뒤에 맺힙니다. 가까운 곳이 흐립니다.');
+        else setHint('👁 정상 눈: 상이 망막 위에 정확히 맺힙니다.');
+    }
+    $('btnNormal').addEventListener('click', function () { setVision('normal'); });
+    $('btnMyopia').addEventListener('click', function () { setVision('myopia'); });
+    $('btnHyper').addEventListener('click', function () { setVision('hyperopia'); });
+
+    function setGlass(g) {
+        state.glass = g;
+        $('btnNoGlass').classList.toggle('active', g === 'none');
+        $('btnConcave').classList.toggle('active', g === 'concave');
+        $('btnConvex').classList.toggle('active', g === 'convex');
+        updateEyeModel();
+        if (g === 'concave') setHint('🔍 오목렌즈: 빛을 퍼지게 해 근시의 결상점을 망막으로 옮깁니다.');
+        else if (g === 'convex') setHint('🔍 볼록렌즈: 빛을 모아 원시의 결상점을 망막으로 옮깁니다.');
+        else setHint('안경을 벗었습니다.');
+    }
+    $('btnNoGlass').addEventListener('click', function () { setGlass('none'); });
+    $('btnConcave').addEventListener('click', function () { setGlass('concave'); });
+    $('btnConvex').addEventListener('click', function () { setGlass('convex'); });
+
+    $('yawRange').addEventListener('input', function (e) {
+        state.yawTarget = parseFloat(e.target.value);
+        if (state.tab !== 'ear') setTab('ear');
+    });
+    $('tiltRange').addEventListener('input', function (e) {
+        state.tiltTarget = parseFloat(e.target.value);
+        if (state.tab !== 'ear') setTab('ear');
+    });
+    $('btnShake').addEventListener('click', function () {
+        state.shake = 0.0001;
+        setHint('🔄 머리를 좌우로 흔들면 반고리관 속 림프액이 관성으로 뒤처지며 흐릅니다.');
+    });
+
+    $('themeBtn').addEventListener('click', function () {
+        state.dark = !state.dark;
+        document.body.classList.toggle('dark-mode', state.dark);
+        scene.background = new THREE.Color(state.dark ? DARK_BG : LIGHT_BG);
+        hemi.intensity = state.dark ? 0.5 : 0.9;
+        key.intensity = state.dark ? 0.8 : 1.05;
+        fill.intensity = state.dark ? 0.16 : 0.32;
+        $('themeBtn').textContent = state.dark ? '☀️' : '🌙';
+        $('themeBtn').title = state.dark ? '주간 모드로 전환' : '야간 모드로 전환';
+    });
+
+    var hintTimer = null;
+    function setHint(msg, keep) {
+        var el = $('centerTooltip');
+        el.textContent = msg;
+        el.classList.remove('hidden');
+        if (hintTimer) clearTimeout(hintTimer);
+        if (!keep) hintTimer = setTimeout(function () { el.classList.add('hidden'); }, 7000);
+    }
+
+    function reset() {
+        state.far = true;
+        state.bright = true;
+        state.vision = 'normal';
+        state.glass = 'none';
+        state.yawTarget = 0;
+        state.tiltTarget = 0;
+        state.yaw = 0;
+        state.tilt = 0;
+        state.shake = 0;
+        for (var i = 0; i < canals.length; i++) { canals[i].flow = 0; canals[i].vel = 0; }
+        $('yawRange').value = 0;
+        $('tiltRange').value = 0;
+        setFar(true);
+        setBright(true);
+        setVision('normal');
+        setGlass('none');
+        setHint(state.tab === 'eye' ? '💡 먼 곳과 가까운 곳을 오가며 수정체 두께와 망막 상의 변화를 살펴보세요.' : '💡 머리를 좌우로 돌리면 수평반고리관의 림프액이, 기울이면 이석이 움직입니다.', false);
+    }
+    $('btnReset').addEventListener('click', reset);
+    $('btnAlign').addEventListener('click', fitCamera);
+
+    window.addEventListener('resize', function () {
+        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        fitCamera();
+    });
+
+    /* ============================================================
+       루프
+       ============================================================ */
+    var lastT = performance.now();
+    function frame(now) {
+        requestAnimationFrame(frame);
+        var dt = Math.min((now - lastT) / 1000, 0.06);
+        lastT = now;
+
+        if (state.tab === 'eye') {
+            // 수정체 미세 맥동
+            var pulse = 1 + Math.sin(now * 0.0015) * 0.006;
+            lensMesh.scale.x = 0.40 * pulse;
+            lensMesh.scale.y = 0.44 * pulse;
+        } else {
+            if (state.shake > 0) {
+                state.shake += dt * 7.2;
+                if (state.shake > Math.PI * 2.6) state.shake = 0;
+            }
+            updateEarModel(dt);
+        }
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* ============================================================
+       시작
+       ============================================================ */
+    setTab('eye');
+    updateEyeModel();
+    updateEarModel(0.016);
+    requestAnimationFrame(frame);
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { fitCamera(); });
+    }
+})();
+</script>
+<script>
+/* ============ 전체화면 / 창모드 + 모바일 화면 재조정 (공통) ============ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+    var started = false;
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '\uD83D\uDDD7' : '\u26F6';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) {
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            btn.title = on ? '창모드로 전환' : '전체화면으로 전환';
+        }
+        document.body.classList.toggle('is-fullscreen', on);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (typeof window.svlFitCamera === 'function') window.svlFitCamera();
+        }, 140);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (typeof window.svlFitCamera === 'function') window.svlFitCamera();
+        }, 420);
+    }
+
+    function onKey(e) {
+        if (e.key !== 'Escape' && e.key !== 'Esc') return;
+        if (pseudo() && !realFs()) { docEl.classList.remove('pseudo-fs'); setUI(); }
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+                return;
+            }
+            if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var r = req.call(docEl);
+                    if (r && typeof r.catch === 'function') r.catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                } catch (err) {
+                    docEl.classList.add('pseudo-fs');
+                }
+            } else {
+                docEl.classList.add('pseudo-fs');
+                try { window.scrollTo(0, 1); } catch (e) {}
+                toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+            }
+            setUI();
+        }, false);
+    }
+
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+    document.addEventListener('keydown', onKey);
+
+    /* 회전·주소창 변화·전체화면 전환 후 3D 카메라/렌더러 재계산 */
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (typeof window.svlFitCamera === 'function') window.svlFitCamera();
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+    started = true;
+})();
+
+</script>
+<script src="../common/feedback.js" defer></script>
+<script src="../common/lib/qrcode.min.js" defer></script>
+<script src="../common/qr-modal.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+</body>
+</html>

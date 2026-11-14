@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>암석의 순환과 광물 감별 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../common/lib/three.min.js"></script>
+<script src="../common/lib/OrbitControls.js"></script>
+<link rel="stylesheet" href="../common/qr-modal.css">
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eef3f9;
+    color: #1c1c1e;
+    -webkit-user-select: none; user-select: none;
+    transition: background-color .35s ease, color .35s ease;
+}
+
+#canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+canvas { display: block; touch-action: none; }
+
+:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* ---------------- Glass ---------------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.80);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.09);
+    border-radius: 18px;
+    transition: background .3s ease, border-color .3s ease, color .3s ease;
+}
+
+/* ---------------- 좌상단 ---------------- */
+.top-left-bar {
+    position: fixed; top: 16px; left: 18px;
+    display: flex; align-items: center; gap: 8px;
+    z-index: 30; max-width: calc(100vw - 132px);
+}
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; font-family: inherit; font-size: 13px; font-weight: 700;
+    color: #1c1c1e; text-decoration: none; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 999px;
+    white-space: nowrap; transition: all .2s ease;
+}
+.back-btn:hover { background: rgba(255, 255, 255, 0.95); transform: translateY(-1px); }
+.back-btn > span:first-child { display: inline-block; margin-right: 2px; }
+.tag-badge {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 14px; font-size: 13px; font-weight: 800;
+    min-width: 0; white-space: nowrap;
+}
+.tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-pill {
+    flex: 0 0 auto; padding: 2px 7px; border-radius: 999px;
+    background: rgba(147, 51, 234, 0.14); color: #7e22ce;
+    font-size: 10px; font-weight: 800; letter-spacing: .2px;
+}
+.qr-btn { font-size: 12px; padding: 8px 12px; }
+
+/* ---------------- 우상단 ---------------- */
+.top-right-bar {
+    position: fixed; top: 16px; right: 18px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+    z-index: 25; max-width: calc(100vw - 24px);
+}
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.data-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 7px 15px; border-radius: 999px;
+}
+.data-item { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 54px; }
+.data-label { font-size: 9.5px; font-weight: 800; color: #64748b; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value { font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; white-space: nowrap; }
+.data-sep { width: 1px; height: 22px; background: rgba(15, 23, 42, 0.10); flex: 0 0 auto; }
+.icon-btn {
+    width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%; cursor: pointer; font-size: 16px;
+    font-family: inherit; background: rgba(255, 255, 255, 0.85);
+    transition: all .2s ease;
+}
+.icon-btn:hover { transform: scale(1.05); }
+
+/* ---------------- 안내 툴팁 ---------------- */
+.center-tooltip {
+    position: fixed; top: 78px; left: 50%; transform: translateX(-50%);
+    padding: 6px 16px; border-radius: 999px; z-index: 20;
+    font-size: 12px; font-weight: 700; color: #334155;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+    pointer-events: none; white-space: nowrap;
+    max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------------- 좌측 데이터 패널 ---------------- */
+.left-panel {
+    position: fixed; left: 18px; bottom: 76px; z-index: 40;
+    padding: 10px 12px; border-radius: 16px;
+    width: min(316px, calc(100vw - 320px));
+    display: flex; flex-direction: column; gap: 7px;
+}
+.left-panel-title {
+    font-size: 11px; font-weight: 800; color: #475569;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.left-panel canvas { width: 100%; height: auto; display: block; border-radius: 10px; }
+
+/* ---------------- 우측 조절 패널 (250px / 모바일 226px) ---------------- */
+body #side-ctrl.side-ctrl-panel {
+    width: 250px !important;
+    right: 20px !important;
+    bottom: 74px !important;
+    padding: 12px !important;
+    gap: 8px !important;
+    max-height: calc(100vh - 168px) !important;
+    z-index: 60 !important;
+}
+#side-ctrl .panel-title {
+    font-size: 12px !important; font-weight: 800 !important; color: #475569 !important;
+    text-align: center !important; padding-bottom: 5px !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+}
+
+/* 탭(모드) 선택 */
+.mode-row {
+    display: flex; gap: 4px; padding: 3px;
+    background: rgba(127, 140, 160, 0.14); border-radius: 11px;
+}
+.mode-btn {
+    flex: 1; min-width: 0; padding: 7px 4px; border: none; border-radius: 8px;
+    background: transparent; color: #475569;
+    font-family: inherit; font-size: 11.5px; font-weight: 800;
+    cursor: pointer; white-space: nowrap; transition: all .18s ease;
+}
+.mode-btn.active { background: #ffffff; color: #0f172a; box-shadow: 0 1px 5px rgba(15, 23, 42, 0.14); }
+.mode-btn:hover { color: #0f172a; }
+
+/* 타일형 조작 버튼 */
+.ctrl-tab-btn {
+    width: 100%; padding: 8px 6px; border-radius: 11px;
+    border: 1px solid rgba(15, 23, 42, 0.08); background: rgba(255, 255, 255, 0.92);
+    color: #1c1c1e; font-family: inherit; font-size: 11.5px; font-weight: 800;
+    cursor: pointer; text-align: center; line-height: 1.25;
+    white-space: nowrap; word-break: keep-all; transition: all .18s ease;
+}
+.ctrl-tab-btn:hover { background: #ffffff; transform: translateY(-1px); }
+.ctrl-tab-btn.active { background: #2563eb; color: #ffffff; border-color: #2563eb; box-shadow: 0 3px 12px rgba(37, 99, 235, 0.28); }
+.ctrl-tab-btn:disabled { opacity: .45; cursor: default; transform: none; }
+.ctrl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.ctrl-grid.three { grid-template-columns: repeat(3, 1fr); }
+
+/* 슬라이더 행 */
+.ctrl-row { display: flex; flex-direction: column; gap: 3px; }
+.ctrl-row-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 800; color: #64748b; }
+.ctrl-val { font-size: 11.5px; font-weight: 800; color: #2563eb; white-space: nowrap; }
+input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+    border-radius: 999px; background: #dbe3ee; outline: none; cursor: pointer; margin: 4px 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+    background: #2563eb; box-shadow: 0 1px 4px rgba(37, 99, 235, .45); cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+    width: 15px; height: 15px; border: none; border-radius: 50%;
+    background: #2563eb; cursor: pointer;
+}
+input[type="range"]:disabled { opacity: .5; }
+
+.hint-line {
+    font-size: 10.5px; line-height: 1.45; color: #475569;
+    background: rgba(37, 99, 235, 0.07); border-radius: 10px;
+    padding: 6px 9px; word-break: keep-all;
+}
+.status-line {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 11px; font-weight: 800; color: #475569;
+    background: rgba(15, 23, 42, 0.05); border-radius: 10px; padding: 6px 9px;
+}
+.status-line b { font-size: 11.5px; color: #2563eb; }
+.status-line.ok { background: rgba(16, 185, 129, 0.14); color: #047857; }
+.status-line.ok b { color: #047857; }
+.status-line.warn { background: rgba(245, 158, 11, 0.16); color: #b45309; }
+.status-line.warn b { color: #b45309; }
+
+.legend-row { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 10px; font-weight: 700; color: #475569; }
+.legend-row span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.legend-row i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+
+.result-card {
+    display: flex; flex-direction: column; gap: 3px;
+    background: rgba(16, 185, 129, 0.10); border: 1px solid rgba(16, 185, 129, 0.28);
+    border-radius: 10px; padding: 7px 9px;
+    font-size: 10.5px; font-weight: 700; color: #065f46; line-height: 1.4;
+}
+.result-card b { font-size: 11.5px; color: #047857; }
+
+/* ---------------- 전체화면 버튼 ---------------- */
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 15px; border-radius: 999px; border: none;
+    background: rgba(255, 255, 255, 0.85); color: #1e293b;
+    font-family: inherit; font-size: 12.5px; font-weight: 800;
+    cursor: pointer; transition: all .2s ease; white-space: nowrap;
+}
+.fullscreen-btn:hover { background: #ffffff; transform: translateY(-1px); }
+
+/* ---------------- 다크 모드 ---------------- */
+body.dark-mode { background-color: #0f172a; color: #f8fafc; }
+body.dark-mode .glass-panel {
+    background: rgba(23, 32, 50, 0.84);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    color: #f8fafc;
+}
+body.dark-mode .back-btn, body.dark-mode .tag-badge { color: #f8fafc; }
+body.dark-mode .data-label { color: #94a3b8; }
+body.dark-mode .data-value { color: #f1f5f9; }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.14); }
+body.dark-mode .icon-btn, body.dark-mode .fullscreen-btn {
+    background: rgba(45, 55, 72, 0.9); color: #f8fafc;
+}
+body.dark-mode .center-tooltip {
+    background: rgba(23, 32, 50, 0.9); color: #cbd5e1; border-color: rgba(255, 255, 255, 0.12);
+}
+body.dark-mode .left-panel-title, body.dark-mode .ctrl-row-h, body.dark-mode .legend-row,
+body.dark-mode .hint-line, body.dark-mode .status-line { color: #cbd5e1; }
+body.dark-mode .hint-line { background: rgba(56, 189, 248, 0.10); }
+body.dark-mode .status-line { background: rgba(255, 255, 255, 0.07); }
+body.dark-mode .status-line b { color: #7dd3fc; }
+body.dark-mode .status-line.ok { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+body.dark-mode .status-line.ok b { color: #6ee7b7; }
+body.dark-mode .status-line.warn { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+body.dark-mode .status-line.warn b { color: #fcd34d; }
+body.dark-mode .ctrl-tab-btn {
+    background: rgba(45, 55, 72, 0.9); color: #e2e8f0; border-color: rgba(255, 255, 255, 0.10);
+}
+body.dark-mode .ctrl-tab-btn.active { background: #2563eb; color: #ffffff; }
+body.dark-mode .mode-row { background: rgba(255, 255, 255, 0.08); }
+body.dark-mode .mode-btn { color: #cbd5e1; }
+body.dark-mode .mode-btn.active { background: rgba(255, 255, 255, 0.16); color: #ffffff; }
+body.dark-mode .ctrl-val { color: #7dd3fc; }
+body.dark-mode input[type="range"] { background: #334155; }
+body.dark-mode .result-card { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.35); color: #a7f3d0; }
+body.dark-mode .result-card b { color: #6ee7b7; }
+body.dark-mode .tag-pill { background: rgba(191, 90, 242, 0.22); color: #e9b3ff; }
+
+/* ---------------- 전체화면 상태 ---------------- */
+body.is-fullscreen #canvas-container { width: 100vw; height: 100vh; }
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip { display: none !important; }
+
+/* ---------------- 모바일 세로 ---------------- */
+@media (max-width: 900px) {
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)); left: 8px;
+        gap: 6px; max-width: calc(100vw - 104px);
+    }
+    .top-left-bar .back-btn { padding: 6px 10px; font-size: 12px; }
+    .tag-badge { padding: 6px 10px; font-size: 11.5px; }
+    .tag-pill { display: none; }
+    .qr-btn { display: none; }
+
+    .top-right-bar { top: max(8px, env(safe-area-inset-top)); right: 8px; gap: 6px; }
+    .data-card { padding: 5px 9px; gap: 7px; }
+    .data-item { min-width: 44px; }
+    .data-label { font-size: 8.5px; }
+    .data-value { font-size: 11px; }
+    .data-sep { height: 18px; }
+    .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+
+    .center-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+        font-size: 10.5px; padding: 5px 11px;
+        white-space: normal; text-align: center; line-height: 1.35;
+    }
+
+    body #side-ctrl.side-ctrl-panel {
+        width: 226px !important;
+        right: max(8px, env(safe-area-inset-right)) !important;
+        bottom: calc(62px + env(safe-area-inset-bottom)) !important;
+        padding: 9px !important;
+        gap: 6px !important;
+        max-height: 46vh !important;
+    }
+    #side-ctrl .panel-title { font-size: 11px !important; }
+    .ctrl-tab-btn { font-size: 10.5px; padding: 6px 4px; }
+    .mode-btn { font-size: 10.5px; padding: 6px 3px; }
+    .hint-line { font-size: 10px; padding: 5px 7px; }
+
+    .left-panel {
+        left: 8px; bottom: calc(62px + env(safe-area-inset-bottom));
+        width: min(214px, calc(100vw - 244px));
+        padding: 7px 8px; gap: 5px;
+    }
+    .left-panel-title { font-size: 10px; }
+
+    .fullscreen-btn { padding: 7px 11px; font-size: 11.5px; }
+}
+
+@media (max-width: 430px) {
+    .data-card { gap: 6px; padding: 5px 8px; }
+    .data-item { min-width: 40px; }
+}
+
+/* ---------------- 모바일 가로 ---------------- */
+@media (max-height: 520px) and (orientation: landscape) {
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)); left: 6px; gap: 5px; }
+    .top-left-bar .back-btn { padding: 4px 9px; font-size: 11px; }
+    .tag-badge { padding: 4px 9px; font-size: 11px; }
+    .qr-btn, .tag-pill { display: none; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)); right: 6px; gap: 5px; }
+    .data-card { padding: 3px 8px; gap: 7px; }
+    .data-label { font-size: 8px; }
+    .data-value { font-size: 10.5px; }
+    .icon-btn { width: 28px; height: 28px; font-size: 13px; }
+    .center-tooltip { display: none; }
+    .data-card { display: none !important; }
+
+    body #side-ctrl.side-ctrl-panel {
+        top: 40px !important; bottom: auto !important;
+        right: 6px !important; width: 216px !important;
+        max-height: calc(100vh - 92px) !important;
+        padding: 7px !important; gap: 5px !important;
+    }
+    .left-panel {
+        left: 6px; top: 40px; bottom: auto;
+        width: min(190px, calc(100vw - 240px));
+        padding: 6px 7px;
+    }
+    .ctrl-tab-btn { font-size: 9.5px; padding: 5px 3px; }
+    .mode-btn { font-size: 9.5px; }
+    .fullscreen-btn { padding: 5px 9px; font-size: 10.5px; }
+}
+
+/* 실험 6 전용 */
+.seg-row { display: flex; gap: 4px; }
+.seg-btn {
+    flex: 1; min-width: 0; padding: 6px 2px; border-radius: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.08); background: rgba(255, 255, 255, 0.92);
+    color: #475569; font-family: inherit; font-size: 10.5px; font-weight: 800;
+    cursor: pointer; white-space: nowrap; transition: all .18s ease;
+}
+.seg-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+.res-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 4px 8px; border-radius: 8px; background: rgba(15, 23, 42, 0.05);
+    font-size: 10.5px; font-weight: 700; color: #475569;
+}
+.res-row b { font-size: 11px; font-weight: 800; color: #94a3b8; }
+.res-row.done { background: rgba(37, 99, 235, 0.10); color: #1e3a8a; }
+.res-row.done b { color: #1d4ed8; }
+body.dark-mode .seg-btn { background: rgba(45, 55, 72, 0.9); color: #cbd5e1; border-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .seg-btn.active { background: #2563eb; color: #fff; }
+body.dark-mode .res-row { background: rgba(255, 255, 255, 0.07); color: #cbd5e1; }
+body.dark-mode .res-row b { color: #94a3b8; }
+body.dark-mode .res-row.done { background: rgba(56, 189, 248, 0.16); color: #bae6fd; }
+body.dark-mode .res-row.done b { color: #7dd3fc; }
+
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>암석의 순환과 광물 감별 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span aria-hidden="true">📱</span> QR code</button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel" id="dataCard">
+<div class="data-item"><span class="data-label" id="dcL1">과정 완료</span><span class="data-value" id="dcV1">0 / 4</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label" id="dcL2">순환 횟수</span><span class="data-value" id="dcV2">0 회</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label" id="dcL3">최근 과정</span><span class="data-value" id="dcV3">-</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip" id="centerTooltip">💡 과정 버튼을 눌러 암석이 다른 암석으로 바뀌는 순환을 확인하고, 광물은 네 가지 시험으로 감별해 보세요.</div>
+
+<div class="bottom-control-bar glass-panel" id="bar">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel" id="side-ctrl">
+    <div class="panel-title">⚙️ 암석·광물 조절</div>
+<div class="mode-row" id="modeRow">
+    <button class="mode-btn active" type="button" data-mode="cycle">🔄 암석 순환</button>
+    <button class="mode-btn" type="button" data-mode="mineral">🔍 광물 감별</button>
+</div>
+
+<div id="pane-cycle">
+    <div class="status-line" id="cycleStatus"><span>현재 과정</span><b id="cycleStatusVal">대기 중</b></div>
+    <div class="ctrl-grid">
+        <button class="ctrl-tab-btn" type="button" data-process="cooling">❄️ 냉각</button>
+        <button class="ctrl-tab-btn" type="button" data-process="weathering">🌧️ 풍화·퇴적</button>
+        <button class="ctrl-tab-btn" type="button" data-process="metamorphism">🔥 열·압력</button>
+        <button class="ctrl-tab-btn" type="button" data-process="melting">🌋 용융</button>
+    </div>
+    <button class="ctrl-tab-btn" type="button" id="btnAuto">▶️ 전체 순환 보기</button>
+    <div class="hint-line" id="cycleHint">과정을 하나씩 눌러 암석이 어떻게 다른 암석으로 바뀌는지 확인해 보세요.</div>
+    <div class="legend-row">
+        <span><i style="background:#ff6b3d"></i>냉각</span>
+        <span><i style="background:#d9a05b"></i>풍화·퇴적</span>
+        <span><i style="background:#8b5cf6"></i>열·압력</span>
+        <span><i style="background:#ffa726"></i>용융</span>
+    </div>
+</div>
+
+<div id="pane-mineral" style="display:none">
+    <div class="ctrl-grid" id="mineralGrid">
+        <button class="ctrl-tab-btn active" type="button" data-mineral="quartz">석영</button>
+        <button class="ctrl-tab-btn" type="button" data-mineral="feldspar">장석</button>
+        <button class="ctrl-tab-btn" type="button" data-mineral="biotite">흑운모</button>
+        <button class="ctrl-tab-btn" type="button" data-mineral="calcite">방해석</button>
+        <button class="ctrl-tab-btn" type="button" data-mineral="pyrite">황철석</button>
+        <button class="ctrl-tab-btn" type="button" data-mineral="magnetite">자철석</button>
+    </div>
+    <div class="status-line" id="mineralStatus"><span>선택한 시료</span><b id="mName">석영</b></div>
+    <div class="ctrl-grid">
+        <button class="ctrl-tab-btn" type="button" data-test="streak">🪨 조흔판</button>
+        <button class="ctrl-tab-btn" type="button" data-test="acid">🧪 염산</button>
+        <button class="ctrl-tab-btn" type="button" data-test="magnet">🧲 자석</button>
+        <button class="ctrl-tab-btn" type="button" data-test="hardness">⛏️ 굳기</button>
+    </div>
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>비교할 물체의 굳기</span><span class="ctrl-val" id="probeVal">강철 6.5</span></div>
+        <div class="seg-row" id="probeRow">
+            <button class="seg-btn" type="button" data-probe="2.5">손톱</button>
+            <button class="seg-btn" type="button" data-probe="3.5">동전</button>
+            <button class="seg-btn" type="button" data-probe="5.5">유리</button>
+            <button class="seg-btn active" type="button" data-probe="6.5">강철</button>
+        </div>
+    </div>
+    <div id="resList">
+        <div class="res-row" data-res="streak"><span>조흔색</span><b>-</b></div>
+        <div class="res-row" data-res="acid"><span>염산 반응</span><b>-</b></div>
+        <div class="res-row" data-res="magnet"><span>자성</span><b>-</b></div>
+        <div class="res-row" data-res="hardness"><span>굳기</span><b>-</b></div>
+    </div>
+    <div class="result-card" id="mSummary" style="display:none"></div>
+    <div class="hint-line" id="mineralHint">광물을 고른 뒤 조흔판·염산·자석·굳기 시험으로 성질을 확인해 보세요.</div>
+</div>
+</div>
+
+<script>
+/* ============================================================
+   암석의 순환과 광물 감별 3D
+   모드 1: 마그마·화성암·퇴적암·변성암 순환 다이어그램 + 변환 입자
+   모드 2: 주요 광물 6종 3D 시료 + 조흔·염산·자석·굳기 감별
+   ============================================================ */
+(function () {
+    'use strict';
+
+    var $ = function (s, r) { return (r || document).querySelector(s); };
+    var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+    var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+    var easeInOut = function (k) { return k < 0.5 ? 2 * k * k : -1 + (4 - 2 * k) * k; };
+
+    /* ---------------- 기본 3D 환경 ---------------- */
+    var container = document.getElementById('canvas-container');
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    var scene = new THREE.Scene();
+    var SKY_LIGHT = 0xe8f1fa, SKY_DARK = 0x0b1524;
+    scene.background = new THREE.Color(SKY_LIGHT);
+
+    var camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
+    camera.position.set(0, 15, 26);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 6;
+    controls.maxDistance = 48;
+    controls.maxPolarAngle = Math.PI * 0.495;
+    controls.target.set(0, 2.2, 0);
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0x93a2b5, 0.58);
+    scene.add(hemi);
+    var keyLight = new THREE.DirectionalLight(0xffffff, 0.66);
+    keyLight.position.set(12, 20, 12);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.left = -26;
+    keyLight.shadow.camera.right = 26;
+    keyLight.shadow.camera.top = 26;
+    keyLight.shadow.camera.bottom = -26;
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 70;
+    scene.add(keyLight);
+    var fillLight = new THREE.DirectionalLight(0xcfe2ff, 0.26);
+    fillLight.position.set(-14, 9, -10);
+    scene.add(fillLight);
+
+    /* ---------------- 글자 라벨(캔버스 텍스처) ---------------- */
+    var labelItems = [];
+
+    var LABEL_FONT = '700 58px SeoulNamsan, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+    var LABEL_PX = 0.0082;
+
+    function labelWidth(text) {
+        var c = document.createElement('canvas').getContext('2d');
+        c.font = LABEL_FONT;
+        return Math.ceil(c.measureText(text).width);
+    }
+
+    function labelCanvasWidth(tw) {
+        return Math.max(250, Math.min(940, tw + 96));
+    }
+
+    function drawLabel(item) {
+        var c = item.canvas, g = item.ctx;
+        g.clearRect(0, 0, c.width, c.height);
+        g.font = LABEL_FONT;
+        var w = Math.min(c.width - 8, item.tw + 44);
+        var h = 88, x = (c.width - w) / 2, y = (c.height - h) / 2, r = 28;
+        g.fillStyle = item.bg;
+        g.beginPath();
+        g.moveTo(x + r, y);
+        g.lineTo(x + w - r, y);
+        g.quadraticCurveTo(x + w, y, x + w, y + r);
+        g.lineTo(x + w, y + h - r);
+        g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        g.lineTo(x + r, y + h);
+        g.quadraticCurveTo(x, y + h, x, y + h - r);
+        g.lineTo(x, y + r);
+        g.quadraticCurveTo(x, y, x + r, y);
+        g.closePath();
+        g.fill();
+        if (item.ring) { g.strokeStyle = item.ring; g.lineWidth = 4; g.stroke(); }
+        g.fillStyle = item.color;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(item.text, c.width / 2, y + h / 2 + 2);
+        item.tex.needsUpdate = true;
+    }
+
+    function makeLabel(text, color, bg, ring) {
+        var tw = labelWidth(text);
+        var W = labelCanvasWidth(tw);
+        var H = 132;
+        var canvas = document.createElement('canvas');
+        canvas.width = W;
+        canvas.height = H;
+        var ctx = canvas.getContext('2d');
+        var tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+        spr.scale.set(W * LABEL_PX, H * LABEL_PX, 1);
+        spr.renderOrder = 20;
+        var item = {
+            canvas: canvas, ctx: ctx, tex: tex, sprite: spr, text: text, tw: tw,
+            color: color || '#0f172a',
+            bg: bg || 'rgba(255,255,255,0.93)',
+            ring: ring || null
+        };
+        labelItems.push(item);
+        drawLabel(item);
+        return spr;
+    }
+
+    function setLabel(item, text) {
+        if (!item || item.text === text) return;
+        item.text = text;
+        item.tw = labelWidth(text);
+        var need = labelCanvasWidth(item.tw);
+        if (Math.abs(need - item.canvas.width) > 4) {
+            item.canvas.width = need;
+            item.sprite.scale.set(need * LABEL_PX, item.canvas.height * LABEL_PX, 1);
+        }
+        drawLabel(item);
+    }
+
+
+    if (document.fonts && document.fonts.load) {
+        document.fonts.load('700 62px SeoulNamsan').then(function () {
+            labelItems.forEach(drawLabel);
+        }).catch(function () {});
+    }
+
+    /* ---------------- 트윈(애니메이션) ---------------- */
+    var tweens = [];
+    function tween(dur, onUpdate, onDone) {
+        var item = { start: performance.now(), dur: Math.max(1, dur), onUpdate: onUpdate, onDone: onDone };
+        tweens.push(item);
+        return item;
+    }
+    function updateTweens(now) {
+        if (!tweens.length) return;
+        var current = tweens;
+        tweens = [];
+        for (var i = 0; i < current.length; i++) {
+            var t = current[i];
+            var k = clamp((now - t.start) / t.dur, 0, 1);
+            if (t.onUpdate) t.onUpdate(k);
+            if (k < 1) tweens.push(t);
+            else if (t.onDone) t.onDone();
+        }
+    }
+
+    /* ---------------- 바닥 ---------------- */
+    var world = new THREE.Group();
+    scene.add(world);
+
+    var groundMat = new THREE.MeshStandardMaterial({ color: 0xdbe6f2, roughness: 0.95, metalness: 0.02 });
+    var ground = new THREE.Mesh(new THREE.CylinderGeometry(18.5, 19.2, 0.8, 72), groundMat);
+    ground.position.y = -0.42;
+    ground.receiveShadow = true;
+    world.add(ground);
+
+    var ringMat = new THREE.MeshBasicMaterial({ color: 0xb9cbe0, transparent: true, opacity: 0.55 });
+    [6.2, 12.4].forEach(function (r) {
+        var ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.05, r + 0.05, 96), ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.01;
+        world.add(ring);
+    });
+
+    /* ============================================================
+       모드 1 — 암석의 순환
+       ============================================================ */
+    var cycleGroup = new THREE.Group();
+    world.add(cycleGroup);
+
+    var NODE_POS = {
+        magma: new THREE.Vector3(0, 0, -9.2),
+        igneous: new THREE.Vector3(-9.8, 0, 0.6),
+        sedimentary: new THREE.Vector3(0, 0, 9.2),
+        metamorphic: new THREE.Vector3(9.8, 0, 0.6)
+    };
+    var nodeGroups = {};
+
+    function stoneMaterial(color) {
+        return new THREE.MeshStandardMaterial({ color: color, roughness: 0.85, metalness: 0.05 });
+    }
+
+    function buildNode(key) {
+        var g = new THREE.Group();
+        g.position.copy(NODE_POS[key]);
+        cycleGroup.add(g);
+
+        var base = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 3.15, 0.9, 48), stoneMaterial(0xe7eef7));
+        base.position.y = 0.45;
+        base.castShadow = true;
+        base.receiveShadow = true;
+        g.add(base);
+
+        var rim = new THREE.Mesh(new THREE.TorusGeometry(2.95, 0.07, 8, 56),
+            new THREE.MeshStandardMaterial({ color: 0x9fb4cc, roughness: 0.6 }));
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = 0.9;
+        g.add(rim);
+
+        var rock = new THREE.Group();
+        rock.position.y = 0.9;
+        g.add(rock);
+
+        if (key === 'magma') {
+            var lavaMat = new THREE.MeshStandardMaterial({
+                color: 0xff6a2b, emissive: 0xff3300, emissiveIntensity: 0.9, roughness: 0.55
+            });
+            var lava = new THREE.Mesh(new THREE.IcosahedronGeometry(1.85, 2), lavaMat);
+            lava.position.y = 1.55;
+            lava.castShadow = true;
+            rock.add(lava);
+            var glow = new THREE.PointLight(0xff6a1a, 1.2, 11, 2);
+            glow.position.set(0, 2.1, 0);
+            rock.add(glow);
+            rock.userData.lava = lava;
+            rock.userData.glow = glow;
+        } else if (key === 'igneous') {
+            var crystalCols = [0x6b7280, 0x59616e, 0x7e8899, 0x4b5563];
+            for (var i = 0; i < 7; i++) {
+                var geo = new THREE.IcosahedronGeometry(0.55 + Math.random() * 0.32, 0);
+                var m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+                    color: crystalCols[i % crystalCols.length], roughness: 0.55, metalness: 0.16, flatShading: true
+                }));
+                var ang = (i / 7) * Math.PI * 2;
+                m.position.set(Math.cos(ang) * (0.55 + Math.random() * 0.75), 0.55 + Math.random() * 0.75, Math.sin(ang) * (0.55 + Math.random() * 0.6));
+                m.rotation.set(Math.random(), Math.random(), Math.random());
+                m.scale.set(1, 0.85 + Math.random() * 0.6, 1);
+                m.castShadow = true;
+                rock.add(m);
+            }
+        } else if (key === 'sedimentary') {
+            var layerCols = [0xdcb98c, 0xc9a273, 0xe6cdaa, 0xb9905f, 0xd3ae83];
+            for (var j = 0; j < 5; j++) {
+                var w = 3.7 - j * 0.16;
+                var box = new THREE.Mesh(new THREE.BoxGeometry(w, 0.52, 2.9 - j * 0.14),
+                    new THREE.MeshStandardMaterial({ color: layerCols[j], roughness: 0.92, metalness: 0.02 }));
+                box.position.set((j % 2 ? 0.06 : -0.05), 0.28 + j * 0.53, 0);
+                box.rotation.y = (j % 2 ? 0.045 : -0.04);
+                box.castShadow = true;
+                box.receiveShadow = true;
+                rock.add(box);
+            }
+        } else {
+            var cvs = document.createElement('canvas');
+            cvs.width = 256; cvs.height = 256;
+            var ctx = cvs.getContext('2d');
+            ctx.fillStyle = '#b7b0d8';
+            ctx.fillRect(0, 0, 256, 256);
+            for (var b = 0; b < 7; b++) {
+                ctx.beginPath();
+                ctx.strokeStyle = b % 2 ? '#efeafc' : '#8d84bc';
+                ctx.lineWidth = 9 + (b % 3) * 5;
+                for (var x = 0; x <= 256; x += 8) {
+                    var y = 22 + b * 34 + Math.sin(x / 34 + b) * 11;
+                    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+            var tex = new THREE.CanvasTexture(cvs);
+            var metaRock = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.7, 2.7),
+                new THREE.MeshStandardMaterial({ map: tex, roughness: 0.62, metalness: 0.06 }));
+            metaRock.position.y = 1.35;
+            metaRock.castShadow = true;
+            metaRock.receiveShadow = true;
+            rock.add(metaRock);
+        }
+
+        var label = makeLabel(
+            key === 'magma' ? '마그마' : (key === 'igneous' ? '화성암' : (key === 'sedimentary' ? '퇴적암' : '변성암')),
+            key === 'magma' ? '#b91c1c' : '#0f172a',
+            'rgba(255,255,255,0.94)',
+            key === 'magma' ? 'rgba(239,68,68,0.5)' : 'rgba(148,163,184,0.5)'
+        );
+        label.position.set(0, 5.0, 0);
+        g.add(label);
+        nodeGroups[key] = { group: g, rock: rock, pulse: 0, base: base };
+        return g;
+    }
+
+    Object.keys(NODE_POS).forEach(buildNode);
+
+    var PROC = {
+        cooling: {
+            label: '냉각', from: 'magma', to: 'igneous', color: 0xff6b3d,
+            hint: '마그마가 식으면 광물 결정이 자라 화성암이 됩니다.'
+        },
+        weathering: {
+            label: '풍화·퇴적', from: 'igneous', to: 'sedimentary', color: 0xd9a05b,
+            hint: '암석이 잘게 부서져 운반·퇴적되고 굳어 퇴적암이 됩니다.'
+        },
+        metamorphism: {
+            label: '열·압력', from: 'sedimentary', to: 'metamorphic', color: 0x8b5cf6,
+            hint: '높은 열과 압력을 받으면 광물 배열이 바뀌어 변성암이 됩니다.'
+        },
+        melting: {
+            label: '용융', from: 'metamorphic', to: 'magma', color: 0xffa726,
+            hint: '깊은 곳에서 다시 녹아 마그마가 되고 순환이 이어집니다.'
+        }
+    };
+    var PROC_ORDER = ['cooling', 'weathering', 'metamorphism', 'melting'];
+
+    function arcCurve(a, b, lift) {
+        var start = a.clone(); start.y = 2.5;
+        var end = b.clone(); end.y = 2.5;
+        var mid = start.clone().add(end).multiplyScalar(0.5);
+        mid.y += lift;
+        mid.multiplyScalar(1.06);
+        return new THREE.QuadraticBezierCurve3(start, mid, end);
+    }
+
+    var arrows = {};
+    PROC_ORDER.forEach(function (key) {
+        var def = PROC[key];
+        var curve = arcCurve(NODE_POS[def.from], NODE_POS[def.to], 5.2);
+        var mat = new THREE.MeshStandardMaterial({
+            color: def.color, emissive: def.color, emissiveIntensity: 0.32, roughness: 0.45, metalness: 0.1
+        });
+        var tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 56, 0.105, 8, false), mat);
+        tube.castShadow = false;
+        cycleGroup.add(tube);
+
+        var end = curve.getPointAt(1);
+        var prev = curve.getPointAt(0.965);
+        var dir = end.clone().sub(prev).normalize();
+        var cone = new THREE.Mesh(new THREE.ConeGeometry(0.27, 0.78, 16), mat);
+        cone.position.copy(end.clone().add(dir.clone().multiplyScalar(0.36)));
+        cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        cycleGroup.add(cone);
+
+        arrows[key] = { curve: curve, tube: tube, cone: cone, mat: mat, curveForParticles: curve };
+    });
+
+    /* 흐르는 입자 */
+    var particles = [];
+    var particleGeo = new THREE.SphereGeometry(0.12, 8, 8);
+    for (var pi = 0; pi < 88; pi++) {
+        var pmat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
+        var pmesh = new THREE.Mesh(particleGeo, pmat);
+        pmesh.visible = false;
+        cycleGroup.add(pmesh);
+        particles.push({ mesh: pmesh, active: false, curve: null, t: 0, speed: 0.7, off: new THREE.Vector3() });
+    }
+
+    function spawnFlow(curve, color, count) {
+        var used = 0;
+        for (var i = 0; i < particles.length && used < count; i++) {
+            var p = particles[i];
+            if (p.active) continue;
+            p.active = true;
+            p.curve = curve;
+            p.t = -used * 0.018;
+            p.speed = 0.72 + Math.random() * 0.22;
+            p.off.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(1.1);
+            p.mesh.material.color.setHex(color);
+            p.mesh.material.opacity = 0.95;
+            p.mesh.scale.setScalar(0.7 + Math.random() * 0.8);
+            p.mesh.visible = false;
+            used++;
+        }
+    }
+
+    function clearParticles() {
+        particles.forEach(function (p) {
+            p.active = false;
+            p.mesh.visible = false;
+        });
+    }
+
+    /* 순환 상태 */
+    var procState = { active: null, done: {}, cycleCount: 0, token: 0, auto: false, autoIdx: 0 };
+    var autoTimer = null;
+
+    function setStatus(kind, text) {
+        var box = $('#cycleStatus');
+        var val = $('#cycleStatusVal');
+        if (val) val.textContent = text;
+        if (!box) return;
+        box.classList.remove('ok', 'warn');
+        if (kind === 'ok') box.classList.add('ok');
+        if (kind === 'warn') box.classList.add('warn');
+    }
+
+    function pulseNode(key) {
+        var n = nodeGroups[key];
+        if (!n) return;
+        n.pulse = 1;
+    }
+
+    function runProcess(key) {
+        if (procState.active) return;
+        var def = PROC[key];
+        if (!def) return;
+        procState.active = key;
+        procState.token++;
+        var token = procState.token;
+        spawnFlow(arrows[key].curve, def.color, 36);
+        arrows[key].mat.emissiveIntensity = 1.15;
+        setStatus('', def.label + ' 진행 중');
+        var hint = $('#cycleHint');
+        if (hint) hint.textContent = def.hint;
+        var dc3 = $('#dcV3');
+        if (dc3) dc3.textContent = def.label;
+
+        setTimeout(function () {
+            if (token !== procState.token) return;
+            procState.active = null;
+            arrows[key].mat.emissiveIntensity = 0.32;
+            pulseNode(def.to);
+            setStatus('ok', def.label + ' 완료');
+            procState.done[key] = true;
+            var n = Object.keys(procState.done).length;
+            if (n >= 4) {
+                procState.cycleCount++;
+                procState.done = {};
+                n = 0;
+            }
+            var v1 = $('#dcV1'), v2 = $('#dcV2');
+            if (v1) v1.textContent = n + ' / 4';
+            if (v2) v2.textContent = procState.cycleCount + ' 회';
+            if (procState.auto) {
+                procState.autoIdx = (PROC_ORDER.indexOf(key) + 1) % PROC_ORDER.length;
+                autoTimer = setTimeout(autoStep, 520);
+            }
+        }, 2150);
+    }
+
+    function autoStep() {
+        if (!procState.auto) return;
+        runProcess(PROC_ORDER[procState.autoIdx]);
+    }
+
+    function toggleAuto() {
+        var btn = $('#btnAuto');
+        if (procState.auto) {
+            procState.auto = false;
+            if (autoTimer) clearTimeout(autoTimer);
+            if (btn) { btn.textContent = '▶️ 전체 순환 보기'; btn.classList.remove('active'); }
+            return;
+        }
+        if (procState.active) return;
+        procState.auto = true;
+        procState.autoIdx = 0;
+        if (btn) { btn.textContent = '⏸️ 자동 순환 멈추기'; btn.classList.add('active'); }
+        autoStep();
+    }
+
+    /* ============================================================
+       모드 2 — 광물 감별
+       ============================================================ */
+    var mineralGroup = new THREE.Group();
+    mineralGroup.visible = false;
+    world.add(mineralGroup);
+
+    var MIN = {
+        quartz: { name: '석영', hardness: 7, streak: '흰색', streakColor: 0xffffff, acid: false, magnet: false, note: '유리광택 · 패각 모양으로 깨짐 · 무색 반투명' },
+        feldspar: { name: '장석', hardness: 6, streak: '흰색', streakColor: 0xf1f5f9, acid: false, magnet: false, note: '판 모양으로 쪼개짐 · 불투명한 분홍빛' },
+        biotite: { name: '흑운모', hardness: 2.5, streak: '회흑색', streakColor: 0x6b7280, acid: false, magnet: false, note: '얇은 판으로 쪼개짐 · 진주광택' },
+        calcite: { name: '방해석', hardness: 3, streak: '흰색', streakColor: 0xf8fafc, acid: true, magnet: false, note: '묽은 염산에 반응해 거품 · 삼각형으로 쪼개짐' },
+        pyrite: { name: '황철석', hardness: 6.5, streak: '황록흑색', streakColor: 0x5c6b1f, acid: false, magnet: false, note: '황금색 금속광택 · 육면체 결정' },
+        magnetite: { name: '자철석', hardness: 5.5, streak: '흑색', streakColor: 0x111827, acid: false, magnet: true, note: '자석에 붙음 · 검은 금속광택' }
+    };
+    var MIN_ORDER = ['quartz', 'feldspar', 'biotite', 'calcite', 'pyrite', 'magnetite'];
+
+    /* 받침대 */
+    var pedestal = new THREE.Mesh(new THREE.CylinderGeometry(2.35, 2.55, 1.2, 48), stoneMaterial(0xa8b8ca));
+    pedestal.position.set(0, 0.6, 0);
+    pedestal.castShadow = true;
+    pedestal.receiveShadow = true;
+    mineralGroup.add(pedestal);
+    var pedTop = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 0.06, 48),
+        new THREE.MeshStandardMaterial({ color: 0x93a6ba, roughness: 0.6 }));
+    pedTop.position.set(0, 1.22, 0);
+    mineralGroup.add(pedTop);
+
+    var SAMPLE_HOME = new THREE.Vector3(0, 1.25, 0);
+    var sampleParent = new THREE.Group();
+    sampleParent.position.copy(SAMPLE_HOME);
+    mineralGroup.add(sampleParent);
+
+    function mineralMat(color, rough, metal, extra) {
+        var p = { color: color, roughness: rough, metalness: metal };
+        if (extra) Object.keys(extra).forEach(function (k) { p[k] = extra[k]; });
+        return new THREE.MeshStandardMaterial(p);
+    }
+
+    function buildSample(key) {
+        var g = new THREE.Group();
+        if (key === 'quartz') {
+            var qMat = new THREE.MeshStandardMaterial({
+                color: 0xcfe6ff, roughness: 0.08, metalness: 0.06,
+                transparent: true, opacity: 0.9, emissive: 0x1e3a5f, emissiveIntensity: 0.2
+            });
+            var body = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.74, 1.75, 6), qMat);
+            body.position.y = 0.88;
+            body.castShadow = true;
+            g.add(body);
+            var tip = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.0, 6), qMat);
+            tip.position.y = 2.26;
+            tip.castShadow = true;
+            g.add(tip);
+        } else if (key === 'feldspar') {
+            var fMat = mineralMat(0xf2b7a3, 0.78, 0.05);
+            var b1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.05, 1.25), fMat);
+            b1.position.set(0, 0.56, 0);
+            b1.rotation.set(0.08, 0.42, 0.05);
+            b1.castShadow = true;
+            g.add(b1);
+            var b2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.72, 0.85), fMat);
+            b2.position.set(0.55, 0.38, 0.42);
+            b2.rotation.set(0.15, 0.9, -0.1);
+            b2.castShadow = true;
+            g.add(b2);
+        } else if (key === 'biotite') {
+            for (var i = 0; i < 6; i++) {
+                var plate = new THREE.Mesh(new THREE.BoxGeometry(1.4 - i * 0.05, 0.1, 1.15 - i * 0.04),
+                    mineralMat(0x232a33, 0.36, 0.6));
+                plate.position.set((i % 2 ? 0.04 : -0.04), 0.1 + i * 0.12, (i % 2 ? -0.03 : 0.03));
+                plate.rotation.y = i * 0.14;
+                plate.castShadow = true;
+                g.add(plate);
+            }
+        } else if (key === 'calcite') {
+            var cGeo = new THREE.BoxGeometry(1.25, 1.25, 1.25);
+            cGeo.applyMatrix4(new THREE.Matrix4().set(1, 0.34, 0, 0, 0, 1, 0, 0, 0, 0.26, 1, 0, 0, 0, 0, 1));
+            var cMat = new THREE.MeshStandardMaterial({
+                color: 0xf7fbff, roughness: 0.12, metalness: 0.03,
+                transparent: true, opacity: 0.9, emissive: 0x0b2545, emissiveIntensity: 0.06
+            });
+            var cal = new THREE.Mesh(cGeo, cMat);
+            cal.position.y = 0.72;
+            cal.rotation.y = 0.5;
+            cal.castShadow = true;
+            g.add(cal);
+            var cal2 = new THREE.Mesh(cGeo, cMat);
+            cal2.scale.setScalar(0.55);
+            cal2.position.set(0.72, 0.42, 0.35);
+            cal2.rotation.set(0.3, 1.1, 0.2);
+            cal2.castShadow = true;
+            g.add(cal2);
+        } else if (key === 'pyrite') {
+            var pMat = mineralMat(0xd8b23c, 0.24, 0.92);
+            var sizes = [0.95, 0.78, 0.66];
+            var spots = [[0, 0.48, 0, 0.2], [0.62, 0.34, 0.3, 0.7], [-0.5, 0.3, 0.42, 1.2]];
+            spots.forEach(function (s, idx) {
+                var cube = new THREE.Mesh(new THREE.BoxGeometry(sizes[idx], sizes[idx], sizes[idx]), pMat);
+                cube.position.set(s[0], s[1], s[2]);
+                cube.rotation.set(s[3], s[3] * 1.4, s[3] * 0.6);
+                cube.castShadow = true;
+                g.add(cube);
+            });
+        } else {
+            var mMat = mineralMat(0x2b2f36, 0.45, 0.6);
+            var oct = new THREE.Mesh(new THREE.OctahedronGeometry(1.0, 0), mMat);
+            oct.position.y = 1.0;
+            oct.castShadow = true;
+            g.add(oct);
+            var oct2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), mMat);
+            oct2.position.set(0.78, 0.42, 0.3);
+            oct2.castShadow = true;
+            g.add(oct2);
+        }
+
+        /* 굳기 시험 흠집 표시 */
+        var scratch = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.05, 0.03),
+            new THREE.MeshBasicMaterial({ color: 0xfff7cc }));
+        scratch.position.set(0.1, 0.95, 0.62);
+        scratch.rotation.z = 0.22;
+        scratch.visible = false;
+        g.add(scratch);
+        g.userData.scratch = scratch;
+        return g;
+    }
+
+    var samples = {};
+    MIN_ORDER.forEach(function (key) {
+        var g = buildSample(key);
+        g.visible = false;
+        sampleParent.add(g);
+        samples[key] = g;
+    });
+
+    /* 조흔판 */
+    var plateMat = new THREE.MeshStandardMaterial({ color: 0x3b4250, roughness: 0.78, metalness: 0.05 });
+    var plate = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.24, 2.0), plateMat);
+    plate.position.set(-2.95, 0.72, 1.75);
+    plate.rotation.y = 0.12;
+    plate.castShadow = true;
+    plate.receiveShadow = true;
+    mineralGroup.add(plate);
+    var streakMark = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 0.15),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.96, side: THREE.DoubleSide }));
+    streakMark.rotation.x = -Math.PI / 2;
+    streakMark.position.set(0.05, 0.13, 0);
+    streakMark.visible = false;
+    plate.add(streakMark);
+
+    /* 염산 스포이드 */
+    var dropGroup = new THREE.Group();
+    dropGroup.position.set(1.0, 0, 1.05);
+    mineralGroup.add(dropGroup);
+    var glassMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff, roughness: 0.05, metalness: 0.02, transparent: true, opacity: 0.55
+    });
+    var dTube = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.15, 14), glassMat);
+    dTube.position.y = 4.15;
+    dropGroup.add(dTube);
+    var dBulb = new THREE.Mesh(new THREE.SphereGeometry(0.23, 16, 14), glassMat);
+    dBulb.position.y = 4.9;
+    dropGroup.add(dBulb);
+    var dTip = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.32, 14), glassMat);
+    dTip.position.y = 3.45;
+    dTip.rotation.x = Math.PI;
+    dropGroup.add(dTip);
+    var dropMesh = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10),
+        new THREE.MeshStandardMaterial({ color: 0xbae6fd, roughness: 0.1, emissive: 0x38bdf8, emissiveIntensity: 0.35 }));
+    dropMesh.position.set(1.0, 3.32, 1.05);
+    dropMesh.visible = false;
+    mineralGroup.add(dropMesh);
+
+    /* 자석 */
+    var magnetGroup = new THREE.Group();
+    var mRed = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.42, 0.42), mineralMat(0xdc2626, 0.4, 0.35));
+    mRed.position.x = -0.53;
+    magnetGroup.add(mRed);
+    var mBlue = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.42, 0.42), mineralMat(0x2563eb, 0.4, 0.35));
+    mBlue.position.x = 0.53;
+    magnetGroup.add(mBlue);
+    magnetGroup.position.set(3.85, 1.3, 1.35);
+    magnetGroup.rotation.y = -0.4;
+    mineralGroup.add(magnetGroup);
+    var MAGNET_HOME = magnetGroup.position.clone();
+
+    /* 굳기 시험 막대 */
+    var probeGroup = new THREE.Group();
+    var pinMat = mineralMat(0xcbd5e1, 0.3, 0.9);
+    var pin = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.5, 14), pinMat);
+    pin.position.y = 0;
+    probeGroup.add(pin);
+    var pinTip = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.34, 14), pinMat);
+    pinTip.position.y = -0.92;
+    pinTip.rotation.x = Math.PI;
+    probeGroup.add(pinTip);
+    probeGroup.position.set(0.85, 3.15, 2.0);
+    mineralGroup.add(probeGroup);
+    var PROBE_HOME = probeGroup.position.clone();
+
+    /* 거품 */
+    var bubbles = [];
+    for (var bi = 0; bi < 18; bi++) {
+        var bub = new THREE.Mesh(new THREE.SphereGeometry(0.07 + Math.random() * 0.06, 8, 8),
+            new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, emissive: 0x7dd3fc, emissiveIntensity: 0.4 }));
+        bub.visible = false;
+        mineralGroup.add(bub);
+        bubbles.push({ mesh: bub, t: 0, active: false, x: 0, z: 0, speed: 0.6 + Math.random() * 0.5 });
+    }
+    var bubbleTimer = 0;
+
+    var mineralState = { key: 'quartz', busy: false, probe: 6.5, results: {}, tests: 0 };
+
+    function showSample(key) {
+        MIN_ORDER.forEach(function (k) { samples[k].visible = (k === key); });
+        mineralGroup.userData.current = key;
+        var nameEl = $('#mName');
+        if (nameEl) nameEl.textContent = MIN[key].name;
+        updateMineralData();
+    }
+
+    function setDataCard(l1, v1, l2, v2, l3, v3) {
+        var els = [$('#dcL1'), $('#dcV1'), $('#dcL2'), $('#dcV2'), $('#dcL3'), $('#dcV3')];
+        var vals = [l1, v1, l2, v2, l3, v3];
+        els.forEach(function (el, i) { if (el) el.textContent = vals[i]; });
+    }
+
+    function updateMineralData() {
+        var m = MIN[mineralState.key];
+        setDataCard('시료', m.name, '굳기', String(m.hardness), '조흔색', m.streak);
+    }
+
+    function setDataCycle() {
+        var n = Object.keys(procState.done).length;
+        setDataCard('과정 완료', n + ' / 4', '순환 횟수', procState.cycleCount + ' 회', '최근 과정',
+            $('#dcV3') ? $('#dcV3').textContent : '-');
+    }
+
+    function resetResults() {
+        mineralState.results = {};
+        mineralState.tests = 0;
+        $$('#resList .res-row').forEach(function (row) {
+            row.classList.remove('done');
+            var b = row.querySelector('b');
+            if (b) b.textContent = '-';
+        });
+        var sum = $('#mSummary');
+        if (sum) { sum.style.display = 'none'; sum.innerHTML = ''; }
+        streakMark.visible = false;
+        streakMark.scale.set(1, 1, 1);
+        bubbles.forEach(function (b) { b.active = false; b.mesh.visible = false; });
+        Object.keys(samples).forEach(function (k) { samples[k].userData.scratch.visible = false; });
+        dropMesh.visible = false;
+        var st = $('#mineralStatus');
+        if (st) st.classList.remove('ok', 'warn');
+        magnetGroup.position.copy(MAGNET_HOME);
+        probeGroup.position.copy(PROBE_HOME);
+        sampleParent.position.copy(SAMPLE_HOME);
+        sampleParent.rotation.set(0, 0, 0);
+    }
+
+    function finishTest(type, value) {
+        mineralState.results[type] = value;
+        mineralState.tests = Object.keys(mineralState.results).length;
+        var row = $('#resList .res-row[data-res="' + type + '"]');
+        if (row) {
+            row.classList.add('done');
+            var b = row.querySelector('b');
+            if (b) b.textContent = value;
+        }
+        if (mineralState.tests >= 4) {
+            var m = MIN[mineralState.key];
+            var sum = $('#mSummary');
+            if (sum) {
+                sum.style.display = 'flex';
+                sum.innerHTML = '<b>' + m.name + '</b><span>굳기 ' + m.hardness + ' · 조흔 ' + m.streak +
+                    ' · 염산 ' + (m.acid ? '반응함' : '반응 없음') + ' · 자성 ' + (m.magnet ? '있음' : '없음') +
+                    '</span><span>' + m.note + '</span>';
+            }
+            var st = $('#mineralStatus');
+            if (st) st.classList.add('ok');
+            var hint = $('#mineralHint');
+            if (hint) hint.textContent = m.name + '의 네 가지 성질을 모두 확인했습니다.';
+        }
+    }
+
+    function testStreak() {
+        if (mineralState.busy) return;
+        mineralState.busy = true;
+        var s = sampleParent;
+        var home = SAMPLE_HOME.clone();
+        var onPlate = new THREE.Vector3(-2.9, 0.86, 1.77);
+        var slideTo = onPlate.clone().add(new THREE.Vector3(1.4, 0, 0.15));
+        tween(460, function (k) {
+            s.position.lerpVectors(home, onPlate, easeInOut(k));
+            s.rotation.z = -0.18 * k;
+        }, function () {
+            tween(520, function (k) {
+                s.position.lerpVectors(onPlate, slideTo, k);
+            }, function () {
+                var m = MIN[mineralState.key];
+                streakMark.material.color.setHex(m.streakColor);
+                streakMark.visible = true;
+                tween(240, function (k) { streakMark.scale.x = 0.3 + 0.7 * k; }, null);
+                tween(420, function (k) {
+                    s.position.lerpVectors(slideTo, home, easeInOut(k));
+                    s.rotation.z = -0.18 * (1 - k);
+                }, function () {
+                    finishTest('streak', m.streak);
+                    mineralState.busy = false;
+                });
+            });
+        });
+    }
+
+    function startBubbles() {
+        bubbles.forEach(function (b, i) {
+            b.active = false;
+            b.mesh.visible = false;
+        });
+        bubbleTimer = 2000;
+    }
+
+    function testAcid() {
+        if (mineralState.busy) return;
+        mineralState.busy = true;
+        var m = MIN[mineralState.key];
+        dropMesh.position.set(1.0, 3.32, 1.05);
+        dropMesh.visible = true;
+        tween(430, function (k) {
+            dropMesh.position.y = 3.72 - 1.7 * k;
+        }, function () {
+            dropMesh.visible = false;
+            if (m.acid) {
+                startBubbles();
+                finishTest('acid', '거품 발생');
+            } else {
+                finishTest('acid', '반응 없음');
+            }
+            mineralState.busy = false;
+        });
+    }
+
+    function testMagnet() {
+        if (mineralState.busy) return;
+        mineralState.busy = true;
+        var m = MIN[mineralState.key];
+        var near = new THREE.Vector3(2.15, 1.3, 1.35);
+        tween(620, function (k) {
+            magnetGroup.position.lerpVectors(MAGNET_HOME, near, easeInOut(k));
+        }, function () {
+            if (m.magnet) {
+                tween(520, function (k) {
+                    sampleParent.position.x = -0.5 * k;
+                    sampleParent.rotation.z = 0.12 * k;
+                }, function () {
+                    tween(560, function (k) {
+                        sampleParent.position.x = -0.5 * (1 - k);
+                        sampleParent.rotation.z = 0.12 * (1 - k);
+                        magnetGroup.position.lerpVectors(near, MAGNET_HOME, k);
+                    }, function () {
+                        sampleParent.position.copy(SAMPLE_HOME);
+                        finishTest('magnet', '있음 (끌려붙음)');
+                        mineralState.busy = false;
+                    });
+                });
+            } else {
+                tween(560, function (k) {
+                    magnetGroup.position.lerpVectors(near, MAGNET_HOME, k);
+                }, function () {
+                    finishTest('magnet', '없음 (반응 없음)');
+                    mineralState.busy = false;
+                });
+            }
+        });
+    }
+
+    function testHardness() {
+        if (mineralState.busy) return;
+        mineralState.busy = true;
+        var m = MIN[mineralState.key];
+        var probe = mineralState.probe;
+        var box = new THREE.Box3().setFromObject(samples[mineralState.key]);
+        var topY = box.max.y + 0.16;
+        tween(520, function (k) {
+            probeGroup.position.y = PROBE_HOME.y - (PROBE_HOME.y - topY) * easeInOut(k);
+        }, function () {
+            var scratched = probe > m.hardness;
+            if (scratched) {
+                var scratchMesh = samples[mineralState.key].userData.scratch;
+                scratchMesh.visible = true;
+            }
+            tween(260, function (k) {
+                probeGroup.position.y = topY + 0.3 * k;
+            }, function () {
+                tween(420, function (k) {
+                    probeGroup.position.y = topY + 0.3 + (PROBE_HOME.y - topY - 0.3) * k;
+                }, function () {
+                    probeGroup.position.copy(PROBE_HOME);
+                    finishTest('hardness', scratched
+                        ? '긁힘 (' + probe + ' > ' + m.hardness + ')'
+                        : '긁히지 않음 (' + probe + ' ≤ ' + m.hardness + ')');
+                    mineralState.busy = false;
+                });
+            });
+        });
+    }
+
+    /* ============================================================
+       화면·UI 연결
+       ============================================================ */
+    var mode = 'cycle';
+    var CYCLE_CAM = { pos: new THREE.Vector3(0, 18, 29.5), target: new THREE.Vector3(0, 3.0, 0) };
+    var MINERAL_CAM = { pos: new THREE.Vector3(1.1, 5.0, 16.6), target: new THREE.Vector3(1.0, 1.9, 0.4) };
+
+    /* 화면이 좁으면(모바일) 카메라를 뒤로 물린다 */
+    function camFit(pos, target) {
+        var a = window.innerWidth / Math.max(1, window.innerHeight);
+        var f = a < 1.2 ? Math.min(1.8, 1.2 / Math.max(0.4, a)) : 1;
+        return target.clone().add(pos.clone().sub(target).multiplyScalar(f));
+    }
+
+    var camTween = null;
+    function flyTo(pos, target, dur) {
+        camTween = {
+            p0: camera.position.clone(), p1: pos.clone(),
+            t0: controls.target.clone(), t1: target.clone(),
+            start: performance.now(), dur: dur || 640
+        };
+    }
+
+    function setMode(next) {
+        if (next === mode) return;
+        mode = next;
+        cycleGroup.visible = (mode === 'cycle');
+        mineralGroup.visible = (mode === 'mineral');
+        var paneC = $('#pane-cycle'), paneM = $('#pane-mineral');
+        if (paneC) paneC.style.display = mode === 'cycle' ? '' : 'none';
+        if (paneM) paneM.style.display = mode === 'mineral' ? '' : 'none';
+        $$('#modeRow .mode-btn').forEach(function (b) {
+            b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+        });
+        var tip = $('#centerTooltip');
+        if (mode === 'cycle') {
+            if (tip) tip.textContent = '💡 과정 버튼을 눌러 암석이 다른 암석으로 바뀌는 순환을 확인해 보세요.';
+            setDataCycle();
+            flyTo(camFit(CYCLE_CAM.pos, CYCLE_CAM.target), CYCLE_CAM.target);
+            controls.minDistance = 8;
+        } else {
+            if (tip) tip.textContent = '💡 광물을 고르고 조흔판·염산·자석·굳기 시험으로 성질을 확인해 보세요.';
+            showSample(mineralState.key);
+            flyTo(camFit(MINERAL_CAM.pos, MINERAL_CAM.target), MINERAL_CAM.target);
+            controls.minDistance = 5;
+        }
+    }
+
+    function bindUI() {
+        $$('#modeRow .mode-btn').forEach(function (b) {
+            b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
+        });
+        $$('#pane-cycle [data-process]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                if (procState.auto) toggleAuto();
+                runProcess(b.getAttribute('data-process'));
+            });
+        });
+        var autoBtn = $('#btnAuto');
+        if (autoBtn) autoBtn.addEventListener('click', toggleAuto);
+
+        $$('#mineralGrid [data-mineral]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                if (mineralState.busy) return;
+                mineralState.key = b.getAttribute('data-mineral');
+                $$('#mineralGrid .ctrl-tab-btn').forEach(function (o) { o.classList.toggle('active', o === b); });
+                resetResults();
+                showSample(mineralState.key);
+                setStatus('', '시료 교체');
+                var hint = $('#mineralHint');
+                if (hint) hint.textContent = MIN[mineralState.key].name + ' 시료입니다. 네 가지 시험을 해 보세요.';
+            });
+        });
+
+        $$('#pane-mineral [data-test]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                var t = b.getAttribute('data-test');
+                if (t === 'streak') testStreak();
+                else if (t === 'acid') testAcid();
+                else if (t === 'magnet') testMagnet();
+                else if (t === 'hardness') testHardness();
+            });
+        });
+
+        $$('#probeRow .seg-btn').forEach(function (b) {
+            b.addEventListener('click', function () {
+                mineralState.probe = parseFloat(b.getAttribute('data-probe'));
+                $$('#probeRow .seg-btn').forEach(function (o) { o.classList.toggle('active', o === b); });
+                var v = $('#probeVal');
+                if (v) v.textContent = b.textContent.trim() + ' ' + mineralState.probe;
+            });
+        });
+    }
+
+    /* ---------------- 초기화 / 시점 / 테마 / 리사이즈 ---------------- */
+    window.pageReset = function () {
+        if (mode === 'cycle') {
+            procState.auto = false;
+            if (autoTimer) clearTimeout(autoTimer);
+            procState.token++;
+            procState.active = null;
+            procState.done = {};
+            procState.cycleCount = 0;
+            var btn = $('#btnAuto');
+            if (btn) { btn.textContent = '▶️ 전체 순환 보기'; btn.classList.remove('active'); }
+            clearParticles();
+            PROC_ORDER.forEach(function (k) { arrows[k].mat.emissiveIntensity = 0.32; });
+            Object.keys(nodeGroups).forEach(function (k) { nodeGroups[k].pulse = 0; nodeGroups[k].group.scale.setScalar(1); });
+            setStatus('', '대기 중');
+            setDataCard('과정 완료', '0 / 4', '순환 횟수', '0 회', '최근 과정', '-');
+            var hint = $('#cycleHint');
+            if (hint) hint.textContent = '과정을 하나씩 눌러 암석이 어떻게 다른 암석으로 바뀌는지 확인해 보세요.';
+        } else {
+            tweens.length = 0;
+            mineralState.busy = false;
+            resetResults();
+            setStatus('', '시료 ' + MIN[mineralState.key].name);
+        }
+    };
+
+    window.pageAlign = function () {
+        if (mode === 'cycle') flyTo(camFit(CYCLE_CAM.pos, CYCLE_CAM.target), CYCLE_CAM.target, 520);
+        else flyTo(camFit(MINERAL_CAM.pos, MINERAL_CAM.target), MINERAL_CAM.target, 520);
+    };
+
+    var lastAspect = window.innerWidth / Math.max(1, window.innerHeight);
+    window.pageResize = function () {
+        var w = window.innerWidth, h = window.innerHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        var a = w / Math.max(1, h);
+        if (Math.abs(a - lastAspect) > 0.18) {
+            lastAspect = a;
+            window.pageAlign();
+        }
+    };
+
+    window.pageTheme = function (dark) {
+        scene.background.setHex(dark ? SKY_DARK : SKY_LIGHT);
+        groundMat.color.setHex(dark ? 0x22303f : 0xdbe6f2);
+        ringMat.color.setHex(dark ? 0x3b4c60 : 0xb9cbe0);
+    };
+
+    /* ---------------- 애니메이션 루프 ---------------- */
+    var clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+        var dt = Math.min(clock.getDelta(), 0.05);
+        var now = performance.now();
+
+        if (camTween) {
+            var k = clamp((now - camTween.start) / camTween.dur, 0, 1);
+            var e = easeInOut(k);
+            camera.position.lerpVectors(camTween.p0, camTween.p1, e);
+            controls.target.lerpVectors(camTween.t0, camTween.t1, e);
+            if (k >= 1) camTween = null;
+        }
+
+        updateTweens(now);
+
+        /* 흐르는 입자 */
+        for (var i = 0; i < particles.length; i++) {
+            var p = particles[i];
+            if (!p.active) continue;
+            p.t += dt * p.speed;
+            if (p.t < 0) { p.mesh.visible = false; continue; }
+            if (p.t >= 1) { p.active = false; p.mesh.visible = false; continue; }
+            p.mesh.visible = true;
+            var pos = p.curve.getPoint(p.t);
+            var wob = Math.sin(p.t * Math.PI);
+            p.mesh.position.set(pos.x + p.off.x * wob, pos.y + p.off.y * wob, pos.z + p.off.z * wob);
+        }
+
+        /* 마그마 맥동 */
+        var magma = nodeGroups.magma;
+        if (magma && magma.rock.userData.lava) {
+            var t = now * 0.0016;
+            var s = 1 + Math.sin(t * 2.2) * 0.035;
+            magma.rock.userData.lava.scale.setScalar(s);
+            magma.rock.userData.lava.material.emissiveIntensity = 0.75 + Math.sin(t * 3.1) * 0.22;
+            magma.rock.userData.glow.intensity = 1.0 + Math.sin(t * 3.1) * 0.25;
+        }
+
+        /* 생성 노드 펄스 */
+        Object.keys(nodeGroups).forEach(function (key) {
+            var n = nodeGroups[key];
+            if (n.pulse > 0) {
+                n.pulse = Math.max(0, n.pulse - dt * 1.5);
+                var sc = 1 + Math.sin((1 - n.pulse) * Math.PI) * 0.16 * n.pulse;
+                n.group.scale.setScalar(sc);
+            }
+        });
+
+        /* 염산 거품 */
+        if (bubbleTimer > 0) {
+            bubbleTimer -= dt * 1000;
+            for (var b = 0; b < bubbles.length; b++) {
+                var bb = bubbles[b];
+                if (!bb.active && Math.random() < 0.28) {
+                    bb.active = true;
+                    bb.t = 0;
+                    bb.x = (Math.random() - 0.5) * 1.5;
+                    bb.z = (Math.random() - 0.5) * 1.2;
+                    bb.mesh.visible = true;
+                }
+                if (bb.active) {
+                    bb.t += dt * bb.speed;
+                    bb.mesh.position.set(bb.x, 1.4 + bb.t * 1.9, bb.z);
+                    var sc2 = Math.max(0.2, 1 - bb.t);
+                    bb.mesh.scale.setScalar(sc2);
+                    bb.mesh.material.opacity = 0.85 * sc2;
+                    if (bb.t > 1) { bb.active = false; bb.mesh.visible = false; }
+                }
+            }
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* ---------------- 시작 ---------------- */
+    showSample('quartz');
+    bindUI();
+    setDataCard('과정 완료', '0 / 4', '순환 횟수', '0 회', '최근 과정', '-');
+    camera.position.copy(camFit(CYCLE_CAM.pos, CYCLE_CAM.target));
+    controls.target.copy(CYCLE_CAM.target);
+    camTween = null;
+    window.pageResize();
+    animate();
+})();
+</script>
+<script>
+/* ============================================================
+   공통 UI 크롬: 전체화면 / 야간 모드 / 초기화·시점정렬 / 리사이즈
+   각 실험의 고유 동작은 window.pageReset · pageAlign · pageResize · pageTheme 로 연결된다.
+   ============================================================ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var fsBtn = document.getElementById('fullscreenBtn');
+    var fsIcon = document.getElementById('fullscreenIcon');
+    var fsText = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+            document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudoFs() { return docEl.classList.contains('pseudo-fs'); }
+    function syncFs() {
+        var on = realFs() || pseudoFs();
+        if (fsIcon) fsIcon.textContent = on ? '🗗' : '⛶';
+        if (fsText) fsText.textContent = on ? '창모드' : '전체화면';
+        if (fsBtn) fsBtn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+        if (window.pageResize) setTimeout(window.pageResize, 140);
+    }
+    if (fsBtn) {
+        fsBtn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                return;
+            }
+            if (pseudoFs()) { docEl.classList.remove('pseudo-fs'); syncFs(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var p = req.call(docEl);
+                    if (p && p.catch) p.catch(function () { docEl.classList.add('pseudo-fs'); syncFs(); });
+                } catch (e) { docEl.classList.add('pseudo-fs'); }
+            } else {
+                docEl.classList.add('pseudo-fs');
+            }
+            syncFs();
+        });
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, syncFs);
+    });
+    syncFs();
+
+    /* 야간 모드 */
+    var themeBtn = document.getElementById('themeBtn');
+    var saved = null;
+    try { saved = localStorage.getItem('svl_test_dark'); } catch (e) { saved = null; }
+    function applyTheme(dark) {
+        document.body.classList.toggle('dark-mode', dark);
+        if (themeBtn) {
+            themeBtn.textContent = dark ? '☀️' : '🌙';
+            themeBtn.title = dark ? '주간 모드로 전환' : '야간 모드 전환';
+        }
+        if (window.pageTheme) window.pageTheme(dark);
+    }
+    applyTheme(saved === '1');
+    if (themeBtn) {
+        themeBtn.addEventListener('click', function () {
+            var dark = !document.body.classList.contains('dark-mode');
+            applyTheme(dark);
+            try { localStorage.setItem('svl_test_dark', dark ? '1' : '0'); } catch (e) {}
+        });
+    }
+
+    /* 초기화 · 시점정렬 */
+    var btnReset = document.getElementById('btnReset');
+    var btnAlign = document.getElementById('btnAlign');
+    if (btnReset) btnReset.addEventListener('click', function () { if (window.pageReset) window.pageReset(); });
+    if (btnAlign) btnAlign.addEventListener('click', function () { if (window.pageAlign) window.pageAlign(); });
+
+    /* 리사이즈 */
+    var timer = null;
+    function schedule() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function () { if (window.pageResize) window.pageResize(); }, 90);
+    }
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
+    window.addEventListener('load', schedule);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', schedule);
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+<script src="../common/lib/qrcode.min.js" defer></script>
+<script src="../common/qr-modal.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>인터랙티브 주기율표 3D | Science Virtual LAB</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+@font-face{
+    font-family:'SeoulNamsan';
+    src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+        url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+    --bg:#eef2f7; --ink:#14181f; --muted:#64748b; --line:rgba(15,23,42,.10);
+    --card:rgba(255,255,255,.9); --card-solid:#fff; --accent:#0a84ff; --accent-soft:rgba(10,132,255,.12);
+    --ok:#10b981; --danger:#ef4444; --shadow:0 10px 30px rgba(15,23,42,.10);
+}
+body.dark{
+    --bg:#0e121c; --ink:#eef3fb; --muted:#94a3b8; --line:rgba(255,255,255,.13);
+    --card:rgba(26,32,45,.9); --card-solid:#1a2130; --accent:#4aa3ff; --accent-soft:rgba(74,163,255,.18);
+    --shadow:0 10px 30px rgba(0,0,0,.5);
+}
+html,body{margin:0;padding:0;width:100%;height:100%}
+body{
+    font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    color:var(--ink); background:var(--bg); overflow:hidden;
+    transition:background .3s ease,color .3s ease;
+}
+.top-nav{
+    position:fixed; top:0; left:0; right:0; height:60px; display:flex; align-items:center; gap:10px;
+    padding:0 250px 0 16px; z-index:100; background:var(--card);
+    backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border-bottom:1px solid var(--line);
+}
+.back-btn{
+    display:inline-flex; align-items:center; gap:6px; padding:7px 14px;
+    font-family:inherit; font-size:13px; font-weight:800; color:inherit; text-decoration:none;
+    border:1px solid var(--line); border-radius:999px; background:var(--card-solid);
+    transition:transform .16s ease; white-space:nowrap;
+}
+.back-btn:hover{transform:translateY(-1px)}
+.page-title{display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:800; letter-spacing:-.2px; min-width:0}
+.page-title .t{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pill-badge{padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:800; background:var(--accent-soft); color:var(--accent); white-space:nowrap; flex:0 0 auto}
+.vb{background:linear-gradient(135deg,#ff6ec7,#b06bff); color:#fff; font-size:9.5px; letter-spacing:.3px}
+
+.top-right-bar{
+    position:fixed !important; top:15px !important; right:20px !important;
+    display:flex !important; flex-direction:column; align-items:flex-end; gap:8px;
+    z-index:130 !important; pointer-events:none;
+}
+.top-right-bar > .tr-util{display:flex !important; flex-direction:row; align-items:center; gap:8px; pointer-events:auto}
+#bTheme{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; height:40px; padding:0 15px;
+    border-radius:20px; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:800; color:inherit;
+    border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); white-space:nowrap; transition:transform .16s ease;
+}
+#bTheme:hover{transform:translateY(-1px)}
+
+/* ---------- 레이아웃 ---------- */
+.app{position:fixed; top:60px; left:0; right:0; bottom:0; display:flex; gap:14px; padding:14px 16px 16px; overflow:hidden}
+.table-col{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:10px; overflow:hidden}
+.pt-board{
+    margin:0; flex:0 0 auto; padding:14px 15px 10px; border-radius:22px;
+    border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow);
+    display:flex; flex-direction:column; gap:8px; min-height:0;
+}
+.table-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.table-head h1{margin:0; font-size:15px; font-weight:900; letter-spacing:-.3px; white-space:nowrap}
+.legend{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-left:auto}
+.legend span{
+    display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border-radius:999px;
+    font-size:10.5px; font-weight:800; color:var(--ink); background:var(--card); border:1px solid var(--line); white-space:nowrap;
+}
+.legend i{width:9px; height:9px; border-radius:3px; display:inline-block}
+
+.swipe-hint{display:none; font-size:11px; font-weight:800; color:var(--muted); padding:0 2px}
+.pt-note{font-size:11px; font-weight:700; color:var(--muted); line-height:1.45; padding:0 2px; flex:0 0 auto}
+.pt-tips{display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin-top:2px; flex:0 0 auto}
+.tip{display:flex; gap:9px; padding:10px 11px; border-radius:14px; border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow)}
+.tip .ti{font-size:16px; line-height:1.2; flex:0 0 auto}
+.tip b{display:block; font-size:11.5px; font-weight:900; margin-bottom:2px}
+.tip span{display:block; font-size:10.5px; font-weight:700; color:var(--muted); line-height:1.45; word-break:keep-all}
+.pt-scroll{flex:1 1 auto; overflow:auto; min-height:0; padding-bottom:6px; display:flex; align-items:flex-start}
+.pt-grid{
+    display:grid; grid-template-columns:22px repeat(18, minmax(0,1fr));
+    gap:5px; min-width:660px; width:100%; flex:0 0 auto; align-content:start;
+}
+.grp-label{display:flex; align-items:center; justify-content:center; font-size:9.5px; font-weight:800; color:var(--muted)}
+.cell{
+    position:relative; border-radius:9px; border:1.5px solid transparent; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family:inherit; color:var(--ink); padding:2px 1px; min-height:0; overflow:hidden; aspect-ratio:1;
+    transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+}
+.cell:hover{transform:translateY(-2px); box-shadow:0 8px 18px rgba(15,23,42,.16); z-index:2}
+.cell .z{position:absolute; top:2px; left:4px; font-size:8px; font-weight:800; opacity:.7; line-height:1}
+.cell .sym{font-size:16px; font-weight:900; line-height:1.05; letter-spacing:-.4px}
+.cell .nm{font-size:8.5px; font-weight:800; opacity:.82; line-height:1.1; margin-top:1px; white-space:nowrap}
+.cell.sel{border-color:var(--ink); box-shadow:0 0 0 2.5px rgba(10,132,255,.55), 0 10px 22px rgba(10,132,255,.28); transform:translateY(-2px); z-index:3}
+body.dark .cell.sel{box-shadow:0 0 0 2.5px rgba(74,163,255,.65), 0 10px 22px rgba(0,0,0,.5)}
+.empty{visibility:hidden}
+
+/* ---------- 원자 패널 ---------- */
+.atom-col{
+    width:352px; flex:0 0 352px; display:flex; flex-direction:column; gap:12px; min-height:0;
+}
+.atom-stage{
+    position:relative; border-radius:20px; overflow:hidden; border:1px solid var(--line);
+    background:radial-gradient(circle at 50% 35%, #16233d 0%, #0a1020 70%);
+    box-shadow:var(--shadow); height:290px; flex:0 0 auto;
+}
+#atomCanvas{display:block; width:100%; height:100%; touch-action:none}
+body.dark .atom-stage{background:radial-gradient(circle at 50% 35%, #16233d 0%, #060a14 70%)}
+.atom-hint{
+    position:absolute; left:10px; bottom:8px; font-size:10.5px; font-weight:700; color:#a7b8d4;
+    background:rgba(6,12,24,.55); padding:3px 8px; border-radius:999px; pointer-events:none;
+}
+.atom-sym{
+    position:absolute; right:12px; top:10px; text-align:right; color:#e8f0ff; pointer-events:none;
+}
+.atom-sym b{display:block; font-size:26px; font-weight:900; line-height:1; letter-spacing:-1px; text-shadow:0 4px 14px rgba(0,0,0,.5)}
+.atom-sym i{font-style:normal; font-size:11px; font-weight:700; opacity:.75}
+
+.el-card{
+    flex:0 1 auto; min-height:0; max-height:calc(100% - 306px); overflow-y:auto; border-radius:20px; border:1px solid var(--line);
+    background:var(--card); box-shadow:var(--shadow); padding:14px 15px;
+    display:flex; flex-direction:column;
+}
+.el-name{display:flex; align-items:baseline; gap:9px; flex-wrap:wrap}
+.el-name b{font-size:19px; font-weight:900; letter-spacing:-.4px}
+.el-name span{font-size:12px; font-weight:800; color:var(--muted)}
+.cat-chip{
+    display:inline-flex; align-items:center; gap:5px; margin-left:auto; padding:4px 10px; border-radius:999px;
+    font-size:10.5px; font-weight:900; border:1px solid transparent;
+}
+.rows{margin:11px 0 14px; display:flex; flex-direction:column; gap:8px}
+.row{display:flex; gap:10px; font-size:12.5px; line-height:1.45}
+.row .k{flex:0 0 76px; font-weight:800; color:var(--muted); font-size:11.5px}
+.row .v{flex:1 1 auto; font-weight:700; word-break:keep-all}
+.shell-chips{display:flex; gap:6px; flex-wrap:wrap}
+.shell-chips b{
+    display:inline-flex; align-items:center; justify-content:center; gap:3px;
+    min-width:44px; padding:3px 8px; border-radius:8px; font-size:11px; font-weight:900;
+    background:var(--accent-soft); color:var(--accent);
+}
+.quiz-launch{
+    display:flex; align-items:center; gap:8px; width:100%; margin-top:14px; margin-bottom:2px;
+    padding:11px 14px; border-radius:14px; border:none; cursor:pointer; font-family:inherit; flex:0 0 auto;
+    font-size:13px; font-weight:900; color:#fff; background:linear-gradient(135deg,#6366f1,#0ea5e9);
+    box-shadow:0 10px 22px rgba(99,102,241,.28); transition:transform .16s ease;
+}
+.quiz-launch:hover{transform:translateY(-1px)}
+
+/* ---------- 모바일 탭 ---------- */
+.seg{display:none; gap:6px; padding:0 16px 6px; margin-top:0}
+.seg button{
+    flex:1 1 0; padding:9px 8px; border-radius:12px; border:1px solid var(--line); background:var(--card);
+    font-family:inherit; font-size:12px; font-weight:800; color:var(--ink); cursor:pointer;
+}
+.seg button.on{background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 6px 16px rgba(10,132,255,.28)}
+
+/* ---------- 퀴즈 모달 ---------- */
+.qz-mask{
+    position:fixed; inset:0; background:rgba(12,18,32,.55); backdrop-filter:blur(7px);
+    -webkit-backdrop-filter:blur(7px); z-index:2000; display:none; align-items:center; justify-content:center; padding:16px;
+}
+.qz-mask.show{display:flex; animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.qz-card{
+    width:100%; max-width:520px; max-height:88vh; overflow-y:auto; border-radius:24px; padding:20px 20px 18px;
+    background:var(--card-solid); border:1px solid var(--line); box-shadow:0 22px 60px rgba(8,14,26,.4);
+    animation:popIn .26s cubic-bezier(.16,1,.3,1);
+}
+@keyframes popIn{from{opacity:0; transform:scale(.94) translateY(10px)}to{opacity:1;transform:none}}
+.qz-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:4px}
+.qz-title{font-size:16.5px; font-weight:900; letter-spacing:-.3px}
+.qz-close{width:30px;height:30px;border-radius:50%;border:none;background:rgba(0,0,0,.06);color:inherit;font-size:15px;font-weight:800;cursor:pointer}
+body.dark .qz-close{background:rgba(255,255,255,.1)}
+.qz-sub{font-size:12px; color:var(--muted); font-weight:700; line-height:1.45; margin-bottom:12px}
+.qz-bar{height:7px; border-radius:99px; background:rgba(120,140,170,.22); overflow:hidden; margin-bottom:13px}
+.qz-bar > i{display:block; height:100%; width:0; border-radius:99px; background:linear-gradient(90deg,#6366f1,#0ea5e9); transition:width .3s ease}
+.qz-prompt{font-size:14px; font-weight:800; line-height:1.45; margin-bottom:12px}
+.qz-prompt b{font-size:22px; font-weight:900; letter-spacing:-.6px}
+.qz-opts{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+.qz-opt{
+    padding:13px 12px; border-radius:14px; border:1.5px solid var(--line); background:var(--card-solid);
+    font-family:inherit; font-size:14px; font-weight:800; color:inherit; cursor:pointer; text-align:center;
+    transition:transform .14s ease, border-color .14s ease, background .14s ease;
+}
+.qz-opt:hover:not(:disabled){transform:translateY(-1px); border-color:var(--accent)}
+.qz-opt.ok{border-color:var(--ok); background:rgba(16,185,129,.14)}
+.qz-opt.no{border-color:var(--danger); background:rgba(239,68,68,.12)}
+.qz-opt:disabled{cursor:default}
+.qz-note{min-height:20px; margin-top:11px; font-size:12.5px; font-weight:800; line-height:1.45}
+.qz-note.ok{color:#047857} body.dark .qz-note.ok{color:#6ee7b7}
+.qz-note.no{color:#b91c1c} body.dark .qz-note.no{color:#fca5a5}
+.qz-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px}
+.qz-score{font-size:12px; font-weight:800; color:var(--muted)}
+.qz-score b{color:var(--ink); font-size:15px}
+.qz-next{
+    padding:10px 18px; border-radius:13px; border:none; cursor:pointer; font-family:inherit;
+    font-size:13px; font-weight:900; color:#fff; background:var(--accent); box-shadow:0 8px 20px rgba(10,132,255,.28);
+}
+.qz-next:disabled{opacity:.45; cursor:not-allowed; box-shadow:none}
+.qz-result{display:none; text-align:center; padding:6px 0 2px}
+.qz-result.show{display:block}
+.qz-result .big{font-size:38px; font-weight:900; letter-spacing:-1px}
+.qz-result .msg{font-size:13px; font-weight:800; color:var(--muted); line-height:1.5; margin-top:6px}
+
+/* ---------- 전체화면 ---------- */
+#btn-fullscreen{
+    position:fixed; right:20px; bottom:calc(18px + env(safe-area-inset-bottom,0px)); z-index:95;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:9px 16px; border-radius:999px;
+    border:1px solid var(--line); background:var(--card); box-shadow:0 8px 24px rgba(15,23,42,.16);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    color:inherit; font-family:inherit; font-size:12.5px; font-weight:800; white-space:nowrap; cursor:pointer;
+    transition:transform .18s ease;
+}
+#btn-fullscreen:hover{transform:translateY(-1px)}
+body.pseudo-fullscreen .top-nav{transform:translateY(-100%); opacity:0; pointer-events:none}
+body.pseudo-fullscreen .app{top:0}
+body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:none !important}
+.fs-toast{
+    position:fixed; left:50%; bottom:calc(74px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,8px);
+    z-index:2050; max-width:86vw; padding:10px 16px; border-radius:14px; background:rgba(28,28,30,.92);
+    color:#fff; font-size:12.5px; font-weight:700; line-height:1.45; text-align:center;
+    box-shadow:0 10px 26px rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .26s ease, transform .26s ease;
+}
+.fs-toast.show{opacity:1; transform:translate(-50%,0)}
+
+/* ---------- 반응형 ---------- */
+@media (max-width:1180px){
+    .atom-col{width:320px; flex:0 0 320px}
+    .cell .sym{font-size:14px}
+    .cell .nm{font-size:7.5px}
+}
+@media (max-width:900px){
+    .top-nav{height:52px; padding:0 12px; gap:8px}
+    .page-title{font-size:12.5px}
+    .back-btn{padding:6px 11px; font-size:12px}
+    .top-right-bar{top:calc(max(8px,env(safe-area-inset-top)) + 48px) !important; right:8px !important}
+    #bTheme{height:34px; padding:0 11px; font-size:11.5px}
+    .seg{display:flex; position:fixed; top:96px; left:0; right:0; z-index:90; background:var(--bg); padding:0 10px 8px}
+    .app{top:150px; padding:8px 10px 12px; flex-direction:column; gap:10px}
+    .table-col{display:none}
+    .atom-col{width:100%; flex:1 1 auto}
+    .atom-stage{height:clamp(200px,34vh,300px)}
+    .el-card{padding:12px 13px; border-radius:18px}
+    body.view-table .table-col{display:flex}
+    body.view-table .atom-col{display:none}
+    .pt-scroll{display:flex; align-items:flex-start}
+    .pt-grid{margin:0}
+    .pt-board{margin:0; padding:10px 10px 8px}
+    .pt-tips{grid-template-columns:1fr}
+    .pt-note{display:none}
+    .table-col{flex:1 1 auto}
+    .atom-col{flex:0 0 auto}
+    .el-card{flex:0 0 auto}
+    .app{overflow-y:auto}
+    body.view-zoom .table-col{display:none}
+    body.view-zoom .atom-col{display:flex}
+    .pt-grid{min-width:720px; grid-template-columns:18px repeat(18,minmax(42px,1fr))}
+    .swipe-hint{display:block}
+    .cell .sym{font-size:14px}
+    .cell .nm{font-size:8px}
+    #btn-fullscreen{bottom:calc(10px + env(safe-area-inset-bottom,0px)); right:10px; padding:8px 13px; font-size:12px}
+}
+@media (max-width:430px){
+    .cell .sym{font-size:13px}
+    .qz-opts{grid-template-columns:1fr}
+}
+@media (max-height:500px) and (orientation:landscape){
+    .top-nav{height:44px}
+    .app{top:44px}
+    .seg{display:none}
+    .table-col{display:flex !important}
+    .atom-col{display:flex !important; width:280px; flex:0 0 280px}
+    .app{flex-direction:row; top:44px; padding:8px 10px}
+    .atom-stage{height:150px}
+    .top-right-bar{top:max(6px,env(safe-area-inset-top)) !important; right:88px !important}
+}
+</style>
+</head>
+<body class="view-table">
+
+<nav class="top-nav">
+    <a href="../../index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="page-title"><span class="t">인터랙티브 주기율표 3D</span><span class="pill-badge vb">3D</span></div>
+</nav>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button id="bTheme" type="button">🌙 야간 모드</button>
+    </div>
+</div>
+
+<div class="seg" id="seg">
+    <button type="button" class="on" data-view="table">🧪 주기율표</button>
+    <button type="button" data-view="zoom">⚛️ 원자 모형</button>
+</div>
+
+<div class="app">
+    <section class="table-col">
+        <div class="table-head">
+            <h1>원소 1~30</h1>
+            <div class="legend" id="legend"></div>
+        </div>
+        <div class="swipe-hint">👉 옆으로 밀어 13~18족까지 볼 수 있습니다</div>
+        <div class="pt-board">
+            <div class="pt-scroll">
+                <div class="pt-grid" id="ptGrid"></div>
+            </div>
+            <div class="pt-note">원소를 누르면 오른쪽에 원자핵과 전자 껍질 모형이 나타납니다. 1~20번은 2·3주기, 21~30번은 4주기 전이 원소입니다.</div>
+        </div>
+        <div class="pt-tips">
+            <div class="tip"><div class="ti">↔️</div><div><b>가로줄 = 주기</b><span>전자 껍질의 수가 같습니다. 1주기 1개, 2주기 2개 …</span></div></div>
+            <div class="tip"><div class="ti">↕️</div><div><b>세로줄 = 족</b><span>최외각 전자 수가 같아 성질이 비슷합니다. 1족은 모두 물과 격렬히 반응합니다.</span></div></div>
+            <div class="tip"><div class="ti">🎨</div><div><b>색 = 분류</b><span>같은 색은 같은 분류입니다. 알칼리 금속·할로젠·비활성 기체처럼 묶어서 봅니다.</span></div></div>
+        </div>
+    </section>
+
+    <aside class="atom-col">
+        <div class="atom-stage">
+            <canvas id="atomCanvas"></canvas>
+            <div class="atom-sym"><b id="atomSym">H</b><i id="atomZ">1번</i></div>
+            <div class="atom-hint">🖐️ 드래그로 회전 · 휠/핀치로 확대</div>
+        </div>
+        <div class="el-card" id="elCard">
+            <div class="el-name"><b id="elName">수소</b><span id="elSym2">H · 1.008</span><span class="cat-chip" id="elCat">비금속</span></div>
+            <div class="rows">
+                <div class="row"><span class="k">전자 껍질</span><span class="v shell-chips" id="elShells"></span></div>
+                <div class="row"><span class="k">성질</span><span class="v" id="elProp">–</span></div>
+                <div class="row"><span class="k">실생활</span><span class="v" id="elUse">–</span></div>
+            </div>
+            <button class="quiz-launch" id="btnQuiz" type="button">🎯 원소 기호·이름 짝맞추기 퀴즈</button>
+        </div>
+    </aside>
+</div>
+
+<div class="qz-mask" id="qzMask">
+    <div class="qz-card">
+        <div class="qz-head">
+            <div class="qz-title">🎯 원소 기호·이름 짝맞추기</div>
+            <button class="qz-close" id="qzClose" type="button" aria-label="닫기">✕</button>
+        </div>
+        <div class="qz-sub">1~20번 원소에서 10문제가 나옵니다. 기호와 이름을 짝지어 보세요.</div>
+        <div class="qz-bar"><i id="qzBar"></i></div>
+        <div id="qzPlay">
+            <div class="qz-prompt" id="qzPrompt">문제</div>
+            <div class="qz-opts" id="qzOpts"></div>
+            <div class="qz-note" id="qzNote"></div>
+            <div class="qz-foot">
+                <div class="qz-score">정답 <b id="qzScore">0</b> / 10</div>
+                <button class="qz-next" id="qzNext" type="button" disabled>다음 문제 →</button>
+            </div>
+        </div>
+        <div class="qz-result" id="qzResult">
+            <div class="big" id="qzFinal">0 / 10</div>
+            <div class="msg" id="qzMsg"></div>
+            <div class="qz-foot" style="justify-content:center">
+                <button class="qz-next" id="qzAgain" type="button">↺ 다시 풀기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<button id="btn-fullscreen" type="button" aria-pressed="false" aria-label="전체화면으로 전환">
+    <span class="fs-icon" id="fsIcon">⛶</span><span class="fs-text" id="fsText">전체화면</span>
+</button>
+
+<script src="../common/lib/three.min.js"></script>
+<script src="../common/lib/OrbitControls.js"></script>
+<script>
+/* ==========================================================
+   인터랙티브 주기율표 3D
+   1~30번 원소 그리드 + Three.js 보어 원자 모형 + 기호·이름 퀴즈
+   ========================================================== */
+(function () {
+    'use strict';
+
+    /* ---------- 분류 색 ---------- */
+    var CAT = {
+        alkali:    { label: '알칼리 금속',    solid: '#f472b6', bg: 'rgba(244,114,182,.22)', bd: 'rgba(244,114,182,.55)' },
+        alkaline:  { label: '알칼리 토금속',  solid: '#fb923c', bg: 'rgba(251,146,60,.22)',  bd: 'rgba(251,146,60,.55)' },
+        transition:{ label: '전이 원소',      solid: '#60a5fa', bg: 'rgba(96,165,250,.22)',  bd: 'rgba(96,165,250,.55)' },
+        metal:     { label: '그 밖의 금속',   solid: '#94a3b8', bg: 'rgba(148,163,184,.24)', bd: 'rgba(148,163,184,.6)' },
+        metalloid: { label: '준금속',         solid: '#a3e635', bg: 'rgba(163,230,53,.22)',  bd: 'rgba(163,230,53,.55)' },
+        nonmetal:  { label: '비금속',         solid: '#34d399', bg: 'rgba(52,211,153,.22)',  bd: 'rgba(52,211,153,.55)' },
+        halogen:   { label: '할로젠',         solid: '#fbbf24', bg: 'rgba(251,191,36,.24)',  bd: 'rgba(251,191,36,.6)' },
+        noble:     { label: '비활성 기체',    solid: '#c084fc', bg: 'rgba(192,132,252,.22)', bd: 'rgba(192,132,252,.55)' }
+    };
+
+    /* ---------- 원소 데이터 (z, 기호, 이름, 원자량, 껍질, 분류, 성질, 쓰임, 주기, 족) ---------- */
+    var EL = [
+        [1,'H','수소',1.008,[1],'nonmetal','색·냄새가 없고 가장 가벼운 기체, 불꽃 앞에서 폭발적으로 탄다','물의 구성 원소, 로켓·연료 전지의 연료',1,1],
+        [2,'He','헬륨',4.003,[2],'noble','다른 원소와 거의 반응하지 않는 안정한 기체','풍선, 액체 헬륨 냉각, 반도체 제조',1,18],
+        [3,'Li','리튬',6.94,[2,1],'alkali','물에 넣으면 수소를 내며 격렬하게 반응한다','리튬 이온 배터리, 휴대 전화',2,1],
+        [4,'Be','베릴륨',9.0122,[2,2],'alkaline','가볍고 단단하며 열을 잘 전달한다','X선 창, 항공기 합금',2,2],
+        [5,'B','붕소',10.81,[2,3],'metalloid','단단하지만 부서지기 쉽고 열에 강하다','내열 유리, 붕산(소독제)',2,13],
+        [6,'C','탄소',12.011,[2,4],'nonmetal','원자 결합 방식에 따라 흑연·다이아몬드로 달라진다','유기물의 뼈대, 연필심·다이아몬드',2,14],
+        [7,'N','질소',14.007,[2,5],'nonmetal','공기의 약 78%를 차지하고 반응성이 작다','비료, 액체 질소 냉각, 과자 포장',2,15],
+        [8,'O','산소',15.999,[2,6],'nonmetal','다른 물질과 잘 결합해 연소와 호흡을 돕는다','호흡, 연소, 산소 호흡기',2,16],
+        [9,'F','플루오르',18.998,[2,7],'halogen','반응성이 가장 큰 비금속으로 거의 모든 원소와 결합한다','치약(불소), 테플론, 냉매',2,17],
+        [10,'Ne','네온',20.180,[2,8],'noble','전류를 흘리면 붉은빛을 내고 반응하지 않는다','네온사인, 표시등',2,18],
+        [11,'Na','나트륨',22.990,[2,8,1],'alkali','물과 만나면 수소를 내며 격렬히 반응한다','소금(염화 나트륨), 가로등',3,1],
+        [12,'Mg','마그네슘',24.305,[2,8,2],'alkaline','불꽃에서 눈부신 흰빛을 내며 탄다','불꽃놀이, 가벼운 합금, 엽록소',3,2],
+        [13,'Al','알루미늄',26.982,[2,8,3],'metal','가볍고 공기 중에서 표면이 얇게 산화해 잘 부식되지 않는다','음료수 캔, 포일, 항공기',3,13],
+        [14,'Si','규소',28.085,[2,8,4],'metalloid','모래의 주성분이며 반도체로 쓰인다','반도체 칩, 유리, 태양 전지',3,14],
+        [15,'P','인',30.974,[2,8,5],'nonmetal','공기 중에서 저절로 타기도 하고 빛을 낸다','성냥, 비료, DNA와 뼈',3,15],
+        [16,'S','황',32.06,[2,8,6],'nonmetal','노란 고체로 탈 때 자극적인 냄새가 난다','황산 원료, 고무 가공, 비료',3,16],
+        [17,'Cl','염소',35.45,[2,8,7],'halogen','자극적인 냄새가 나는 기체로 살균력이 강하다','수영장·수도 소독, 표백제',3,17],
+        [18,'Ar','아르곤',39.948,[2,8,8],'noble','공기 중 세 번째로 많고 거의 반응하지 않는다','용접 보호 기체, 전구 충전',3,18],
+        [19,'K','칼륨',39.098,[2,8,8,1],'alkali','물과 만나면 격렬하게 반응하고 보라색 불꽃을 낸다','비료, 소금 대용품',4,1],
+        [20,'Ca','칼슘',40.078,[2,8,8,2],'alkaline','물과 천천히 반응하고 불꽃은 주황색이다','뼈·치아, 석회석·시멘트',4,2],
+        [21,'Sc','스칸듐',44.956,[2,8,9,2],'transition','가볍고 강한 금속으로 열에 강하다','항공기·자전거 합금, 조명',4,3],
+        [22,'Ti','타이타늄',47.867,[2,8,10,2],'transition','가볍지만 매우 강하고 부식에 강하다','인공 관절, 항공기, 안경테',4,4],
+        [23,'V','바나듐',50.942,[2,8,11,2],'transition','강철의 강도를 높여 준다','합금강, 공구, 촉매',4,5],
+        [24,'Cr','크로뮴',51.996,[2,8,13,2],'transition','광택이 있고 녹슬지 않는 막을 만든다','크롬 도금, 스테인리스 강',4,6],
+        [25,'Mn','망가니즈',54.938,[2,8,13,2],'transition','강철을 단단하게 만드는 데 많이 쓰인다','건전지, 합금강',4,7],
+        [26,'Fe','철',55.845,[2,8,14,2],'transition','자성을 띠고 녹이 슬며 강도가 크다','건축·자동차, 혈액의 헤모글로빈',4,8],
+        [27,'Co','코발트',58.933,[2,8,15,2],'transition','푸른색 화합물을 만든다','배터리, 푸른 유리·안료',4,9],
+        [28,'Ni','니켈',58.693,[2,8,16,2],'transition','단단하고 잘 부식되지 않는다','동전, 스테인리스 강, 충전지',4,10],
+        [29,'Cu','구리',63.546,[2,8,18,1],'transition','전기와 열을 매우 잘 전달한다','전선, 동전, 조리 기구',4,11],
+        [30,'Zn','아연',65.38,[2,8,18,2],'transition','철 표면을 덮어 녹을 막는다','철 도금, 건전지, 합금',4,12]
+    ];
+    var EL_BY_Z = {};
+    EL.forEach(function (e) {
+        EL_BY_Z[e[0]] = {
+            z: e[0], sym: e[1], name: e[2], mass: e[3], shells: e[4],
+            cat: e[5], prop: e[6], use: e[7], period: e[8], group: e[9]
+        };
+    });
+
+    var $ = function (s) { return document.querySelector(s); };
+    var current = 1;
+
+    /* ---------- 주기율표 그리드 ---------- */
+    function buildGrid() {
+        var grid = $('#ptGrid');
+        var html = '';
+        /* 1행: 족 번호 */
+        html += '<div class="grp-label"></div>';
+        for (var g = 1; g <= 18; g++) html += '<div class="grp-label">' + g + '</div>';
+        /* 2~5행: 주기 번호 + 원소 */
+        for (var p = 1; p <= 4; p++) {
+            html += '<div class="grp-label">' + p + '</div>';
+            for (var c = 1; c <= 18; c++) {
+                var found = null;
+                for (var i = 0; i < EL.length; i++) {
+                    if (EL[i][8] === p && EL[i][9] === c) { found = EL[i]; break; }
+                }
+                if (!found) { html += '<div class="empty"></div>'; continue; }
+                var cat = CAT[found[5]];
+                html += '<button class="cell" type="button" data-z="' + found[0] + '" ' +
+                    'style="background:' + cat.bg + ';border-color:' + cat.bd + '" ' +
+                    'title="' + found[2] + ' (' + found[1] + ')">' +
+                    '<span class="z">' + found[0] + '</span>' +
+                    '<span class="sym">' + found[1] + '</span>' +
+                    '<span class="nm">' + found[2] + '</span>' +
+                    '</button>';
+            }
+        }
+        grid.innerHTML = html;
+        var lg = '';
+        Object.keys(CAT).forEach(function (k) {
+            lg += '<span><i style="background:' + CAT[k].solid + '"></i>' + CAT[k].label + '</span>';
+        });
+        $('#legend').innerHTML = lg;
+    }
+
+    function select(z) {
+        var el = EL_BY_Z[z];
+        if (!el) return;
+        current = z;
+        Array.prototype.forEach.call(document.querySelectorAll('.cell'), function (c) {
+            c.classList.toggle('sel', +c.getAttribute('data-z') === z);
+        });
+        $('#atomSym').textContent = el.sym;
+        $('#atomZ').textContent = el.z + '번 · ' + el.name;
+        $('#elName').textContent = el.name;
+        $('#elSym2').textContent = el.sym + ' · ' + el.mass + ' · ' + el.period + '주기 ' + el.group + '족';
+        var chip = $('#elCat');
+        chip.textContent = CAT[el.cat].label;
+        chip.style.background = CAT[el.cat].bg;
+        chip.style.borderColor = CAT[el.cat].bd;
+        chip.style.color = CAT[el.cat].solid;
+        var sh = '';
+        el.shells.forEach(function (n, i) {
+            sh += '<b>' + 'KLMN'[i] + ' ' + n + '</b>';
+        });
+        $('#elShells').innerHTML = sh;
+        $('#elProp').textContent = el.prop;
+        $('#elUse').textContent = el.use;
+        buildAtom(el);
+    }
+
+    /* ---------- Three.js ---------- */
+    var renderer, scene, camera, controls, atomRoot, shellTex = [], raf = null;
+    var canvas = document.getElementById('atomCanvas');
+    var hasThree = (typeof THREE !== 'undefined');
+
+    function initThree() {
+        if (!hasThree) {
+            var ctx = canvas.getContext('2d');
+            canvas.width = canvas.clientWidth || 320;
+            canvas.height = canvas.clientHeight || 240;
+            ctx.fillStyle = '#0a1020';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#9db0cb';
+            ctx.font = '13px SeoulNamsan, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('3D 라이브러리를 불러오지 못했습니다.', canvas.width / 2, canvas.height / 2);
+            return;
+        }
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        scene = new THREE.Scene();
+
+        camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+        camera.position.set(0, 3.4, 6.2);
+        camera.lookAt(0, 0, 0);
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x1b2a46, 1.15));
+        var key = new THREE.DirectionalLight(0xffffff, 1.05);
+        key.position.set(4, 7, 6);
+        scene.add(key);
+        var rim = new THREE.DirectionalLight(0x7cc4ff, 0.7);
+        rim.position.set(-5, -2, -5);
+        scene.add(rim);
+
+        atomRoot = new THREE.Group();
+        scene.add(atomRoot);
+
+        if (typeof THREE.OrbitControls === 'function') {
+            controls = new THREE.OrbitControls(camera, canvas);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.08;
+            controls.enablePan = false;
+            controls.rotateSpeed = 0.85;
+            controls.minDistance = 3.2;
+            controls.maxDistance = 12;
+            controls.minPolarAngle = 0.25;
+            controls.maxPolarAngle = Math.PI - 0.25;
+        }
+        resizeThree();
+        window.addEventListener('resize', resizeThree);
+        if (window.ResizeObserver) {
+            try { new ResizeObserver(resizeThree).observe(canvas.parentElement); } catch (e) { }
+        }
+    }
+
+    function resizeThree() {
+        if (!renderer) return;
+        var w = canvas.parentElement.clientWidth || 320;
+        var h = canvas.parentElement.clientHeight || 240;
+        if (w < 8 || h < 8) return;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+
+    function disposeGroup(g) {
+        while (g.children.length) {
+            var c = g.children.pop();
+            if (c.geometry) c.geometry.dispose();
+            if (c.material) {
+                if (Array.isArray(c.material)) c.material.forEach(function (m) { m.dispose(); });
+                else c.material.dispose();
+            }
+            if (c.children && c.children.length) disposeGroup(c);
+        }
+    }
+
+    function buildAtom(el) {
+        if (!hasThree || !atomRoot) return;
+        disposeGroup(atomRoot);
+        shellTex = [];
+
+        /* 원자핵: 양성자(빨강) + 중성자(회색) 덩어리 */
+        var nucleus = new THREE.Group();
+        var protonMat = new THREE.MeshStandardMaterial({ color: 0xff5d5d, roughness: 0.35, metalness: 0.15, emissive: 0x5a1010, emissiveIntensity: 0.5 });
+        var neutronMat = new THREE.MeshStandardMaterial({ color: 0x9fb2cc, roughness: 0.45, metalness: 0.2 });
+        var pg = new THREE.SphereGeometry(0.14, 14, 12);
+        var count = Math.min(18, Math.max(4, Math.round(el.z / 2)));
+        for (var i = 0; i < count; i++) {
+            var m = new THREE.Mesh(pg, i % 2 ? neutronMat : protonMat);
+            var a = Math.random() * Math.PI * 2;
+            var b = Math.acos(2 * Math.random() - 1);
+            var r = 0.26 * Math.cbrt(Math.random()) + 0.05;
+            m.position.set(r * Math.sin(b) * Math.cos(a), r * Math.cos(b), r * Math.sin(b) * Math.sin(a));
+            nucleus.add(m);
+        }
+        var halo = new THREE.Mesh(
+            new THREE.SphereGeometry(0.52, 24, 18),
+            new THREE.MeshBasicMaterial({ color: 0xff8a8a, transparent: true, opacity: 0.12 })
+        );
+        nucleus.add(halo);
+        atomRoot.add(nucleus);
+
+        /* 전자 껍질 */
+        el.shells.forEach(function (n, k) {
+            var radius = 0.95 + k * 0.78;
+            var shell = new THREE.Group();
+            shell.rotation.x = Math.PI / 2 - 0.34 + k * 0.2;
+            shell.rotation.z = k * 0.34;
+
+            var ring = new THREE.Mesh(
+                new THREE.TorusGeometry(radius, 0.012, 8, 96),
+                new THREE.MeshBasicMaterial({ color: 0x6ea8ff, transparent: true, opacity: 0.5 })
+            );
+            shell.add(ring);
+
+            var spin = new THREE.Group();
+            shell.add(spin);
+            var eGeo = new THREE.SphereGeometry(0.085, 12, 10);
+            var eMat = new THREE.MeshStandardMaterial({ color: 0x8ee7ff, emissive: 0x1a7fa8, emissiveIntensity: 0.9, roughness: 0.3 });
+            for (var i = 0; i < n; i++) {
+                var ang = (i / n) * Math.PI * 2;
+                var e = new THREE.Mesh(eGeo, eMat);
+                e.position.set(Math.cos(ang) * radius, 0, Math.sin(ang) * radius);
+                spin.add(e);
+            }
+            atomRoot.add(shell);
+            shellTex.push({ spin: spin, speed: 0.42 / (k + 1) + 0.1, tilt: shell.rotation.x });
+        });
+
+        /* 크기에 맞춰 카메라 거리 유지 */
+        atomRoot.scale.setScalar(el.shells.length > 3 ? 0.86 : 1);
+    }
+
+    var lastT = 0;
+    function loop(t) {
+        raf = requestAnimationFrame(loop);
+        var dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
+        lastT = t;
+        if (!hasThree) return;
+        shellTex.forEach(function (s) { s.spin.rotation.y += s.speed * dt * 2.2; });
+        if (controls) controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* ---------- 퀴즈 ---------- */
+    var qz = { list: [], i: 0, score: 0, locked: false, mode: '' };
+    function rnd(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function shuffle(a) {
+        for (var i = a.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+        return a;
+    }
+    function buildQuiz() {
+        var pool = shuffle(EL.filter(function (e) { return e[0] <= 20; }).map(function (e) { return e[0]; }));
+        qz = { list: pool.slice(0, 10), i: 0, score: 0, locked: false, mode: '' };
+        $('#qzPlay').style.display = 'block';
+        $('#qzResult').classList.remove('show');
+        renderQ();
+    }
+    function renderQ() {
+        var z = qz.list[qz.i];
+        var el = EL_BY_Z[z];
+        var askSymbol = Math.random() < 0.5;
+        qz.mode = askSymbol ? 'name2sym' : 'sym2name';
+        qz.locked = false;
+
+        var others = shuffle(EL.filter(function (e) { return e[0] !== z && e[0] <= 20; }).map(function (e) { return e[0]; })).slice(0, 3);
+        var opts = shuffle([z].concat(others));
+
+        $('#qzPrompt').innerHTML = askSymbol
+            ? '이름이 <b>' + el.name + '</b> 인 원소의 기호는?'
+            : '기호 <b>' + el.sym + '</b> 가 가리키는 원소의 이름은?';
+        var html = '';
+        opts.forEach(function (oz) {
+            var o = EL_BY_Z[oz];
+            html += '<button class="qz-opt" type="button" data-z="' + oz + '">' + (askSymbol ? o.sym : o.name) + '</button>';
+        });
+        $('#qzOpts').innerHTML = html;
+        $('#qzNote').textContent = '';
+        $('#qzNote').className = 'qz-note';
+        $('#qzNext').disabled = true;
+        $('#qzNext').textContent = qz.i === 9 ? '결과 보기 →' : '다음 문제 →';
+        $('#qzScore').textContent = qz.score;
+        $('#qzBar').style.width = ((qz.i) / 10 * 100) + '%';
+    }
+    function answerQ(btn, oz) {
+        if (qz.locked) return;
+        qz.locked = true;
+        var z = qz.list[qz.i];
+        var el = EL_BY_Z[z];
+        Array.prototype.forEach.call($('#qzOpts').children, function (b) {
+            b.disabled = true;
+            if (+b.getAttribute('data-z') === z) b.classList.add('ok');
+        });
+        if (oz === z) {
+            qz.score++;
+            $('#qzNote').className = 'qz-note ok';
+            $('#qzNote').textContent = '✅ 맞았습니다! ' + el.sym + ' = ' + el.name + ' (' + el.z + '번)';
+        } else {
+            btn.classList.add('no');
+            $('#qzNote').className = 'qz-note no';
+            $('#qzNote').textContent = '❌ ' + el.sym + ' = ' + el.name + ' (' + el.z + '번) 입니다.';
+        }
+        $('#qzScore').textContent = qz.score;
+        $('#qzNext').disabled = false;
+    }
+    function nextQ() {
+        if (qz.i >= 9) {
+            $('#qzPlay').style.display = 'none';
+            $('#qzResult').classList.add('show');
+            $('#qzBar').style.width = '100%';
+            $('#qzFinal').textContent = qz.score + ' / 10';
+            $('#qzMsg').textContent = qz.score === 10 ? '완벽합니다! 원소 기호와 이름을 모두 알고 있네요.'
+                : qz.score >= 7 ? '잘했습니다. 틀린 원소는 주기율표에서 다시 찾아보세요.'
+                    : '주기율표를 보며 기호와 이름을 다시 확인해 보세요.';
+            return;
+        }
+        qz.i++;
+        renderQ();
+    }
+
+    /* ---------- 이벤트 ---------- */
+    $('#ptGrid').addEventListener('click', function (e) {
+        var c = e.target.closest('.cell');
+        if (!c) return;
+        select(+c.getAttribute('data-z'));
+        if (window.matchMedia('(max-width: 900px)').matches) {
+            setView('zoom');
+        }
+    });
+    $('#seg').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        setView(b.getAttribute('data-view'));
+    });
+    function setView(v) {
+        document.body.classList.toggle('view-table', v === 'table');
+        document.body.classList.toggle('view-zoom', v === 'zoom');
+        Array.prototype.forEach.call($('#seg').children, function (b) {
+            b.classList.toggle('on', b.getAttribute('data-view') === v);
+        });
+        setTimeout(resizeThree, 60);
+    }
+    $('#btnQuiz').addEventListener('click', function () {
+        $('#qzMask').classList.add('show');
+        buildQuiz();
+    });
+    $('#qzClose').addEventListener('click', function () { $('#qzMask').classList.remove('show'); });
+    $('#qzMask').addEventListener('click', function (e) { if (e.target === $('#qzMask')) $('#qzMask').classList.remove('show'); });
+    $('#qzOpts').addEventListener('click', function (e) {
+        var b = e.target.closest('.qz-opt');
+        if (!b) return;
+        answerQ(b, +b.getAttribute('data-z'));
+    });
+    $('#qzNext').addEventListener('click', nextQ);
+    $('#qzAgain').addEventListener('click', buildQuiz);
+
+    /* 테마 */
+    function applyTheme(dark) {
+        document.body.classList.toggle('dark', dark);
+        $('#bTheme').textContent = dark ? '☀️ 주간 모드' : '🌙 야간 모드';
+        try { localStorage.setItem('svl_pt_theme', dark ? '1' : '0'); } catch (e) { }
+    }
+    $('#bTheme').addEventListener('click', function () { applyTheme(!document.body.classList.contains('dark')); });
+    try { if (localStorage.getItem('svl_pt_theme') === '1') applyTheme(true); } catch (e) { }
+
+    /* 전체화면 / 창모드 */
+    (function () {
+        var btn = document.getElementById('btn-fullscreen');
+        var iconEl = document.getElementById('fsIcon');
+        var textEl = document.getElementById('fsText');
+        var root = document.documentElement;
+        var PSEUDO = 'pseudo-fullscreen';
+        function isRealFs() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                document.mozFullScreenElement || document.msFullscreenElement);
+        }
+        function isPseudo() { return document.body.classList.contains(PSEUDO); }
+        function syncUI() {
+            var on = isRealFs() || isPseudo();
+            iconEl.textContent = on ? '🗗' : '⛶';
+            textEl.textContent = on ? '창모드' : '전체화면';
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            setTimeout(resizeThree, 120);
+        }
+        function toast(msg) {
+            var el = document.getElementById('fs-toast');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'fs-toast'; el.id = 'fs-toast';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg; void el.offsetWidth; el.classList.add('show');
+            clearTimeout(toast._t);
+            toast._t = setTimeout(function () { el.classList.remove('show'); }, 2600);
+        }
+        function enterPseudo(hint) {
+            if (isRealFs()) return;
+            document.body.classList.add(PSEUDO);
+            syncUI();
+            if (hint) toast('이 브라우저는 브라우저 전체화면 대신 상단 바를 숨긴 몰입 모드로 표시합니다');
+        }
+        function requestReal() {
+            var req = root.requestFullscreen || root.webkitRequestFullscreen || root.mozRequestFullScreen || root.msRequestFullscreen;
+            if (!req) return false;
+            try {
+                var p = req.call(root);
+                if (p && typeof p.then === 'function') p.then(syncUI, function () { enterPseudo(true); });
+                else setTimeout(function () { if (!isRealFs() && !isPseudo()) enterPseudo(true); else syncUI(); }, 500);
+                return true;
+            } catch (err) { return false; }
+        }
+        btn.addEventListener('click', function () {
+            if (isRealFs()) {
+                var exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                try { if (exit) { var q = exit.call(document); if (q && typeof q.catch === 'function') q.catch(function () { }); } } catch (err) { }
+                syncUI(); return;
+            }
+            if (isPseudo()) { document.body.classList.remove(PSEUDO); syncUI(); return; }
+            if (!requestReal()) enterPseudo(true);
+            syncUI();
+        });
+        ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+            document.addEventListener(ev, function () {
+                if (isRealFs()) document.body.classList.remove(PSEUDO);
+                syncUI();
+            });
+        });
+        document.addEventListener('keydown', function (e) {
+            if ((e.key === 'Escape' || e.key === 'Esc') && isPseudo() && !isRealFs()) {
+                document.body.classList.remove(PSEUDO); syncUI();
+            }
+        });
+        window.addEventListener('resize', syncUI);
+        syncUI();
+    })();
+
+    /* ---------- 시작 ---------- */
+    buildGrid();
+    initThree();
+    if (hasThree) {
+        select(1);
+        frameStart();
+        function frameStart() { requestAnimationFrame(loop); }
+    } else {
+        select(1);
+    }
+    if (window.matchMedia('(max-width: 900px)').matches) setView('table');
+
+    /* 폰트 준비 후 다시 그리기 */
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { resizeThree(); });
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+</body>
+</html>

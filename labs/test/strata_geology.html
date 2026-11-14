@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>지층 생성과 지사학 법칙 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../common/lib/three.min.js"></script>
+<script src="../common/lib/OrbitControls.js"></script>
+<link rel="stylesheet" href="../common/qr-modal.css">
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eef3f9;
+    color: #1c1c1e;
+    -webkit-user-select: none; user-select: none;
+    transition: background-color .35s ease, color .35s ease;
+}
+
+#canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+canvas { display: block; touch-action: none; }
+
+:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* ---------------- Glass ---------------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.80);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.09);
+    border-radius: 18px;
+    transition: background .3s ease, border-color .3s ease, color .3s ease;
+}
+
+/* ---------------- 좌상단 ---------------- */
+.top-left-bar {
+    position: fixed; top: 16px; left: 18px;
+    display: flex; align-items: center; gap: 8px;
+    z-index: 30; max-width: calc(100vw - 132px);
+}
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; font-family: inherit; font-size: 13px; font-weight: 700;
+    color: #1c1c1e; text-decoration: none; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 999px;
+    white-space: nowrap; transition: all .2s ease;
+}
+.back-btn:hover { background: rgba(255, 255, 255, 0.95); transform: translateY(-1px); }
+.back-btn > span:first-child { display: inline-block; margin-right: 2px; }
+.tag-badge {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 14px; font-size: 13px; font-weight: 800;
+    min-width: 0; white-space: nowrap;
+}
+.tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-pill {
+    flex: 0 0 auto; padding: 2px 7px; border-radius: 999px;
+    background: rgba(147, 51, 234, 0.14); color: #7e22ce;
+    font-size: 10px; font-weight: 800; letter-spacing: .2px;
+}
+.qr-btn { font-size: 12px; padding: 8px 12px; }
+
+/* ---------------- 우상단 ---------------- */
+.top-right-bar {
+    position: fixed; top: 16px; right: 18px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+    z-index: 25; max-width: calc(100vw - 24px);
+}
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.data-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 7px 15px; border-radius: 999px;
+}
+.data-item { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 54px; }
+.data-label { font-size: 9.5px; font-weight: 800; color: #64748b; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value { font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; white-space: nowrap; }
+.data-sep { width: 1px; height: 22px; background: rgba(15, 23, 42, 0.10); flex: 0 0 auto; }
+.icon-btn {
+    width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%; cursor: pointer; font-size: 16px;
+    font-family: inherit; background: rgba(255, 255, 255, 0.85);
+    transition: all .2s ease;
+}
+.icon-btn:hover { transform: scale(1.05); }
+
+/* ---------------- 안내 툴팁 ---------------- */
+.center-tooltip {
+    position: fixed; top: 78px; left: 50%; transform: translateX(-50%);
+    padding: 6px 16px; border-radius: 999px; z-index: 20;
+    font-size: 12px; font-weight: 700; color: #334155;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+    pointer-events: none; white-space: nowrap;
+    max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------------- 좌측 데이터 패널 ---------------- */
+.left-panel {
+    position: fixed; left: 18px; bottom: 76px; z-index: 40;
+    padding: 10px 12px; border-radius: 16px;
+    width: min(316px, calc(100vw - 320px));
+    display: flex; flex-direction: column; gap: 7px;
+}
+.left-panel-title {
+    font-size: 11px; font-weight: 800; color: #475569;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.left-panel canvas { width: 100%; height: auto; display: block; border-radius: 10px; }
+
+/* ---------------- 우측 조절 패널 (250px / 모바일 226px) ---------------- */
+body #side-ctrl.side-ctrl-panel {
+    width: 250px !important;
+    right: 20px !important;
+    bottom: 74px !important;
+    padding: 12px !important;
+    gap: 8px !important;
+    max-height: calc(100vh - 168px) !important;
+    z-index: 60 !important;
+}
+#side-ctrl .panel-title {
+    font-size: 12px !important; font-weight: 800 !important; color: #475569 !important;
+    text-align: center !important; padding-bottom: 5px !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+}
+
+/* 탭(모드) 선택 */
+.mode-row {
+    display: flex; gap: 4px; padding: 3px;
+    background: rgba(127, 140, 160, 0.14); border-radius: 11px;
+}
+.mode-btn {
+    flex: 1; min-width: 0; padding: 7px 4px; border: none; border-radius: 8px;
+    background: transparent; color: #475569;
+    font-family: inherit; font-size: 11.5px; font-weight: 800;
+    cursor: pointer; white-space: nowrap; transition: all .18s ease;
+}
+.mode-btn.active { background: #ffffff; color: #0f172a; box-shadow: 0 1px 5px rgba(15, 23, 42, 0.14); }
+.mode-btn:hover { color: #0f172a; }
+
+/* 타일형 조작 버튼 */
+.ctrl-tab-btn {
+    width: 100%; padding: 8px 6px; border-radius: 11px;
+    border: 1px solid rgba(15, 23, 42, 0.08); background: rgba(255, 255, 255, 0.92);
+    color: #1c1c1e; font-family: inherit; font-size: 11.5px; font-weight: 800;
+    cursor: pointer; text-align: center; line-height: 1.25;
+    white-space: nowrap; word-break: keep-all; transition: all .18s ease;
+}
+.ctrl-tab-btn:hover { background: #ffffff; transform: translateY(-1px); }
+.ctrl-tab-btn.active { background: #2563eb; color: #ffffff; border-color: #2563eb; box-shadow: 0 3px 12px rgba(37, 99, 235, 0.28); }
+.ctrl-tab-btn:disabled { opacity: .45; cursor: default; transform: none; }
+.ctrl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.ctrl-grid.three { grid-template-columns: repeat(3, 1fr); }
+
+/* 슬라이더 행 */
+.ctrl-row { display: flex; flex-direction: column; gap: 3px; }
+.ctrl-row-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 800; color: #64748b; }
+.ctrl-val { font-size: 11.5px; font-weight: 800; color: #2563eb; white-space: nowrap; }
+input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+    border-radius: 999px; background: #dbe3ee; outline: none; cursor: pointer; margin: 4px 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+    background: #2563eb; box-shadow: 0 1px 4px rgba(37, 99, 235, .45); cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+    width: 15px; height: 15px; border: none; border-radius: 50%;
+    background: #2563eb; cursor: pointer;
+}
+input[type="range"]:disabled { opacity: .5; }
+
+.hint-line {
+    font-size: 10.5px; line-height: 1.45; color: #475569;
+    background: rgba(37, 99, 235, 0.07); border-radius: 10px;
+    padding: 6px 9px; word-break: keep-all;
+}
+.status-line {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 11px; font-weight: 800; color: #475569;
+    background: rgba(15, 23, 42, 0.05); border-radius: 10px; padding: 6px 9px;
+}
+.status-line b { font-size: 11.5px; color: #2563eb; }
+.status-line.ok { background: rgba(16, 185, 129, 0.14); color: #047857; }
+.status-line.ok b { color: #047857; }
+.status-line.warn { background: rgba(245, 158, 11, 0.16); color: #b45309; }
+.status-line.warn b { color: #b45309; }
+
+.legend-row { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 10px; font-weight: 700; color: #475569; }
+.legend-row span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.legend-row i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+
+.result-card {
+    display: flex; flex-direction: column; gap: 3px;
+    background: rgba(16, 185, 129, 0.10); border: 1px solid rgba(16, 185, 129, 0.28);
+    border-radius: 10px; padding: 7px 9px;
+    font-size: 10.5px; font-weight: 700; color: #065f46; line-height: 1.4;
+}
+.result-card b { font-size: 11.5px; color: #047857; }
+
+/* ---------------- 전체화면 버튼 ---------------- */
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 15px; border-radius: 999px; border: none;
+    background: rgba(255, 255, 255, 0.85); color: #1e293b;
+    font-family: inherit; font-size: 12.5px; font-weight: 800;
+    cursor: pointer; transition: all .2s ease; white-space: nowrap;
+}
+.fullscreen-btn:hover { background: #ffffff; transform: translateY(-1px); }
+
+/* ---------------- 다크 모드 ---------------- */
+body.dark-mode { background-color: #0f172a; color: #f8fafc; }
+body.dark-mode .glass-panel {
+    background: rgba(23, 32, 50, 0.84);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    color: #f8fafc;
+}
+body.dark-mode .back-btn, body.dark-mode .tag-badge { color: #f8fafc; }
+body.dark-mode .data-label { color: #94a3b8; }
+body.dark-mode .data-value { color: #f1f5f9; }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.14); }
+body.dark-mode .icon-btn, body.dark-mode .fullscreen-btn {
+    background: rgba(45, 55, 72, 0.9); color: #f8fafc;
+}
+body.dark-mode .center-tooltip {
+    background: rgba(23, 32, 50, 0.9); color: #cbd5e1; border-color: rgba(255, 255, 255, 0.12);
+}
+body.dark-mode .left-panel-title, body.dark-mode .ctrl-row-h, body.dark-mode .legend-row,
+body.dark-mode .hint-line, body.dark-mode .status-line { color: #cbd5e1; }
+body.dark-mode .hint-line { background: rgba(56, 189, 248, 0.10); }
+body.dark-mode .status-line { background: rgba(255, 255, 255, 0.07); }
+body.dark-mode .status-line b { color: #7dd3fc; }
+body.dark-mode .status-line.ok { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+body.dark-mode .status-line.ok b { color: #6ee7b7; }
+body.dark-mode .status-line.warn { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+body.dark-mode .status-line.warn b { color: #fcd34d; }
+body.dark-mode .ctrl-tab-btn {
+    background: rgba(45, 55, 72, 0.9); color: #e2e8f0; border-color: rgba(255, 255, 255, 0.10);
+}
+body.dark-mode .ctrl-tab-btn.active { background: #2563eb; color: #ffffff; }
+body.dark-mode .mode-row { background: rgba(255, 255, 255, 0.08); }
+body.dark-mode .mode-btn { color: #cbd5e1; }
+body.dark-mode .mode-btn.active { background: rgba(255, 255, 255, 0.16); color: #ffffff; }
+body.dark-mode .ctrl-val { color: #7dd3fc; }
+body.dark-mode input[type="range"] { background: #334155; }
+body.dark-mode .result-card { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.35); color: #a7f3d0; }
+body.dark-mode .result-card b { color: #6ee7b7; }
+body.dark-mode .tag-pill { background: rgba(191, 90, 242, 0.22); color: #e9b3ff; }
+
+/* ---------------- 전체화면 상태 ---------------- */
+body.is-fullscreen #canvas-container { width: 100vw; height: 100vh; }
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip { display: none !important; }
+
+/* ---------------- 모바일 세로 ---------------- */
+@media (max-width: 900px) {
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)); left: 8px;
+        gap: 6px; max-width: calc(100vw - 104px);
+    }
+    .top-left-bar .back-btn { padding: 6px 10px; font-size: 12px; }
+    .tag-badge { padding: 6px 10px; font-size: 11.5px; }
+    .tag-pill { display: none; }
+    .qr-btn { display: none; }
+
+    .top-right-bar { top: max(8px, env(safe-area-inset-top)); right: 8px; gap: 6px; }
+    .data-card { padding: 5px 9px; gap: 7px; }
+    .data-item { min-width: 44px; }
+    .data-label { font-size: 8.5px; }
+    .data-value { font-size: 11px; }
+    .data-sep { height: 18px; }
+    .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+
+    .center-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+        font-size: 10.5px; padding: 5px 11px;
+        white-space: normal; text-align: center; line-height: 1.35;
+    }
+
+    body #side-ctrl.side-ctrl-panel {
+        width: 226px !important;
+        right: max(8px, env(safe-area-inset-right)) !important;
+        bottom: calc(62px + env(safe-area-inset-bottom)) !important;
+        padding: 9px !important;
+        gap: 6px !important;
+        max-height: 46vh !important;
+    }
+    #side-ctrl .panel-title { font-size: 11px !important; }
+    .ctrl-tab-btn { font-size: 10.5px; padding: 6px 4px; }
+    .mode-btn { font-size: 10.5px; padding: 6px 3px; }
+    .hint-line { font-size: 10px; padding: 5px 7px; }
+
+    .left-panel {
+        left: 8px; bottom: calc(62px + env(safe-area-inset-bottom));
+        width: min(214px, calc(100vw - 244px));
+        padding: 7px 8px; gap: 5px;
+    }
+    .left-panel-title { font-size: 10px; }
+
+    .fullscreen-btn { padding: 7px 11px; font-size: 11.5px; }
+}
+
+@media (max-width: 430px) {
+    .data-card { gap: 6px; padding: 5px 8px; }
+    .data-item { min-width: 40px; }
+}
+
+/* ---------------- 모바일 가로 ---------------- */
+@media (max-height: 520px) and (orientation: landscape) {
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)); left: 6px; gap: 5px; }
+    .top-left-bar .back-btn { padding: 4px 9px; font-size: 11px; }
+    .tag-badge { padding: 4px 9px; font-size: 11px; }
+    .qr-btn, .tag-pill { display: none; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)); right: 6px; gap: 5px; }
+    .data-card { padding: 3px 8px; gap: 7px; }
+    .data-label { font-size: 8px; }
+    .data-value { font-size: 10.5px; }
+    .icon-btn { width: 28px; height: 28px; font-size: 13px; }
+    .center-tooltip { display: none; }
+    .data-card { display: none !important; }
+
+    body #side-ctrl.side-ctrl-panel {
+        top: 40px !important; bottom: auto !important;
+        right: 6px !important; width: 216px !important;
+        max-height: calc(100vh - 92px) !important;
+        padding: 7px !important; gap: 5px !important;
+    }
+    .left-panel {
+        left: 6px; top: 40px; bottom: auto;
+        width: min(190px, calc(100vw - 240px));
+        padding: 6px 7px;
+    }
+    .ctrl-tab-btn { font-size: 9.5px; padding: 5px 3px; }
+    .mode-btn { font-size: 9.5px; }
+    .fullscreen-btn { padding: 5px 9px; font-size: 10.5px; }
+}
+
+/* 실험 7 전용 */
+.step-btn { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 7px 2px; font-size: 11px; }
+.step-btn .sn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; flex: 0 0 auto;
+    background: rgba(15, 23, 42, 0.08); color: #475569;
+    font-size: 9.5px; font-weight: 800;
+}
+.step-btn.done { background: rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.35); color: #047857; }
+.step-btn.done .sn { background: #10b981; color: #fff; }
+.step-btn.next { background: #2563eb; border-color: #2563eb; color: #fff; box-shadow: 0 3px 12px rgba(37, 99, 235, 0.28); }
+.step-btn.next .sn { background: rgba(255, 255, 255, 0.28); color: #fff; }
+.step-btn:disabled { opacity: .42; }
+
+.law-box { display: flex; flex-direction: column; gap: 3px; }
+.law-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 7px; border-radius: 8px;
+    background: rgba(15, 23, 42, 0.05);
+    font-size: 10.5px; font-weight: 700; color: #94a3b8;
+    transition: all .25s ease;
+}
+.law-row i { font-style: normal; font-weight: 800; }
+.law-row.on { background: rgba(37, 99, 235, 0.11); color: #1d4ed8; }
+.law-row.on i { color: #2563eb; }
+
+.quiz-q {
+    font-size: 11px; font-weight: 800; color: #1e293b; line-height: 1.45;
+    background: rgba(37, 99, 235, 0.09); border-radius: 9px; padding: 7px 9px;
+}
+.quiz-opts { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.quiz-opt {
+    padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(15, 23, 42, 0.1);
+    background: rgba(255, 255, 255, 0.94); color: #1c1c1e;
+    font-family: inherit; font-size: 10.5px; font-weight: 800;
+    cursor: pointer; text-align: left; transition: all .16s ease;
+}
+.quiz-opt:hover { background: #fff; }
+.quiz-opt.right { background: #10b981; border-color: #10b981; color: #fff; }
+.quiz-opt.wrong { background: #ef4444; border-color: #ef4444; color: #fff; }
+.quiz-feed { font-size: 10.5px; font-weight: 800; color: #047857; margin-top: 4px; line-height: 1.4; }
+
+body.dark-mode .step-btn .sn { background: rgba(255, 255, 255, 0.14); color: #cbd5e1; }
+body.dark-mode .step-btn.done { background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
+body.dark-mode .law-row { background: rgba(255, 255, 255, 0.07); color: #94a3b8; }
+body.dark-mode .law-row.on { background: rgba(56, 189, 248, 0.16); color: #7dd3fc; }
+body.dark-mode .law-row.on i { color: #7dd3fc; }
+body.dark-mode .quiz-q { background: rgba(56, 189, 248, 0.14); color: #e2e8f0; }
+body.dark-mode .quiz-opt { background: rgba(45, 55, 72, 0.92); color: #e2e8f0; border-color: rgba(255, 255, 255, 0.12); }
+body.dark-mode .quiz-feed { color: #6ee7b7; }
+
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>지층 생성과 지사학 법칙 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span aria-hidden="true">📱</span> QR code</button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel" id="dataCard">
+<div class="data-item"><span class="data-label">지층 수</span><span class="data-value" id="dcV1">0</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label">진행 단계</span><span class="data-value" id="dcV2">0 / 8</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label">최근 사건</span><span class="data-value" id="dcV3">-</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip" id="centerTooltip">💡 퇴적 → 습곡 → 단층 → 관입 → 부정합 순서로 눌러 3D 지층을 완성하고, 지사학 법칙을 확인해 보세요.</div>
+
+<div class="bottom-control-bar glass-panel" id="bar">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel" id="side-ctrl">
+    <div class="panel-title">⚙️ 지층 만들기</div>
+<div class="status-line" id="buildStatus"><span>진행 단계</span><b id="buildStatusVal">0 / 8</b></div>
+
+<div class="ctrl-grid" id="stepGrid">
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="mudstone"><span class="sn">1</span>이암</button>
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="sandstone"><span class="sn">2</span>사암</button>
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="conglomerate"><span class="sn">3</span>역암</button>
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="limestone"><span class="sn">4</span>석회암</button>
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="fold"><span class="sn">5</span>습곡</button>
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="fault"><span class="sn">6</span>단층</button>
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="intrusion"><span class="sn">7</span>관입</button>
+    <button class="ctrl-tab-btn step-btn" type="button" data-step="unconformity"><span class="sn">8</span>부정합</button>
+</div>
+
+<button class="ctrl-tab-btn" type="button" id="btnBuildAll">▶️ 전체 순서 재생</button>
+
+<div class="law-box" id="lawBox">
+    <div class="law-row" data-law="horizontal"><i>①</i><span>수평퇴적</span></div>
+    <div class="law-row" data-law="superposition"><i>②</i><span>지층누중</span></div>
+    <div class="law-row" data-law="fauna"><i>③</i><span>동물군 천이</span></div>
+    <div class="law-row" data-law="crosscut"><i>④</i><span>관입</span></div>
+    <div class="law-row" data-law="unconformity"><i>⑤</i><span>부정합</span></div>
+</div>
+
+<button class="ctrl-tab-btn" type="button" id="btnQuiz">🧠 생성 순서 퀴즈</button>
+<div id="quizPanel" style="display:none">
+    <div class="quiz-q" id="quizQ"></div>
+    <div class="quiz-opts" id="quizOpts"></div>
+    <div class="quiz-feed" id="quizFeed"></div>
+</div>
+
+<div class="hint-line" id="stepHint">아래 지층부터 차례로 쌓입니다. 다음 단계 버튼을 눌러 지층을 완성해 보세요.</div>
+</div>
+
+<script>
+/* ============================================================
+   지층 생성과 지사학 법칙 3D
+   퇴적(이암·사암·역암·석회암) → 습곡 → 단층 → 마그마 관입 → 부정합
+   각 단계마다 지사학 5대 법칙이 적용되고, 생성 순서 퀴즈를 제공한다.
+   ============================================================ */
+(function () {
+    'use strict';
+
+    var $ = function (s, r) { return (r || document).querySelector(s); };
+    var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+    var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+    var easeInOut = function (k) { return k < 0.5 ? 2 * k * k : -1 + (4 - 2 * k) * k; };
+
+    /* ---------------- 3D 환경 ---------------- */
+    var container = document.getElementById('canvas-container');
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    var scene = new THREE.Scene();
+    var SKY_LIGHT = 0xe8f1fa, SKY_DARK = 0x0b1524;
+    scene.background = new THREE.Color(SKY_LIGHT);
+
+    var camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
+    camera.position.set(1.6, 8.4, 21);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 7;
+    controls.maxDistance = 46;
+    controls.maxPolarAngle = Math.PI * 0.492;
+    controls.target.set(0, 3.2, 0);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8fa0b4, 0.62));
+    var keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    keyLight.position.set(14, 22, 13);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.left = -20;
+    keyLight.shadow.camera.right = 20;
+    keyLight.shadow.camera.top = 20;
+    keyLight.shadow.camera.bottom = -20;
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 80;
+    scene.add(keyLight);
+    var fillLight = new THREE.DirectionalLight(0xcfe2ff, 0.38);
+    fillLight.position.set(-14, 10, -12);
+    scene.add(fillLight);
+
+    /* ---------------- 트윈 ---------------- */
+    var tweens = [];
+    function tween(dur, onUpdate, onDone) {
+        tweens.push({ start: performance.now(), dur: Math.max(1, dur), onUpdate: onUpdate, onDone: onDone });
+    }
+    function updateTweens(now) {
+        if (!tweens.length) return;
+        var current = tweens;
+        tweens = [];
+        for (var i = 0; i < current.length; i++) {
+            var t = current[i];
+            var k = clamp((now - t.start) / t.dur, 0, 1);
+            if (t.onUpdate) t.onUpdate(k);
+            if (k < 1) tweens.push(t);
+            else if (t.onDone) t.onDone();
+        }
+    }
+
+    /* ---------------- 바닥 ---------------- */
+    var groundMat = new THREE.MeshStandardMaterial({ color: 0xb6c4d4, roughness: 0.95, metalness: 0.02 });
+    var ground = new THREE.Mesh(new THREE.CylinderGeometry(17, 17.6, 0.5, 64), groundMat);
+    ground.position.y = -1.55;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    /* ---------------- 지층 모델 ---------------- */
+    var GEO_W = 11, GEO_H = 0.95, GEO_D = 6, LAYER_GAP = 1.0, BASE_Y = 0.55;
+    var CUT_Y = 4.9;
+    var FOLD_AMP = 0.85;
+    var FAULT_UP = 0.55, FAULT_DOWN = 0.35;
+
+    var STEPS = [
+        { id: 'mudstone', label: '이암', color: 0x5f6b7a, hint: '가장 아래에 입자가 고운 이암이 수평으로 쌓였습니다.' },
+        { id: 'sandstone', label: '사암', color: 0xd3b07d, hint: '그 위에 사암이 쌓였습니다. 아래 지층일수록 오래되었습니다.' },
+        { id: 'conglomerate', label: '역암', color: 0xa9784f, hint: '자갈이 섞인 역암이 쌓였습니다.' },
+        { id: 'limestone', label: '석회암', color: 0xe4dfcc, hint: '석회암에는 화석이 들어 있습니다. 지층마다 화석이 달라 동물군 천이를 보여 줍니다.' },
+        { id: 'fold', label: '습곡', hint: '좌우에서 압력을 받아 지층이 물결 모양으로 휘었습니다.' },
+        { id: 'fault', label: '단층', hint: '지층이 끊겨 어긋났습니다. 어긋난 면이 단층면입니다.' },
+        { id: 'intrusion', label: '마그마 관입', hint: '마그마가 지층을 뚫고 올라와 굳었습니다. 관입암이 주변 지층보다 나중입니다.' },
+        { id: 'unconformity', label: '부정합', hint: '깎인 면 위에 새 지층이 쌓였습니다. 그 사이에는 긴 시간이 비어 있습니다.' }
+    ];
+
+    var state = { applied: [], fault: null, intrusion: false, unconformity: false };
+    var foldAmt = 0, faultOffset = 0;
+
+    var geology = new THREE.Group();
+    scene.add(geology);
+    var halves = [];
+    var layerGroups = [];
+    var fossils = [];
+    var dikeGroup = null;
+    var markers = [];
+    var labels = [];
+
+    var LABEL_FONT = '700 58px SeoulNamsan, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+    var LABEL_PX = 0.0082;
+
+    function labelWidth(text) {
+        var c = document.createElement('canvas').getContext('2d');
+        c.font = LABEL_FONT;
+        return Math.ceil(c.measureText(text).width);
+    }
+
+    function labelCanvasWidth(tw) {
+        return Math.max(250, Math.min(940, tw + 96));
+    }
+
+    function drawLabel(item) {
+        var c = item.canvas, g = item.ctx;
+        g.clearRect(0, 0, c.width, c.height);
+        g.font = LABEL_FONT;
+        var w = Math.min(c.width - 8, item.tw + 44);
+        var h = 88, x = (c.width - w) / 2, y = (c.height - h) / 2, r = 28;
+        g.fillStyle = item.bg;
+        g.beginPath();
+        g.moveTo(x + r, y);
+        g.lineTo(x + w - r, y);
+        g.quadraticCurveTo(x + w, y, x + w, y + r);
+        g.lineTo(x + w, y + h - r);
+        g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        g.lineTo(x + r, y + h);
+        g.quadraticCurveTo(x, y + h, x, y + h - r);
+        g.lineTo(x, y + r);
+        g.quadraticCurveTo(x, y, x + r, y);
+        g.closePath();
+        g.fill();
+        if (item.ring) { g.strokeStyle = item.ring; g.lineWidth = 4; g.stroke(); }
+        g.fillStyle = item.color;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(item.text, c.width / 2, y + h / 2 + 2);
+        item.tex.needsUpdate = true;
+    }
+
+    function makeLabel(text, color, bg, ring) {
+        var tw = labelWidth(text);
+        var W = labelCanvasWidth(tw);
+        var H = 132;
+        var canvas = document.createElement('canvas');
+        canvas.width = W;
+        canvas.height = H;
+        var ctx = canvas.getContext('2d');
+        var tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+        spr.scale.set(W * LABEL_PX, H * LABEL_PX, 1);
+        spr.renderOrder = 20;
+        var item = {
+            canvas: canvas, ctx: ctx, tex: tex, sprite: spr, text: text, tw: tw,
+            color: color || '#0f172a',
+            bg: bg || 'rgba(255,255,255,0.93)',
+            ring: ring || null
+        };
+        labels.push(item);
+        drawLabel(item);
+        return spr;
+    }
+
+    function setLabel(item, text) {
+        if (!item || item.text === text) return;
+        item.text = text;
+        item.tw = labelWidth(text);
+        var need = labelCanvasWidth(item.tw);
+        if (Math.abs(need - item.canvas.width) > 4) {
+            item.canvas.width = need;
+            item.sprite.scale.set(need * LABEL_PX, item.canvas.height * LABEL_PX, 1);
+        }
+        drawLabel(item);
+    }
+
+
+    /* ---------------- 라벨 ---------------- */
+
+    if (document.fonts && document.fonts.load) {
+        document.fonts.load('700 62px SeoulNamsan').then(function () {
+            labels.forEach(drawLabel);
+        }).catch(function () {});
+    }
+
+    function clearGeology() {
+        while (geology.children.length) {
+            var child = geology.children.pop();
+            child.traverse(function (o) {
+                if (o.geometry) o.geometry.dispose();
+                if (o.material) {
+                    if (o.material.map) o.material.map.dispose();
+                    o.material.dispose();
+                }
+            });
+            geology.remove(child);
+        }
+        halves = [];
+        layerGroups = [];
+        fossils = [];
+        markers = [];
+        labels = [];
+        dikeGroup = null;
+    }
+
+    /* ---------------- 지층 생성 ---------------- */
+    function buildBase() {
+        var base = new THREE.Mesh(new THREE.BoxGeometry(GEO_W + 1.2, 1.4, GEO_D + 1.0),
+            new THREE.MeshStandardMaterial({ color: 0x4c5866, roughness: 0.96, metalness: 0.02 }));
+        base.position.set(0, -0.66, 0);
+        base.receiveShadow = true;
+        base.castShadow = true;
+        geology.add(base);
+        var label = makeLabel('기반암', '#e2e8f0', 'rgba(51,65,85,0.85)');
+        label.position.set(-GEO_W / 2 - 2.0, -0.62, 2.1);
+        geology.add(label);
+    }
+
+    /* 지층이 쌓일 자리를 보여 주는 안내 박스 */
+    function buildGhost() {
+        var h = 4.1;
+        var geo = new THREE.BoxGeometry(GEO_W, h, GEO_D);
+        var box = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+            color: 0xffffff, transparent: true, opacity: 0.12, roughness: 1, depthWrite: false
+        }));
+        box.position.set(0, 0.05 + h / 2, 0);
+        geology.add(box);
+        var edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+            new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 1 }));
+        edges.position.copy(box.position);
+        geology.add(edges);
+        var lbl = makeLabel('여기에 지층이 쌓입니다', '#475569');
+        lbl.position.set(0, h + 1.0, 0);
+        geology.add(lbl);
+    }
+
+    function buildLayer(step, index) {
+        var group = new THREE.Group();
+        var y = BASE_Y + index * LAYER_GAP;
+        group.position.set(0, y, 0);
+
+        var mat = new THREE.MeshStandardMaterial({ color: step.color, roughness: 0.94, metalness: 0.02 });
+
+        ['left', 'right'].forEach(function (side) {
+            var geo = new THREE.BoxGeometry(GEO_W / 2, GEO_H, GEO_D, 18, 1, 1);
+            geo.translate(side === 'left' ? -GEO_W / 4 : GEO_W / 4, 0, 0);
+            var pos = geo.attributes.position;
+            var base = new Float32Array(pos.count * 3);
+            var delta = new Float32Array(pos.count);
+            for (var i = 0; i < pos.count; i++) {
+                var x = pos.getX(i);
+                base[i * 3] = x;
+                base[i * 3 + 1] = pos.getY(i);
+                base[i * 3 + 2] = pos.getZ(i);
+                delta[i] = Math.cos((x / (GEO_W / 2)) * Math.PI);
+            }
+            var mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = { base: base, delta: delta, layerY: y, side: side, faultOff: 0 };
+            halves.push(mesh);
+            group.add(mesh);
+        });
+
+        /* 화석 표시 */
+        if (step.id === 'limestone') {
+            [[-2.55, 0], [-0.95, 1]].forEach(function (spot, k) {
+                var fossil = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.055, 8, 14),
+                    new THREE.MeshStandardMaterial({ color: 0x8b7a5a, roughness: 0.8 }));
+                fossil.position.set(spot[0], 0.05, GEO_D / 2 + 0.02);
+                fossil.rotation.z = k * 0.6;
+                group.add(fossil);
+                fossils.push({ mesh: fossil, x: spot[0] });
+            });
+        } else if (step.id === 'sandstone') {
+            var shell = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10),
+                new THREE.MeshStandardMaterial({ color: 0x9c7b52, roughness: 0.85 }));
+            shell.scale.set(1, 0.55, 0.4);
+            shell.position.set(-1.8, 0.05, GEO_D / 2 + 0.02);
+            group.add(shell);
+            fossils.push({ mesh: shell, x: -1.8 });
+        }
+
+        var label = makeLabel(step.label, '#0f172a');
+        label.position.set(-GEO_W / 2 - 2.0, 0, 2.1);
+        group.add(label);
+
+        geology.add(group);
+        layerGroups.push(group);
+        return group;
+    }
+
+    function buildDike() {
+        dikeGroup = new THREE.Group();
+        var dikeMat = new THREE.MeshStandardMaterial({ color: 0x4a4238, roughness: 0.85, metalness: 0.08, flatShading: true });
+        var dike = new THREE.Mesh(new THREE.BoxGeometry(0.85, 6.2, 5.4), dikeMat);
+        dike.position.set(0, 1.0, 0);
+        dike.castShadow = true;
+        dike.receiveShadow = true;
+        dikeGroup.add(dike);
+
+        /* 단면에 드러난 암맥 띠 — 지층을 뚫고 올라온 모습을 앞면에서 보여 준다 */
+        var faceDike = new THREE.Mesh(new THREE.BoxGeometry(0.8, 6.0, 0.09),
+            new THREE.MeshStandardMaterial({ color: 0x3f3830, roughness: 0.8, metalness: 0.1 }));
+        faceDike.position.set(0, 1.1, GEO_D / 2 + 0.04);
+        dikeGroup.add(faceDike);
+
+        var glow = new THREE.PointLight(0xff7a33, 0.9, 9, 2);
+        glow.position.set(0, -1.6, 0);
+        dikeGroup.add(glow);
+
+        var tip = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.8, 6), dikeMat);
+        tip.position.set(0, 4.4, 0);
+        dikeGroup.add(tip);
+
+        var label = makeLabel('관입 화강암', '#7c2d12');
+        label.position.set(3.2, 4.1, 2.4);
+        dikeGroup.add(label);
+
+        dikeGroup.position.set(1.7, 0, 0);
+        geology.add(dikeGroup);
+        return dikeGroup;
+    }
+
+    function buildUnconformity() {
+        /* 침식면 위에 새 지층을 쌓는다. 낙차가 있는 쪽은 아래를 채워 두께가 두꺼워진다. */
+        var sedCount = state.applied.filter(function (id) {
+            return id === 'mudstone' || id === 'sandstone' || id === 'conglomerate' || id === 'limestone';
+        }).length;
+        var topCenter = BASE_Y + (sedCount - 1) * LAYER_GAP + GEO_H / 2;
+        var crest = topCenter + FOLD_AMP * foldAmt;
+        var normal = state.fault !== 'reverse';
+        var leftOff = state.fault ? (normal ? FAULT_UP : -FAULT_UP) * faultOffset : 0;
+        var rightOff = state.fault ? (normal ? -FAULT_DOWN : FAULT_DOWN) * faultOffset : 0;
+        var leftTop = Math.min(crest + leftOff, CUT_Y);
+        var rightTop = Math.min(crest + rightOff, CUT_Y);
+
+        var color = 0xbfa37c;
+        var mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.94, metalness: 0.02 });
+        var group = new THREE.Group();
+
+        var slab = new THREE.Mesh(new THREE.BoxGeometry(GEO_W, GEO_H, GEO_D), mat);
+        slab.position.set(0, CUT_Y + GEO_H / 2, 0);
+        slab.castShadow = true;
+        slab.receiveShadow = true;
+        group.add(slab);
+
+        [[-1, leftTop], [1, rightTop]].forEach(function (sideInfo) {
+            var gap = CUT_Y - sideInfo[1];
+            if (gap > 0.06) {
+                var fill = new THREE.Mesh(new THREE.BoxGeometry(GEO_W / 2, gap, GEO_D), mat);
+                fill.position.set(sideInfo[0] * GEO_W / 4, sideInfo[1] + gap / 2, 0);
+                fill.castShadow = true;
+                fill.receiveShadow = true;
+                group.add(fill);
+            }
+        });
+
+        var label = makeLabel('새 지층', '#0f172a');
+        label.position.set(-GEO_W / 2 - 2.0, CUT_Y + GEO_H / 2, 2.1);
+        group.add(label);
+
+        /* 부정합면: 앞면에 그어진 경계선 */
+        var lineMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5, emissive: 0x7f1d1d, emissiveIntensity: 0.3 });
+        var lineLeft = new THREE.Mesh(new THREE.BoxGeometry(GEO_W / 2, 0.07, 0.07), lineMat);
+        lineLeft.position.set(-GEO_W / 4, leftTop, GEO_D / 2 + 0.03);
+        group.add(lineLeft);
+        var lineRight = new THREE.Mesh(new THREE.BoxGeometry(GEO_W / 2, 0.07, 0.07), lineMat);
+        lineRight.position.set(GEO_W / 4, rightTop, GEO_D / 2 + 0.03);
+        group.add(lineRight);
+        markers.push(lineLeft, lineRight);
+
+        var markLabel = makeLabel('부정합면', '#b91c1c', 'rgba(254,226,226,0.95)');
+        markLabel.position.set(4.2, CUT_Y + 1.15, 2.6);
+        group.add(markLabel);
+
+        geology.add(group);
+        layerGroups.push(group);
+        return group;
+    }
+
+    function buildFaultPlane() {
+        var mat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.7, transparent: true, opacity: 0.72, side: THREE.DoubleSide });
+        var plane = new THREE.Mesh(new THREE.PlaneGeometry(GEO_D + 0.2, 5.2), mat);
+        plane.rotation.y = Math.PI / 2;
+        plane.rotation.z = 0.16;
+        plane.position.set(0, 1.9, 0);
+        geology.add(plane);
+        markers.push(plane);
+    }
+
+    function rebuild() {
+        clearGeology();
+        buildBase();
+        var idx = 0;
+        STEPS.forEach(function (step) {
+            if (step.color !== undefined && state.applied.indexOf(step.id) >= 0) {
+                buildLayer(step, idx);
+                idx++;
+            }
+        });
+        if (state.fault) buildFaultPlane();
+        if (state.intrusion) buildDike();
+        if (state.unconformity) buildUnconformity();
+        if (state.applied.length === 0) buildGhost();
+        updateGeometry();
+    }
+
+    function updateGeometry() {
+        var amt = foldAmt;
+        var fo = faultOffset;
+        var cut = state.unconformity ? CUT_Y : 1e9;
+        var normal = state.fault !== 'reverse';
+
+        for (var h = 0; h < halves.length; h++) {
+            var mesh = halves[h];
+            var ud = mesh.userData;
+            var isRight = ud.side === 'right';
+            var off = 0;
+            if (state.fault) {
+                off = isRight ? (normal ? -FAULT_DOWN : FAULT_DOWN) * fo : (normal ? FAULT_UP : -FAULT_UP) * fo;
+            }
+            ud.faultOff = off;
+            mesh.position.y = off;
+
+            var pos = mesh.geometry.attributes.position;
+            var base = ud.base, delta = ud.delta;
+            for (var i = 0; i < pos.count; i++) {
+                var yb = base[i * 3 + 1] + delta[i] * amt;
+                var world = ud.layerY + off + yb;
+                if (world > cut) yb -= (world - cut);
+                pos.setY(i, yb);
+            }
+            pos.needsUpdate = true;
+            mesh.geometry.computeVertexNormals();
+        }
+
+        for (var f = 0; f < fossils.length; f++) {
+            var fos = fossils[f];
+            fos.mesh.position.y = 0.05 + Math.cos((fos.x / (GEO_W / 2)) * Math.PI) * amt;
+        }
+    }
+
+    /* ---------------- 단계 실행 ---------------- */
+    function currentIndex() { return state.applied.length; }
+
+    function doStep(id) {
+        var idx = currentIndex();
+        if (idx >= STEPS.length) return false;
+        var step = STEPS[idx];
+        if (step.id !== id) return false;
+
+        state.applied.push(id);
+
+        if (step.color !== undefined) {
+            rebuild();
+            var g = layerGroups[layerGroups.length - 1];
+            if (g) {
+                var targetY = g.position.y;
+                g.position.y = targetY + 3.4;
+                tween(520, function (k) {
+                    g.position.y = targetY + 3.4 * (1 - easeInOut(k));
+                });
+            }
+        } else if (id === 'fold') {
+            tween(950, function (k) {
+                foldAmt = easeInOut(k);
+                updateGeometry();
+            });
+        } else if (id === 'fault') {
+            state.fault = 'normal';
+            buildFaultPlane();
+            tween(850, function (k) {
+                faultOffset = easeInOut(k);
+                updateGeometry();
+            });
+        } else if (id === 'intrusion') {
+            state.intrusion = true;
+            rebuild();
+            if (dikeGroup) {
+                dikeGroup.position.y = -3.6;
+                tween(950, function (k) {
+                    dikeGroup.position.y = -3.6 * (1 - easeInOut(k));
+                });
+            }
+        } else if (id === 'unconformity') {
+            state.unconformity = true;
+            rebuild();
+            var top = layerGroups[layerGroups.length - 1];
+            if (top) {
+                var ty = top.position.y;
+                top.position.y = ty + 3.2;
+                tween(620, function (k) {
+                    top.position.y = ty + 3.2 * (1 - easeInOut(k));
+                });
+            }
+        }
+
+        updateUI(step);
+        return true;
+    }
+
+    function updateUI(step) {
+        var n = currentIndex();
+        var bv = $('#buildStatusVal');
+        if (bv) bv.textContent = n + ' / 8';
+        var v1 = $('#dcV1'), v2 = $('#dcV2'), v3 = $('#dcV3');
+        var layerCount = state.applied.filter(function (id) {
+            return id === 'mudstone' || id === 'sandstone' || id === 'conglomerate' || id === 'limestone';
+        }).length + (state.unconformity ? 1 : 0);
+        if (v1) v1.textContent = String(layerCount);
+        if (v2) v2.textContent = n + ' / 8';
+        if (v3) v3.textContent = step ? step.label : '-';
+
+        $$('#stepGrid .step-btn').forEach(function (btn) {
+            var sIdx = -1;
+            for (var i = 0; i < STEPS.length; i++) if (STEPS[i].id === btn.getAttribute('data-step')) sIdx = i;
+            btn.classList.toggle('done', sIdx >= 0 && sIdx < n);
+            btn.classList.toggle('next', sIdx === n);
+            btn.disabled = !(sIdx === n);
+        });
+
+        var has = function (id) { return state.applied.indexOf(id) >= 0; };
+        setLaw('horizontal', n >= 1);
+        setLaw('superposition', n >= 1);
+        setLaw('fauna', has('limestone'));
+        setLaw('crosscut', has('intrusion'));
+        setLaw('unconformity', has('unconformity'));
+
+        var hint = $('#stepHint');
+        if (hint) {
+            if (step) hint.textContent = step.hint;
+            else if (n === 0) hint.textContent = '아래 지층부터 차례로 쌓입니다. 다음 단계 버튼을 눌러 지층을 완성해 보세요.';
+        }
+
+        var status = $('#buildStatus');
+        if (status) {
+            status.classList.remove('ok');
+            if (n >= STEPS.length) status.classList.add('ok');
+        }
+    }
+
+    function setLaw(key, on) {
+        var row = $('#lawBox .law-row[data-law="' + key + '"]');
+        if (row) row.classList.toggle('on', !!on);
+    }
+
+    /* ---------------- 생성 순서 퀴즈 ---------------- */
+    var quiz = { score: 0, total: 0, current: null };
+
+    function labelOf(id) {
+        for (var i = 0; i < STEPS.length; i++) if (STEPS[i].id === id) return STEPS[i].label;
+        return id;
+    }
+
+    function shuffle(arr) {
+        for (var i = arr.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+        }
+        return arr;
+    }
+
+    function newQuestion() {
+        var done = state.applied.slice();
+        var qEl = $('#quizQ'), optEl = $('#quizOpts'), feed = $('#quizFeed');
+        var panel = $('#quizPanel');
+        if (panel) panel.style.display = '';
+        if (done.length < 3) {
+            if (qEl) qEl.textContent = '지층을 3단계 이상 만든 뒤 퀴즈를 풀 수 있습니다.';
+            if (optEl) optEl.innerHTML = '';
+            if (feed) feed.textContent = '';
+            return;
+        }
+        var askFirst = Math.random() < 0.5;
+        var answer = askFirst ? done[0] : done[done.length - 1];
+        var options = [answer];
+        var pool = shuffle(done.slice());
+        for (var i = 0; i < pool.length && options.length < 4; i++) {
+            if (pool[i] !== answer) options.push(pool[i]);
+        }
+        shuffle(options);
+        quiz.current = { answer: answer };
+
+        if (qEl) qEl.textContent = '지금 지층에서 가장 ' + (askFirst ? '먼저' : '나중에') + ' 일어난 사건은?';
+        if (feed) feed.textContent = '점수 ' + quiz.score + ' / ' + quiz.total;
+        if (optEl) {
+            optEl.innerHTML = '';
+            options.forEach(function (id) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'quiz-opt';
+                b.textContent = labelOf(id);
+                b.setAttribute('data-opt', id);
+                b.addEventListener('click', function () { answerQuestion(id, b); });
+                optEl.appendChild(b);
+            });
+        }
+    }
+
+    function answerQuestion(id, btn) {
+        if (!quiz.current) return;
+        var feed = $('#quizFeed');
+        quiz.total++;
+        var correct = quiz.current.answer === id;
+        if (correct) quiz.score++;
+        $$('#quizOpts .quiz-opt').forEach(function (b) {
+            b.disabled = true;
+            if (b.getAttribute('data-opt') === quiz.current.answer) b.classList.add('right');
+        });
+        if (!correct && btn) btn.classList.add('wrong');
+        if (feed) {
+            feed.textContent = (correct ? '정답! ' : '아쉽습니다. ') + '정답은 ' + labelOf(quiz.current.answer) +
+                ' · 점수 ' + quiz.score + ' / ' + quiz.total;
+        }
+        quiz.current = null;
+        setTimeout(newQuestion, 1600);
+    }
+
+    /* ---------------- 전체 재생 ---------------- */
+    var autoTimer = null;
+    function buildAll() {
+        if (autoTimer) clearTimeout(autoTimer);
+        if (currentIndex() >= STEPS.length) return;
+        var btn = $('#btnBuildAll');
+        if (btn) btn.classList.add('active');
+        autoTimer = setTimeout(function () {
+            if (currentIndex() >= STEPS.length) {
+                if (btn) btn.classList.remove('active');
+                return;
+            }
+            doStep(STEPS[currentIndex()].id);
+            buildAll();
+        }, currentIndex() === 0 ? 60 : 1150);
+    }
+
+    /* ---------------- UI 연결 ---------------- */
+    function bindUI() {
+        $$('#stepGrid .step-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+                doStep(btn.getAttribute('data-step'));
+            });
+        });
+        var allBtn = $('#btnBuildAll');
+        if (allBtn) allBtn.addEventListener('click', buildAll);
+        var qBtn = $('#btnQuiz');
+        if (qBtn) qBtn.addEventListener('click', newQuestion);
+    }
+
+    /* ---------------- 초기화 · 시점 · 테마 · 리사이즈 ---------------- */
+    window.pageReset = function () {
+        if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+        tweens.length = 0;
+        state = { applied: [], fault: null, intrusion: false, unconformity: false };
+        foldAmt = 0;
+        faultOffset = 0;
+        quiz.score = 0;
+        quiz.total = 0;
+        quiz.current = null;
+        rebuild();
+        var panel = $('#quizPanel');
+        if (panel) panel.style.display = 'none';
+        var btn = $('#btnBuildAll');
+        if (btn) btn.classList.remove('active');
+        updateUI(null);
+        var bv = $('#buildStatusVal');
+        if (bv) bv.textContent = '0 / 8';
+    };
+
+    var DEFAULT_CAM = { pos: new THREE.Vector3(1.6, 8.4, 21), target: new THREE.Vector3(0, 3.2, 0) };
+    var camTween = null;
+
+    function camFit(pos, target) {
+        var a = window.innerWidth / Math.max(1, window.innerHeight);
+        var f = a < 1.2 ? Math.min(1.8, 1.2 / Math.max(0.4, a)) : 1;
+        return target.clone().add(pos.clone().sub(target).multiplyScalar(f));
+    }
+
+    window.pageAlign = function () {
+        camTween = {
+            p0: camera.position.clone(), p1: camFit(DEFAULT_CAM.pos, DEFAULT_CAM.target),
+            t0: controls.target.clone(), t1: DEFAULT_CAM.target.clone(),
+            start: performance.now(), dur: 560
+        };
+    };
+
+    var lastAspect = window.innerWidth / Math.max(1, window.innerHeight);
+    window.pageResize = function () {
+        var w = window.innerWidth, h = window.innerHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        var a = w / Math.max(1, h);
+        if (Math.abs(a - lastAspect) > 0.18) {
+            lastAspect = a;
+            window.pageAlign();
+        }
+    };
+
+    window.pageTheme = function (dark) {
+        scene.background.setHex(dark ? SKY_DARK : SKY_LIGHT);
+        groundMat.color.setHex(dark ? 0x22303f : 0xdbe6f2);
+    };
+
+    /* ---------------- 루프 ---------------- */
+    var clock = new THREE.Clock();
+    function animate() {
+        requestAnimationFrame(animate);
+        var now = performance.now();
+        if (camTween) {
+            var k = clamp((now - camTween.start) / camTween.dur, 0, 1);
+            var e = easeInOut(k);
+            camera.position.lerpVectors(camTween.p0, camTween.p1, e);
+            controls.target.lerpVectors(camTween.t0, camTween.t1, e);
+            if (k >= 1) camTween = null;
+        }
+        updateTweens(now);
+
+        /* 관입 화강암 아래 마그마 발광 */
+        if (dikeGroup) {
+            dikeGroup.children.forEach(function (c) {
+                if (c.isPointLight) c.intensity = 0.75 + Math.sin(now * 0.004) * 0.25;
+            });
+        }
+
+        clock.getDelta();
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    rebuild();
+    bindUI();
+    updateUI(null);
+    camera.position.copy(camFit(DEFAULT_CAM.pos, DEFAULT_CAM.target));
+    controls.target.copy(DEFAULT_CAM.target);
+    camTween = null;
+    window.pageResize();
+    animate();
+})();
+</script>
+<script>
+/* ============================================================
+   공통 UI 크롬: 전체화면 / 야간 모드 / 초기화·시점정렬 / 리사이즈
+   각 실험의 고유 동작은 window.pageReset · pageAlign · pageResize · pageTheme 로 연결된다.
+   ============================================================ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var fsBtn = document.getElementById('fullscreenBtn');
+    var fsIcon = document.getElementById('fullscreenIcon');
+    var fsText = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+            document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudoFs() { return docEl.classList.contains('pseudo-fs'); }
+    function syncFs() {
+        var on = realFs() || pseudoFs();
+        if (fsIcon) fsIcon.textContent = on ? '🗗' : '⛶';
+        if (fsText) fsText.textContent = on ? '창모드' : '전체화면';
+        if (fsBtn) fsBtn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+        if (window.pageResize) setTimeout(window.pageResize, 140);
+    }
+    if (fsBtn) {
+        fsBtn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                return;
+            }
+            if (pseudoFs()) { docEl.classList.remove('pseudo-fs'); syncFs(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var p = req.call(docEl);
+                    if (p && p.catch) p.catch(function () { docEl.classList.add('pseudo-fs'); syncFs(); });
+                } catch (e) { docEl.classList.add('pseudo-fs'); }
+            } else {
+                docEl.classList.add('pseudo-fs');
+            }
+            syncFs();
+        });
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, syncFs);
+    });
+    syncFs();
+
+    /* 야간 모드 */
+    var themeBtn = document.getElementById('themeBtn');
+    var saved = null;
+    try { saved = localStorage.getItem('svl_test_dark'); } catch (e) { saved = null; }
+    function applyTheme(dark) {
+        document.body.classList.toggle('dark-mode', dark);
+        if (themeBtn) {
+            themeBtn.textContent = dark ? '☀️' : '🌙';
+            themeBtn.title = dark ? '주간 모드로 전환' : '야간 모드 전환';
+        }
+        if (window.pageTheme) window.pageTheme(dark);
+    }
+    applyTheme(saved === '1');
+    if (themeBtn) {
+        themeBtn.addEventListener('click', function () {
+            var dark = !document.body.classList.contains('dark-mode');
+            applyTheme(dark);
+            try { localStorage.setItem('svl_test_dark', dark ? '1' : '0'); } catch (e) {}
+        });
+    }
+
+    /* 초기화 · 시점정렬 */
+    var btnReset = document.getElementById('btnReset');
+    var btnAlign = document.getElementById('btnAlign');
+    if (btnReset) btnReset.addEventListener('click', function () { if (window.pageReset) window.pageReset(); });
+    if (btnAlign) btnAlign.addEventListener('click', function () { if (window.pageAlign) window.pageAlign(); });
+
+    /* 리사이즈 */
+    var timer = null;
+    function schedule() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function () { if (window.pageResize) window.pageResize(); }, 90);
+    }
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
+    window.addEventListener('load', schedule);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', schedule);
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+<script src="../common/lib/qrcode.min.js" defer></script>
+<script src="../common/qr-modal.js" defer></script>
+</body>
+</html>

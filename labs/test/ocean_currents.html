@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="1.05">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>해수의 순환과 표층 해류 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<script src="../common/lib/three.min.js"></script>
+<script>if(!window.THREE){document.write('<scr'+'ipt src="../common/lib/three.min.js"><\/scr'+'ipt>');}</script>
+<script src="../common/lib/OrbitControls.js"></script>
+<script>if(!(window.THREE&&THREE.OrbitControls)){document.write('<scr'+'ipt src="../common/lib/OrbitControls.js"><\/scr'+'ipt>');}</script>
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+
+@font-face{
+  font-family:'SeoulNamsan';
+  src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+  font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+  font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color:#16202e;
+  background:linear-gradient(180deg,#f8fbff 0%,#e9f1fa 52%,#dbe6f2 100%);
+  transition:background .35s ease,color .35s ease;
+  touch-action:none;
+}
+body.dark-mode{color:#eef4ff;background:linear-gradient(180deg,#1a2740 0%,#101a2c 50%,#060a12 100%)}
+#canvas-container{position:absolute;inset:0;z-index:1;touch-action:none}
+#canvas-container canvas{display:block}
+
+/* ---------- 유리 카드 ---------- */
+.glass-panel{
+  background:rgba(255,255,255,.80);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(255,255,255,.62);
+  border-radius:18px;
+  box-shadow:0 10px 28px rgba(15,23,42,.10);
+  transition:background .35s ease,border-color .35s ease,color .35s ease;
+}
+body.dark-mode .glass-panel{background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+
+/* ---------- 좌상단 : 메인 / 제목 ---------- */
+.top-left-bar{position:fixed;top:16px;left:18px;display:flex;align-items:center;gap:10px;z-index:40;max-width:calc(100vw - 112px)}
+.back-btn{
+  display:flex;align-items:center;gap:6px;padding:9px 16px;font-size:14px;font-weight:700;font-family:inherit;
+  color:#16202e;text-decoration:none;border:none;border-radius:999px;cursor:pointer;white-space:nowrap;
+  background:rgba(255,255,255,.80);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.62);box-shadow:0 10px 28px rgba(15,23,42,.10);transition:transform .18s,background .35s;
+}
+body.dark-mode .back-btn{color:#eef4ff;background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13)}
+.back-btn:active{transform:scale(.97)}
+.tag-badge{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:14px;font-weight:700;border-radius:999px;min-width:0;overflow:hidden}
+.tag-badge .title-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vision-badge{flex:0 0 auto;background:linear-gradient(135deg,#0a84ff,#5e5ce6);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.2px}
+
+/* ---------- 우상단 : 유틸 + 데이터 ---------- */
+.icon-btn{
+  width:38px;height:38px;min-width:38px;border-radius:50%;border:1px solid rgba(255,255,255,.62);
+  display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+  color:#16202e;background:rgba(255,255,255,.80);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 8px 22px rgba(15,23,42,.10);transition:background .35s,border-color .35s;
+}
+body.dark-mode .icon-btn{color:#eef4ff;background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13)}
+.data-card{display:flex;align-items:center;gap:14px;padding:9px 16px;border-radius:16px}
+.data-item{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.data-label{font-size:10.5px;font-weight:700;color:#64748b;white-space:nowrap;line-height:1.2}
+body.dark-mode .data-label{color:#9db0cb}
+.data-value{font-size:14px;font-weight:800;color:#16202e;white-space:nowrap;line-height:1.25}
+body.dark-mode .data-value{color:#eef4ff}
+
+/* ---------- 중앙 안내 ---------- */
+.center-tooltip{
+  position:fixed;top:78px;left:50%;transform:translateX(-50%);padding:8px 18px;border-radius:999px;
+  font-size:12.5px;font-weight:700;color:#475569;pointer-events:none;z-index:15;white-space:nowrap;
+  max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;
+  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+body.dark-mode .center-tooltip{color:#cbd5e1;background:rgba(18,28,46,.78);border-color:rgba(255,255,255,.12)}
+
+/* ---------- 우측 조절 패널 ---------- */
+body #side-ctrl.side-ctrl-panel{width:250px !important;padding:12px !important;gap:9px !important}
+.panel-header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-bottom:6px;border-bottom:1px solid rgba(15,23,42,.08);width:100%}
+body.dark-mode .panel-header{border-bottom-color:rgba(255,255,255,.12)}
+.ctrl-block{display:flex;flex-direction:column;gap:7px;width:100%}
+.ctrl-row{display:flex;flex-direction:column;gap:3px;width:100%}
+.ctrl-row-header{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.ctrl-label{font-size:11.5px;font-weight:700;color:#475569;white-space:nowrap;line-height:1.25}
+body.dark-mode .ctrl-label{color:#cbd5e1}
+.ctrl-val{font-size:12px;font-weight:800;color:#0a84ff;white-space:nowrap;line-height:1.25}
+.ctrl-slider{
+  width:100%;height:6px;border-radius:999px;background:#dbe4ef;outline:none;
+  -webkit-appearance:none;appearance:none;cursor:pointer;margin:4px 0;
+}
+body.dark-mode .ctrl-slider{background:#334155}
+.ctrl-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#0a84ff;box-shadow:0 2px 6px rgba(10,132,255,.45);cursor:pointer}
+.ctrl-slider::-moz-range-thumb{width:15px;height:15px;border:none;border-radius:50%;background:#0a84ff}
+.panel-note{font-size:10.5px;font-weight:700;color:#64748b;line-height:1.45;letter-spacing:-.1px;word-break:keep-all}
+body.dark-mode .panel-note{color:#9db0cb}
+.seg-toggle{display:flex;gap:3px;background:rgba(15,23,42,.06);padding:3px;border-radius:11px;width:100%}
+body.dark-mode .seg-toggle{background:rgba(0,0,0,.3)}
+.seg-btn{
+  flex:1 1 0;min-width:0;padding:7px 2px;border:none;border-radius:8px;background:transparent;
+  color:#64748b;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;transition:all .18s;
+}
+body.dark-mode .seg-btn{color:#94a3b8}
+.seg-btn.active{background:#0a84ff;color:#fff;box-shadow:0 2px 8px rgba(10,132,255,.35)}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+.mode-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:44px;padding:6px 3px;
+  border-radius:12px;border:1px solid rgba(15,23,42,.09);background:rgba(255,255,255,.9);color:#334155;
+  font-family:inherit;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer;transition:all .18s;
+}
+body.dark-mode .mode-btn{background:rgba(30,42,62,.9);border-color:rgba(255,255,255,.12);color:#cbd5e1}
+.mode-btn .mb-icon{font-size:14px;line-height:1}
+.mode-btn.active{background:#0a84ff;border-color:#0a84ff;color:#fff;box-shadow:0 4px 12px rgba(10,132,255,.35)}
+
+/* ---------- 좌측 보조 패널 (그래프 · 정보) ---------- */
+.side-left-panel{position:fixed;left:18px;bottom:76px;width:252px;padding:12px;z-index:20;border-radius:18px}
+.side-left-panel .panel-title{font-size:12px;font-weight:800;color:#334155;margin:0 0 6px;letter-spacing:-.2px}
+body.dark-mode .side-left-panel .panel-title{color:#cbd5e1}
+.side-left-panel canvas{display:block;width:100%;height:auto;border-radius:10px}
+
+/* ---------- 하단 ---------- */
+.bottom-right-bar{position:fixed;right:18px;bottom:18px;display:flex;align-items:center;gap:10px;z-index:40}
+
+/* ---------- 모바일 세로 ---------- */
+@media (max-width:900px){
+  .top-left-bar{top:max(8px,env(safe-area-inset-top));left:8px;gap:6px;max-width:calc(100vw - 66px)}
+  .back-btn{padding:7px 11px;font-size:12px}
+  .tag-badge{padding:7px 11px;font-size:12px}
+  .vision-badge{display:none}
+  .icon-btn{width:32px;height:32px;min-width:32px;font-size:14px}
+  .data-card{gap:9px;padding:6px 10px;border-radius:14px}
+  .data-label{font-size:9px}
+  .data-value{font-size:12px}
+  .center-tooltip{display:none}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(64px + env(safe-area-inset-bottom)) !important;
+    max-height:min(56vh,420px) !important;padding:9px !important;gap:6px !important;
+  }
+  .ctrl-label{font-size:10.5px}
+  .ctrl-val{font-size:11px}
+  .panel-note{font-size:9.5px}
+  .mode-btn{min-height:40px;font-size:10px}
+  .seg-btn{font-size:10.5px;padding:6px 2px}
+  .bottom-right-bar{right:8px;bottom:calc(8px + env(safe-area-inset-bottom))}
+  #fullscreenText{display:none}
+  .side-left-panel{left:8px;right:auto;top:calc(env(safe-area-inset-top) + 112px);bottom:auto;width:212px;padding:8px;max-height:none;overflow:hidden}
+  .side-left-panel .panel-title{font-size:10.5px;margin-bottom:4px}
+  .side-left-panel canvas{max-height:106px}
+}
+
+/* ---------- 모바일 가로 ---------- */
+@media (max-height:520px) and (orientation:landscape){
+  .top-left-bar{top:max(6px,env(safe-area-inset-top));left:6px;gap:5px;max-width:46vw}
+  .back-btn{padding:5px 9px;font-size:11px}
+  .tag-badge{padding:5px 9px;font-size:11px}
+  .vision-badge{display:none}
+  .icon-btn{width:28px;height:28px;min-width:28px;font-size:13px}
+  .data-card{gap:8px;padding:4px 9px;border-radius:12px}
+  .data-label{font-size:8.5px}
+  .data-value{font-size:11px}
+  .center-tooltip{display:none}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(46px + env(safe-area-inset-bottom)) !important;
+    max-height:calc(100vh - 108px) !important;padding:8px !important;gap:5px !important;
+  }
+  .ctrl-label{font-size:10px}
+  .ctrl-val{font-size:10.5px}
+  .panel-note{display:none}
+  .mode-btn{min-height:34px;font-size:9.5px}
+  .mode-btn .mb-icon{font-size:12px}
+  .seg-btn{font-size:10px;padding:5px 2px}
+  .side-left-panel{left:6px;bottom:calc(46px + env(safe-area-inset-bottom));width:176px;padding:6px}
+  .side-left-panel .panel-title{font-size:9.5px;margin-bottom:3px}
+  .bottom-right-bar{right:8px;bottom:calc(6px + env(safe-area-inset-bottom))}
+}
+
+/* ===== page ===== */
+.cur-table{display:flex;flex-direction:column;gap:4px;width:100%}
+.cur-row{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;color:#334155}
+body.dark-mode .cur-row{color:#cbd5e1}
+.cur-row i{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.cur-row .cn{flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cur-row .cv{flex:0 0 auto;white-space:nowrap;color:#0a84ff;font-weight:800}
+.fish-note{font-size:10px;font-weight:700;color:#64748b;line-height:1.4;margin-top:2px;word-break:keep-all}
+body.dark-mode .fish-note{color:#9db0cb}
+.chip-row{display:grid;grid-template-columns:1fr 1fr;gap:5px;width:100%}
+.chip{
+  padding:6px 4px;border-radius:10px;border:1px solid rgba(15,23,42,.09);background:rgba(255,255,255,.9);
+  color:#334155;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap;transition:all .18s;
+}
+body.dark-mode .chip{background:rgba(30,42,62,.9);border-color:rgba(255,255,255,.12);color:#cbd5e1}
+.chip.off{opacity:.42}
+
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+  <a href="../../index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+  <div class="glass-panel tag-badge">
+    <span class="title-text">해수의 순환과 표층 해류 3D</span>
+    <span class="vision-badge">visionOS</span>
+  </div>
+</div>
+
+<div class="top-right-bar">
+  <div class="tr-util">
+    <button class="icon-btn" id="theme-toggle" type="button" title="주간/야간 모드" aria-label="주간/야간 모드 전환">🌙</button>
+  </div>
+  <div class="glass-panel data-card">
+    <div class="data-item"><span class="data-label">우세 난류</span><span class="data-value" id="val-main" style="color:#ef4444">—</span></div>
+    <div class="data-item"><span class="data-label">조경 수역</span><span class="data-value" id="val-meet" style="color:#7c3aed">—</span></div>
+    <div class="data-item"><span class="data-label">표층 수온</span><span class="data-value" id="val-t" style="color:#f97316">—</span></div>
+    <div class="data-item"><span class="data-label">염분</span><span class="data-value" id="val-s" style="color:#0ea5e9">—</span></div>
+  </div>
+</div>
+
+<div class="glass-panel center-tooltip" id="guide-tooltip">💡 난류와 한류가 만나는 조경 수역은 좋은 어장이 됩니다</div>
+
+<div class="glass-panel bottom-control-bar">
+  <button class="control-tab-btn" id="btn-reset" type="button"><span>🔄</span><span>초기화</span></button>
+  <button class="control-tab-btn" id="btn-cam" type="button"><span>🎥</span><span>시점정렬</span></button>
+</div>
+
+<div class="glass-panel side-left-panel" id="info-panel">
+  <div class="panel-title">🌊 해류 정보</div>
+  <div class="cur-table" id="cur-table"></div>
+  <div class="fish-note" id="fish-note">난류 어장: 오징어·멸치·고등어 / 한류 어장: 명태·대구</div>
+</div>
+
+<div class="glass-panel side-ctrl-panel" id="side-ctrl">
+  <div class="panel-header"><span class="panel-title">🌡️ 계절과 해류</span></div>
+  <div class="ctrl-block">
+    <div class="seg-toggle" id="season">
+      <button class="seg-btn active" type="button" data-season="summer">☀️ 여름</button>
+      <button class="seg-btn" type="button" data-season="winter">❄️ 겨울</button>
+    </div>
+    <div class="chip-row" id="chips">
+      <button class="chip" type="button" data-cur="kuro">🔴 쿠로시오</button>
+      <button class="chip" type="button" data-cur="yellow">🟠 황해난류</button>
+      <button class="chip" type="button" data-cur="east">🔶 동한난류</button>
+      <button class="chip" type="button" data-cur="north">🔵 북한한류</button>
+    </div>
+    <div class="panel-note" id="note">여름: 난류의 세력이 강해져 동한난류가 북쪽까지 올라가고 조경 수역도 북쪽으로 이동합니다.</div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   해수의 순환과 표층 해류 3D  —  lab script
+   ===================================================================== */
+(function () {
+'use strict';
+
+var $ = function (s) { return document.querySelector(s); };
+
+/* ---------------- 지도 투영 ---------------- */
+var K = 0.62, LS = 1.0;
+function lx(lon) { return (lon - 127.6) * K * LS; }
+function lz(lat) { return (37.6 - lat) * K * LS; }
+
+var KOREA = [
+    [124.35, 40.00], [124.95, 40.16], [125.55, 40.32], [126.15, 40.62], [126.65, 41.02],
+    [127.30, 41.32], [128.05, 41.92], [128.62, 42.02], [129.30, 42.32], [130.00, 42.42],
+    [130.65, 42.28], [130.20, 41.50], [129.95, 41.00], [129.75, 40.50], [129.50, 39.90],
+    [129.30, 39.30], [129.00, 38.70], [128.92, 38.20], [129.10, 37.60], [129.35, 37.10],
+    [129.45, 36.60], [129.50, 36.00], [129.40, 35.50], [129.25, 35.20], [129.08, 35.05],
+    [128.70, 34.85], [128.30, 34.80], [127.90, 34.75], [127.50, 34.60], [127.00, 34.50],
+    [126.60, 34.35], [126.28, 34.60], [126.40, 35.00], [126.50, 35.40], [126.60, 35.90],
+    [126.40, 36.40], [126.60, 36.80], [126.50, 37.20], [126.30, 37.60], [126.00, 37.80],
+    [125.60, 37.85], [125.40, 38.20], [125.20, 38.60], [124.90, 38.90], [124.60, 39.30],
+    [124.40, 39.70]
+];
+
+/* ---------------- 해류 정의 ---------------- */
+var CURRENTS = [
+    {
+        id: 'kuro', name: '쿠로시오', warm: true, color: 0xff5a3c, pts: [
+            [124.2, 24.2], [127.0, 26.4], [130.0, 28.4], [133.0, 30.4],
+            [136.0, 32.4], [139.5, 34.4], [142.5, 36.2]
+        ], T: [24, 28], S: 34.5, reach: [0.92, 1.0]
+    },
+    {
+        id: 'yellow', name: '황해난류', warm: true, color: 0xff9f43, pts: [
+            [124.3, 30.6], [124.6, 32.6], [125.0, 34.6], [125.6, 36.4], [126.3, 37.9]
+        ], T: [10, 14], S: 33.5, reach: [0.7, 1.0]
+    },
+    {
+        id: 'east', name: '동한난류', warm: true, color: 0xffc44d, pts: [
+            [128.3, 30.2], [129.2, 32.8], [129.8, 34.8], [130.3, 36.8], [130.6, 38.8], [130.9, 40.8]
+        ], T: [14, 20], S: 34.2, reach: [0.82, 1.0]
+    },
+    {
+        id: 'north', name: '북한한류', warm: false, color: 0x2b7fff, pts: [
+            [137.5, 46.0], [135.0, 44.2], [132.8, 42.2], [131.6, 40.4], [130.9, 38.6], [130.4, 36.8]
+        ], T: [4, 10], S: 33.8, reach: [1.0, 0.72]
+    }
+];
+
+var state = { season: 'summer', on: { kuro: true, yellow: true, east: true, north: true } };
+
+/* ---------------- 렌더러 · 씬 ---------------- */
+var container = $('#canvas-container');
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(45, 1, 0.5, 500);
+var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+
+var controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 6;
+controls.maxDistance = 70;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.target.set(3.1, 0.4, 1.2);
+
+/* ---------------- 조명 ---------------- */
+var hemi = new THREE.HemisphereLight(0xffffff, 0xd3e3f2, 0.8);
+scene.add(hemi);
+var key = new THREE.DirectionalLight(0xffffff, 0.8);
+key.position.set(10, 20, 14);
+key.castShadow = true;
+key.shadow.mapSize.width = 1024;
+key.shadow.mapSize.height = 1024;
+key.shadow.camera.left = -14;
+key.shadow.camera.right = 14;
+key.shadow.camera.top = 14;
+key.shadow.camera.bottom = -14;
+key.shadow.camera.near = 1;
+key.shadow.camera.far = 60;
+scene.add(key);
+var fill = new THREE.DirectionalLight(0xc7ddff, 0.26);
+fill.position.set(-12, 10, -10);
+scene.add(fill);
+
+/* ---------------- 바다 ---------------- */
+var oceanMat = new THREE.MeshStandardMaterial({ color: 0x6cb1dc, roughness: 0.55, metalness: 0.08 });
+var ocean = new THREE.Mesh(new THREE.PlaneGeometry(60, 50), oceanMat);
+ocean.rotation.x = -Math.PI / 2;
+ocean.position.set(3, -0.06, 1);
+ocean.receiveShadow = true;
+scene.add(ocean);
+
+(function graticule() {
+    var pts = [], lon, lat;
+    for (lon = 120; lon <= 146; lon += 4) {
+        pts.push(new THREE.Vector3(lx(lon), 0.02, lz(24)), new THREE.Vector3(lx(lon), 0.02, lz(48)));
+    }
+    for (lat = 24; lat <= 48; lat += 4) {
+        pts.push(new THREE.Vector3(lx(120), 0.02, lz(lat)), new THREE.Vector3(lx(146), 0.02, lz(lat)));
+    }
+    var g = new THREE.BufferGeometry().setFromPoints(pts);
+    scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.3
+    })));
+})();
+
+/* ---------------- 한반도 ---------------- */
+var landMat = new THREE.MeshStandardMaterial({ color: 0x5faa48, roughness: 0.9 });
+(function korea() {
+    var sh = new THREE.Shape();
+    for (var i = 0; i < KOREA.length; i++) {
+        var x = lx(KOREA[i][0]), y = -lz(KOREA[i][1]);
+        if (i === 0) sh.moveTo(x, y); else sh.lineTo(x, y);
+    }
+    sh.closePath();
+    var geo = new THREE.ExtrudeGeometry(sh, {
+        depth: 0.42, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.09, bevelSegments: 2, curveSegments: 2
+    });
+    var mesh = new THREE.Mesh(geo, landMat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.04;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+
+    var jz = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.3, 20), landMat);
+    jz.position.set(lx(126.55), 0.15, lz(33.4));
+    jz.scale.set(1.5, 1, 0.85);
+    scene.add(jz);
+
+    [[130.9, 37.5, 0.13], [131.86, 37.24, 0.08]].forEach(function (v) {
+        var m = new THREE.Mesh(new THREE.SphereGeometry(v[2], 10, 8), landMat);
+        m.position.set(lx(v[0]), 0.16, lz(v[1]));
+        scene.add(m);
+    });
+})();
+
+/* ---------------- 라벨 유틸 ---------------- */
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+}
+
+function makeLabel(text, opts) {
+    opts = opts || {};
+    var fs = opts.fontSize || 42;
+    var color = opts.color || '#16202e';
+    var bg = opts.bg || 'rgba(255,255,255,0.92)';
+    var border = opts.border || 'rgba(15,23,42,0.12)';
+    var padX = 24, padY = 14;
+    var font = '700 ' + fs + 'px "SeoulNamsan", -apple-system, "Malgun Gothic", sans-serif';
+
+    var cv = document.createElement('canvas');
+    var ctx = cv.getContext('2d');
+    ctx.font = font;
+    var tw = ctx.measureText(text).width;
+    cv.width = Math.ceil(tw + padX * 2);
+    cv.height = Math.ceil(fs + padY * 2);
+
+    var tex = new THREE.CanvasTexture(cv);
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+
+    function draw() {
+        var c2 = cv.getContext('2d');
+        c2.clearRect(0, 0, cv.width, cv.height);
+        roundRect(c2, 2, 2, cv.width - 4, cv.height - 4, Math.min(cv.height / 2, 20));
+        c2.fillStyle = bg;
+        c2.fill();
+        c2.lineWidth = 3;
+        c2.strokeStyle = border;
+        c2.stroke();
+        c2.font = font;
+        c2.fillStyle = color;
+        c2.textAlign = 'center';
+        c2.textBaseline = 'middle';
+        c2.fillText(text, cv.width / 2, cv.height / 2 + 1);
+        tex.needsUpdate = true;
+    }
+    draw();
+
+    var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: tex, transparent: true, depthTest: false, depthWrite: false
+    }));
+    var hW = opts.h || 0.5;
+    sprite.scale.set(hW * cv.width / cv.height, hW, 1);
+    sprite.renderOrder = 900;
+
+    if (document.fonts && document.fonts.load) {
+        document.fonts.load('700 ' + fs + 'px "SeoulNamsan"').then(function () {
+            var c3 = cv.getContext('2d');
+            c3.font = font;
+            var tw2 = c3.measureText(text).width;
+            if (Math.abs(tw2 - tw) > 1) {
+                cv.width = Math.ceil(tw2 + padX * 2);
+                sprite.scale.set(hW * cv.width / cv.height, hW, 1);
+            }
+            draw();
+        }, function () {});
+    }
+    return sprite;
+}
+
+[['황해', 124.2, 35.4], ['동해', 133.2, 38.6], ['남해', 127.6, 33.0], ['동중국해', 124.6, 28.6], ['태평양', 141.0, 31.5]]
+    .forEach(function (v) {
+        var s = makeLabel(v[0], { color: '#155e85', bg: 'rgba(255,255,255,0.72)', h: 0.52 });
+        s.position.set(lx(v[1]), 0.2, lz(v[2]));
+        scene.add(s);
+    });
+
+/* ---------------- 해류 흐름 ---------------- */
+var curObjs = {};
+var dotTex = (function () {
+    var c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    var ctx = c.getContext('2d');
+    var g = ctx.createRadialGradient(32, 32, 1, 32, 32, 31);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.45, 'rgba(255,255,255,0.9)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+})();
+
+var NPP = 46;
+
+CURRENTS.forEach(function (c, idx) {
+    var pts = c.pts.map(function (p) { return new THREE.Vector3(lx(p[0]), 0.16, lz(p[1])); });
+    var curve = new THREE.CatmullRomCurve3(pts);
+
+    /* 흐름 띠 (얇은 튜브) */
+    var tubeMat = new THREE.MeshStandardMaterial({
+        color: c.color, transparent: true, opacity: 0.28, roughness: 0.5,
+        emissive: c.color, emissiveIntensity: 0.25
+    });
+    var tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.13, 8, false), tubeMat);
+    tube.renderOrder = 3;
+    scene.add(tube);
+
+    /* 입자 */
+    var arr = new Float32Array(NPP * 3);
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+    var mat = new THREE.PointsMaterial({
+        color: c.color, size: 0.5, map: dotTex, transparent: true, opacity: 0.98,
+        depthWrite: false, sizeAttenuation: true
+    });
+    var pts3d = new THREE.Points(geo, mat);
+    scene.add(pts3d);
+
+    /* 방향 화살표 */
+    var arrows = [];
+    for (var a = 0; a < 3; a++) {
+        var cone = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.42, 10),
+            new THREE.MeshBasicMaterial({ color: c.color }));
+        scene.add(cone);
+        arrows.push(cone);
+    }
+
+    var lbl = makeLabel(c.name, {
+        color: c.warm ? '#9a3412' : '#1e3a8a',
+        bg: c.warm ? 'rgba(255,236,224,0.92)' : 'rgba(226,238,255,0.92)',
+        h: 0.5
+    });
+    lbl.position.set(pts[Math.floor(pts.length / 2)].x, 1.1, pts[Math.floor(pts.length / 2)].z);
+    scene.add(lbl);
+
+    curObjs[c.id] = {
+        curve: curve, tube: tube, tubeMat: tubeMat, points: pts3d, geo: geo,
+        phase: Math.random(), arrows: arrows, label: lbl, speed: 0
+    };
+});
+
+/* ---------------- 조경 수역 ---------------- */
+var meetGroup = new THREE.Group();
+scene.add(meetGroup);
+(function meet() {
+    var warmHalf = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.09, 8, 32, Math.PI),
+        new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.5, emissive: 0x7f1d1d, emissiveIntensity: 0.3 }));
+    warmHalf.rotation.x = -Math.PI / 2;
+    var coldHalf = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.09, 8, 32, Math.PI),
+        new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.5, emissive: 0x1e3a8a, emissiveIntensity: 0.3 }));
+    coldHalf.rotation.x = -Math.PI / 2;
+    coldHalf.rotation.z = Math.PI;
+    meetGroup.add(warmHalf, coldHalf);
+})();
+var meetLbl = makeLabel('조경 수역', { color: '#4c1d95', bg: 'rgba(245,235,255,0.94)', h: 0.5 });
+meetGroup.add(meetLbl);
+
+/* ---------------- 계산 ---------------- */
+function strength(id) {
+    var s = state.season === 'summer';
+    var c = null;
+    for (var i = 0; i < CURRENTS.length; i++) if (CURRENTS[i].id === id) c = CURRENTS[i];
+    if (!c) return 1;
+    var base = s ? { kuro: 1.0, yellow: 0.85, east: 0.95, north: 0.55 }[id]
+                 : { kuro: 0.8, yellow: 0.5, east: 0.7, north: 1.0 }[id];
+    return base;
+}
+
+function meetPos() {
+    var f = state.season === 'summer' ? 1 : 0;
+    var lon = 130.2 + 0.75 * f;         // 여름엔 북쪽(위도↑)
+    var lat = 37.4 + 2.7 * f;
+    return { lon: lon, lat: lat };
+}
+
+function tempOf(c) {
+    var f = state.season === 'summer' ? 1 : 0;
+    return c.T[0] + (c.T[1] - c.T[0]) * f;
+}
+
+/* ---------------- 상태 반영 ---------------- */
+function applyState() {
+    var summer = state.season === 'summer';
+
+    CURRENTS.forEach(function (c) {
+        var o = curObjs[c.id];
+        var st = strength(c.id);
+        var on = state.on[c.id];
+        o.tube.visible = on;
+        o.points.visible = on;
+        o.label.visible = on;
+        o.arrows.forEach(function (a) { a.visible = on; });
+        o.tubeMat.opacity = 0.3 + st * 0.38;
+        o.speed = st;
+        o.reach = c.reach[summer ? 1 : 0];
+    });
+
+    /* 조경 수역 */
+    var mp = meetPos();
+    meetGroup.position.set(lx(mp.lon), 0.35, lz(mp.lat));
+    meetLbl.position.set(0.9, 1.35, 0);
+    meetGroup.visible = state.on.east && state.on.north;
+
+    /* 정보 표 */
+    var html = '';
+    CURRENTS.forEach(function (c) {
+        html += '<div class="cur-row"><i style="background:#' + c.color.toString(16).padStart(6, '0') + '"></i>' +
+            '<span class="cn">' + c.name + '</span>' +
+            '<span class="cv">' + tempOf(c).toFixed(0) + '℃ · ' + c.S.toFixed(1) + '‰</span></div>';
+    });
+    $('#cur-table').innerHTML = html;
+
+    /* HUD */
+    var main = summer ? '동한난류' : '북한한류';
+    $('#val-main').textContent = main;
+    $('#val-meet').textContent = mp.lat.toFixed(1) + '°N';
+    var warmTemp = summer ? '24~28℃' : '18~24℃';
+    $('#val-t').textContent = warmTemp;
+    $('#val-s').textContent = summer ? '34.5‰' : '34.1‰';
+
+    var note;
+    if (summer) {
+        note = '여름: 난류의 세력이 강해져 동한난류가 북쪽까지 올라가고, 조경 수역도 북쪽(약 ' +
+            mp.lat.toFixed(0) + '°N)으로 이동합니다.';
+    } else {
+        note = '겨울: 북한한류가 세력을 넓혀 남하하고 난류는 약해져, 조경 수역이 남쪽(약 ' +
+            mp.lat.toFixed(0) + '°N)으로 내려옵니다.';
+    }
+    $('#note').textContent = note;
+}
+
+/* ---------------- 애니메이션 ---------------- */
+var tmp = new THREE.Vector3();
+var clock = new THREE.Clock();
+
+function animate() {
+    requestAnimationFrame(animate);
+    var dt = Math.min(clock.getDelta(), 0.05);
+
+    CURRENTS.forEach(function (c, ci) {
+        var o = curObjs[c.id];
+        if (!o.points.visible) return;
+        o.phase += dt * (0.035 + 0.055 * o.speed);
+        if (o.phase > 1) o.phase -= 1;
+        var arr = o.geo.attributes.position.array;
+        var reach = o.reach || 1;
+        for (var i = 0; i < NPP; i++) {
+            var u = (o.phase + i / NPP) % 1;
+            u = u * reach;
+            o.curve.getPointAt(u, tmp);
+            arr[i * 3] = tmp.x + Math.sin(i * 2.3 + ci) * 0.05;
+            arr[i * 3 + 1] = 0.18 + Math.sin(i * 1.7 + o.phase * 6.28) * 0.03;
+            arr[i * 3 + 2] = tmp.z + Math.cos(i * 1.9 + ci) * 0.05;
+        }
+        o.geo.attributes.position.needsUpdate = true;
+
+        /* 화살표 */
+        for (var k = 0; k < o.arrows.length; k++) {
+            var uu = (0.18 + k * 0.26) * reach;
+            if (uu > 0.99) uu = 0.99;
+            var p = o.curve.getPointAt(uu, new THREE.Vector3());
+            var p2 = o.curve.getPointAt(Math.min(0.999, uu + 0.01), new THREE.Vector3());
+            o.arrows[k].position.set(p.x, 0.3, p.z);
+            var dir = p2.clone().sub(p);
+            if (dir.lengthSq() > 1e-6) {
+                o.arrows[k].quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+            }
+        }
+    });
+
+    /* 조경 수역 맥동 */
+    var s = 1 + Math.sin(clock.elapsedTime * 2.2) * 0.06;
+    meetGroup.scale.set(s, 1, s);
+
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+/* ---------------- UI ---------------- */
+document.querySelectorAll('#season .seg-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+        state.season = b.getAttribute('data-season');
+        document.querySelectorAll('#season .seg-btn').forEach(function (x) {
+            x.classList.toggle('active', x === b);
+        });
+        applyState();
+    });
+});
+
+document.querySelectorAll('#chips .chip').forEach(function (b) {
+    b.addEventListener('click', function () {
+        var id = b.getAttribute('data-cur');
+        state.on[id] = !state.on[id];
+        b.classList.toggle('off', !state.on[id]);
+        applyState();
+    });
+});
+
+$('#btn-reset').addEventListener('click', function () {
+    state.season = 'summer';
+    state.on = { kuro: true, yellow: true, east: true, north: true };
+    document.querySelectorAll('#season .seg-btn').forEach(function (x) {
+        x.classList.toggle('active', x.getAttribute('data-season') === 'summer');
+    });
+    document.querySelectorAll('#chips .chip').forEach(function (x) { x.classList.remove('off'); });
+    alignCamera(true);
+    applyState();
+});
+$('#btn-cam').addEventListener('click', function () { alignCamera(false); });
+
+var isDark = false;
+$('#theme-toggle').addEventListener('click', function (e) {
+    isDark = !isDark;
+    document.body.classList.toggle('dark-mode', isDark);
+    e.currentTarget.textContent = isDark ? '☀️' : '🌙';
+    oceanMat.color.setHex(isDark ? 0x143350 : 0x6cb1dc);
+    landMat.color.setHex(isDark ? 0x2f5a34 : 0x5faa48);
+    hemi.intensity = isDark ? 0.6 : 1.0;
+    key.intensity = isDark ? 0.55 : 0.8;
+});
+
+/* ---------------- 카메라 ---------------- */
+var FIT_W = 7.4, FIT_H = 5.6;
+function fitDistance() {
+    var vfov = camera.fov * Math.PI / 180;
+    var dH = FIT_H / Math.tan(vfov / 2);
+    var fw = camera.aspect < 0.85 ? FIT_W * 0.76 : FIT_W;
+    var dW = fw / (Math.tan(vfov / 2) * Math.max(camera.aspect, 0.25));
+    return Math.max(dH, dW);
+}
+function alignCamera(resetTarget) {
+    if (resetTarget) controls.target.set(3.1, 0.4, 1.2);
+    var dir = new THREE.Vector3(0.02, 0.9, 1).normalize();
+    camera.position.copy(controls.target).addScaledVector(dir, fitDistance());
+    controls.update();
+}
+
+var userZoomed = false;
+controls.addEventListener('start', function () { userZoomed = true; });
+
+function applyLabelScale() {
+    var f = camera.aspect < 0.85 ? 1.65 : 1.0;
+    scene.traverse(function (o) {
+        if (o.isSprite) {
+            if (!o.userData.bs) o.userData.bs = o.scale.clone();
+            o.scale.set(o.userData.bs.x * f, o.userData.bs.y * f, 1);
+        }
+    });
+}
+
+function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    applyLabelScale();
+    if (!userZoomed) alignCamera(false);
+}
+window.addEventListener('resize', resize);
+window.__LAB_CAM__ = camera;
+
+resize();
+alignCamera(false);
+applyState();
+animate();
+
+})();
+
+</script>
+
+<!-- Fullscreen / Windowed Mode Button -->
+<div class="bottom-right-bar">
+  <button id="fullscreenBtn" class="glass-panel back-btn" type="button" aria-label="전체화면으로 전환">
+    <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+  </button>
+</div>
+
+<script>
+/* ============ 전체화면 / 창모드 (표준 + 모바일 몰입 모드 폴백) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            try {
+                if (!wasReal) {
+                    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen ||
+                              docEl.webkitRequestFullScreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                    if (req) req.call(docEl);
+                } else {
+                    var exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                               document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                    if (exit) exit.call(document);
+                }
+            } catch (e) {}
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+                if (!realFs()) {
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 420);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, function () { setUI(); refit(); });
+    });
+
+    /* 좁은 화면에서는 3D 장면이 잘리지 않도록 시야각을 넓힌다 */
+    function theCam() {
+        try { if (window.__LAB_CAM__ && window.__LAB_CAM__.isPerspectiveCamera) return window.__LAB_CAM__; } catch (e) {}
+        return null;
+    }
+    function mobileFit() {
+        var cam = theCam();
+        if (!cam) return;
+        try {
+            if (!cam.userData) cam.userData = {};
+            if (!cam.userData.baseFov) cam.userData.baseFov = cam.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = docEl.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 520) f = 1 + k * 0.18;
+            cam.fov = Math.min(88, cam.userData.baseFov * f);
+            cam.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+    setUI();
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+</body>
+</html>

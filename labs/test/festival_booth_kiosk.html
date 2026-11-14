@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>과학 축제 부스 키오스크</title>
+<meta name="description" content="과학 축제 부스용 대형 터치 게임입니다. 빛의 삼원색을 섞어 목표 색을 맞히는 게임과 원소 불꽃 반응 색을 빠르게 맞히는 게임, 최고 점수 랭킹을 제공합니다.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<style>
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background: #080c1a; color: #f2f5fb;
+    -webkit-user-select: none; user-select: none;
+    transition: background .3s ease, color .3s ease;
+}
+body:not(.dark-mode) { background: #eef3fb; color: #101a2c; }
+
+body.dark-mode {
+    --ink: #f2f5fb; --sub: #94a6c2; --line: rgba(140,170,230,.16);
+    --glass: rgba(18,26,44,.72); --glass-2: rgba(26,36,58,.9); --chip: rgba(120,160,240,.14);
+    --accent: #4da3ff; --accent-2: #b487ff; --ok: #38d9a0; --warn: #ffc65c; --danger: #ff6f8b;
+    --shadow: 0 18px 50px rgba(0,0,0,.42);
+    background:
+        radial-gradient(900px 620px at 8% -8%, rgba(60,120,255,.26), transparent 62%),
+        radial-gradient(800px 560px at 96% 4%, rgba(170,90,255,.22), transparent 60%),
+        radial-gradient(700px 520px at 50% 118%, rgba(0,180,190,.18), transparent 60%),
+        #080c1a;
+}
+body:not(.dark-mode) {
+    --ink: #101a2c; --sub: #5e7189; --line: rgba(20,40,70,.12);
+    --glass: rgba(255,255,255,.86); --glass-2: rgba(255,255,255,.96); --chip: rgba(50,110,210,.09);
+    --accent: #2563eb; --accent-2: #7c3aed; --ok: #0f9d6b; --warn: #b45309; --danger: #d92c46;
+    --shadow: 0 14px 40px rgba(20,40,80,.12);
+    background:
+        radial-gradient(900px 560px at 8% -8%, rgba(90,150,250,.22), transparent 60%),
+        radial-gradient(760px 520px at 96% 4%, rgba(150,110,250,.18), transparent 58%),
+        #eef3fb;
+}
+.glass { background: var(--glass); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); }
+
+/* ---------- 상단 ---------- */
+.top-left-bar { position: fixed; top: 14px; left: 18px; display: flex; align-items: center; gap: 9px; z-index: 60; max-width: calc(100vw - 130px); }
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+    text-decoration: none; color: var(--ink); font-family: inherit; font-weight: 700; font-size: 13px;
+    background: var(--glass); border: 1px solid var(--line); box-shadow: var(--shadow); cursor: pointer;
+    white-space: nowrap; transition: transform .18s ease;
+}
+.back-btn:hover { transform: translateY(-1px); }
+.page-title-badge { display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line); box-shadow: var(--shadow); font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; }
+.page-title-badge .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill-badge { background: var(--chip); color: var(--accent); font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; flex: 0 0 auto; }
+.qr-btn { padding: 8px 12px; }
+.qr-btn-icon { font-size: 13px; }
+.qr-btn-label { font-size: 12px; }
+.top-right-bar { position: fixed; top: 14px; right: 18px; display: flex; align-items: center; gap: 8px; z-index: 60; }
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.icon-btn { width: 38px; height: 38px; flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--line); background: var(--glass); color: var(--ink); font-family: inherit; font-size: 15px; cursor: pointer; box-shadow: var(--shadow); padding: 0; }
+.icon-btn:hover { transform: translateY(-1px); }
+
+/* ---------- 화면 공통 ---------- */
+.screen { position: absolute; inset: 0; display: none; padding: 66px 22px 78px; overflow-y: auto; -webkit-overflow-scrolling: touch; z-index: 2; }
+.screen.show { display: flex; flex-direction: column; align-items: center; justify-content: center; animation: pop .32s ease both; }
+@keyframes pop { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+.wrap { width: 100%; max-width: 1240px; margin: 0 auto; }
+
+/* ---------- 어트랙트 ---------- */
+.attract { text-align: center; cursor: pointer; }
+.kicker { font-size: clamp(11px, 1.4vw, 14px); letter-spacing: 4px; font-weight: 800; color: var(--accent); text-transform: uppercase; }
+.attract h1 {
+    margin: 14px 0 8px; font-size: clamp(38px, 8.4vw, 96px); font-weight: 800; letter-spacing: -3px; line-height: 1.05;
+    background: linear-gradient(100deg, #57a8ff, #b487ff 55%, #49e0c5);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.attract p { margin: 0 auto 26px; max-width: 640px; font-size: clamp(13px, 1.7vw, 18px); line-height: 1.8; color: var(--sub); }
+.touch-pulse {
+    display: inline-flex; align-items: center; gap: 12px; padding: 18px 40px; border-radius: 999px;
+    font-size: clamp(16px, 2.2vw, 22px); font-weight: 800; color: #fff;
+    background: linear-gradient(100deg, #2f7df6, #9b5cf5);
+    box-shadow: 0 16px 44px rgba(70,120,240,.42);
+    animation: breathe 2.2s ease-in-out infinite;
+}
+@keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+.attract-tools { margin-top: 26px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.mini-btn {
+    padding: 11px 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip);
+    color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+
+/* ---------- 메뉴 ---------- */
+.menu-head { text-align: center; margin-bottom: 22px; }
+.menu-head h2 { margin: 0 0 8px; font-size: clamp(24px, 4vw, 42px); font-weight: 800; letter-spacing: -1.4px; }
+.menu-head p { margin: 0; font-size: clamp(12px, 1.5vw, 15px); color: var(--sub); }
+.game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.game-card {
+    text-align: left; padding: 26px 26px 22px; border-radius: 26px; cursor: pointer;
+    background: var(--glass); border: 1.5px solid var(--line); color: var(--ink);
+    font-family: inherit; box-shadow: var(--shadow); transition: transform .2s ease, border-color .2s ease;
+    min-height: 200px; display: flex; flex-direction: column;
+}
+.game-card:hover, .game-card:active { transform: translateY(-4px); border-color: var(--accent); }
+.game-card .g-emoji { font-size: clamp(38px, 5vw, 56px); line-height: 1; }
+.game-card .g-title { margin-top: 12px; font-size: clamp(19px, 2.4vw, 27px); font-weight: 800; letter-spacing: -.6px; }
+.game-card .g-desc { margin-top: 8px; font-size: clamp(12px, 1.4vw, 14.5px); line-height: 1.7; color: var(--sub); }
+.game-card .g-go { margin-top: auto; padding-top: 16px; font-size: 13px; font-weight: 800; color: var(--accent); }
+.menu-foot { margin-top: 18px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* ---------- 게임 공통 HUD ---------- */
+.hud { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 20px; margin-bottom: 14px; flex-wrap: wrap; }
+.hud-item { font-size: clamp(12px, 1.4vw, 15px); font-weight: 800; color: var(--sub); }
+.hud-item b { color: var(--ink); font-size: clamp(16px, 2vw, 21px); font-variant-numeric: tabular-nums; }
+.hud-spacer { flex: 1 1 auto; }
+.timebar { width: 100%; height: 8px; border-radius: 999px; background: var(--chip); overflow: hidden; margin-top: 4px; }
+.timebar i { display: block; height: 100%; width: 100%; border-radius: 999px; background: linear-gradient(90deg, #35d0a5, #4da3ff); transition: width .25s linear; }
+.timebar.low i { background: linear-gradient(90deg, #ff8a5c, #ff4d6d); }
+
+/* ---------- RGB 게임 ---------- */
+.rgb-board { width: 100%; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.swatch-card { padding: 18px; border-radius: 24px; text-align: center; }
+.swatch-label { font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: var(--sub); }
+.swatch {
+    width: 100%; height: clamp(150px, 26vh, 250px); border-radius: 20px; margin-top: 10px;
+    border: 1px solid var(--line); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+    transition: background .12s linear;
+}
+.swatch-hex { margin-top: 8px; font-size: 12.5px; font-weight: 800; color: var(--sub); font-variant-numeric: tabular-nums; }
+
+.channels { padding: 16px 18px; border-radius: 24px; display: flex; flex-direction: column; gap: 14px; }
+.channel { display: grid; grid-template-columns: 24px 34px 1fr 34px; align-items: center; gap: 8px; }
+.channel-name { font-size: 16px; font-weight: 800; text-align: center; }
+.channel-name.r { color: #ff5a76; }
+.channel-name.g { color: #3ddc84; }
+.channel-name.b { color: #4d8dff; }
+.ch-step {
+    width: 34px; height: 60px; border-radius: 14px; border: 1px solid var(--line); background: var(--chip);
+    color: var(--ink); font-family: inherit; font-size: 22px; font-weight: 800; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.ch-step:active { transform: scale(.94); }
+.ch-bar { position: relative; height: 34px; border-radius: 10px; background: var(--chip); overflow: hidden; }
+.ch-bar i { display: block; height: 100%; width: 0; transition: width .12s linear; }
+.ch-bar span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--ink); }
+.rgb-actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; margin-top: 14px; width: 100%; }
+.huge-btn {
+    min-height: 62px; border-radius: 18px; cursor: pointer; font-family: inherit;
+    font-size: clamp(14px, 1.8vw, 18px); font-weight: 800; border: 1px solid var(--line);
+    background: var(--chip); color: var(--ink);
+}
+.huge-btn.primary { border: none; color: #fff; background: linear-gradient(100deg, #2f7df6, #9b5cf5); box-shadow: 0 12px 30px rgba(70,120,240,.34); }
+.mix-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mix-item { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px; background: var(--chip); font-size: 11.5px; font-weight: 700; color: var(--sub); }
+.mix-item i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; box-shadow: 0 0 0 1px var(--line); }
+.huge-btn:active { transform: scale(.985); }
+
+/* ---------- 불꽃 게임 ---------- */
+.flame-card { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.element-box { width: 100%; padding: 22px 26px; border-radius: 26px; text-align: center; }
+.element-symbol { font-size: clamp(46px, 9vw, 96px); font-weight: 800; line-height: 1.05; letter-spacing: -2px; }
+.element-name { font-size: clamp(15px, 2vw, 21px); font-weight: 800; color: var(--sub); margin-top: 2px; }
+.element-q { font-size: clamp(12px, 1.5vw, 15px); color: var(--sub); margin-top: 10px; }
+.color-grid { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.color-btn {
+    border-radius: 22px; border: 2px solid transparent; cursor: pointer; padding: 0;
+    min-height: clamp(96px, 17vh, 150px); display: flex; flex-direction: column; align-items: flex-end; justify-content: flex-end;
+    color: #fff; font-family: inherit; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,.45);
+    box-shadow: var(--shadow); transition: transform .14s ease, border-color .14s ease;
+    position: relative; overflow: hidden;
+}
+.color-btn .cname { background: rgba(0,0,0,.28); width: 100%; text-align: center; padding: 8px 4px; font-size: clamp(13px, 1.6vw, 17px); }
+.color-btn:active { transform: scale(.97); }
+.color-btn.right { border-color: #ffffff; box-shadow: 0 0 0 4px rgba(56,217,160,.55); }
+.color-btn.wrong { border-color: #ff6f8b; box-shadow: 0 0 0 4px rgba(255,111,139,.5); }
+.flame-feedback { min-height: 22px; font-size: clamp(12px, 1.5vw, 15px); font-weight: 800; color: var(--ok); text-align: center; }
+.flame-feedback.bad { color: var(--danger); }
+
+/* ---------- 결과 ---------- */
+.result-card { width: 100%; max-width: 780px; padding: 30px 26px; border-radius: 28px; text-align: center; }
+.result-emoji { font-size: clamp(44px, 7vw, 72px); line-height: 1; }
+.result-title { margin: 10px 0 6px; font-size: clamp(24px, 4vw, 38px); font-weight: 800; letter-spacing: -1px; }
+.result-sub { font-size: clamp(13px, 1.6vw, 16px); color: var(--sub); line-height: 1.7; }
+.result-score { margin: 20px 0 6px; font-size: clamp(52px, 11vw, 92px); font-weight: 800; color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
+.result-score small { font-size: .32em; color: var(--sub); margin-left: 6px; }
+.result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 18px 0; }
+.stat { padding: 12px; border-radius: 16px; background: var(--chip); }
+.stat .k { font-size: 11.5px; color: var(--sub); font-weight: 700; }
+.stat .v { margin-top: 4px; font-size: clamp(16px, 2vw, 20px); font-weight: 800; }
+.name-row { display: flex; gap: 8px; justify-content: center; margin: 16px 0 4px; flex-wrap: wrap; }
+.name-row input {
+    flex: 1 1 220px; max-width: 320px; min-height: 54px; padding: 0 16px; border-radius: 14px;
+    border: 1.5px solid var(--line); background: var(--glass-2); color: var(--ink);
+    font-family: inherit; font-size: 16px; font-weight: 800; outline: none; text-align: center;
+    -webkit-user-select: text; user-select: text;
+}
+.name-row input:focus { border-color: var(--accent); }
+.result-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+
+/* ---------- 랭킹 ---------- */
+.rank-card { width: 100%; max-width: 860px; padding: 24px; border-radius: 26px; }
+.rank-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.rank-title { font-size: clamp(20px, 3vw, 30px); font-weight: 800; letter-spacing: -1px; }
+.rank-list { display: flex; flex-direction: column; gap: 7px; }
+.rank-row {
+    display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+    padding: 11px 14px; border-radius: 14px; background: var(--chip);
+    font-size: clamp(13px, 1.5vw, 16px); font-weight: 800;
+}
+.rank-row .rk { color: var(--sub); font-size: 1.05em; }
+.rank-row .rname { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-row .rdate { font-weight: 700; color: var(--sub); font-size: .8em; }
+.rank-row .rscore { color: var(--accent); font-size: 1.1em; font-variant-numeric: tabular-nums; }
+.rank-row.top1 { background: linear-gradient(100deg, rgba(255,200,80,.26), rgba(255,160,60,.12)); }
+.rank-row.top2 { background: linear-gradient(100deg, rgba(200,215,235,.30), rgba(160,180,210,.12)); }
+.rank-row.top3 { background: linear-gradient(100deg, rgba(210,150,90,.26), rgba(180,120,70,.12)); }
+.rank-empty { padding: 30px 10px; text-align: center; color: var(--sub); font-size: 13.5px; line-height: 1.7; }
+.rank-foot { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+
+/* ---------- 전체화면 / 토스트 ---------- */
+.fs-pill-wrap { position: fixed; right: 18px; bottom: 16px; z-index: 70; }
+.fs-pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 999px;
+    cursor: pointer; background: var(--glass); border: 1px solid var(--line); color: var(--ink);
+    font-family: inherit; font-size: 12.5px; font-weight: 800; box-shadow: var(--shadow); white-space: nowrap;
+}
+#ux-toast {
+    position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    z-index: 300; background: rgba(16,22,36,.94); color: #fff; font-size: 12.5px;
+    padding: 10px 16px; border-radius: 14px; max-width: 88vw; text-align: center;
+    pointer-events: none; opacity: 0; transition: opacity .3s ease; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    line-height: 1.5;
+}
+#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 250; }
+
+/* ---------- 반응형 ---------- */
+@media (max-width: 900px) {
+    .top-left-bar { top: max(8px, env(safe-area-inset-top)); left: 8px; right: 54px; gap: 6px; }
+    .top-left-bar .back-btn { padding: 6px 10px; font-size: 11.5px; }
+    .page-title-badge { padding: 6px 10px; font-size: 12px; min-width: 0; }
+    .pill-badge { font-size: 9px; padding: 1px 6px; }
+    .qr-btn { display: none; }
+    .top-right-bar { top: max(8px, env(safe-area-inset-top)); right: 8px; }
+    .icon-btn { width: 34px; height: 34px; flex: 0 0 34px; font-size: 14px; }
+    .screen { padding: calc(max(8px, env(safe-area-inset-top)) + 50px) 12px 84px; }
+    .screen.show { justify-content: flex-start; }
+    .game-grid { grid-template-columns: 1fr; gap: 10px; }
+    .game-card { min-height: 0; padding: 18px; }
+    .rgb-board { grid-template-columns: 1fr; }
+    .color-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .color-btn { min-height: 88px; }
+    .swatch { height: 120px; }
+    .channel { grid-template-columns: 20px 30px 1fr 30px; gap: 6px; }
+    .ch-step { width: 30px; height: 52px; font-size: 19px; }
+    .hud { padding: 10px 12px; gap: 8px; }
+    .result-card, .rank-card { padding: 20px 16px; }
+    .rank-row { grid-template-columns: 34px minmax(0, 1fr) auto; }
+    .rank-row .rdate { display: none; }
+    .fs-pill-wrap { right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); }
+    .fs-pill { padding: 8px; width: 38px; height: 38px; justify-content: center; font-size: 14px; }
+    .fs-pill #fullscreenText { display: none; }
+}
+@media (max-width: 430px) {
+    .attract h1 { font-size: 40px; letter-spacing: -1.5px; }
+    .touch-pulse { padding: 15px 26px; }
+    .color-grid { gap: 8px; }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+    .screen { padding: 50px 12px 54px; }
+    .screen.show { justify-content: flex-start; }
+    .attract h1 { font-size: 40px; letter-spacing: -1.5px; }
+    .attract p { margin-bottom: 14px; font-size: 12.5px; }
+    .touch-pulse { padding: 12px 26px; font-size: 15px; }
+    .game-card { min-height: 0; padding: 14px; }
+    .game-card .g-emoji { font-size: 30px; }
+    .game-card .g-title { font-size: 17px; margin-top: 6px; }
+    .swatch { height: 96px; }
+    .element-symbol { font-size: 40px; }
+    .color-btn { min-height: 72px; }
+    .fs-pill-wrap { bottom: 6px; right: 6px; }
+}
+html.pseudo-fs .page-title-badge .pill-badge, html.pseudo-fs .top-right-bar { display: none !important; }
+html.pseudo-fs .fs-pill-wrap { display: flex !important; }
+</style>
+<link rel="stylesheet" href="../common/qr-modal.css">
+<link rel="stylesheet" href="../common/ui-layout.css">
+</head>
+<body class="dark-mode">
+<canvas id="confetti"></canvas>
+
+<div class="top-left-bar">
+    <a href="../../index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="page-title-badge">
+        <span class="tt">과학 축제 부스 키오스크</span>
+        <span class="pill-badge">테스트</span>
+    </div>
+    <button class="back-btn qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn" id="themeBtn" type="button" title="주간 모드 전환" aria-label="주간 모드 전환">☀️</button>
+    </div>
+</div>
+
+<!-- 1. 어트랙트 -->
+<section class="screen show" id="sAttract">
+    <div class="wrap attract" id="attractHit">
+        <div class="kicker">Science Festival</div>
+        <h1>과학 축제 부스</h1>
+        <p>빛의 삼원색을 섞어 목표 색을 만들고, 원소의 불꽃 색을 맞혀 보세요.<br>오늘의 부스 최고 점수에 도전합니다.</p>
+        <div class="touch-pulse">👆 화면을 눌러 시작</div>
+        <div class="attract-tools">
+            <button class="mini-btn" id="rankBtn1" type="button">🏆 명예의 전당</button>
+        </div>
+    </div>
+</section>
+
+<!-- 2. 메뉴 -->
+<section class="screen" id="sMenu">
+    <div class="wrap">
+        <div class="menu-head">
+            <h2>어떤 게임부터 할까요?</h2>
+            <p>두 게임 점수가 합산됩니다 · 한 게임당 1~2분</p>
+        </div>
+        <div class="game-grid">
+            <button class="game-card" type="button" data-game="rgb">
+                <span class="g-emoji">🌈</span>
+                <span class="g-title">빛의 삼원색 색 맞추기</span>
+                <span class="g-desc">목표 색을 보고 R·G·B 세 빛을 조절해 같은 색을 만드세요. 5라운드 타임어택.</span>
+                <span class="g-go">▶ 시작하기</span>
+            </button>
+            <button class="game-card" type="button" data-game="flame">
+                <span class="g-emoji">🔥</span>
+                <span class="g-title">불꽃 반응 색 매칭</span>
+                <span class="g-desc">원소 기호를 보고 불꽃 반응 색을 빠르게 고르세요. 10문제 스피드 매칭.</span>
+                <span class="g-go">▶ 시작하기</span>
+            </button>
+        </div>
+        <div class="menu-foot">
+            <button class="mini-btn" id="rankBtn2" type="button">🏆 명예의 전당</button>
+            <button class="mini-btn" id="menuHome" type="button">⌂ 처음 화면</button>
+        </div>
+    </div>
+</section>
+
+<!-- 3. RGB 게임 -->
+<section class="screen" id="sRgb">
+    <div class="wrap">
+        <div class="hud glass">
+            <div class="hud-item">라운드 <b id="rgbRound">1 / 5</b></div>
+            <div class="hud-item">점수 <b id="rgbScore">0</b></div>
+            <div class="hud-spacer"></div>
+            <div class="hud-item">남은 시간 <b id="rgbTime">25.0</b>초</div>
+            <button class="mini-btn" id="rgbQuit" type="button">✕ 그만하기</button>
+            <div class="timebar" id="rgbBarWrap"><i id="rgbBar"></i></div>
+        </div>
+
+        <div class="rgb-board">
+            <div class="swatch-card glass">
+                <div class="swatch-label">목표 색</div>
+                <div class="swatch" id="targetSwatch"></div>
+                <div class="swatch-hex" id="targetHex">#000000</div>
+                <div class="swatch-label" style="margin-top:14px;">내가 만든 색</div>
+                <div class="swatch" id="mineSwatch" style="height:clamp(90px,15vh,150px)"></div>
+                <div class="swatch-hex" id="mineHex">#808080</div>
+            </div>
+
+            <div>
+                <div class="channels glass">
+                    <div class="channel">
+                        <span class="channel-name r">R</span>
+                        <button class="ch-step" type="button" data-ch="r" data-d="-16">−</button>
+                        <div class="ch-bar"><i id="barR" style="background:linear-gradient(90deg,#ff8fa3,#ff2d55)"></i><span id="valR">128</span></div>
+                        <button class="ch-step" type="button" data-ch="r" data-d="16">+</button>
+                    </div>
+                    <div class="channel">
+                        <span class="channel-name g">G</span>
+                        <button class="ch-step" type="button" data-ch="g" data-d="-16">−</button>
+                        <div class="ch-bar"><i id="barG" style="background:linear-gradient(90deg,#8bf0bf,#12c96b)"></i><span id="valG">128</span></div>
+                        <button class="ch-step" type="button" data-ch="g" data-d="16">+</button>
+                    </div>
+                    <div class="channel">
+                        <span class="channel-name b">B</span>
+                        <button class="ch-step" type="button" data-ch="b" data-d="-16">−</button>
+                        <div class="ch-bar"><i id="barB" style="background:linear-gradient(90deg,#9dc2ff,#2f6dff)"></i><span id="valB">128</span></div>
+                        <button class="ch-step" type="button" data-ch="b" data-d="16">+</button>
+                    </div>
+                </div>
+                <div class="rgb-actions">
+                    <button class="huge-btn" id="rgbReset" type="button">↺ 회색으로</button>
+                    <button class="huge-btn primary" id="rgbSubmit" type="button">이 색으로 확정</button>
+                </div>
+                <div class="mix-legend">
+                    <span class="mix-item"><i style="background:#ffff00"></i>R+G = 노랑</span>
+                    <span class="mix-item"><i style="background:#00ffff"></i>G+B = 청록</span>
+                    <span class="mix-item"><i style="background:#ff00ff"></i>R+B = 자홍</span>
+                    <span class="mix-item"><i style="background:#ffffff"></i>R+G+B = 흰색</span>
+                </div>
+                <div class="flame-feedback" id="rgbFeedback"></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 4. 불꽃 게임 -->
+<section class="screen" id="sFlame">
+    <div class="wrap">
+        <div class="hud glass">
+            <div class="hud-item">문제 <b id="flQ">1 / 10</b></div>
+            <div class="hud-item">연속 <b id="flStreak">0</b></div>
+            <div class="hud-item">점수 <b id="flScore">0</b></div>
+            <div class="hud-spacer"></div>
+            <div class="hud-item">남은 시간 <b id="flTime">45.0</b>초</div>
+            <button class="mini-btn" id="flQuit" type="button">✕ 그만하기</button>
+            <div class="timebar" id="flBarWrap"><i id="flBar"></i></div>
+        </div>
+        <div class="flame-card">
+            <div class="element-box glass">
+                <div class="element-symbol" id="elSymbol">Na</div>
+                <div class="element-name" id="elName">나트륨</div>
+                <div class="element-q">이 원소의 불꽃 반응 색은?</div>
+            </div>
+            <div class="color-grid" id="colorGrid"></div>
+            <div class="flame-feedback" id="flFeedback">색을 눌러 정답을 고르세요</div>
+        </div>
+    </div>
+</section>
+
+<!-- 5. 결과 -->
+<section class="screen" id="sResult">
+    <div class="wrap">
+        <div class="result-card glass">
+            <div class="result-emoji" id="resEmoji">🎉</div>
+            <div class="result-title" id="resTitle">게임 끝!</div>
+            <div class="result-sub" id="resSub"></div>
+            <div class="result-score" id="resScore">0<small>점</small></div>
+            <div class="result-grid" id="resGrid"></div>
+            <div class="name-row">
+                <input type="text" id="playerName" maxlength="8" placeholder="이름 또는 별명 (8자)" autocomplete="off">
+            </div>
+            <div class="result-actions">
+                <button class="huge-btn primary" id="saveScore" type="button">🏆 기록 등록</button>
+                <button class="huge-btn" id="playOther" type="button">➕ 다른 게임 도전</button>
+                <button class="huge-btn" id="backMenu" type="button">⌂ 메뉴로</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 6. 랭킹 -->
+<section class="screen" id="sRank">
+    <div class="wrap">
+        <div class="rank-card glass">
+            <div class="rank-head">
+                <div class="rank-title">🏆 명예의 전당</div>
+                <button class="mini-btn" id="rankClose" type="button">✕ 닫기</button>
+            </div>
+            <div class="rank-list" id="rankList"></div>
+            <div class="rank-foot">
+                <button class="mini-btn" id="rankClear" type="button">🧹 기록 전체 삭제(교사용)</button>
+                <button class="mini-btn" id="rankPlay" type="button">▶ 게임 하러 가기</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="fs-pill-wrap">
+    <button class="fs-pill" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function rnd(a, b) { return a + Math.random() * (b - a); }
+    function randInt(a, b) { return Math.floor(rnd(a, b + 1)); }
+    function shuffle(arr) {
+        var a = arr.slice();
+        for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+        return a;
+    }
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    function hex(r, g, b) { return '#' + pad2(Math.round(r).toString(16)) + pad2(Math.round(g).toString(16)) + pad2(Math.round(b).toString(16)); }
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+    var toastEl = null;
+    function toast(msg, ms) {
+        if (!toastEl) { toastEl = document.createElement('div'); toastEl.id = 'ux-toast'; document.body.appendChild(toastEl); }
+        toastEl.textContent = msg;
+        toastEl.style.opacity = '1';
+        clearTimeout(toastEl._t);
+        toastEl._t = setTimeout(function () { toastEl.style.opacity = '0'; }, ms || 2400);
+    }
+
+    /* ============================================================
+       상태
+       ============================================================ */
+    var S = {
+        screen: 'attract',
+        session: 0,
+        lastGame: null,
+        played: { rgb: false, flame: false },
+        rgb: { round: 0, max: 5, score: 0, time: 25, target: { r: 0, g: 0, b: 0 }, cur: { r: 128, g: 128, b: 128 }, tick: null, busy: false, hits: [] },
+        fl: { q: 0, total: 10, score: 0, streak: 0, best: 0, right: 0, time: 45, tick: null, busy: false, list: [] }
+    };
+
+    function showScreen(name) {
+        S.screen = name;
+        qsa('.screen').forEach(function (s) { s.classList.remove('show'); });
+        var el = $('s' + name.charAt(0).toUpperCase() + name.slice(1));
+        if (el) el.classList.add('show');
+        if (name !== 'rgb') stopRgbTimer();
+        if (name !== 'flame') stopFlTimer();
+    }
+
+    /* ============================================================
+       RGB 게임
+       ============================================================ */
+    function rgbRender() {
+        var c = S.rgb.cur;
+        var mine = 'rgb(' + Math.round(c.r) + ',' + Math.round(c.g) + ',' + Math.round(c.b) + ')';
+        $('mineSwatch').style.background = mine;
+        $('mineHex').textContent = hex(c.r, c.g, c.b) + ' · ' + mine;
+        $('valR').textContent = Math.round(c.r);
+        $('valG').textContent = Math.round(c.g);
+        $('valB').textContent = Math.round(c.b);
+        $('barR').style.width = (c.r / 255 * 100) + '%';
+        $('barG').style.width = (c.g / 255 * 100) + '%';
+        $('barB').style.width = (c.b / 255 * 100) + '%';
+    }
+
+    function rgbNewRound() {
+        var R = S.rgb;
+        R.round += 1;
+        R.busy = false;
+        R.cur = { r: 128, g: 128, b: 128 };
+        var t = { r: randInt(20, 235), g: randInt(20, 235), b: randInt(20, 235) };
+        /* 너무 비슷한 색은 피한다 */
+        if (Math.abs(t.r - t.g) < 30 && Math.abs(t.g - t.b) < 30) t.b = clamp(t.b + 70, 20, 240);
+        R.target = t;
+        R.time = 25;
+        $('targetSwatch').style.background = 'rgb(' + t.r + ',' + t.g + ',' + t.b + ')';
+        $('targetHex').textContent = hex(t.r, t.g, t.b);
+        $('rgbRound').textContent = R.round + ' / ' + R.max;
+        $('rgbScore').textContent = S.session + R.score;
+        $('rgbFeedback').textContent = '';
+        $('rgbFeedback').className = 'flame-feedback';
+        rgbRender();
+        startRgbTimer();
+    }
+
+    function startRgbTimer() {
+        stopRgbTimer();
+        S.rgb.tick = setInterval(function () {
+            S.rgb.time -= 0.1;
+            if (S.rgb.time <= 0) { S.rgb.time = 0; }
+            $('rgbTime').textContent = S.rgb.time.toFixed(1);
+            var pct = S.rgb.time / 25 * 100;
+            $('rgbBar').style.width = pct + '%';
+            $('rgbBarWrap').classList.toggle('low', S.rgb.time <= 7);
+            if (S.rgb.time <= 0) { stopRgbTimer(); rgbScoreIt(true); }
+        }, 100);
+    }
+    function stopRgbTimer() { if (S.rgb.tick) { clearInterval(S.rgb.tick); S.rgb.tick = null; } }
+
+    function rgbScoreIt(timedOut) {
+        if (S.rgb.busy) return;
+        S.rgb.busy = true;
+        stopRgbTimer();
+        var R = S.rgb;
+        var t = R.target, c = R.cur;
+        var dr = c.r - t.r, dg = c.g - t.g, db = c.b - t.b;
+        var dist = Math.sqrt(dr * dr + dg * dg + db * db);
+        var acc = clamp(Math.round(100 - dist / 3.6), 0, 100);
+        var bonus = timedOut ? 0 : Math.round(R.time * 2);
+        var gain = acc + bonus;
+        R.score += gain;
+        R.hits.push(acc);
+        $('rgbScore').textContent = S.session + R.score;
+        var fb = $('rgbFeedback');
+        var msg = '정확도 ' + acc + '% (' + gain + '점)';
+        if (acc >= 95) msg = '🎯 완벽해요! ' + msg;
+        else if (acc >= 80) msg = '👍 아주 가까워요! ' + msg;
+        else msg = '💡 ' + msg;
+        fb.textContent = msg + (acc < 95 ? ' · R ' + (dr > 0 ? '+' : '') + Math.round(dr) + ', G ' + (dg > 0 ? '+' : '') + Math.round(dg) + ', B ' + (db > 0 ? '+' : '') + Math.round(db) : '');
+        fb.className = 'flame-feedback' + (acc >= 80 ? '' : ' bad');
+        setTimeout(function () {
+            if (R.round >= R.max) { finishGame('rgb'); return; }
+            rgbNewRound();
+        }, timedOut ? 1300 : 1500);
+    }
+
+    /* ============================================================
+       불꽃 반응 게임
+       ============================================================ */
+    var ELEMENTS = [
+        { sym: 'Li', name: '리튬', color: 'red', note: '리튬은 빨간색 불꽃을 냅니다.' },
+        { sym: 'Na', name: '나트륨', color: 'yellow', note: '나트륨은 노란색 불꽃을 냅니다.' },
+        { sym: 'K', name: '칼륨', color: 'violet', note: '칼륨은 보라색 불꽃을 냅니다.' },
+        { sym: 'Cu', name: '구리', color: 'teal', note: '구리는 청록색 불꽃을 냅니다.' },
+        { sym: 'Ca', name: '칼슘', color: 'orange', note: '칼슘은 주황색 불꽃을 냅니다.' },
+        { sym: 'Sr', name: '스트론튬', color: 'red', note: '스트론튬은 진한 빨간색 불꽃을 냅니다.' },
+        { sym: 'Ba', name: '바륨', color: 'yellow', note: '바륨은 황록색 불꽃을 냅니다(노랑 계열).' },
+        { sym: 'Cs', name: '세슘', color: 'violet', note: '세슘은 보라색 불꽃을 냅니다.' }
+    ];
+    var COLORS = {
+        red:    { name: '빨강', css: 'linear-gradient(160deg,#ff6b81,#c81e3a)' },
+        yellow: { name: '노랑', css: 'linear-gradient(160deg,#ffe066,#e0a800)' },
+        violet: { name: '보라', css: 'linear-gradient(160deg,#c4a2ff,#7b3fe4)' },
+        teal:   { name: '청록', css: 'linear-gradient(160deg,#6ee7d7,#0e8f86)' },
+        orange: { name: '주황', css: 'linear-gradient(160deg,#ffb26b,#e2620a)' }
+    };
+
+    function flBuild() {
+        var pool = shuffle(ELEMENTS);
+        S.fl.list = [];
+        for (var i = 0; i < S.fl.total; i++) S.fl.list.push(pool[i % pool.length]);
+        S.fl.q = 0; S.fl.score = 0; S.fl.streak = 0; S.fl.best = 0; S.fl.right = 0;
+        S.fl.time = 45; S.fl.busy = false;
+        $('flScore').textContent = S.session;
+        $('flStreak').textContent = '0';
+        renderFlameQuestion();
+        startFlTimer();
+    }
+
+    function startFlTimer() {
+        stopFlTimer();
+        S.fl.tick = setInterval(function () {
+            S.fl.time -= 0.1;
+            if (S.fl.time <= 0) S.fl.time = 0;
+            $('flTime').textContent = S.fl.time.toFixed(1);
+            $('flBar').style.width = (S.fl.time / 45 * 100) + '%';
+            $('flBarWrap').classList.toggle('low', S.fl.time <= 8);
+            if (S.fl.time <= 0) { stopFlTimer(); finishGame('flame'); }
+        }, 100);
+    }
+    function stopFlTimer() { if (S.fl.tick) { clearInterval(S.fl.tick); S.fl.tick = null; } }
+
+    function renderFlameQuestion() {
+        var F = S.fl;
+        if (F.q >= F.total) { finishGame('flame'); return; }
+        var el = F.list[F.q];
+        $('elSymbol').textContent = el.sym;
+        $('elName').textContent = el.name;
+        $('flQ').textContent = (F.q + 1) + ' / ' + F.total;
+        $('flFeedback').textContent = '색을 눌러 정답을 고르세요';
+        $('flFeedback').className = 'flame-feedback';
+        var keys = Object.keys(COLORS);
+        var opts = [el.color];
+        var others = shuffle(keys.filter(function (k) { return k !== el.color; }));
+        while (opts.length < 4) opts.push(others.pop());
+        opts = shuffle(opts);
+        $('colorGrid').innerHTML = opts.map(function (k) {
+            return '<button class="color-btn" type="button" data-color="' + k + '" style="background:' + COLORS[k].css + '">' +
+                '<span class="cname">' + COLORS[k].name + '</span></button>';
+        }).join('');
+        F.busy = false;
+    }
+
+    function flameAnswer(k) {
+        var F = S.fl;
+        if (F.busy) return;
+        F.busy = true;
+        var el = F.list[F.q];
+        var ok = (k === el.color);
+        var btns = qsa('.color-btn');
+        btns.forEach(function (b) {
+            var c = b.getAttribute('data-color');
+            if (c === el.color) b.classList.add('right');
+            else if (c === k) b.classList.add('wrong');
+        });
+        if (ok) {
+            F.right += 1;
+            F.streak += 1;
+            F.best = Math.max(F.best, F.streak);
+            var gain = 10 + (F.streak >= 3 ? 5 : 0);
+            F.score += gain;
+            $('flFeedback').textContent = '✅ 정답! +' + gain + '점 · ' + el.note;
+            $('flFeedback').className = 'flame-feedback';
+        } else {
+            F.streak = 0;
+            F.time = Math.max(0, F.time - 3);
+            $('flFeedback').textContent = '❌ 아쉬워요 (−3초) · ' + el.note;
+            $('flFeedback').className = 'flame-feedback bad';
+        }
+        $('flScore').textContent = S.session + F.score;
+        $('flStreak').textContent = F.streak;
+        setTimeout(function () {
+            F.q += 1;
+            if (F.q >= F.total) { finishGame('flame'); return; }
+            renderFlameQuestion();
+        }, ok ? 620 : 1250);
+    }
+
+    /* ============================================================
+       결과 · 랭킹
+       ============================================================ */
+    function finishGame(which) {
+        if (which === 'rgb' && S.screen !== 'rgb') return;
+        if (which === 'flame' && S.screen !== 'flame') return;
+        stopRgbTimer(); stopFlTimer();
+        S.lastGame = which;
+        S.played[which] = true;
+        var gained = (which === 'rgb') ? S.rgb.score : S.fl.score;
+        S.session += gained;
+        showScreen('result');
+        $('playerName').value = localStorage.getItem('svl_festival_name') || '';
+        popConfetti();
+        if (which === 'rgb') {
+            var avg = S.rgb.hits.length ? Math.round(S.rgb.hits.reduce(function (a, b) { return a + b; }, 0) / S.rgb.hits.length) : 0;
+            $('resEmoji').textContent = avg >= 85 ? '🌈' : '🎨';
+            $('resTitle').textContent = '색 맞추기 완료!';
+            $('resSub').textContent = '5라운드 평균 정확도 ' + avg + '%';
+            $('resGrid').innerHTML = stat('이번 게임', gained + '점') + stat('평균 정확도', avg + '%') +
+                stat('라운드', S.rgb.max + '회');
+        } else {
+            $('resEmoji').textContent = S.fl.right >= 8 ? '🔥' : '🧪';
+            $('resTitle').textContent = '불꽃 매칭 완료!';
+            $('resSub').textContent = S.fl.total + '문제 중 ' + S.fl.right + '문제 정답 · 최고 연속 ' + S.fl.best;
+            $('resGrid').innerHTML = stat('이번 게임', gained + '점') + stat('정답', S.fl.right + ' / ' + S.fl.total) +
+                stat('최고 연속', S.fl.best + '연속');
+        }
+        $('resScore').innerHTML = (S.session) + '<small>점 합계</small>';
+        var other = (which === 'rgb') ? 'flame' : 'rgb';
+        $('playOther').textContent = S.played[other] ? '🔁 다른 게임 한 번 더' : '➕ 다른 게임 도전';
+    }
+    function stat(k, v) { return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>'; }
+
+    var RANK_KEY = 'svl_festival_rank_v1';
+    function loadRank() {
+        try { return JSON.parse(localStorage.getItem(RANK_KEY) || '[]'); } catch (e) { return []; }
+    }
+    function saveRank(list) {
+        try { localStorage.setItem(RANK_KEY, JSON.stringify(list.slice(0, 30))); } catch (e) {}
+    }
+    function renderRank() {
+        var list = loadRank();
+        var box = $('rankList');
+        if (!list.length) {
+            box.innerHTML = '<div class="rank-empty">아직 기록이 없습니다.<br>첫 번째 기록의 주인공이 되어 보세요!</div>';
+            return;
+        }
+        box.innerHTML = list.slice(0, 10).map(function (r, i) {
+            var cls = i === 0 ? ' top1' : (i === 1 ? ' top2' : (i === 2 ? ' top3' : ''));
+            var medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : (i + 1)));
+            return '<div class="rank-row' + cls + '">' +
+                '<span class="rk">' + medal + '</span>' +
+                '<span class="rname">' + esc(r.name || '손님') + '</span>' +
+                '<span class="rdate">' + esc(r.date || '') + '</span>' +
+                '<span class="rscore">' + (r.score || 0) + '점</span>' +
+                '</div>';
+        }).join('');
+    }
+
+    function registerScore() {
+        var name = ($('playerName').value || '').trim().slice(0, 8);
+        if (!name) { toast('이름이나 별명을 먼저 적어 주세요.'); $('playerName').focus(); return; }
+        if (S.session <= 0) { toast('점수가 0점입니다. 게임을 먼저 해 주세요.'); return; }
+        var d = new Date();
+        var date = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+        var list = loadRank();
+        list.push({ name: name, score: S.session, date: date, ts: Date.now() });
+        list.sort(function (a, b) { return b.score - a.score; });
+        saveRank(list);
+        try { localStorage.setItem('svl_festival_name', name); } catch (e) {}
+        popConfetti();
+        showScreen('rank');
+        renderRank();
+        toast('🏆 기록을 등록했습니다!', 2200);
+    }
+
+    /* ============================================================
+       색종이 효과
+       ============================================================ */
+    var cvs = $('confetti'), cctx = cvs.getContext('2d');
+    var parts = [], confettiOn = false;
+    function fitConfetti() {
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        cvs.width = Math.round(innerWidth * dpr);
+        cvs.height = Math.round(innerHeight * dpr);
+        cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function popConfetti() {
+        parts = [];
+        var cols = ['#4da3ff', '#b487ff', '#38d9a0', '#ffc65c', '#ff6f8b', '#7ee0ff'];
+        for (var i = 0; i < 90; i++) {
+            parts.push({
+                x: innerWidth * (0.5 + (Math.random() - 0.5) * 0.3),
+                y: innerHeight * 0.34,
+                vx: (Math.random() - 0.5) * 9,
+                vy: -Math.random() * 11 - 3,
+                s: 4 + Math.random() * 6,
+                c: cols[Math.floor(Math.random() * cols.length)],
+                rot: Math.random() * 6.28,
+                vr: (Math.random() - 0.5) * 0.3,
+                life: 1
+            });
+        }
+        if (!confettiOn) { confettiOn = true; requestAnimationFrame(confettiFrame); }
+    }
+    function confettiFrame() {
+        fitConfetti();
+        cctx.clearRect(0, 0, innerWidth, innerHeight);
+        var alive = 0;
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            p.vy += 0.42; p.x += p.vx; p.y += p.vy; p.vx *= 0.995; p.rot += p.vr;
+            p.life -= 0.008;
+            if (p.life <= 0 || p.y > innerHeight + 40) continue;
+            alive++;
+            cctx.save();
+            cctx.translate(p.x, p.y);
+            cctx.rotate(p.rot);
+            cctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+            cctx.fillStyle = p.c;
+            cctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+            cctx.restore();
+        }
+        if (alive > 0) requestAnimationFrame(confettiFrame);
+        else { confettiOn = false; cctx.clearRect(0, 0, innerWidth, innerHeight); }
+    }
+
+    /* ============================================================
+       이벤트
+       ============================================================ */
+    document.addEventListener('click', function (e) {
+        var t = e.target;
+        var step = t.closest ? t.closest('.ch-step') : null;
+        if (step) {
+            var ch = step.getAttribute('data-ch');
+            var d = parseInt(step.getAttribute('data-d'), 10);
+            S.rgb.cur[ch] = clamp(S.rgb.cur[ch] + d, 0, 255);
+            rgbRender();
+            return;
+        }
+        var cb = t.closest ? t.closest('.color-btn') : null;
+        if (cb) { flameAnswer(cb.getAttribute('data-color')); return; }
+    });
+
+    $('attractHit').addEventListener('click', function () { showScreen('menu'); });
+    $('rankBtn1').addEventListener('click', function (e) { e.stopPropagation(); renderRank(); showScreen('rank'); });
+    $('rankBtn2').addEventListener('click', function () { renderRank(); showScreen('rank'); });
+    $('rankClose').addEventListener('click', function () { showScreen('menu'); });
+    $('rankPlay').addEventListener('click', function () { showScreen('menu'); });
+    $('rankClear').addEventListener('click', function () {
+        if (!window.confirm('명예의 전당 기록을 모두 지울까요?')) return;
+        saveRank([]);
+        renderRank();
+        toast('기록을 모두 지웠습니다.');
+    });
+    $('menuHome').addEventListener('click', function () { showScreen('attract'); });
+
+    qsa('[data-game]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var g = btn.getAttribute('data-game');
+            if (g === 'rgb') {
+                S.rgb.round = 0; S.rgb.score = 0; S.rgb.hits = [];
+                showScreen('rgb');
+                rgbNewRound();
+            } else {
+                showScreen('flame');
+                flBuild();
+            }
+        });
+    });
+
+    $('rgbReset').addEventListener('click', function () { S.rgb.cur = { r: 128, g: 128, b: 128 }; rgbRender(); });
+    $('rgbSubmit').addEventListener('click', function () { rgbScoreIt(false); });
+    $('rgbQuit').addEventListener('click', function () {
+        if (!window.confirm('색 맞추기를 그만할까요? 지금까지 점수는 사라집니다.')) return;
+        stopRgbTimer(); showScreen('menu');
+    });
+    $('flQuit').addEventListener('click', function () {
+        if (!window.confirm('불꽃 매칭을 그만할까요? 지금까지 점수는 사라집니다.')) return;
+        stopFlTimer(); showScreen('menu');
+    });
+
+    $('saveScore').addEventListener('click', registerScore);
+    $('backMenu').addEventListener('click', function () { showScreen('menu'); });
+    $('playOther').addEventListener('click', function () {
+        var other = (S.lastGame === 'rgb') ? 'flame' : 'rgb';
+        if (other === 'rgb') {
+            S.rgb.round = 0; S.rgb.score = 0; S.rgb.hits = [];
+            showScreen('rgb'); rgbNewRound();
+        } else {
+            showScreen('flame'); flBuild();
+        }
+    });
+    $('playerName').addEventListener('keydown', function (e) { if (e.key === 'Enter') registerScore(); });
+
+    /* 테마 */
+    var themeBtn = $('themeBtn');
+    function applyTheme(dark) {
+        document.body.classList.toggle('dark-mode', dark);
+        themeBtn.textContent = dark ? '☀️' : '🌙';
+        themeBtn.title = dark ? '주간 모드 전환' : '야간 모드 전환';
+    }
+    themeBtn.addEventListener('click', function () { applyTheme(!document.body.classList.contains('dark-mode')); });
+    applyTheme(true);
+
+    window.addEventListener('resize', function () { fitConfetti(); });
+    fitConfetti();
+    renderRank();
+    showScreen('attract');
+})();
+</script>
+<script>
+/* ============ 전체화면 / 창모드 ============ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(16,22,36,.94);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '\uD83D\uDDD7' : '\u26F6';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) {
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            btn.title = on ? '창모드로 전환' : '전체화면으로 전환';
+        }
+        document.body.classList.toggle('is-fullscreen', on);
+        setTimeout(function () { try { window.dispatchEvent(new Event('resize')); } catch (e) {} }, 150);
+    }
+    if (btn) {
+        btn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                return;
+            }
+            if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+            if (req) {
+                try {
+                    var r = req.call(docEl);
+                    if (r && typeof r.catch === 'function') r.catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                } catch (err) { docEl.classList.add('pseudo-fs'); }
+            } else {
+                docEl.classList.add('pseudo-fs');
+                toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+            }
+            setUI();
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+    document.addEventListener('keydown', function (e) {
+        if ((e.key === 'Escape' || e.key === 'Esc') && pseudo() && !realFs()) {
+            docEl.classList.remove('pseudo-fs'); setUI();
+        }
+    });
+    setUI();
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+<script src="../common/lib/qrcode.min.js" defer></script>
+<script src="../common/qr-modal.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+</body>
+</html>

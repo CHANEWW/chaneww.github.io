@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>과학 단위 변환 &amp; 오차 계산기 | Science Virtual LAB</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+@font-face{
+    font-family:'SeoulNamsan';
+    src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+        url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+    --bg:#eef2f7; --ink:#14181f; --muted:#64748b; --line:rgba(15,23,42,.10);
+    --card:rgba(255,255,255,.9); --card-solid:#fff; --accent:#0a84ff; --accent-soft:rgba(10,132,255,.12);
+    --ok:#10b981; --ok-soft:rgba(16,185,129,.13); --warn:#f59e0b; --danger:#ef4444;
+    --shadow:0 10px 30px rgba(15,23,42,.10);
+}
+body.dark{
+    --bg:#0e121c; --ink:#eef3fb; --muted:#94a3b8; --line:rgba(255,255,255,.13);
+    --card:rgba(26,32,45,.9); --card-solid:#1a2130; --accent:#4aa3ff; --accent-soft:rgba(74,163,255,.18);
+    --ok:#34d399; --ok-soft:rgba(52,211,153,.16); --shadow:0 10px 30px rgba(0,0,0,.5);
+}
+html,body{margin:0;padding:0;width:100%;height:100%}
+body{
+    font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    color:var(--ink); background:var(--bg); overflow:hidden; transition:background .3s ease,color .3s ease;
+}
+.top-nav{
+    position:fixed; top:0; left:0; right:0; height:60px; display:flex; align-items:center; gap:10px;
+    padding:0 250px 0 16px; z-index:100; background:var(--card);
+    backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border-bottom:1px solid var(--line);
+}
+.back-btn{
+    display:inline-flex; align-items:center; gap:6px; padding:7px 14px; font-family:inherit;
+    font-size:13px; font-weight:800; color:inherit; text-decoration:none; border:1px solid var(--line);
+    border-radius:999px; background:var(--card-solid); transition:transform .16s ease; white-space:nowrap;
+}
+.back-btn:hover{transform:translateY(-1px)}
+.page-title{display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:800; letter-spacing:-.2px; min-width:0}
+.page-title .t{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pill-badge{padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:800; background:var(--accent-soft); color:var(--accent); white-space:nowrap; flex:0 0 auto}
+.top-right-bar{
+    position:fixed !important; top:15px !important; right:20px !important;
+    display:flex !important; flex-direction:column; align-items:flex-end; gap:8px; z-index:130 !important; pointer-events:none;
+}
+.top-right-bar > .tr-util{display:flex !important; flex-direction:row; align-items:center; gap:8px; pointer-events:auto}
+#bTheme{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; height:40px; padding:0 15px;
+    border-radius:20px; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:800; color:inherit;
+    border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); white-space:nowrap; transition:transform .16s ease;
+}
+#bTheme:hover{transform:translateY(-1px)}
+
+.app{position:fixed; top:60px; left:0; right:0; bottom:0; overflow-y:auto; padding:14px 16px 26px}
+.wrap{max-width:1080px; margin:0 auto}
+
+/* 탭 */
+.tabs{
+    display:flex; gap:7px; padding:5px; border-radius:16px; background:var(--card);
+    border:1px solid var(--line); box-shadow:var(--shadow); margin-bottom:14px;
+}
+.tabs button{
+    flex:1 1 0; display:flex; align-items:center; justify-content:center; gap:7px;
+    padding:10px 8px; border-radius:12px; border:none; background:transparent; color:var(--ink);
+    font-family:inherit; font-size:13px; font-weight:800; cursor:pointer; white-space:nowrap;
+    transition:background .16s ease, color .16s ease, box-shadow .16s ease;
+}
+.tabs button.on{background:var(--accent); color:#fff; box-shadow:0 8px 18px rgba(10,132,255,.28)}
+.panel{display:none}
+.panel.on{display:block; animation:fadeUp .22s ease}
+@keyframes fadeUp{from{opacity:0; transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.card{
+    background:var(--card); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow);
+    padding:16px 17px; margin-bottom:13px;
+}
+.card-head{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap}
+.card-head h2{margin:0; font-size:14.5px; font-weight:900; letter-spacing:-.2px}
+.card-head .sub{font-size:11.5px; font-weight:700; color:var(--muted)}
+.spacer{margin-left:auto}
+
+/* 칩 */
+.chips{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:14px}
+.chip{
+    padding:8px 14px; border-radius:999px; border:1.5px solid var(--line); background:var(--card-solid);
+    font-family:inherit; font-size:12.5px; font-weight:800; color:inherit; cursor:pointer;
+    transition:transform .14s ease, border-color .14s ease, background .14s ease;
+}
+.chip:hover{transform:translateY(-1px); border-color:var(--accent)}
+.chip.on{background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 6px 16px rgba(10,132,255,.25)}
+
+/* 변환기 */
+.conv{display:grid; grid-template-columns:1fr 46px 1fr; gap:11px; align-items:end}
+.conv-side{display:flex; flex-direction:column; gap:6px; min-width:0}
+.conv label{font-size:11.5px; font-weight:800; color:var(--muted)}
+.io{display:flex; gap:7px}
+.io input{
+    flex:1 1 auto; min-width:0; padding:12px 13px; border-radius:14px; border:1.5px solid var(--line);
+    background:var(--card-solid); color:inherit; font-family:inherit; font-size:19px; font-weight:900;
+    letter-spacing:-.5px; outline:none; transition:border-color .16s ease, box-shadow .16s ease;
+}
+.io input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.io select{
+    flex:0 0 96px; padding:12px 8px; border-radius:14px; border:1.5px solid var(--line);
+    background:var(--card-solid); color:inherit; font-family:inherit; font-size:13px; font-weight:800;
+    outline:none; cursor:pointer;
+}
+.swap{
+    width:46px; height:46px; border-radius:50%; border:1.5px solid var(--line); background:var(--card-solid);
+    color:var(--ink); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    align-self:center; margin-bottom:2px; transition:transform .18s ease, border-color .16s ease;
+}
+.swap:hover{transform:rotate(180deg); border-color:var(--accent)}
+.conv-eq{
+    margin-top:13px; padding:12px 14px; border-radius:14px; background:var(--accent-soft);
+    font-size:14px; font-weight:900; color:var(--accent); text-align:center; line-height:1.45; word-break:break-all;
+}
+table.units{width:100%; border-collapse:collapse; margin-top:14px; font-size:12.5px}
+table.units th,table.units td{padding:8px 6px; border-bottom:1px solid var(--line); text-align:right}
+table.units th:first-child,table.units td:first-child{text-align:left; font-weight:800}
+table.units th{font-size:11px; font-weight:900; color:var(--muted); letter-spacing:.2px}
+table.units td{font-weight:800; font-variant-numeric:tabular-nums}
+table.units tr:last-child td{border-bottom:none}
+table.units tr.cur td{background:var(--accent-soft)}
+
+/* 계산 입력 */
+.calc{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:11px}
+.field{display:flex; flex-direction:column; gap:6px}
+.field label{font-size:11.5px; font-weight:800; color:var(--muted)}
+.field input{
+    padding:11px 13px; border-radius:13px; border:1.5px solid var(--line); background:var(--card-solid);
+    color:inherit; font-family:inherit; font-size:17px; font-weight:900; outline:none;
+}
+.field input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.result{
+    margin-top:13px; padding:14px 16px; border-radius:16px; background:var(--ok-soft);
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;
+}
+.result .lbl{font-size:12px; font-weight:900; color:#047857}
+body.dark .result .lbl{color:#6ee7b7}
+.result .val{font-size:26px; font-weight:900; letter-spacing:-.8px; color:#047857}
+body.dark .result .val{color:#a7f3d0}
+.result .val small{font-size:13px; font-weight:800; margin-left:3px}
+.steps{margin-top:11px; font-size:12px; font-weight:700; color:var(--muted); line-height:1.7; word-break:keep-all}
+.steps code{
+    font-family:'SeoulNamsan',monospace; background:rgba(120,140,170,.14); padding:1px 6px; border-radius:6px;
+    color:var(--ink); font-weight:800;
+}
+.hintline{font-size:11.5px; font-weight:700; color:var(--muted); margin-top:9px; line-height:1.5; word-break:keep-all}
+
+/* 오차 */
+.ta{
+    width:100%; min-height:88px; padding:12px 13px; border-radius:14px; border:1.5px solid var(--line);
+    background:var(--card-solid); color:inherit; font-family:inherit; font-size:14px; font-weight:800;
+    line-height:1.6; outline:none; resize:vertical;
+}
+.ta:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:9px; margin-top:13px}
+.stat{padding:11px 12px; border-radius:14px; border:1px solid var(--line); background:var(--card-solid)}
+.stat .k{font-size:10.5px; font-weight:900; color:var(--muted); letter-spacing:.2px}
+.stat .v{font-size:18px; font-weight:900; letter-spacing:-.4px; margin-top:3px; font-variant-numeric:tabular-nums}
+.stat .v small{font-size:11px; font-weight:800; margin-left:2px; color:var(--muted)}
+.stat.em{border-color:rgba(16,185,129,.45); background:var(--ok-soft)}
+.stat.em .v{color:#047857}
+body.dark .stat.em .v{color:#6ee7b7}
+.btnrow{display:flex; gap:8px; flex-wrap:wrap; margin-top:13px}
+.btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:10px 16px;
+    border-radius:13px; border:none; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:900;
+    color:#fff; background:var(--accent); box-shadow:0 8px 20px rgba(10,132,255,.26);
+    transition:transform .16s ease; white-space:nowrap;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn.ghost{background:transparent; color:var(--ink); border:1px solid var(--line); box-shadow:none}
+.btn.ok{background:linear-gradient(135deg,#10b981,#059669); box-shadow:0 8px 20px rgba(16,185,129,.26)}
+.msr-table{width:100%; border-collapse:collapse; margin-top:13px; font-size:12.5px}
+.msr-table th,.msr-table td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:right; font-variant-numeric:tabular-nums}
+.msr-table th:first-child,.msr-table td:first-child{text-align:left}
+.msr-table th{font-size:11px; color:var(--muted); font-weight:900}
+.msr-table td{font-weight:800}
+.msr-table tr:last-child td{border-bottom:none}
+.note{
+    display:flex; gap:9px; padding:11px 13px; border-radius:14px; background:rgba(245,158,11,.12);
+    border:1px solid rgba(245,158,11,.35); font-size:12px; font-weight:800; line-height:1.5;
+    color:#92400e; word-break:keep-all;
+}
+body.dark .note{color:#fcd34d}
+
+/* 전체화면 */
+#btn-fullscreen{
+    position:fixed; right:20px; bottom:calc(18px + env(safe-area-inset-bottom,0px)); z-index:95;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:9px 16px; border-radius:999px;
+    border:1px solid var(--line); background:var(--card); box-shadow:0 8px 24px rgba(15,23,42,.16);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    color:inherit; font-family:inherit; font-size:12.5px; font-weight:800; white-space:nowrap; cursor:pointer;
+    transition:transform .18s ease;
+}
+#btn-fullscreen:hover{transform:translateY(-1px)}
+body.pseudo-fullscreen .top-nav{transform:translateY(-100%); opacity:0; pointer-events:none}
+body.pseudo-fullscreen .app{top:0}
+body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:none !important}
+.fs-toast{
+    position:fixed; left:50%; bottom:calc(74px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,8px);
+    z-index:2050; max-width:86vw; padding:10px 16px; border-radius:14px; background:rgba(28,28,30,.92);
+    color:#fff; font-size:12.5px; font-weight:700; line-height:1.45; text-align:center;
+    box-shadow:0 10px 26px rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .26s ease, transform .26s ease;
+}
+.fs-toast.show{opacity:1; transform:translate(-50%,0)}
+
+/* 반응형 */
+@media (max-width:900px){
+    .top-nav{height:52px; padding:0 12px; gap:8px}
+    .page-title{font-size:12.5px}
+    .back-btn{padding:6px 11px; font-size:12px}
+    .top-right-bar{top:calc(max(8px,env(safe-area-inset-top)) + 48px) !important; right:8px !important}
+    #bTheme{height:34px; padding:0 11px; font-size:11.5px}
+    .app{top:100px; padding:10px 10px 70px}
+    .tabs{margin-bottom:10px}
+    .tabs button{font-size:12px; padding:9px 4px; gap:4px}
+    .conv{grid-template-columns:1fr; gap:8px}
+    .swap{width:38px; height:38px; margin:-2px auto; font-size:15px}
+    .io input{font-size:17px; padding:11px 12px}
+    .io select{flex:0 0 84px; font-size:12.5px; padding:11px 6px}
+    .card{padding:13px 13px; border-radius:18px}
+    .result .val{font-size:22px}
+    .stat .v{font-size:16px}
+    #btn-fullscreen{bottom:calc(10px + env(safe-area-inset-bottom,0px)); right:10px; padding:8px 13px; font-size:12px}
+}
+@media (max-width:430px){
+    .chips{gap:6px}
+    .chip{padding:7px 11px; font-size:11.5px}
+    .stats{grid-template-columns:1fr 1fr}
+}
+@media (max-height:500px) and (orientation:landscape){
+    .top-nav{height:44px}
+    .app{top:44px; padding:8px 10px 60px}
+    .top-right-bar{top:max(6px,env(safe-area-inset-top)) !important; right:88px !important}
+}
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="../../index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="page-title"><span class="t">과학 단위 변환 &amp; 오차 계산기</span><span class="pill-badge">교실 도구</span></div>
+</nav>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button id="bTheme" type="button">🌙 야간 모드</button>
+    </div>
+</div>
+
+<div class="app">
+<div class="wrap">
+
+    <div class="tabs" id="tabs">
+        <button type="button" class="on" data-tab="conv">🔁 단위 변환</button>
+        <button type="button" data-tab="dens">⚗️ 밀도·농도</button>
+        <button type="button" data-tab="err">📏 측정 오차</button>
+    </div>
+
+    <!-- ============ 탭 1: 단위 변환 ============ -->
+    <section class="panel on" id="p-conv">
+        <div class="card">
+            <div class="card-head">
+                <h2>🔁 단위 변환</h2>
+                <span class="sub">값을 입력하면 양쪽이 서로 바뀝니다</span>
+            </div>
+            <div class="chips" id="cats"></div>
+
+            <div class="conv">
+                <div class="conv-side">
+                    <label for="inA">변환 전</label>
+                    <div class="io">
+                        <input id="inA" type="text" inputmode="decimal" value="1" autocomplete="off">
+                        <select id="selA"></select>
+                    </div>
+                </div>
+                <button class="swap" id="btnSwap" type="button" title="단위 바꾸기" aria-label="단위 바꾸기">⇄</button>
+                <div class="conv-side">
+                    <label for="inB">변환 후</label>
+                    <div class="io">
+                        <input id="inB" type="text" inputmode="decimal" autocomplete="off">
+                        <select id="selB"></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="conv-eq" id="eqLine">1 A = 1000 mA</div>
+
+            <table class="units">
+                <thead><tr><th>단위</th><th>같은 값을 이 단위로</th></tr></thead>
+                <tbody id="unitRows"></tbody>
+            </table>
+            <div class="hintline" id="convHint"></div>
+        </div>
+    </section>
+
+    <!-- ============ 탭 2: 밀도·농도 ============ -->
+    <section class="panel" id="p-dens">
+        <div class="card">
+            <div class="card-head">
+                <h2>⚗️ 밀도 구하기</h2>
+                <span class="sub">밀도 = 질량 ÷ 부피</span>
+            </div>
+            <div class="calc">
+                <div class="field">
+                    <label for="mMass">질량 (g)</label>
+                    <input id="mMass" type="text" inputmode="decimal" placeholder="예: 54" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="mVol">부피 (mL = cm³)</label>
+                    <input id="mVol" type="text" inputmode="decimal" placeholder="예: 20" autocomplete="off">
+                </div>
+            </div>
+            <div class="result">
+                <span class="lbl">밀도</span>
+                <span class="val" id="densOut">– <small>g/mL</small></span>
+            </div>
+            <div class="steps" id="densSteps">질량과 부피를 입력하면 계산 과정이 여기에 표시됩니다.</div>
+            <div class="btnrow">
+                <button class="btn ghost" type="button" data-ex="al">예시: 알루미늄</button>
+                <button class="btn ghost" type="button" data-ex="water">예시: 물</button>
+                <button class="btn ok" type="button" id="copyDens">📋 결과 복사</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <h2>🧪 퍼센트 농도 구하기</h2>
+                <span class="sub">농도(%) = 용질 ÷ 용액 × 100</span>
+            </div>
+            <div class="calc">
+                <div class="field">
+                    <label for="cSol">용질의 양 (g)</label>
+                    <input id="cSol" type="text" inputmode="decimal" placeholder="예: 5" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="cSov">용매의 양 (g)</label>
+                    <input id="cSov" type="text" inputmode="decimal" placeholder="예: 95" autocomplete="off">
+                </div>
+            </div>
+            <div class="result">
+                <span class="lbl">퍼센트 농도</span>
+                <span class="val" id="concOut">– <small>%</small></span>
+            </div>
+            <div class="steps" id="concSteps">용질과 용매의 양을 입력하면 계산 과정이 여기에 표시됩니다.</div>
+            <div class="hintline">용액의 양 = 용질 + 용매입니다. 물 100 g에 소금 5 g을 녹이면 용액은 105 g이므로 농도는 약 4.8%입니다.</div>
+            <div class="btnrow">
+                <button class="btn ghost" type="button" data-ex="salt">예시: 소금물</button>
+                <button class="btn ghost" type="button" data-ex="sugar">예시: 설탕물</button>
+                <button class="btn ok" type="button" id="copyConc">📋 결과 복사</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============ 탭 3: 측정 오차 ============ -->
+    <section class="panel" id="p-err">
+        <div class="card">
+            <div class="card-head">
+                <h2>📏 측정값 분석</h2>
+                <span class="sub">쉼표·띄어쓰기·줄바꿈으로 구분해 입력</span>
+            </div>
+            <textarea class="ta" id="msrIn" placeholder="예: 9.8, 9.9, 9.7, 10.0, 9.8"></textarea>
+            <div class="calc" style="margin-top:11px">
+                <div class="field">
+                    <label for="trueVal">참값 (없으면 비워 두세요)</label>
+                    <input id="trueVal" type="text" inputmode="decimal" placeholder="예: 9.8" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label>측정값 개수</label>
+                    <input id="msrCount" type="text" value="0개" readonly style="opacity:.75">
+                </div>
+            </div>
+            <div class="btnrow">
+                <button class="btn ghost" type="button" data-ex="drop">예시: 자유 낙하</button>
+                <button class="btn ghost" type="button" data-ex="pend">예시: 진자 주기</button>
+                <button class="btn ghost" type="button" id="btnClear">지우기</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head"><h2>📊 계산 결과</h2><span class="sub">표준편차는 표본 표준편차입니다</span></div>
+            <div class="stats">
+                <div class="stat"><div class="k">평균</div><div class="v" id="outMean">–</div></div>
+                <div class="stat"><div class="k">표준편차</div><div class="v" id="outSd">–</div></div>
+                <div class="stat"><div class="k">최솟값</div><div class="v" id="outMin">–</div></div>
+                <div class="stat"><div class="k">최댓값</div><div class="v" id="outMax">–</div></div>
+                <div class="stat"><div class="k">최대 - 최소</div><div class="v" id="outRange">–</div></div>
+                <div class="stat em"><div class="k">참값 대비 오차</div><div class="v" id="outErr">–</div></div>
+            </div>
+            <table class="msr-table">
+                <thead><tr><th>측정</th><th>측정값</th><th>평균과의 차</th></tr></thead>
+                <tbody id="msrRows"><tr><td colspan="3" style="text-align:left;color:var(--muted);font-weight:700">측정값을 입력하면 표가 채워집니다.</td></tr></tbody>
+            </table>
+            <div class="btnrow">
+                <button class="btn ok" type="button" id="copyErr">📋 보고서용으로 복사</button>
+                <button class="btn ghost" type="button" id="copyTable">📋 표만 복사</button>
+            </div>
+            <div class="note" style="margin-top:12px">
+                <span>💡</span>
+                <span>오차(%) = |평균 - 참값| ÷ |참값| × 100. 표준편차가 작을수록 측정값이 평균 근처에 모여 있어 정밀한 측정입니다.</span>
+            </div>
+        </div>
+    </section>
+
+</div>
+</div>
+
+<button id="btn-fullscreen" type="button" aria-pressed="false" aria-label="전체화면으로 전환">
+    <span class="fs-icon" id="fsIcon">⛶</span><span class="fs-text" id="fsText">전체화면</span>
+</button>
+
+<script>
+/* ==========================================================
+   과학 단위 변환 & 오차 계산기
+   탭1 단위 변환 · 탭2 밀도/농도 · 탭3 측정 오차
+   ========================================================== */
+(function () {
+    'use strict';
+    var $ = function (s) { return document.querySelector(s); };
+
+    /* ---------- 숫자 도우미 ---------- */
+    function num(v) {
+        if (v == null) return NaN;
+        var s = String(v).replace(/,/g, '').replace(/[^\d.eE+\-]/g, '').trim();
+        if (!s) return NaN;
+        return parseFloat(s);
+    }
+    function fmt(n, digits) {
+        if (!isFinite(n)) return '–';
+        var d = (digits == null) ? 4 : digits;
+        var r = Number(n.toPrecision(d));
+        if (Math.abs(r) >= 1e7 || (Math.abs(r) < 1e-4 && r !== 0)) return r.toExponential(3).replace('e', ' × 10^');
+        var s = r.toString();
+        if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+        return s;
+    }
+    function fmtFix(n, d) {
+        if (!isFinite(n)) return '–';
+        return (Math.round(n * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d);
+    }
+    function copyText(t, btn) {
+        var done = function () {
+            if (!btn) return;
+            var old = btn.textContent;
+            btn.textContent = '✅ 복사됨';
+            setTimeout(function () { btn.textContent = old; }, 1400);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(t).then(done, fallback);
+        } else fallback();
+        function fallback() {
+            var ta = document.createElement('textarea');
+            ta.value = t;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); done(); } catch (e) { }
+            document.body.removeChild(ta);
+        }
+    }
+
+    /* ============================================================
+       탭 1 : 단위 변환
+       ============================================================ */
+    var UNITS = {
+        current: {
+            name: '전류', icon: '🔌', base: 'A',
+            list: [
+                { u: 'A', f: 1 }, { u: 'mA', f: 1e-3 }
+            ]
+        },
+        voltage: {
+            name: '전압', icon: '🔋', base: 'V',
+            list: [
+                { u: 'V', f: 1 }, { u: 'mV', f: 1e-3 }, { u: 'kV', f: 1e3 }
+            ]
+        },
+        length: {
+            name: '길이', icon: '📏', base: 'm',
+            list: [
+                { u: 'mm', f: 1e-3 }, { u: 'cm', f: 1e-2 }, { u: 'm', f: 1 }, { u: 'km', f: 1e3 }
+            ]
+        },
+        mass: {
+            name: '질량', icon: '⚖️', base: 'g',
+            list: [
+                { u: 'mg', f: 1e-3 }, { u: 'g', f: 1 }, { u: 'kg', f: 1e3 }
+            ]
+        },
+        volume: {
+            name: '부피', icon: '🧪', base: 'mL',
+            list: [
+                { u: 'mL', f: 1 }, { u: 'L', f: 1e3 }, { u: 'cm³', f: 1 }
+            ]
+        },
+        temp: {
+            name: '온도', icon: '🌡️', base: 'K', linear: false,
+            list: [
+                { u: '°C', f: 1, add: 273.15 }, { u: 'K', f: 1, add: 0 }
+            ]
+        },
+        speed: {
+            name: '속력', icon: '🏃', base: 'm/s',
+            list: [
+                { u: 'm/s', f: 1 }, { u: 'km/h', f: 1000 / 3600 }
+            ]
+        }
+    };
+    var HINTS = {
+        current: '1 A = 1000 mA. 회로에 흐르는 전류의 세기를 잴 때는 전류계를 직렬로 연결합니다.',
+        voltage: '1 V = 1000 mV. 전압은 전지나 전원 장치 양단에 걸리는 전기적 압력입니다.',
+        length: '1 m = 100 cm = 1000 mm. 1 km = 1000 m.',
+        mass: '1 kg = 1000 g, 1 g = 1000 mg. 질량은 장소가 바뀌어도 변하지 않습니다.',
+        volume: '1 L = 1000 mL이고, 1 mL = 1 cm³ 입니다. 눈금실린더는 눈높이를 맞춰 읽습니다.',
+        temp: 'K = °C + 273.15. 켈빈 온도는 절대 온도로, 0 K는 더 이상 낮출 수 없는 온도입니다.',
+        speed: '1 m/s = 3.6 km/h. 속력 = 이동 거리 ÷ 걸린 시간입니다.'
+    };
+
+    var curCat = 'current';
+    var conv = { a: 0, b: 1 };
+
+    function toBase(cat, idx, v) {
+        var u = UNITS[cat].list[idx];
+        return v * u.f + (u.add || 0);
+    }
+    function fromBase(cat, idx, b) {
+        var u = UNITS[cat].list[idx];
+        return (b - (u.add || 0)) / u.f;
+    }
+
+    function buildCats() {
+        var html = '';
+        Object.keys(UNITS).forEach(function (k) {
+            html += '<button class="chip' + (k === curCat ? ' on' : '') + '" type="button" data-cat="' + k + '">' +
+                UNITS[k].icon + ' ' + UNITS[k].name + '</button>';
+        });
+        $('#cats').innerHTML = html;
+    }
+
+    function fillSelects() {
+        var list = UNITS[curCat].list;
+        var a = '', b = '';
+        list.forEach(function (u, i) {
+            a += '<option value="' + i + '">' + u.u + '</option>';
+            b += '<option value="' + i + '">' + u.u + '</option>';
+        });
+        $('#selA').innerHTML = a;
+        $('#selB').innerHTML = b;
+        conv.a = 0;
+        conv.b = list.length > 1 ? 1 : 0;
+        $('#selA').value = conv.a;
+        $('#selB').value = conv.b;
+        $('#convHint').textContent = HINTS[curCat] || '';
+    }
+
+    function renderConv() {
+        var list = UNITS[curCat].list;
+        var va = num($('#inA').value);
+        var vb = num($('#inB').value);
+        var out;
+        if (isFinite(va)) {
+            out = fromBase(curCat, conv.b, toBase(curCat, conv.a, va));
+            $('#inB').value = (curCat === 'temp') ? fmtFix(out, 2) : fmt(out, 6);
+            vb = out;
+        } else if (isFinite(vb)) {
+            out = fromBase(curCat, conv.a, toBase(curCat, conv.b, vb));
+            $('#inA').value = (curCat === 'temp') ? fmtFix(out, 2) : fmt(out, 6);
+            va = out;
+        } else {
+            $('#eqLine').textContent = '값을 입력하세요';
+            $('#unitRows').innerHTML = '';
+            return;
+        }
+        var baseVal = toBase(curCat, conv.a, va);
+        var ua = list[conv.a].u, ub = list[conv.b].u;
+        $('#eqLine').textContent = fmt(va, 6) + ' ' + ua + '  =  ' + fmt(vb, 6) + ' ' + ub;
+
+        var rows = '';
+        list.forEach(function (u, i) {
+            var v = fromBase(curCat, i, baseVal);
+            var shown = (curCat === 'temp') ? fmtFix(v, 2) : fmt(v, 6);
+            rows += '<tr' + (i === conv.a ? ' class="cur"' : '') + '><td>' + u.u + '</td>' +
+                '<td>' + shown + '</td></tr>';
+        });
+        $('#unitRows').innerHTML = rows;
+    }
+
+    function setCat(k) {
+        curCat = k;
+        buildCats();
+        fillSelects();
+        $('#inA').value = '1';
+        $('#inB').value = '';
+        renderConv();
+    }
+
+    $('#cats').addEventListener('click', function (e) {
+        var b = e.target.closest('.chip');
+        if (!b) return;
+        setCat(b.getAttribute('data-cat'));
+    });
+    $('#selA').addEventListener('change', function () { conv.a = +this.value; renderConv(); });
+    $('#selB').addEventListener('change', function () { conv.b = +this.value; renderConv(); });
+    $('#btnSwap').addEventListener('click', function () {
+        var t = conv.a; conv.a = conv.b; conv.b = t;
+        $('#selA').value = conv.a;
+        $('#selB').value = conv.b;
+        var v = $('#inB').value;
+        $('#inA').value = v;
+        renderConv();
+    });
+    var rafConv = null;
+    function onConvInput(which) {
+        if (rafConv) cancelAnimationFrame(rafConv);
+        rafConv = requestAnimationFrame(function () {
+            if (which === 'a') {
+                var v = num($('#inA').value);
+                if (isFinite(v)) {
+                    var out = fromBase(curCat, conv.b, toBase(curCat, conv.a, v));
+                    $('#inB').value = (curCat === 'temp') ? fmtFix(out, 2) : fmt(out, 6);
+                }
+            } else {
+                var v2 = num($('#inB').value);
+                if (isFinite(v2)) {
+                    var out2 = fromBase(curCat, conv.a, toBase(curCat, conv.b, v2));
+                    $('#inA').value = (curCat === 'temp') ? fmtFix(out2, 2) : fmt(out2, 6);
+                }
+            }
+            renderConv();
+        });
+    }
+    $('#inA').addEventListener('input', function () { onConvInput('a'); });
+    $('#inB').addEventListener('input', function () { onConvInput('b'); });
+
+    /* ============================================================
+       탭 2 : 밀도 · 농도
+       ============================================================ */
+    function renderDensity() {
+        var m = num($('#mMass').value), v = num($('#mVol').value);
+        if (isFinite(m) && isFinite(v) && v > 0) {
+            var d = m / v;
+            $('#densOut').innerHTML = fmt(d, 4) + ' <small>g/mL</small>';
+            $('#densSteps').innerHTML =
+                '밀도 = 질량 ÷ 부피 = <code>' + fmt(m, 6) + ' g</code> ÷ <code>' + fmt(v, 6) + ' mL</code> = <code>' + fmt(d, 4) + ' g/mL</code>' +
+                (Math.abs(d - 1) < 0.02 ? '<br>물의 밀도(약 1 g/mL)와 비슷합니다.' : d > 1 ? '<br>물보다 밀도가 커서 물에 넣으면 가라앉습니다.' : '<br>물보다 밀도가 작아 물에 뜹니다.');
+        } else {
+            $('#densOut').innerHTML = '– <small>g/mL</small>';
+            $('#densSteps').textContent = '질량과 부피를 입력하면 계산 과정이 여기에 표시됩니다.';
+        }
+    }
+    function renderConc() {
+        var s = num($('#cSol').value), w = num($('#cSov').value);
+        if (isFinite(s) && isFinite(w) && s >= 0 && w >= 0 && (s + w) > 0) {
+            var total = s + w;
+            var c = s / total * 100;
+            $('#concOut').innerHTML = fmt(c, 4) + ' <small>%</small>';
+            $('#concSteps').innerHTML =
+                '용액 = 용질 + 용매 = <code>' + fmt(s, 6) + ' g</code> + <code>' + fmt(w, 6) + ' g</code> = <code>' + fmt(total, 6) + ' g</code><br>' +
+                '농도 = 용질 ÷ 용액 × 100 = <code>' + fmt(s, 6) + ' ÷ ' + fmt(total, 6) + ' × 100</code> = <code>' + fmt(c, 4) + ' %</code>';
+        } else {
+            $('#concOut').innerHTML = '– <small>%</small>';
+            $('#concSteps').textContent = '용질과 용매의 양을 입력하면 계산 과정이 여기에 표시됩니다.';
+        }
+    }
+    ['#mMass', '#mVol'].forEach(function (s) {
+        $(s).addEventListener('input', renderDensity);
+    });
+    ['#cSol', '#cSov'].forEach(function (s) {
+        $(s).addEventListener('input', renderConc);
+    });
+    var EX = {
+        al: function () { $('#mMass').value = '54'; $('#mVol').value = '20'; renderDensity(); },
+        water: function () { $('#mMass').value = '100'; $('#mVol').value = '100'; renderDensity(); },
+        salt: function () { $('#cSol').value = '5'; $('#cSov').value = '95'; renderConc(); },
+        sugar: function () { $('#cSol').value = '20'; $('#cSov').value = '80'; renderConc(); },
+        drop: function () {
+            $('#msrIn').value = '9.8, 9.9, 9.7, 10.0, 9.8';
+            $('#trueVal').value = '9.8';
+            renderError();
+        },
+        pend: function () {
+            $('#msrIn').value = '1.42 1.40 1.43 1.41 1.42 1.40';
+            $('#trueVal').value = '1.41';
+            renderError();
+        }
+    };
+    document.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-ex]');
+        if (!b) return;
+        var f = EX[b.getAttribute('data-ex')];
+        if (f) f();
+    });
+    $('#copyDens').addEventListener('click', function () {
+        var m = num($('#mMass').value), v = num($('#mVol').value);
+        if (!(isFinite(m) && isFinite(v) && v > 0)) return;
+        copyText('밀도 계산\n· 질량: ' + fmt(m, 6) + ' g\n· 부피: ' + fmt(v, 6) + ' mL\n· 밀도 = ' + fmt(m, 6) + ' ÷ ' + fmt(v, 6) + ' = ' + fmt(m / v, 4) + ' g/mL', this);
+    });
+    $('#copyConc').addEventListener('click', function () {
+        var s = num($('#cSol').value), w = num($('#cSov').value);
+        if (!(isFinite(s) && isFinite(w) && (s + w) > 0)) return;
+        var total = s + w;
+        copyText('퍼센트 농도 계산\n· 용질: ' + fmt(s, 6) + ' g\n· 용매: ' + fmt(w, 6) + ' g\n· 용액: ' + fmt(total, 6) + ' g\n· 농도 = ' + fmt(s, 6) + ' ÷ ' + fmt(total, 6) + ' × 100 = ' + fmt(s / total * 100, 4) + ' %', this);
+    });
+
+    /* ============================================================
+       탭 3 : 측정 오차
+       ============================================================ */
+    var lastErr = null;
+    function renderError() {
+        var raw = $('#msrIn').value || '';
+        var parts = raw.split(/[\s,;\n\t]+/).filter(function (x) { return x !== ''; });
+        var vals = [];
+        parts.forEach(function (p) {
+            var n = num(p);
+            if (isFinite(n)) vals.push(n);
+        });
+        var n = vals.length;
+        $('#msrCount').value = n + '개';
+        if (n === 0) {
+            $('#outMean').textContent = '–'; $('#outSd').textContent = '–';
+            $('#outMin').textContent = '–'; $('#outMax').textContent = '–';
+            $('#outRange').textContent = '–'; $('#outErr').textContent = '–';
+            $('#msrRows').innerHTML = '<tr><td colspan="3" style="text-align:left;color:var(--muted);font-weight:700">측정값을 입력하면 표가 채워집니다.</td></tr>';
+            lastErr = null;
+            return;
+        }
+        var sum = 0, i;
+        for (i = 0; i < n; i++) sum += vals[i];
+        var mean = sum / n;
+        var ss = 0;
+        for (i = 0; i < n; i++) ss += Math.pow(vals[i] - mean, 2);
+        var sd = n > 1 ? Math.sqrt(ss / (n - 1)) : 0;
+        var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+        var tv = num($('#trueVal').value);
+        var errPct = (isFinite(tv) && tv !== 0) ? Math.abs(mean - tv) / Math.abs(tv) * 100 : null;
+        var errAbs = (isFinite(tv)) ? Math.abs(mean - tv) : null;
+
+        $('#outMean').innerHTML = fmt(mean, 5);
+        $('#outSd').innerHTML = fmt(sd, 3);
+        $('#outMin').innerHTML = fmt(mn, 5);
+        $('#outMax').innerHTML = fmt(mx, 5);
+        $('#outRange').innerHTML = fmt(mx - mn, 4);
+        $('#outErr').innerHTML = errPct == null ? '참값 입력' : fmt(errPct, 3) + ' <small>%</small>';
+
+        var rows = '';
+        vals.forEach(function (v, idx) {
+            var d = v - mean;
+            rows += '<tr><td>' + (idx + 1) + '회</td><td>' + fmt(v, 6) + '</td><td>' + (d >= 0 ? '+' : '') + fmt(d, 3) + '</td></tr>';
+        });
+        $('#msrRows').innerHTML = rows;
+
+        lastErr = { vals: vals, n: n, mean: mean, sd: sd, mn: mn, mx: mx, tv: isFinite(tv) ? tv : null, errPct: errPct, errAbs: errAbs };
+    }
+    $('#msrIn').addEventListener('input', renderError);
+    $('#trueVal').addEventListener('input', renderError);
+    $('#btnClear').addEventListener('click', function () {
+        $('#msrIn').value = '';
+        $('#trueVal').value = '';
+        renderError();
+    });
+    $('#copyErr').addEventListener('click', function () {
+        if (!lastErr) { copyText('측정값을 먼저 입력하세요.', this); return; }
+        var e = lastErr;
+        var t = '측정값 분석 결과\n';
+        t += '· 측정값: ' + e.vals.map(function (v) { return fmt(v, 6); }).join(', ') + ' (' + e.n + '회)\n';
+        t += '· 평균: ' + fmt(e.mean, 5) + '\n';
+        t += '· 표준편차: ' + fmt(e.sd, 3) + '\n';
+        t += '· 최솟값 / 최댓값: ' + fmt(e.mn, 5) + ' / ' + fmt(e.mx, 5) + '\n';
+        t += '· 최대 - 최소: ' + fmt(e.mx - e.mn, 4) + '\n';
+        if (e.tv != null && e.errPct != null) {
+            t += '· 참값: ' + fmt(e.tv, 6) + '\n';
+            t += '· 오차: ' + fmt(e.errAbs, 4) + ' (오차율 ' + fmt(e.errPct, 3) + '%)\n';
+        }
+        copyText(t, this);
+    });
+    $('#copyTable').addEventListener('click', function () {
+        if (!lastErr) { copyText('측정값을 먼저 입력하세요.', this); return; }
+        var e = lastErr;
+        var t = '측정 회차\t측정값\t평균과의 차\n';
+        e.vals.forEach(function (v, i) {
+            t += (i + 1) + '회\t' + fmt(v, 6) + '\t' + (v - e.mean >= 0 ? '+' : '') + fmt(v - e.mean, 3) + '\n';
+        });
+        t += '평균\t' + fmt(e.mean, 5) + '\t\n';
+        t += '표준편차\t' + fmt(e.sd, 3) + '\t\n';
+        copyText(t, this);
+    });
+
+    /* ============================================================
+       탭 전환 · 테마 · 전체화면
+       ============================================================ */
+    $('#tabs').addEventListener('click', function (e) {
+        var b = e.target.closest('button');
+        if (!b) return;
+        var t = b.getAttribute('data-tab');
+        Array.prototype.forEach.call($('#tabs').children, function (x) {
+            x.classList.toggle('on', x === b);
+        });
+        ['conv', 'dens', 'err'].forEach(function (k) {
+            $('#p-' + k).classList.toggle('on', k === t);
+        });
+        $('.app').scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    function applyTheme(dark) {
+        document.body.classList.toggle('dark', dark);
+        $('#bTheme').textContent = dark ? '☀️ 주간 모드' : '🌙 야간 모드';
+        try { localStorage.setItem('svl_unit_theme', dark ? '1' : '0'); } catch (e) { }
+    }
+    $('#bTheme').addEventListener('click', function () { applyTheme(!document.body.classList.contains('dark')); });
+    try { if (localStorage.getItem('svl_unit_theme') === '1') applyTheme(true); } catch (e) { }
+
+    (function () {
+        var btn = document.getElementById('btn-fullscreen');
+        var iconEl = document.getElementById('fsIcon');
+        var textEl = document.getElementById('fsText');
+        var root = document.documentElement;
+        var PSEUDO = 'pseudo-fullscreen';
+        function isRealFs() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                document.mozFullScreenElement || document.msFullscreenElement);
+        }
+        function isPseudo() { return document.body.classList.contains(PSEUDO); }
+        function syncUI() {
+            var on = isRealFs() || isPseudo();
+            iconEl.textContent = on ? '🗗' : '⛶';
+            textEl.textContent = on ? '창모드' : '전체화면';
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        }
+        function toast(msg) {
+            var el = document.getElementById('fs-toast');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'fs-toast'; el.id = 'fs-toast';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg; void el.offsetWidth; el.classList.add('show');
+            clearTimeout(toast._t);
+            toast._t = setTimeout(function () { el.classList.remove('show'); }, 2600);
+        }
+        function enterPseudo(hint) {
+            if (isRealFs()) return;
+            document.body.classList.add(PSEUDO);
+            syncUI();
+            if (hint) toast('이 브라우저는 브라우저 전체화면 대신 상단 바를 숨긴 몰입 모드로 표시합니다');
+        }
+        function requestReal() {
+            var req = root.requestFullscreen || root.webkitRequestFullscreen || root.mozRequestFullScreen || root.msRequestFullscreen;
+            if (!req) return false;
+            try {
+                var p = req.call(root);
+                if (p && typeof p.then === 'function') p.then(syncUI, function () { enterPseudo(true); });
+                else setTimeout(function () { if (!isRealFs() && !isPseudo()) enterPseudo(true); else syncUI(); }, 500);
+                return true;
+            } catch (err) { return false; }
+        }
+        btn.addEventListener('click', function () {
+            if (isRealFs()) {
+                var exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                try { if (exit) { var q = exit.call(document); if (q && typeof q.catch === 'function') q.catch(function () { }); } } catch (err) { }
+                syncUI(); return;
+            }
+            if (isPseudo()) { document.body.classList.remove(PSEUDO); syncUI(); return; }
+            if (!requestReal()) enterPseudo(true);
+            syncUI();
+        });
+        ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+            document.addEventListener(ev, function () {
+                if (isRealFs()) document.body.classList.remove(PSEUDO);
+                syncUI();
+            });
+        });
+        document.addEventListener('keydown', function (e) {
+            if ((e.key === 'Escape' || e.key === 'Esc') && isPseudo() && !isRealFs()) {
+                document.body.classList.remove(PSEUDO); syncUI();
+            }
+        });
+        window.addEventListener('resize', syncUI);
+        syncUI();
+    })();
+
+    /* ---------- 시작 ---------- */
+    buildCats();
+    fillSelects();
+    renderConv();
+    renderDensity();
+    renderConc();
+    renderError();
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+</body>
+</html>

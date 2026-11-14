@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>실험실 안전 사고 대처 시뮬레이터 | Science Virtual LAB</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+@font-face{
+    font-family:'SeoulNamsan';
+    src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+        url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+    --bg:#eef2f7; --ink:#14181f; --muted:#64748b; --line:rgba(15,23,42,.10);
+    --card:rgba(255,255,255,.88); --card-solid:#ffffff; --accent:#0a84ff; --accent-soft:rgba(10,132,255,.12);
+    --ok:#10b981; --ok-soft:rgba(16,185,129,.14); --danger:#ef4444; --danger-soft:rgba(239,68,68,.13);
+    --warn:#f59e0b; --shadow:0 10px 30px rgba(15,23,42,.10);
+}
+body.dark{
+    --bg:#0f1420; --ink:#eef3fb; --muted:#94a3b8; --line:rgba(255,255,255,.13);
+    --card:rgba(30,36,50,.88); --card-solid:#1b2230; --accent:#3f9dff; --accent-soft:rgba(63,157,255,.18);
+    --ok:#34d399; --ok-soft:rgba(52,211,153,.16); --danger:#f87171; --danger-soft:rgba(248,113,113,.18);
+    --shadow:0 10px 30px rgba(0,0,0,.45);
+}
+html,body{margin:0;padding:0;width:100%;height:100%}
+body{
+    font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    color:var(--ink); background:var(--bg);
+    transition:background .3s ease,color .3s ease;
+    overflow:hidden;
+}
+
+/* ---------- 상단 헤더 ---------- */
+.top-nav{
+    position:fixed; top:0; left:0; right:0; height:60px;
+    display:flex; align-items:center; gap:10px; padding:0 250px 0 16px; z-index:100;
+    background:var(--card); backdrop-filter:blur(20px) saturate(180%);
+    -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border-bottom:1px solid var(--line);
+}
+.back-btn{
+    display:inline-flex; align-items:center; gap:6px; padding:7px 14px;
+    font-family:inherit; font-size:13px; font-weight:800; color:inherit; text-decoration:none;
+    border:1px solid var(--line); border-radius:999px; background:var(--card-solid);
+    transition:transform .16s ease, background .16s ease; white-space:nowrap;
+}
+.back-btn:hover{transform:translateY(-1px)}
+.page-title{display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:800; letter-spacing:-.2px; min-width:0}
+.page-title .t{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.pill-badge{
+    padding:3px 9px; border-radius:999px; font-size:10.5px; font-weight:800;
+    background:var(--accent-soft); color:var(--accent); white-space:nowrap; flex:0 0 auto;
+}
+
+/* 공통: 우상단 유틸(제안하기 자동 삽입 + 야간모드) */
+.top-right-bar{
+    position:fixed !important; top:15px !important; right:20px !important;
+    display:flex !important; flex-direction:column; align-items:flex-end; gap:8px;
+    z-index:130 !important; pointer-events:none;
+}
+.top-right-bar > .tr-util{
+    display:flex !important; flex-direction:row; align-items:center; gap:8px;
+    pointer-events:auto;
+}
+#bTheme{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    height:40px; padding:0 15px; border-radius:20px; cursor:pointer;
+    font-family:inherit; font-size:12.5px; font-weight:800; color:inherit;
+    border:1px solid var(--line); background:var(--card);
+    backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+    box-shadow:var(--shadow); white-space:nowrap; transition:transform .16s ease;
+}
+#bTheme:hover{transform:translateY(-1px)}
+
+/* ---------- 본문 ---------- */
+.app{position:fixed; top:60px; left:0; right:0; bottom:0; display:flex; overflow:hidden}
+.side{
+    width:286px; flex:0 0 286px; border-right:1px solid var(--line);
+    background:var(--card); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    display:flex; flex-direction:column; min-height:0;
+}
+.side-head{padding:14px 16px 10px; border-bottom:1px solid var(--line)}
+.side-title{font-size:13px; font-weight:800; color:var(--muted); letter-spacing:-.1px; margin-bottom:10px}
+.progress-track{height:8px; border-radius:99px; background:rgba(120,140,170,.22); overflow:hidden}
+.progress-fill{height:100%; width:0%; border-radius:99px; background:linear-gradient(90deg,#22c55e,#0ea5e9); transition:width .45s cubic-bezier(.2,.8,.2,1)}
+.progress-meta{display:flex; justify-content:space-between; margin-top:7px; font-size:11.5px; font-weight:800; color:var(--muted)}
+.progress-meta b{color:var(--ink)}
+.scen-list{flex:1 1 auto; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:8px; min-height:0}
+.scen-item{
+    display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+    padding:10px 11px; border-radius:14px; cursor:pointer; font-family:inherit; color:inherit;
+    border:1px solid var(--line); background:var(--card-solid); font-size:12.5px; font-weight:700;
+    transition:transform .15s ease, border-color .15s ease, background .15s ease;
+}
+.scen-item:hover{transform:translateY(-1px); border-color:var(--accent)}
+.scen-item.active{border-color:var(--accent); background:var(--accent-soft); box-shadow:0 6px 16px rgba(10,132,255,.16)}
+.scen-item .ic{font-size:18px; line-height:1; flex:0 0 auto}
+.scen-item .nm{flex:1 1 auto; min-width:0; line-height:1.3; word-break:keep-all}
+.scen-item .sc{font-size:11px; font-weight:900; color:var(--muted); flex:0 0 auto}
+.scen-item.done .sc{color:var(--ok)}
+.scen-item .chk{font-size:12px; color:var(--ok); flex:0 0 auto}
+
+.main{flex:1 1 auto; min-width:0; display:flex; flex-direction:column; overflow-y:auto; padding:16px 18px 24px}
+.stage-wrap{position:relative; border-radius:22px; overflow:hidden; border:1px solid var(--line); box-shadow:var(--shadow); background:#dce6f2; flex:0 0 auto}
+body.dark .stage-wrap{background:#dce6f2}
+#stage{display:block; width:100%; height:clamp(215px,36vh,345px)}
+.stage-badge{
+    position:absolute; top:12px; left:12px; display:inline-flex; align-items:center; gap:6px;
+    padding:6px 11px; border-radius:999px; font-size:11.5px; font-weight:800;
+    background:rgba(255,255,255,.86); color:#0f172a; box-shadow:0 4px 14px rgba(15,23,42,.12);
+}
+body.dark .stage-badge{background:rgba(24,32,48,.9); color:#e8eefc}
+.stage-alert{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; text-align:center; padding:18px; opacity:0; pointer-events:none; transition:opacity .28s ease;
+}
+.stage-wrap.shake{animation:shake .45s cubic-bezier(.36,.07,.19,.97) both}
+@keyframes shake{
+    10%,90%{transform:translateX(-2px)} 20%,80%{transform:translateX(4px)}
+    30%,50%,70%{transform:translateX(-7px)} 40%,60%{transform:translateX(7px)}
+}
+.stage-alert.show{opacity:1}
+.stage-alert.danger{background:radial-gradient(circle at 50% 55%, rgba(239,68,68,.34), rgba(239,68,68,.12) 60%, transparent 78%)}
+.stage-alert.ok{background:radial-gradient(circle at 50% 55%, rgba(16,185,129,.3), rgba(16,185,129,.10) 60%, transparent 78%)}
+.stage-alert .big{font-size:44px; line-height:1; filter:drop-shadow(0 6px 14px rgba(0,0,0,.25))}
+.stage-alert .msg{font-size:14px; font-weight:900; color:#fff; background:rgba(15,23,42,.72); padding:7px 14px; border-radius:999px; backdrop-filter:blur(6px)}
+
+.scen-head{margin:16px 2px 10px}
+.scen-head .kicker{font-size:11.5px; font-weight:900; color:var(--accent); letter-spacing:.2px}
+.scen-head h2{margin:5px 0 6px; font-size:19px; font-weight:900; letter-spacing:-.4px; line-height:1.3}
+.scen-head p{margin:0; font-size:13px; line-height:1.55; color:var(--muted)}
+
+.step-card{
+    margin-top:12px; padding:16px 16px 14px; border-radius:20px;
+    border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow);
+}
+.step-top{display:flex; align-items:center; gap:9px; margin-bottom:10px; flex-wrap:wrap}
+.step-chip{
+    padding:4px 10px; border-radius:999px; font-size:11px; font-weight:900;
+    background:var(--accent-soft); color:var(--accent); white-space:nowrap;
+}
+.step-q{font-size:15px; font-weight:900; letter-spacing:-.25px; line-height:1.4; flex:1 1 240px}
+.opts{display:flex; flex-direction:column; gap:9px; margin-top:4px}
+.opt{
+    display:flex; align-items:flex-start; gap:11px; width:100%; text-align:left;
+    padding:12px 13px; border-radius:15px; cursor:pointer; font-family:inherit; color:inherit;
+    border:1.5px solid var(--line); background:var(--card-solid);
+    font-size:13.5px; font-weight:700; line-height:1.45; word-break:keep-all;
+    transition:transform .15s ease, border-color .15s ease, background .15s ease, opacity .2s ease;
+}
+.opt:hover:not(:disabled){transform:translateY(-1px); border-color:var(--accent); box-shadow:0 8px 20px rgba(10,132,255,.12)}
+.opt:disabled{cursor:default}
+.opt .mk{
+    flex:0 0 auto; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:900; background:var(--accent-soft); color:var(--accent); margin-top:-1px;
+}
+.opt.correct{border-color:var(--ok); background:var(--ok-soft)}
+.opt.correct .mk{background:var(--ok); color:#fff}
+.opt.wrong{border-color:var(--danger); background:var(--danger-soft); opacity:.85}
+.opt.wrong .mk{background:var(--danger); color:#fff}
+.opt.dim{opacity:.45}
+.feedback{margin-top:12px; padding:12px 14px; border-radius:15px; font-size:13px; line-height:1.55; display:none}
+.feedback.show{display:block; animation:popIn .26s ease}
+@keyframes popIn{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+.feedback.bad{background:var(--danger-soft); border:1px solid rgba(239,68,68,.45)}
+.feedback.good{background:var(--ok-soft); border:1px solid rgba(16,185,129,.45)}
+.feedback .fb-title{display:flex; align-items:center; gap:7px; font-weight:900; margin-bottom:5px; font-size:13.5px}
+.feedback.bad .fb-title{color:#b91c1c}
+body.dark .feedback.bad .fb-title{color:#fca5a5}
+.feedback.good .fb-title{color:#047857}
+body.dark .feedback.good .fb-title{color:#6ee7b7}
+.feedback .fb-body{color:var(--ink); opacity:.92}
+
+.step-foot{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; flex-wrap:wrap}
+.mini-info{font-size:12px; font-weight:800; color:var(--muted)}
+.mini-info b{color:var(--ink)}
+.btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    padding:10px 18px; border-radius:14px; border:none; cursor:pointer;
+    font-family:inherit; font-size:13px; font-weight:900; color:#fff;
+    background:var(--accent); box-shadow:0 8px 20px rgba(10,132,255,.28);
+    transition:transform .16s ease, filter .16s ease, opacity .2s ease; white-space:nowrap;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn:active{transform:scale(.97)}
+.btn.ghost{background:transparent; color:var(--ink); border:1px solid var(--line); box-shadow:none}
+.btn:disabled{opacity:.42; cursor:not-allowed; transform:none; box-shadow:none}
+
+/* ---------- 점수판 ---------- */
+.score-card{margin-top:14px; padding:16px; border-radius:20px; border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow); display:none}
+.score-card.show{display:block; animation:popIn .3s ease}
+.score-top{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap}
+.score-total{display:flex; align-items:baseline; gap:8px}
+.score-total .n{font-size:34px; font-weight:900; letter-spacing:-1px; line-height:1}
+.score-total .u{font-size:13px; font-weight:800; color:var(--muted)}
+.grade{
+    display:inline-flex; flex-direction:column; align-items:center; justify-content:center;
+    width:64px; height:64px; border-radius:20px; font-weight:900; color:#fff;
+    background:linear-gradient(135deg,#22c55e,#0ea5e9); box-shadow:0 10px 24px rgba(14,165,233,.28);
+}
+.grade .g{font-size:24px; line-height:1}
+.grade .l{font-size:9.5px; letter-spacing:.4px; margin-top:3px}
+.score-msg{margin:12px 0 0; font-size:13px; line-height:1.55; color:var(--muted)}
+.res-table{width:100%; border-collapse:collapse; margin-top:12px; font-size:12.5px}
+.res-table th,.res-table td{padding:8px 9px; text-align:left; border-bottom:1px solid var(--line)}
+.res-table th{font-size:11px; font-weight:900; color:var(--muted); letter-spacing:.2px}
+.res-table td.n{text-align:right; font-weight:900; font-variant-numeric:tabular-nums}
+.res-table tr:last-child td{border-bottom:none}
+.res-table .pending{color:var(--muted); font-weight:700}
+
+/* ---------- 하단 요약 바 ---------- */
+.bottombar{
+    position:fixed; left:0; right:0; bottom:0; padding:8px 16px calc(8px + env(safe-area-inset-bottom));
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--card); backdrop-filter:blur(18px); border-top:1px solid var(--line); z-index:90;
+}
+.bottombar .bi{font-size:11.5px; font-weight:800; color:var(--muted)}
+.bottombar .bi b{font-size:16px; color:var(--ink)}
+
+/* ---------- 전체화면 버튼 ---------- */
+#btn-fullscreen{
+    position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom,0px)); z-index:95;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    padding:9px 16px; border-radius:999px; border:1px solid var(--line);
+    background:var(--card); backdrop-filter:blur(18px) saturate(180%);
+    -webkit-backdrop-filter:blur(18px) saturate(180%);
+    box-shadow:0 8px 24px rgba(15,23,42,.16);
+    color:inherit; font-family:inherit; font-size:12.5px; font-weight:800;
+    white-space:nowrap; line-height:1; cursor:pointer; transition:transform .18s ease;
+}
+#btn-fullscreen:hover{transform:translateY(-1px)}
+body.pseudo-fullscreen .top-nav{transform:translateY(-100%); opacity:0; pointer-events:none}
+body.pseudo-fullscreen .app{top:0}
+body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:none !important}
+.fs-toast{
+    position:fixed; left:50%; bottom:calc(78px + env(safe-area-inset-bottom,0px)); transform:translate(-50%,8px);
+    z-index:2050; max-width:86vw; padding:10px 16px; border-radius:14px;
+    background:rgba(28,28,30,.92); color:#fff; font-size:12.5px; font-weight:700; line-height:1.45;
+    text-align:center; box-shadow:0 10px 26px rgba(0,0,0,.3); opacity:0; pointer-events:none;
+    transition:opacity .26s ease, transform .26s ease;
+}
+.fs-toast.show{opacity:1; transform:translate(-50%,0)}
+
+/* ---------- SVG 아트 애니메이션 ---------- */
+#stage .fl{transform-origin:50% 100%; animation:flick .9s ease-in-out infinite alternate}
+#stage .fl2{animation:flick 1.2s .2s ease-in-out infinite alternate}
+#stage .fl3{animation:flick .7s .1s ease-in-out infinite alternate}
+@keyframes flick{from{transform:scaleY(.9) translateY(1px); opacity:.86} to{transform:scaleY(1.08) translateY(-2px); opacity:1}}
+#stage .drop{animation:dropFall 1.6s linear infinite}
+#stage .drop2{animation:dropFall 1.6s .55s linear infinite}
+@keyframes dropFall{0%{transform:translateY(0); opacity:0} 15%{opacity:1} 100%{transform:translateY(52px); opacity:0}}
+#stage .smoke{animation:smokeUp 2.6s ease-in-out infinite}
+#stage .smoke2{animation:smokeUp 2.6s .8s ease-in-out infinite}
+@keyframes smokeUp{0%{transform:translateY(6px); opacity:.15} 45%{opacity:.75} 100%{transform:translateY(-26px); opacity:0}}
+#stage .spark{animation:sparkGlow 1.4s ease-in-out infinite alternate}
+@keyframes sparkGlow{from{opacity:.35} to{opacity:1}}
+#stage .pulse{animation:pulseRing 1.8s ease-out infinite}
+@keyframes pulseRing{0%{r:8; opacity:.55} 100%{r:26; opacity:0}}
+
+/* ---------- 모바일 ---------- */
+@media (max-width:900px){
+    .top-nav{height:52px; padding:0 12px; gap:8px}
+    .page-title{font-size:12.5px}
+    .back-btn{padding:6px 11px; font-size:12px}
+    .top-right-bar{top:calc(max(8px,env(safe-area-inset-top)) + 46px) !important; right:8px !important; z-index:130}
+    #bTheme{height:34px; padding:0 11px; font-size:11.5px}
+    .app{top:96px; flex-direction:column; overflow-y:auto; display:block; padding-bottom:70px}
+    .side{width:100%; flex:none; border-right:none; border-bottom:1px solid var(--line); background:transparent; backdrop-filter:none}
+    .side-head{padding:10px 14px 8px}
+    .side-title{margin-bottom:7px; font-size:12px}
+    .scen-list{flex-direction:row; overflow-x:auto; overflow-y:hidden; padding:8px 12px 10px; gap:7px; -webkit-overflow-scrolling:touch}
+    .scen-item{flex:0 0 auto; width:auto; padding:8px 12px; font-size:12px; gap:7px; border-radius:999px}
+    .scen-item .nm{max-width:170px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    .scen-item .sc{display:none}
+    .main{padding:12px 12px 84px; overflow:visible}
+    #stage{height:auto}
+    .scen-head h2{font-size:17px}
+    .scen-head p{font-size:12.5px}
+    .step-card{padding:13px 13px 12px; border-radius:17px}
+    .step-q{font-size:14px; flex:1 1 100%}
+    .opt{padding:11px 12px; font-size:13px}
+    .bottombar{display:flex}
+    #btn-fullscreen{bottom:calc(64px + env(safe-area-inset-bottom,0px)); right:10px; padding:8px 13px; font-size:12px}
+    .score-total .n{font-size:28px}
+}
+@media (max-width:430px){
+    .opt{font-size:12.5px; gap:9px}
+    .opt .mk{width:22px; height:22px; font-size:11px}
+    .stage-alert .big{font-size:34px}
+}
+@media (max-height:500px) and (orientation:landscape){
+    .top-nav{height:44px}
+    .app{top:44px}
+    .side{display:none}
+    .main{padding:8px 10px 70px}
+    #btn-fullscreen{bottom:calc(8px + env(safe-area-inset-bottom,0px)); right:8px; padding:7px 12px; font-size:11.5px}
+    .top-right-bar{top:max(6px,env(safe-area-inset-top)) !important; right:86px !important}
+    #bTheme{height:30px; font-size:10.5px}
+}
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="../../index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="page-title"><span class="t">실험실 안전 사고 대처 시뮬레이터</span><span class="pill-badge">교실 도구</span></div>
+</nav>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button id="bTheme" type="button">🌙 야간 모드</button>
+    </div>
+</div>
+
+<div class="app">
+    <aside class="side">
+        <div class="side-head">
+            <div class="side-title">🧯 상황 선택</div>
+            <div class="progress-track"><div class="progress-fill" id="progFill"></div></div>
+            <div class="progress-meta">
+                <span>완료 <b id="progDone">0</b>/<b id="progTotal">8</b></span>
+                <span>획득 <b id="progScore">0</b>점</span>
+            </div>
+        </div>
+        <div class="scen-list" id="scenList"></div>
+    </aside>
+
+    <main class="main" id="main">
+        <div class="stage-wrap" id="stageWrap">
+            <svg id="stage" viewBox="0 18 560 216" preserveAspectRatio="xMidYMid meet" role="img" aria-label="상황 그림"></svg>
+            <div class="stage-badge" id="stageBadge">🧪 상황</div>
+            <div class="stage-alert" id="stageAlert">
+                <div class="big" id="alertIcon">⚠️</div>
+                <div class="msg" id="alertMsg">위험!</div>
+            </div>
+        </div>
+
+        <div class="scen-head">
+            <div class="kicker" id="scenKicker">상황 1</div>
+            <h2 id="scenTitle">상황을 선택하세요</h2>
+            <p id="scenDesc">왼쪽 목록에서 대처해 볼 상황을 고르면 단계별 선택이 시작됩니다.</p>
+        </div>
+
+        <div class="step-card" id="stepCard" style="display:none">
+            <div class="step-top">
+                <span class="step-chip" id="stepChip">1단계</span>
+                <div class="step-q" id="stepQ">질문</div>
+            </div>
+            <div class="opts" id="optWrap"></div>
+            <div class="feedback" id="feedback">
+                <div class="fb-title" id="fbTitle"></div>
+                <div class="fb-body" id="fbBody"></div>
+            </div>
+            <div class="step-foot">
+                <div class="mini-info" id="stepInfo">맞힌 개수 <b>0</b></div>
+                <div style="display:flex; gap:8px">
+                    <button class="btn ghost" id="btnRetryScen" type="button">↺ 이 상황 다시</button>
+                    <button class="btn" id="btnNext" type="button" disabled>다음 단계 →</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="step-card" id="nextCard" style="display:none"></div>
+
+        <div class="score-card" id="scoreCard">
+            <div class="score-top">
+                <div>
+                    <div class="kicker" style="font-size:11.5px;font-weight:900;color:var(--accent)">📊 수료 점수판</div>
+                    <div class="score-total"><span class="n" id="totalScore">0</span><span class="u">/ <span id="maxScore">800</span>점</span></div>
+                </div>
+                <div class="grade" id="gradeBox"><span class="g" id="gradeLetter">A</span><span class="l">등급</span></div>
+            </div>
+            <p class="score-msg" id="scoreMsg">상황을 모두 마치면 여기에 점수와 등급이 정리됩니다.</p>
+            <table class="res-table">
+                <thead><tr><th>상황</th><th>시도</th><th class="n" style="text-align:right">점수</th></tr></thead>
+                <tbody id="resBody"></tbody>
+            </table>
+        </div>
+    </main>
+</div>
+
+<div class="bottombar">
+    <div class="bi">완료 <b id="bbDone">0</b>/<b id="bbTotal">8</b></div>
+    <div class="bi">획득 <b id="bbScore">0</b>점</div>
+    <button class="btn" id="bbJump" type="button">📊 점수판</button>
+</div>
+
+<button id="btn-fullscreen" type="button" aria-pressed="false" aria-label="전체화면으로 전환">
+    <span class="fs-icon" id="fsIcon">⛶</span><span class="fs-text" id="fsText">전체화면</span>
+</button>
+
+<script>
+/* ==========================================================
+   실험실 안전 사고 대처 시뮬레이터
+   상황 8종 · 단계별 순서 고르기 · 즉각 피드백 · 수료 점수판
+   ========================================================== */
+(function () {
+    'use strict';
+
+    /* ---------- SVG 장면 ---------- */
+    var BENCH = '<rect x="0" y="0" width="560" height="250" fill="#eaf0f8"/>' +
+                '<rect x="0" y="206" width="560" height="44" fill="#dde5ef"/>' +
+                '<rect x="0" y="188" width="560" height="20" rx="6" fill="#b3c4d8"/><rect x="0" y="186" width="560" height="4" rx="2" fill="#9fb0c6"/>' +
+                '<rect x="0" y="188" width="560" height="5" rx="2" fill="#dbe4f0"/>';
+
+    var ART = {
+        fire:
+            '<ellipse cx="330" cy="192" rx="122" ry="12" fill="#fcd34d" opacity=".55"/>' +
+            '<g transform="rotate(-11 210 176)">' +
+              '<rect x="150" y="156" width="104" height="38" rx="17" fill="#e8f1fc" stroke="#7f8ea3" stroke-width="2.5"/>' +
+              '<rect x="176" y="162" width="12" height="26" rx="4" fill="#bfdbfe"/>' +
+              '<rect x="246" y="164" width="22" height="14" rx="5" fill="#9aa8ba"/>' +
+              '<rect x="248" y="150" width="14" height="16" rx="3" fill="#cbd5e1" stroke="#7f8ea3" stroke-width="2"/>' +
+            '</g>' +
+            '<g transform="translate(268 150)">' +
+              '<path class="fl" d="M0 0c-16-19-3-34 8-45 3 15 15 21 15 33 0 10-9 15-23 12z" fill="#f97316"/>' +
+              '<path class="fl2" d="M4 0c-9-12 0-22 7-28 1 10 9 13 9 21 0 6-6 9-16 7z" fill="#fbbf24"/>' +
+            '</g>' +
+            '<g transform="translate(352 176)">' +
+              '<path class="fl3" d="M0 0c-13-15-2-26 6-35 2 12 12 17 12 26 0 8-7 12-18 9z" fill="#f97316" opacity=".85"/>' +
+              '<path class="fl2" d="M2 0c-7-9 0-16 5-21 1 7 7 9 7 15 0 4-4 7-12 6z" fill="#fbbf24"/>' +
+            '</g>' +
+            '<text x="92" y="188" font-size="36" text-anchor="middle">😱</text>' +
+            '<text x="330" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">흘러나온 알코올에 불이 붙음</text>' +
+            '<path d="M106 150c18 8 30 16 42 30" stroke="#ef4444" stroke-width="2.4" fill="none" stroke-dasharray="5 5"/>',
+        acid:
+            '<rect x="196" y="120" width="96" height="72" rx="7" fill="#eaf6fe" stroke="#7f8ea3" stroke-width="2.5"/>' +
+            '<rect x="199" y="150" width="90" height="39" rx="4" fill="#7dd3fc" opacity=".8"/>' +
+            '<text x="244" y="176" font-size="16" text-anchor="middle" font-weight="bold" fill="#0369a1">H₂O</text>' +
+            '<g transform="rotate(28 336 96)">' +
+              '<rect x="300" y="58" width="42" height="64" rx="8" fill="#fef3c7" stroke="#a16207" stroke-width="2.5"/>' +
+              '<rect x="312" y="46" width="18" height="16" rx="4" fill="#a16207"/>' +
+              '<text x="321" y="98" font-size="12" text-anchor="middle" font-weight="bold" fill="#92400e">H₂SO₄</text>' +
+            '</g>' +
+            '<circle class="drop" cx="292" cy="128" r="4.6" fill="#f59e0b"/>' +
+            '<circle class="drop2" cx="302" cy="124" r="3.6" fill="#f59e0b"/>' +
+            '<path class="smoke" d="M244 142c-10-12 7-16 0-28" stroke="#f87171" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+            '<path class="smoke2" d="M256 140c-8-10 6-14 0-24" stroke="#f87171" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+            '<g transform="translate(378 156)">' +
+              '<rect x="0" y="0" width="34" height="40" rx="9" fill="#a7f3d0" stroke="#059669" stroke-width="2.2"/>' +
+              '<rect x="-6" y="34" width="46" height="12" rx="6" fill="#a7f3d0" stroke="#059669" stroke-width="2.2"/>' +
+            '</g>' +
+            '<text x="244" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">물에 황산을 조금씩 넣으며 젓기</text>' +
+            '<text x="395" y="144" font-size="11.5" text-anchor="middle" fill="#059669">보안경·장갑</text>',
+        heat:
+            '<rect x="150" y="90" width="11" height="102" rx="4" fill="#a8b6c8"/>' +
+            '<rect x="132" y="188" width="140" height="15" rx="6" fill="#c9d6e6" stroke="#a8b6c8" stroke-width="2"/>' +
+            '<rect x="158" y="146" width="62" height="9" rx="4" fill="#a8b6c8"/>' +
+            '<g transform="rotate(22 250 140)">' +
+              '<rect x="228" y="82" width="44" height="112" rx="22" fill="#eaf6fe" stroke="#7f8ea3" stroke-width="2.5"/>' +
+              '<rect x="231" y="134" width="38" height="57" rx="19" fill="#93c5fd" opacity=".9"/>' +
+              '<rect x="222" y="76" width="56" height="11" rx="5" fill="#dbeafe" stroke="#7f8ea3" stroke-width="2"/>' +
+            '</g>' +
+            '<g transform="translate(228 184)">' +
+              '<path class="fl" d="M0 0c-11-13-1-23 5-31 1 10 8 13 8 21 0 6-5 10-13 10z" fill="#f97316"/>' +
+              '<path class="fl2" d="M4 0c-7-9 0-16 4-20 0 7 5 8 5 13 0 4-3 7-9 7z" fill="#fbbf24"/>' +
+            '</g>' +
+            '<text x="430" y="188" font-size="36" text-anchor="middle">🧑‍🎓</text>' +
+            '<path d="M276 82c46 12 84 34 118 60" stroke="#ef4444" stroke-width="2.6" fill="none" stroke-dasharray="7 6"/>' +
+            '<text x="360" y="66" font-size="12.5" text-anchor="middle" fill="#dc2626" font-weight="bold">입구가 친구 쪽을 향함</text>' +
+            '<text x="252" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">입구는 사람이 없는 쪽으로 · 1/3만 넣고 흔들며 가열</text>',
+        glass:
+            '<rect x="120" y="178" width="320" height="14" rx="6" fill="#c9d6e6" stroke="#a8b6c8" stroke-width="2"/>' +
+            '<polygon points="176,178 200,148 214,178" fill="#cfe9fb" stroke="#7f8ea3" stroke-width="1.8"/>' +
+            '<polygon points="222,178 244,140 258,178" fill="#cfe9fb" stroke="#7f8ea3" stroke-width="1.8"/>' +
+            '<polygon points="266,178 282,158 294,178" fill="#cfe9fb" stroke="#7f8ea3" stroke-width="1.8"/>' +
+            '<polygon points="300,178 322,164 332,178" fill="#cfe9fb" stroke="#7f8ea3" stroke-width="1.8"/>' +
+            '<polygon points="338,178 352,168 360,178" fill="#cfe9fb" stroke="#7f8ea3" stroke-width="1.8"/>' +
+            '<path class="spark" d="M250 132l4 9 9-3-6 8 7 7-10-1" fill="#fde68a"/>' +
+            '<text x="112" y="150" font-size="24" text-anchor="middle">⚠️</text>' +
+            '<g transform="translate(392 120)">' +
+              '<rect x="0" y="0" width="26" height="58" rx="12" fill="#fcd9b6" stroke="#c2844f" stroke-width="1.8"/>' +
+              '<path d="M13 6v46" stroke="#e0b48f" stroke-width="1.4"/>' +
+            '</g>' +
+            '<text x="230" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">빗자루와 고무장갑으로 모아 유리 전용 용기에</text>' +
+            '<text x="452" y="188" font-size="34" text-anchor="middle">🧹</text>',
+        eye:
+            '<circle cx="256" cy="132" r="52" fill="#fde8d7" stroke="#d8b394" stroke-width="2.2"/>' +
+            '<ellipse cx="238" cy="126" rx="13" ry="9" fill="#fff" stroke="#94a3b8" stroke-width="1.6"/>' +
+            '<circle cx="238" cy="126" r="4.4" fill="#1e293b"/>' +
+            '<ellipse cx="276" cy="126" rx="14" ry="10" fill="#fff" stroke="#f87171" stroke-width="2.8"/>' +
+            '<circle cx="276" cy="126" r="5" fill="#ef4444"/>' +
+            '<path d="M234 156c10 7 32 7 44 0" stroke="#c2844f" stroke-width="2.4" fill="none"/>' +
+            '<path d="M216 88c24-13 54-13 76 0" stroke="#c2844f" stroke-width="2.4" fill="none"/>' +
+            '<g transform="translate(150 118)">' +
+              '<path d="M0 0h52v40a9 9 0 0 1-9 9H9a9 9 0 0 1-9-9z" fill="#eaf6fe" stroke="#7f8ea3" stroke-width="2.2"/>' +
+              '<path d="M2 22h48v18a9 9 0 0 1-9 9H11a9 9 0 0 1-9-9z" fill="#93c5fd"/>' +
+              '<path d="M13 -14h13v14H13z" fill="#94a3b8"/>' +
+            '</g>' +
+            '<circle class="drop" cx="208" cy="126" r="4.4" fill="#60a5fa"/>' +
+            '<circle class="drop2" cx="216" cy="121" r="3.4" fill="#60a5fa"/>' +
+            '<text x="400" y="126" font-size="11.5" text-anchor="middle" fill="#0369a1">흐르는 물로</text>' +
+            '<text x="400" y="146" font-size="15" text-anchor="middle" fill="#0369a1" font-weight="bold">15분 이상</text>' +
+            '<text x="256" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">눈을 벌린 채 위아래로 굴리며 씻기</text>',
+        skin:
+            '<rect x="186" y="112" width="150" height="42" rx="21" fill="#fcd9b6" stroke="#d8b394" stroke-width="2.2"/>' +
+            '<ellipse cx="238" cy="132" rx="26" ry="14" fill="#fca5a5" opacity=".92"/>' +
+            '<circle class="drop" cx="286" cy="94" r="5" fill="#f59e0b"/>' +
+            '<circle class="drop2" cx="302" cy="88" r="4" fill="#f59e0b"/>' +
+            '<g transform="translate(366 96)">' +
+              '<rect x="0" y="0" width="40" height="54" rx="7" fill="#fef3c7" stroke="#a16207" stroke-width="2.2"/>' +
+              '<rect x="14" y="-10" width="12" height="12" rx="3" fill="#a16207"/>' +
+            '</g>' +
+            '<path d="M214 168c10 12 30 14 44 6" stroke="#ef4444" stroke-width="2.2" fill="none" stroke-dasharray="5 4"/>' +
+            '<text x="236" y="196" font-size="11.5" text-anchor="middle" fill="#b91c1c">붉어지고 따가움</text>' +
+            '<text x="282" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">흐르는 물에 15분 이상 씻기</text>' +
+            '<text x="110" y="140" font-size="34" text-anchor="middle">💧</text>',
+        gas:
+            '<rect x="212" y="118" width="88" height="74" rx="9" fill="#dcfce7" stroke="#7f8ea3" stroke-width="2.5"/>' +
+            '<rect x="248" y="104" width="16" height="16" rx="3" fill="#bbf7d0" stroke="#7f8ea3" stroke-width="2"/>' +
+            '<path d="M226 176c12-12 32-12 44 0" stroke="#22c55e" stroke-width="2.2" fill="none" opacity=".55"/>' +
+            '<path class="smoke" d="M250 100c-11-13 8-17 0-30" stroke="#84cc16" stroke-width="3.6" fill="none" stroke-linecap="round"/>' +
+            '<path class="smoke2" d="M266 98c-10-12 7-15 0-26" stroke="#a3e635" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+            '<path class="smoke" d="M234 100c-9-11 6-15 0-26" stroke="#84cc16" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+            '<text x="388" y="188" font-size="36" text-anchor="middle">😷</text>' +
+            '<path d="M300 118c26-4 44-6 62-8" stroke="#ef4444" stroke-width="2.4" fill="none" stroke-dasharray="5 5"/>' +
+            '<text x="330" y="96" font-size="12.5" text-anchor="middle" fill="#dc2626" font-weight="bold">손으로 부채질</text>' +
+            '<text x="92" y="130" font-size="34" text-anchor="middle">🪟</text>' +
+            '<text x="254" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">창문을 열어 환기</text>',
+        escape:
+            '<rect x="330" y="86" width="96" height="112" rx="6" fill="#c9d6e6" stroke="#7f8ea3" stroke-width="2.5"/>' +
+            '<rect x="338" y="94" width="80" height="96" rx="4" fill="#93c5fd"/>' +
+            '<rect x="352" y="66" width="52" height="22" rx="5" fill="#22c55e"/>' +
+            '<text x="378" y="82" font-size="13" text-anchor="middle" fill="#fff" font-weight="bold">EXIT</text>' +
+            '<text x="172" y="188" font-size="38" text-anchor="middle">🧎</text>' +
+            '<path d="M214 158c34-2 62-2 88 0" stroke="#22c55e" stroke-width="3.6" fill="none" marker-end="url(#arw)"/>' +
+            '<defs><marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0 0l9 4.5-9 4.5z" fill="#22c55e"/></marker></defs>' +
+            '<g opacity=".55">' +
+              '<path class="smoke" d="M60 58c40-12 82-12 122 0" stroke="#94a3b8" stroke-width="7" fill="none" stroke-linecap="round"/>' +
+              '<path class="smoke2" d="M150 40c40-9 80-6 118 4" stroke="#94a3b8" stroke-width="6" fill="none" stroke-linecap="round"/>' +
+            '</g>' +
+            '<text x="86" y="120" font-size="11.5" text-anchor="middle" fill="#475569">연기는 위로</text>' +
+            '<text x="250" y="214" font-size="11.5" text-anchor="middle" fill="#64748b">낮은 자세로 계단을 이용해 대피</text>'
+    };
+
+    /* ---------- 상황 데이터 ---------- */
+    var SCEN = [
+        {
+            id: 'fire', icon: '🔥', art: 'fire',
+            title: '알코올램프가 넘어져 불이 붙었을 때',
+            desc: '알코올램프가 넘어져 흘러나온 알코올에 불이 붙었습니다. 실험대 위로 불꽃이 번지고 있습니다.',
+            steps: [
+                {
+                    q: '불이 붙은 것을 발견했을 때 가장 먼저 할 일은?',
+                    opts: [
+                        { t: '젖은 행주(수건)를 넓게 펼쳐 불 위를 덮는다', ok: true, why: '불에 덮개를 씌워 산소 공급을 끊으면 불이 꺼집니다. 젖은 천은 산소를 막고 주변으로 번지는 것도 막아 줍니다.' },
+                        { t: '입으로 불어서 끈다', ok: false, why: '입으로 불면 불똥이 튀고 흘러나온 알코올이 넓게 퍼져 불이 더 크게 번집니다.' },
+                        { t: '물을 부어 끈다', ok: false, why: '알코올은 물보다 가볍고 물과 잘 섞입니다. 물을 부으면 불이 붙은 알코올이 넘쳐 실험대 전체로 번집니다.' }
+                    ]
+                },
+                {
+                    q: '불을 끈 바로 다음으로 할 일은?',
+                    opts: [
+                        { t: '선생님께 알리고, 뜨거운 램프는 그대로 두고 충분히 식힌다', ok: true, why: '불이 꺼져도 램프는 매우 뜨겁습니다. 손으로 옮기면 화상을 입고 남은 알코올에 다시 불이 붙을 수 있습니다.' },
+                        { t: '램프를손으로 들어 창밖에 버린다', ok: false, why: '뜨거운 램프를 손으로 들면 화상을 입고, 옮기는 도중 넘어지면 불이 옮겨 붙습니다.' },
+                        { t: '심지를 올려 다시 불을 켜서 남은 알코올을 태워 없앤다', ok: false, why: '주변에 이미 알코올이 흘러 있어 다시 붙인 불이 크게 번집니다.' }
+                    ]
+                },
+                {
+                    q: '이 사고를 막기 위한 방법으로 알맞은 것은?',
+                    opts: [
+                        { t: '알코올램프는 실험대 안쪽에 두고, 심지 길이를 맞춰 불꽃을 크게 키우지 않는다', ok: true, why: '램프가 팔에 걸리지 않게 안쪽에 두고 심지를 정상 길이로 유지하면 넘어지거나 불꽃이 크게 타는 일을 줄일 수 있습니다.' },
+                        { t: '심지를 길게 뽑아 두고 실험 내내 켜 둔다', ok: false, why: '심지가 길면 불꽃이 커져 그을음이 생기고 그릇이 뜨거워져 위험합니다.' },
+                        { t: '불을 켠 채로 램프를 다른 자리로 자주 옮긴다', ok: false, why: '불이 켜진 램프를 옮기다 넘어지는 것이 실험실 화재의 흔한 원인입니다.' }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'acid', icon: '🧪', art: 'acid',
+            title: '진한 황산을 물에 희석할 때',
+            desc: '진한 황산을 묽은 황산으로 만들려고 합니다. 비커에는 물이 담겨 있습니다.',
+            steps: [
+                {
+                    q: '진한 황산을 물에 섞는 바른 방법은?',
+                    opts: [
+                        { t: '물이 담긴 비커에 진한 황산을 조금씩 천천히 넣으며 유리 막대로 젓는다', ok: true, why: '황산을 물에 넣으면 생긴 열이 물 전체로 퍼져 비교적 안전합니다. 한 번에 많이 넣지 않고 천천히 넣으며 저어야 합니다.' },
+                        { t: '진한 황산에 물을 부어 넣는다', ok: false, why: '황산에 물을 부으면 열이 한곳에 몰려 물이 갑자기 끓어오르며 황산이 튑니다. 맨얼굴에 튀면 큰 화상을 입습니다.' },
+                        { t: '황산과 물을 각각 다른 통에 담아 한꺼번에 섞는다', ok: false, why: '한꺼번에 섞으면 열을 조절할 수 없어 갑자기 끓어오릅니다.' }
+                    ]
+                },
+                {
+                    q: '황산을 다룰 때 착용해야 할 것은?',
+                    opts: [
+                        { t: '보안경 · 고무장갑 · 실험복(앞치마)', ok: true, why: '눈은 한 방울만 튀어도 다칠 수 있습니다. 보안경과 고무장갑, 실험복으로 피부와 눈을 먼저 보호합니다.' },
+                        { t: '맨손으로 조심해서 다루면 된다', ok: false, why: '맨손은 약품이 묻었는지 바로 알기 어렵고, 튄 한 방울로도 화상을 입습니다.' },
+                        { t: '얇은 위생장갑만 끼면 충분하다', ok: false, why: '위생장갑은 얇아서 진한 산에 금방 뚫립니다. 산·염기용 고무장갑을 써야 합니다.' }
+                    ]
+                },
+                {
+                    q: '황산이 손등에 튀었을 때 바른 대처는?',
+                    opts: [
+                        { t: '바로 흐르는 물에 15분 이상 씻고 선생님께 알린다', ok: true, why: '약품을 흐르는 물로 충분히 씻어 내는 것이 가장 중요합니다. 씻은 뒤에는 반드시 선생님께 알려 상태를 확인합니다.' },
+                        { t: '염기를 발라 중화시킨다', ok: false, why: '중화 반응에서도 열이 나므로 화상이 더 심해질 수 있습니다. 피부에 중화제를 바르지 않습니다.' },
+                        { t: '손으로 닦아내고 계속 실험한다', ok: false, why: '닦아내면 약품이 넓게 퍼지고 피부 속으로 들어가 손상이 커집니다.' }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'heat', icon: '🔥', art: 'heat',
+            title: '시험관을 가열할 때 입구 방향',
+            desc: '시험관에 액체를 넣고 알코올램프로 가열하려 합니다. 맞은편에 친구가 서 있습니다.',
+            steps: [
+                {
+                    q: '시험관을 가열할 때 입구는 어느 쪽을 향해야 할까?',
+                    opts: [
+                        { t: '사람이 없는 쪽을 향하게 한다', ok: true, why: '가열된 액체가 갑자기 끓어오르면 입구 밖으로 튀어 나옵니다. 입구를 사람이 있는 쪽으로 두면 얼굴에 화상을 입습니다.' },
+                        { t: '자기 얼굴 쪽을 향하게 한다', ok: false, why: '액체가 끓어오르면 자기 얼굴과 눈에 그대로 튑니다.' },
+                        { t: '친구가 서 있는 쪽을 향하게 한다', ok: false, why: '튀는 액체는 상대방에게로 갑니다. 가장 위험한 방향입니다.' }
+                    ]
+                },
+                {
+                    q: '시험관에 액체를 얼마나 넣고 어떻게 가열할까?',
+                    opts: [
+                        { t: '1/3 정도만 넣고, 시험관을 비스듬히 잡아 흔들며 고르게 가열한다', ok: true, why: '액체가 많으면 끓어오르기 쉽고, 한 곳만 가열하면 국소 과열로 갑자기 끓어 튑니다. 흔들며 고르게 가열합니다.' },
+                        { t: '가득 채우고 한 곳만 집중해서 가열한다', ok: false, why: '가득 채우면 끓어오를 공간이 없고, 한 곳만 가열하면 그 부분이 갑자기 끓어 액체가 튑니다.' },
+                        { t: '액체를 넣지 않고 시험관만 가열한다', ok: false, why: '빈 시험관을 가열하면 유리에 열이 몰려 깨질 수 있습니다.' }
+                    ]
+                },
+                {
+                    q: '가열이 끝난 시험관은 어떻게 할까?',
+                    opts: [
+                        { t: '시험관 집게나 시험관대에 꽂아 식히고, 뜨거운 부분은 잡지 않는다', ok: true, why: '유리는 겉으로 보아 뜨거운지 알 수 없습니다. 집게·시험관대에 꽂아 식힌 뒤 만집니다.' },
+                        { t: '맨손으로 바로 잡아 확인한다', ok: false, why: '가열한 유리는 손에 닿는 순간 화상을 입습니다.' },
+                        { t: '뜨거운 시험관을 찬물에 바로 담근다', ok: false, why: '급격히 식으면 유리가 수축하며 깨져 다칠 수 있습니다.' }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'glass', icon: '🧹', art: 'glass',
+            title: '유리 기구가 깨졌을 때',
+            desc: '비커가 실험대 아래로 떨어져 유리 조각이 바닥에 흩어졌습니다.',
+            steps: [
+                {
+                    q: '깨진 유리를 치울 때 바른 방법은?',
+                    opts: [
+                        { t: '선생님께 알리고 빗자루와 고무장갑으로 모아 유리 전용 용기에 버린다', ok: true, why: '빗자루로 쓸어 모으면 손이 닿지 않아 안전하고, 유리 전용 용기에 버려야 청소하는 사람이 다치지 않습니다.' },
+                        { t: '맨손으로 조각을 하나씩 줍는다', ok: false, why: '눈에 잘 보이지 않는 작은 조각이 손을 베게 됩니다. 손으로 줍지 않습니다.' },
+                        { t: '물로 씻어 하수구로 흘려보낸다', ok: false, why: '유리가 하수구를 막거나, 나중에 하수구를 만지는 사람이 다칩니다.' }
+                    ]
+                },
+                {
+                    q: '모은 유리는 어디에 버릴까?',
+                    opts: [
+                        { t: '깨진 유리 전용 용기(또는 두꺼운 상자에 표시)에 담는다', ok: true, why: '전용 용기나 "유리"라고 표시한 두꺼운 상자에 담아야 뒤에서 버리는 사람이 다치지 않습니다.' },
+                        { t: '일반 종량제 봉투에 그대로 넣는다', ok: false, why: '봉투를 찢고 나와 청소·수거하는 사람이 다칠 수 있습니다.' },
+                        { t: '실험대 위에 모아 두었다가 나중에 치운다', ok: false, why: '다른 친구가 실험대에 손을 얹거나 팔로 쓸어 베게 됩니다.' }
+                    ]
+                },
+                {
+                    q: '유리 기구를 쓰기 전에 확인할 점은?',
+                    opts: [
+                        { t: '금이 가거나 깨진 부분이 있는지 확인하고, 있으면 바꿔서 쓴다', ok: true, why: '금이 간 유리는 가열하거나 내용물을 넣을 때 갑자기 깨집니다. 사용 전에 반드시 확인합니다.' },
+                        { t: '조금 금이 가도 작은 것이면 그냥 쓴다', ok: false, why: '작은 금도 가열하면 급격히 벌어져 깨집니다.' },
+                        { t: '깨진 기구는 책상 서랍에 임시로 넣어 둔다', ok: false, why: '다른 사람이 열다가 다칠 수 있어 바로 알리고 정해진 곳에 버려야 합니다.' }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'eye', icon: '👁️', art: 'eye',
+            title: '눈에 약품이 들어갔을 때',
+            desc: '비커의 약품이 튀어 눈에 들어갔습니다. 눈이 따갑고 잘 떠지지 않습니다.',
+            steps: [
+                {
+                    q: '가장 먼저 해야 할 일은?',
+                    opts: [
+                        { t: '세안기(또는 흐르는 물)에서 눈을 벌린 채 15분 이상 충분히 씻는다', ok: true, why: '약품이 눈에 닿은 시간이 길수록 손상이 커집니다. 눈꺼풀을 벌리고 위아래로 굴리며 흐르는 물로 충분히 씻어 냅니다.' },
+                        { t: '손으로 눈을 비벼 약품을 닦아낸다', ok: false, why: '비비면 각막이 긁히고 약품이 눈 전체로 퍼집니다.' },
+                        { t: '눈을 감고 잠시 기다린다', ok: false, why: '기다리는 동안 약품이 계속 눈을 손상시킵니다.' }
+                    ]
+                },
+                {
+                    q: '씻는 동안 함께 해야 할 일은?',
+                    opts: [
+                        { t: '옆 친구에게 선생님을 불러 달라고 하고, 씻은 뒤에도 계속 아프면 병원에 간다', ok: true, why: '혼자 조용히 참으면 처치가 늦어집니다. 선생님께 알리고 필요하면 병원 진료를 받습니다.' },
+                        { t: '아프지 않은 척하고 실험을 마저 한다', ok: false, why: '증상이 늦게 나타날 수 있어 그대로 두면 시력 손상으로 이어질 수 있습니다.' },
+                        { t: '안약을 아무거나 넣는다', ok: false, why: '약품의 성질을 모르는 상태에서 다른 약을 넣으면 반응해 더 나빠질 수 있습니다.' }
+                    ]
+                },
+                {
+                    q: '이 사고를 막으려면?',
+                    opts: [
+                        { t: '약품을 다룰 때는 보안경을 쓰고, 시험관 입구를 눈 쪽으로 두지 않는다', ok: true, why: '보안경은 튀는 약품을 눈에 닿지 않게 막아 줍니다. 액체를 다룰 때는 얼굴을 가까이 대지 않습니다.' },
+                        { t: '얼굴을 가까이 대고 색과 냄새를 확인한다', ok: false, why: '가까이 대면 튀는 약품이 얼굴과 눈에 그대로 닿습니다.' },
+                        { t: '안경을 쓰고 있으면 보안경은 필요 없다', ok: false, why: '보통 안경은 옆과 위로 들어오는 약품을 막지 못합니다. 보안경을 따로 써야 합니다.' }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'skin', icon: '💧', art: 'skin',
+            title: '피부에 약품이 튀었을 때',
+            desc: '약품을 옮기다가 팔뚝에 시약이 튀어 따갑고 붉어졌습니다.',
+            steps: [
+                {
+                    q: '피부에 약품이 묻었을 때 바른 대처는?',
+                    opts: [
+                        { t: '흐르는 물에 15분 이상 씻고, 옷에 묻었으면 옷도 벗는다', ok: true, why: '묻은 약품을 물로 충분히 씻어 내는 것이 먼저입니다. 옷에 묻었다면 씻는 동안에도 계속 피부에 닿으므로 벗습니다.' },
+                        { t: '수건으로 닦고 그대로 둔다', ok: false, why: '닦으면 약품이 주변으로 퍼지고 수건에 남아 계속 자극합니다.' },
+                        { t: '다른 약품을 발라 반응시킨다', ok: false, why: '중화 반응에서 열이 나 화상이 더 심해질 수 있습니다.' }
+                    ]
+                },
+                {
+                    q: '씻은 뒤에 할 일은?',
+                    opts: [
+                        { t: '선생님께 알리고 어떤 약품이었는지 밝힌 뒤 상태를 확인한다', ok: true, why: '약품 이름을 알려야 처치 방법을 정할 수 있습니다. 붓거나 통증이 이어지면 병원 진료가 필요합니다.' },
+                        { t: '아무 일 없는 것처럼 다음 실험을 계속한다', ok: false, why: '증상이 늦게 나타날 수 있습니다. 특히 산·염기는 시간이 지나며 손상이 커집니다.' },
+                        { t: '붉은 자리에 연고를 아무거나 바른다', ok: false, why: '약품이 남아 있는 상태에서 연고를 바르면 자극이 심해질 수 있습니다.' }
+                    ]
+                },
+                {
+                    q: '약품을 옮길 때 주의할 점은?',
+                    opts: [
+                        { t: '장갑을 끼고 낮은 자리에서 천천히 옮기며, 얼굴 아래로 지나가게 하지 않는다', ok: true, why: '높이 들어 옮기면 넘어지기 쉽고, 튀는 약품이 얼굴 쪽으로 오게 됩니다.' },
+                        { t: '한 손으로 비커 위쪽을 잡고 빠르게 걸어간다', ok: false, why: '위쪽을 잡고 빠르게 움직이면 내용물이 흔들려 넘치거나 튑니다.' },
+                        { t: '두 비커를 겹쳐 들고 한 번에 옮긴다', ok: false, why: '겹쳐 들면 균형이 무너져 둘 다 쏟아집니다.' }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'gas', icon: '💨', art: 'gas',
+            title: '실험실에서 가스 냄새가 날 때',
+            desc: '플라스크 근처에서 알 수 없는 자극적인 냄새가 납니다.',
+            steps: [
+                {
+                    q: '냄새를 확인하는 바른 방법은?',
+                    opts: [
+                        { t: '손으로 바람을 부채질해 냄새를 살짝 맡아 보고, 바로 선생님께 알린다', ok: true, why: '손으로 공기를 밀어 소량만 맡는 것이 안전합니다. 이상한 냄새는 곧바로 알려야 합니다.' },
+                        { t: '코를 플라스크 입구에 대고 깊게 맡는다', ok: false, why: '유독 가스를 한꺼번에 들이마시면 기도가 손상되고 쓰러질 수 있습니다.' },
+                        { t: '냄새가 날수록 얼굴을 가까이 대고 확인한다', ok: false, why: '가까이 갈수록 가스 농도가 높아 매우 위험합니다.' }
+                    ]
+                },
+                {
+                    q: '이상한 냄새가 계속 날 때 할 일은?',
+                    opts: [
+                        { t: '가스 밸브와 가열 기구를 잠그고 창문을 열어 환기한 뒤 밖으로 나간다', ok: true, why: '가스 공급을 끊고 환기해 농도를 낮춘 뒤, 사람이 적은 곳으로 이동합니다. 불꽃·스위치 사용은 피합니다.' },
+                        { t: '창문을 닫고 계속 실험한다', ok: false, why: '가스가 실험실에 쌓여 더 위험해집니다.' },
+                        { t: '불꽃을 켜서 밝혀 본다', ok: false, why: '가연성 가스에 불이 붙으면 폭발할 수 있습니다.' }
+                    ]
+                },
+                {
+                    q: '실험실 공기와 관련해 미리 지킬 규칙은?',
+                    opts: [
+                        { t: '환기를 자주 하고, 후드(흄 후드) 안에서 유독 가스가 나는 실험을 한다', ok: true, why: '후드는 발생한 가스를 밖으로 빼내 줍니다. 환기와 후드 사용이 기본입니다.' },
+                        { t: '문과 창문을 모두 닫고 실험에 집중한다', ok: false, why: '공기가 순환하지 않아 가스가 쌓입니다.' },
+                        { t: '냄새가 나면 향수나 방향제를 뿌려 덮는다', ok: false, why: '유해 가스는 그대로 남고, 냄새만 가려 위험을 알아차리지 못하게 됩니다.' }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'escape', icon: '🚪', art: 'escape',
+            title: '실험실에 불이 크게 났을 때',
+            desc: '작은 불이 실험대 밖으로 번져 연기가 차오릅니다. 직접 끌 수 없는 상황입니다.',
+            steps: [
+                {
+                    q: '가장 먼저 할 일은?',
+                    opts: [
+                        { t: '큰 소리로 불이 났다고 알리고, 선생님 지시에 따라 모두 밖으로 대피한다', ok: true, why: '사람이 먼저입니다. 큰 소리로 알려 모두가 빨리 빠져나가게 하고, 연기가 적은 낮은 자세로 이동합니다.' },
+                        { t: '혼자 남아 물을 부어 끄려고 한다', ok: false, why: '큰 불은 혼자 끌 수 없고 연기를 마시면 몇 초 만에 쓰러질 수 있습니다.' },
+                        { t: '가방과 준비물을 챙겨서 나간다', ok: false, why: '물건을 챙기는 시간에 연기가 차오릅니다. 사람이 우선입니다.' }
+                    ]
+                },
+                {
+                    q: '대피할 때 지켜야 할 것은?',
+                    opts: [
+                        { t: '몸을 낮추고 젖은 수건으로 입과 코를 막아 계단으로 이동한다', ok: true, why: '연기는 위로 뜨므로 낮은 자세가 안전합니다. 젖은 수건은 연기를 걸러 주고, 불이 났을 때는 계단을 이용합니다.' },
+                        { t: '엘리베이터를 타고 빠르게 내려간다', ok: false, why: '화재 시 엘리베이터는 멈추거나 연기가 차올라 갇힐 수 있습니다.' },
+                        { t: '연기가 보이지 않는 쪽으로 뛰어가 본다', ok: false, why: '정해진 대피로를 따라야 서로 마주치지 않고 빨리 빠져나갈 수 있습니다.' }
+                    ]
+                },
+                {
+                    q: '밖으로 나온 뒤에는?',
+                    opts: [
+                        { t: '정해진 집결 장소에서 인원을 확인하고, 필요하면 119에 신고한다', ok: true, why: '모두 나왔는지 확인해야 구조대가 헛걸음하지 않습니다. 선생님 판단에 따라 119에 신고합니다.' },
+                        { t: '친구를 찾으러 다시 실험실로 들어간다', ok: false, why: '다시 들어가면 연기를 마시거나 불길에 갇힙니다. 구조는 소방관에게 알립니다.' },
+                        { t: '불이 꺼졌는지 문 앞에서 지켜본다', ok: false, why: '문 가까이에서도 연기와 열기에 다칠 수 있습니다. 집결 장소로 이동합니다.' }
+                    ]
+                }
+            ]
+        }
+    ];
+
+    var $ = function (s) { return document.querySelector(s); };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); };
+
+    var state = {
+        idx: 0,
+        step: 0,
+        results: {},   /* id -> {best, cur, tries, done} */
+        started: false,
+        locked: true
+    };
+    var MAX_PER = 100;
+
+    /* ---------- 렌더링 ---------- */
+    function renderList() {
+        var html = '';
+        SCEN.forEach(function (s, i) {
+            var r = state.results[s.id];
+            html += '<button class="scen-item' + (i === state.idx && state.started ? ' active' : '') + (r && r.done ? ' done' : '') + '" data-i="' + i + '" type="button">' +
+                '<span class="ic">' + s.icon + '</span>' +
+                '<span class="nm">' + esc(s.title) + '</span>' +
+                (r && r.done ? '<span class="chk">✔</span><span class="sc">' + r.best + '점</span>' : '<span class="sc">' + s.steps.length + '단계</span>') +
+                '</button>';
+        });
+        $('#scenList').innerHTML = html;
+    }
+
+    function renderProgress() {
+        var done = 0, score = 0;
+        SCEN.forEach(function (s) {
+            var r = state.results[s.id];
+            if (r && r.done) { done++; score += r.best; }
+        });
+        var total = SCEN.length;
+        $('#progDone').textContent = done;
+        $('#progTotal').textContent = total;
+        $('#progScore').textContent = score;
+        $('#progFill').style.width = (done / total * 100) + '%';
+        $('#bbDone').textContent = done;
+        $('#bbTotal').textContent = total;
+        $('#bbScore').textContent = score;
+        renderScoreboard();
+    }
+
+    function renderScoreboard() {
+        var done = 0, score = 0, tries = 0, rows = '';
+        SCEN.forEach(function (s) {
+            var r = state.results[s.id];
+            rows += '<tr><td>' + s.icon + ' ' + esc(s.title) + '</td>' +
+                '<td>' + (r ? (r.done ? r.tries + '회' : '진행 중') : '<span class="pending">–</span>') + '</td>' +
+                '<td class="n">' + (r && r.done ? r.best : '<span class="pending">–</span>') + '</td></tr>';
+            if (r && r.done) { done++; score += r.best; tries += r.tries; }
+        });
+        $('#resBody').innerHTML = rows;
+        $('#totalScore').textContent = score;
+        $('#maxScore').textContent = SCEN.length * MAX_PER;
+        var pct = score / (SCEN.length * MAX_PER);
+        var g = pct >= 0.95 ? 'A+' : pct >= 0.85 ? 'A' : pct >= 0.7 ? 'B' : pct > 0 ? 'C' : '–';
+        $('#gradeLetter').textContent = g;
+        if (done === SCEN.length) {
+            $('#scoreCard').classList.add('show');
+            $('#scoreMsg').textContent = pct >= 0.85
+                ? '모든 상황을 마쳤습니다. 위험한 대처를 거의 고르지 않았습니다. 실제 실험실에서도 같은 순서로 행동해 보세요.'
+                : pct >= 0.7
+                    ? '모든 상황을 마쳤습니다. 틀린 대처의 이유를 다시 읽어 보면 더 정확해집니다.'
+                    : '모든 상황을 마쳤습니다. 틀린 대처가 많았습니다. 각 상황의 피드백을 다시 읽고 한 번 더 도전해 보세요.';
+        } else {
+            $('#scoreMsg').textContent = '상황을 모두 마치면 여기에 점수와 등급이 정리됩니다. (' + done + '/' + SCEN.length + ' 완료)';
+            $('#scoreCard').classList.toggle('show', done > 0);
+        }
+    }
+
+    function setStage(s) {
+        $('#stage').innerHTML = BENCH + (ART[s.art] || '');
+        $('#stageBadge').textContent = s.icon + ' ' + s.title;
+        $('#stage').setAttribute('aria-label', s.title);
+    }
+
+    function alertFlash(kind, msg, icon) {
+        var el = $('#stageAlert');
+        el.className = 'stage-alert show ' + kind;
+        $('#alertIcon').textContent = icon;
+        $('#alertMsg').textContent = msg;
+        if (kind === 'danger') {
+            var w = $('#stageWrap');
+            w.classList.remove('shake');
+            void w.offsetWidth;
+            w.classList.add('shake');
+        }
+        clearTimeout(alertFlash._t);
+        alertFlash._t = setTimeout(function () { el.classList.remove('show'); }, 1500);
+    }
+
+    function openScenario(i) {
+        state.idx = i;
+        state.step = 0;
+        state.started = true;
+        state.locked = false;
+        var rec = state.results[SCEN[i].id];
+        if (!rec) { rec = state.results[SCEN[i].id] = { best: 0, cur: MAX_PER, tries: 0, done: false }; }
+        rec.cur = MAX_PER;
+        rec.tries += 1;
+        var s = SCEN[i];
+        $('#scenKicker').textContent = '상황 ' + (i + 1) + ' / ' + SCEN.length;
+        $('#scenTitle').textContent = s.title;
+        $('#scenDesc').textContent = s.desc;
+        $('#stepCard').style.display = 'block';
+        $('#nextCard').style.display = 'none';
+        $('#scoreCard').classList.remove('show');
+        setStage(s);
+        renderList();
+        renderStep();
+        renderProgress();
+        $('#main').scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderStep() {
+        var s = SCEN[state.idx];
+        var st = s.steps[state.step];
+        /* 선택지 순서는 처음 열 때 한 번만 섞어, 다시 그려도 순서가 바뀌지 않게 한다 */
+        if (!st._ord) {
+            st._ord = st.opts.map(function (o, i) { return i; });
+            for (var k = st._ord.length - 1; k > 0; k--) {
+                var j = Math.floor(Math.random() * (k + 1));
+                var t = st._ord[k]; st._ord[k] = st._ord[j]; st._ord[j] = t;
+            }
+        }
+        var html = '';
+        st._ord.forEach(function (oi, n) {
+            var o = st.opts[oi];
+            html += '<button class="opt" type="button" data-oi="' + oi + '">' +
+                '<span class="mk">' + String.fromCharCode(65 + n) + '</span><span>' + esc(o.t) + '</span></button>';
+        });
+        $('#optWrap').innerHTML = html;
+        $('#stepChip').textContent = (state.step + 1) + ' / ' + s.steps.length + ' 단계';
+        $('#stepQ').textContent = st.q;
+        $('#feedback').className = 'feedback';
+        $('#feedback').innerHTML = '<div class="fb-title" id="fbTitle"></div><div class="fb-body" id="fbBody"></div>';
+        $('#stepInfo').innerHTML = '이 상황 감점 <b>' + (MAX_PER - state.results[s.id].cur) + '</b>점';
+        var next = $('#btnNext');
+        next.disabled = true;
+        next.textContent = state.step === s.steps.length - 1 ? '상황 마치기 →' : '다음 단계 →';
+        state.locked = false;
+    }
+
+    function choose(oi) {
+        if (state.locked) return;
+        var s = SCEN[state.idx];
+        var r = state.results[s.id];
+        var st = s.steps[state.step];
+        var o = st.opts[oi];
+        var btn = $('#optWrap').querySelector('[data-oi="' + oi + '"]');
+        var fb = $('#feedback');
+        var title = fb.querySelector('.fb-title');
+        var body = fb.querySelector('.fb-body');
+
+        if (o.ok) {
+            state.locked = true;
+            btn.classList.add('correct');
+            Array.prototype.forEach.call($('#optWrap').children, function (el) {
+                if (el !== btn) el.classList.add('dim');
+                el.disabled = true;
+            });
+            fb.className = 'feedback show good';
+            title.innerHTML = '✅ 맞았습니다';
+            body.textContent = o.why;
+            alertFlash('ok', '올바른 대처!', '✅');
+            $('#btnNext').disabled = false;
+        } else {
+            btn.classList.add('wrong');
+            btn.disabled = true;
+            fb.className = 'feedback show bad';
+            title.innerHTML = '⚠️ 위험한 대처입니다';
+            body.textContent = o.why;
+            r.cur = Math.max(40, r.cur - 15);
+            alertFlash('danger', '위험! 다른 방법을 고르세요', '⚠️');
+            $('#stepInfo').innerHTML = '이 상황 감점 <b>' + (MAX_PER - r.cur) + '</b>점';
+            renderProgress();
+        }
+    }
+
+    function nextStep() {
+        var s = SCEN[state.idx];
+        if (state.step < s.steps.length - 1) {
+            state.step++;
+            state.locked = false;
+            renderStep();
+            return;
+        }
+        /* 상황 완료 */
+        var r = state.results[s.id];
+        r.best = Math.max(r.best || 0, r.cur);
+        r.done = true;
+        state.locked = true;
+        renderList();
+        renderProgress();
+        $('#stepCard').style.display = 'none';
+        alertFlash('ok', '상황 완료!', '🏁');
+        var allDone = SCEN.every(function (x) { var q = state.results[x.id]; return q && q.done; });
+        $('#scenKicker').textContent = allDone ? '모든 상황 완료' : '상황 완료';
+        $('#scenTitle').textContent = s.title + ' — ' + r.best + '점';
+        $('#scenDesc').textContent = allDone
+            ? '모든 상황을 마쳤습니다. 아래 점수판에서 등급을 확인하고, 다른 상황도 다시 도전해 볼 수 있습니다.'
+            : '이 상황을 ' + r.best + '점으로 마쳤습니다. 다음 상황을 이어서 진행하거나 왼쪽 목록에서 골라도 됩니다.';
+        var nxt = -1;
+        for (var i = 0; i < SCEN.length; i++) {
+            var q = state.results[SCEN[i].id];
+            if (!q || !q.done) { nxt = i; break; }
+        }
+        var nc = $('#nextCard');
+        if (nxt >= 0) {
+            nc.style.display = 'block';
+            nc.innerHTML = '<div class="step-top"><span class="step-chip">다음</span><div class="step-q">' +
+                '다음 상황: ' + SCEN[nxt].icon + ' ' + esc(SCEN[nxt].title) + '</div></div>' +
+                '<div class="step-foot" style="margin-top:6px">' +
+                '<div class="mini-info">남은 상황 <b>' + SCEN.filter(function (x) { return !(state.results[x.id] && state.results[x.id].done); }).length + '</b>개</div>' +
+                '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+                '<button class="btn ghost" type="button" id="btnAgain">↺ 이 상황 다시</button>' +
+                '<button class="btn" type="button" id="btnGoNext">다음 상황 시작 →</button></div></div>';
+            nc.querySelector('#btnAgain').onclick = function () { openScenario(state.idx); };
+            nc.querySelector('#btnGoNext').onclick = function () { openScenario(nxt); };
+        } else {
+            nc.style.display = 'block';
+            nc.innerHTML = '<div class="step-top"><span class="step-chip">완료</span><div class="step-q">' +
+                '모든 상황을 마쳤습니다. 다시 도전하려면 왼쪽 목록에서 상황을 고르세요.</div></div>';
+            $('#scoreCard').classList.add('show');
+        }
+    }
+
+    /* ---------- 이벤트 ---------- */
+    $('#scenList').addEventListener('click', function (e) {
+        var b = e.target.closest('.scen-item');
+        if (!b) return;
+        var i = +b.getAttribute('data-i');
+        var r = state.results[SCEN[i].id];
+        if (r && r.tries > 0 && !r.done && state.started) {
+            /* 진행 중이던 상황이면 그대로 이어감 */
+        }
+        openScenario(i);
+    });
+
+    $('#nextCard').addEventListener('click', function (e) {
+        var t = e.target;
+        if (t && t.id === 'btnAgain') openScenario(state.idx);
+    });
+
+    $('#optWrap').addEventListener('click', function (e) {
+        var b = e.target.closest('.opt');
+        if (!b) return;
+        choose(+b.getAttribute('data-oi'));
+    });
+
+    $('#btnNext').addEventListener('click', nextStep);
+    $('#btnRetryScen').addEventListener('click', function () { openScenario(state.idx); });
+    $('#bbJump').addEventListener('click', function () {
+        $('#scoreCard').classList.add('show');
+        $('#scoreCard').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    /* 테마 */
+    function applyTheme(dark) {
+        document.body.classList.toggle('dark', dark);
+        $('#bTheme').textContent = dark ? '☀️ 주간 모드' : '🌙 야간 모드';
+        try { localStorage.setItem('svl_safety_theme', dark ? '1' : '0'); } catch (err) { }
+    }
+    $('#bTheme').addEventListener('click', function () {
+        applyTheme(!document.body.classList.contains('dark'));
+    });
+    try { if (localStorage.getItem('svl_safety_theme') === '1') applyTheme(true); } catch (err) { }
+
+    /* 전체화면 / 창모드 */
+    (function () {
+        var btn = document.getElementById('btn-fullscreen');
+        var iconEl = document.getElementById('fsIcon');
+        var textEl = document.getElementById('fsText');
+        var root = document.documentElement;
+        var PSEUDO = 'pseudo-fullscreen';
+        function isRealFs() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                document.mozFullScreenElement || document.msFullscreenElement);
+        }
+        function isPseudo() { return document.body.classList.contains(PSEUDO); }
+        function isOn() { return isRealFs() || isPseudo(); }
+        function syncUI() {
+            var on = isOn();
+            iconEl.textContent = on ? '🗗' : '⛶';
+            textEl.textContent = on ? '창모드' : '전체화면';
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        }
+        function toast(msg) {
+            var el = document.getElementById('fs-toast');
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'fs-toast';
+                el.id = 'fs-toast';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg;
+            void el.offsetWidth;
+            el.classList.add('show');
+            clearTimeout(toast._t);
+            toast._t = setTimeout(function () { el.classList.remove('show'); }, 2600);
+        }
+        function enterPseudo(hint) {
+            if (isRealFs()) return;
+            document.body.classList.add(PSEUDO);
+            syncUI();
+            if (hint) toast('이 브라우저는 브라우저 전체화면 대신 상단 바를 숨긴 몰입 모드로 표시합니다');
+        }
+        function requestReal() {
+            var req = root.requestFullscreen || root.webkitRequestFullscreen || root.mozRequestFullScreen || root.msRequestFullscreen;
+            if (!req) return false;
+            try {
+                var p = req.call(root);
+                if (p && typeof p.then === 'function') {
+                    p.then(syncUI, function () { enterPseudo(true); });
+                } else {
+                    setTimeout(function () { if (!isRealFs() && !isPseudo()) enterPseudo(true); else syncUI(); }, 500);
+                }
+                return true;
+            } catch (err) { return false; }
+        }
+        btn.addEventListener('click', function () {
+            if (isRealFs()) {
+                var exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                try {
+                    if (exit) { var q = exit.call(document); if (q && typeof q.catch === 'function') q.catch(function () { }); }
+                } catch (err) { }
+                syncUI();
+                return;
+            }
+            if (isPseudo()) { document.body.classList.remove(PSEUDO); syncUI(); return; }
+            if (!requestReal()) enterPseudo(true);
+            syncUI();
+        });
+        ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+            document.addEventListener(ev, function () {
+                if (isRealFs()) document.body.classList.remove(PSEUDO);
+                syncUI();
+            });
+        });
+        document.addEventListener('keydown', function (e) {
+            if ((e.key === 'Escape' || e.key === 'Esc') && isPseudo() && !isRealFs()) {
+                document.body.classList.remove(PSEUDO);
+                syncUI();
+            }
+        });
+        window.addEventListener('resize', syncUI);
+        syncUI();
+    })();
+
+    /* ---------- 시작 ---------- */
+    renderList();
+    renderProgress();
+    setStage(SCEN[0]);
+    $('#stageBadge').textContent = '🧯 실험실 안전';
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+</body>
+</html>

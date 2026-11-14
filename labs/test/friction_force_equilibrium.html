@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>마찰력과 힘의 평형 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../common/lib/three.min.js"></script>
+<script src="../common/lib/OrbitControls.js"></script>
+<link rel="stylesheet" href="../common/qr-modal.css">
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eef3f9;
+    color: #1c1c1e;
+    -webkit-user-select: none; user-select: none;
+    transition: background-color .35s ease, color .35s ease;
+}
+
+#canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+canvas { display: block; touch-action: none; }
+
+:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* ---------------- Glass ---------------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.80);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 30px rgba(15, 23, 42, 0.09);
+    border-radius: 18px;
+    transition: background .3s ease, border-color .3s ease, color .3s ease;
+}
+
+/* ---------------- 좌상단 ---------------- */
+.top-left-bar {
+    position: fixed; top: 16px; left: 18px;
+    display: flex; align-items: center; gap: 8px;
+    z-index: 30; max-width: calc(100vw - 132px);
+}
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; font-family: inherit; font-size: 13px; font-weight: 700;
+    color: #1c1c1e; text-decoration: none; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 999px;
+    white-space: nowrap; transition: all .2s ease;
+}
+.back-btn:hover { background: rgba(255, 255, 255, 0.95); transform: translateY(-1px); }
+.back-btn > span:first-child { display: inline-block; margin-right: 2px; }
+.tag-badge {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 14px; font-size: 13px; font-weight: 800;
+    min-width: 0; white-space: nowrap;
+}
+.tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-pill {
+    flex: 0 0 auto; padding: 2px 7px; border-radius: 999px;
+    background: rgba(147, 51, 234, 0.14); color: #7e22ce;
+    font-size: 10px; font-weight: 800; letter-spacing: .2px;
+}
+.qr-btn { font-size: 12px; padding: 8px 12px; }
+
+/* ---------------- 우상단 ---------------- */
+.top-right-bar {
+    position: fixed; top: 16px; right: 18px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+    z-index: 25; max-width: calc(100vw - 24px);
+}
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.data-card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 7px 15px; border-radius: 999px;
+}
+.data-item { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 54px; }
+.data-label { font-size: 9.5px; font-weight: 800; color: #64748b; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value { font-size: 13px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; white-space: nowrap; }
+.data-sep { width: 1px; height: 22px; background: rgba(15, 23, 42, 0.10); flex: 0 0 auto; }
+.icon-btn {
+    width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%; cursor: pointer; font-size: 16px;
+    font-family: inherit; background: rgba(255, 255, 255, 0.85);
+    transition: all .2s ease;
+}
+.icon-btn:hover { transform: scale(1.05); }
+
+/* ---------------- 안내 툴팁 ---------------- */
+.center-tooltip {
+    position: fixed; top: 78px; left: 50%; transform: translateX(-50%);
+    padding: 6px 16px; border-radius: 999px; z-index: 20;
+    font-size: 12px; font-weight: 700; color: #334155;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+    pointer-events: none; white-space: nowrap;
+    max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------------- 좌측 데이터 패널 ---------------- */
+.left-panel {
+    position: fixed; left: 18px; bottom: 76px; z-index: 40;
+    padding: 10px 12px; border-radius: 16px;
+    width: min(316px, calc(100vw - 320px));
+    display: flex; flex-direction: column; gap: 7px;
+}
+.left-panel-title {
+    font-size: 11px; font-weight: 800; color: #475569;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.left-panel canvas { width: 100%; height: auto; display: block; border-radius: 10px; }
+
+/* ---------------- 우측 조절 패널 (250px / 모바일 226px) ---------------- */
+body #side-ctrl.side-ctrl-panel {
+    width: 250px !important;
+    right: 20px !important;
+    bottom: 74px !important;
+    padding: 12px !important;
+    gap: 8px !important;
+    max-height: calc(100vh - 168px) !important;
+    z-index: 60 !important;
+}
+#side-ctrl .panel-title {
+    font-size: 12px !important; font-weight: 800 !important; color: #475569 !important;
+    text-align: center !important; padding-bottom: 5px !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07) !important;
+}
+
+/* 탭(모드) 선택 */
+.mode-row {
+    display: flex; gap: 4px; padding: 3px;
+    background: rgba(127, 140, 160, 0.14); border-radius: 11px;
+}
+.mode-btn {
+    flex: 1; min-width: 0; padding: 7px 4px; border: none; border-radius: 8px;
+    background: transparent; color: #475569;
+    font-family: inherit; font-size: 11.5px; font-weight: 800;
+    cursor: pointer; white-space: nowrap; transition: all .18s ease;
+}
+.mode-btn.active { background: #ffffff; color: #0f172a; box-shadow: 0 1px 5px rgba(15, 23, 42, 0.14); }
+.mode-btn:hover { color: #0f172a; }
+
+/* 타일형 조작 버튼 */
+.ctrl-tab-btn {
+    width: 100%; padding: 8px 6px; border-radius: 11px;
+    border: 1px solid rgba(15, 23, 42, 0.08); background: rgba(255, 255, 255, 0.92);
+    color: #1c1c1e; font-family: inherit; font-size: 11.5px; font-weight: 800;
+    cursor: pointer; text-align: center; line-height: 1.25;
+    white-space: nowrap; word-break: keep-all; transition: all .18s ease;
+}
+.ctrl-tab-btn:hover { background: #ffffff; transform: translateY(-1px); }
+.ctrl-tab-btn.active { background: #2563eb; color: #ffffff; border-color: #2563eb; box-shadow: 0 3px 12px rgba(37, 99, 235, 0.28); }
+.ctrl-tab-btn:disabled { opacity: .45; cursor: default; transform: none; }
+.ctrl-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.ctrl-grid.three { grid-template-columns: repeat(3, 1fr); }
+
+/* 슬라이더 행 */
+.ctrl-row { display: flex; flex-direction: column; gap: 3px; }
+.ctrl-row-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 800; color: #64748b; }
+.ctrl-val { font-size: 11.5px; font-weight: 800; color: #2563eb; white-space: nowrap; }
+input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+    border-radius: 999px; background: #dbe3ee; outline: none; cursor: pointer; margin: 4px 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%;
+    background: #2563eb; box-shadow: 0 1px 4px rgba(37, 99, 235, .45); cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+    width: 15px; height: 15px; border: none; border-radius: 50%;
+    background: #2563eb; cursor: pointer;
+}
+input[type="range"]:disabled { opacity: .5; }
+
+.hint-line {
+    font-size: 10.5px; line-height: 1.45; color: #475569;
+    background: rgba(37, 99, 235, 0.07); border-radius: 10px;
+    padding: 6px 9px; word-break: keep-all;
+}
+.status-line {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 11px; font-weight: 800; color: #475569;
+    background: rgba(15, 23, 42, 0.05); border-radius: 10px; padding: 6px 9px;
+}
+.status-line b { font-size: 11.5px; color: #2563eb; }
+.status-line.ok { background: rgba(16, 185, 129, 0.14); color: #047857; }
+.status-line.ok b { color: #047857; }
+.status-line.warn { background: rgba(245, 158, 11, 0.16); color: #b45309; }
+.status-line.warn b { color: #b45309; }
+
+.legend-row { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 10px; font-weight: 700; color: #475569; }
+.legend-row span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.legend-row i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+
+.result-card {
+    display: flex; flex-direction: column; gap: 3px;
+    background: rgba(16, 185, 129, 0.10); border: 1px solid rgba(16, 185, 129, 0.28);
+    border-radius: 10px; padding: 7px 9px;
+    font-size: 10.5px; font-weight: 700; color: #065f46; line-height: 1.4;
+}
+.result-card b { font-size: 11.5px; color: #047857; }
+
+/* ---------------- 전체화면 버튼 ---------------- */
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 15px; border-radius: 999px; border: none;
+    background: rgba(255, 255, 255, 0.85); color: #1e293b;
+    font-family: inherit; font-size: 12.5px; font-weight: 800;
+    cursor: pointer; transition: all .2s ease; white-space: nowrap;
+}
+.fullscreen-btn:hover { background: #ffffff; transform: translateY(-1px); }
+
+/* ---------------- 다크 모드 ---------------- */
+body.dark-mode { background-color: #0f172a; color: #f8fafc; }
+body.dark-mode .glass-panel {
+    background: rgba(23, 32, 50, 0.84);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+    color: #f8fafc;
+}
+body.dark-mode .back-btn, body.dark-mode .tag-badge { color: #f8fafc; }
+body.dark-mode .data-label { color: #94a3b8; }
+body.dark-mode .data-value { color: #f1f5f9; }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.14); }
+body.dark-mode .icon-btn, body.dark-mode .fullscreen-btn {
+    background: rgba(45, 55, 72, 0.9); color: #f8fafc;
+}
+body.dark-mode .center-tooltip {
+    background: rgba(23, 32, 50, 0.9); color: #cbd5e1; border-color: rgba(255, 255, 255, 0.12);
+}
+body.dark-mode .left-panel-title, body.dark-mode .ctrl-row-h, body.dark-mode .legend-row,
+body.dark-mode .hint-line, body.dark-mode .status-line { color: #cbd5e1; }
+body.dark-mode .hint-line { background: rgba(56, 189, 248, 0.10); }
+body.dark-mode .status-line { background: rgba(255, 255, 255, 0.07); }
+body.dark-mode .status-line b { color: #7dd3fc; }
+body.dark-mode .status-line.ok { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+body.dark-mode .status-line.ok b { color: #6ee7b7; }
+body.dark-mode .status-line.warn { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+body.dark-mode .status-line.warn b { color: #fcd34d; }
+body.dark-mode .ctrl-tab-btn {
+    background: rgba(45, 55, 72, 0.9); color: #e2e8f0; border-color: rgba(255, 255, 255, 0.10);
+}
+body.dark-mode .ctrl-tab-btn.active { background: #2563eb; color: #ffffff; }
+body.dark-mode .mode-row { background: rgba(255, 255, 255, 0.08); }
+body.dark-mode .mode-btn { color: #cbd5e1; }
+body.dark-mode .mode-btn.active { background: rgba(255, 255, 255, 0.16); color: #ffffff; }
+body.dark-mode .ctrl-val { color: #7dd3fc; }
+body.dark-mode input[type="range"] { background: #334155; }
+body.dark-mode .result-card { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.35); color: #a7f3d0; }
+body.dark-mode .result-card b { color: #6ee7b7; }
+body.dark-mode .tag-pill { background: rgba(191, 90, 242, 0.22); color: #e9b3ff; }
+
+/* ---------------- 전체화면 상태 ---------------- */
+body.is-fullscreen #canvas-container { width: 100vw; height: 100vh; }
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip { display: none !important; }
+
+/* ---------------- 모바일 세로 ---------------- */
+@media (max-width: 900px) {
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)); left: 8px;
+        gap: 6px; max-width: calc(100vw - 104px);
+    }
+    .top-left-bar .back-btn { padding: 6px 10px; font-size: 12px; }
+    .tag-badge { padding: 6px 10px; font-size: 11.5px; }
+    .tag-pill { display: none; }
+    .qr-btn { display: none; }
+
+    .top-right-bar { top: max(8px, env(safe-area-inset-top)); right: 8px; gap: 6px; }
+    .data-card { padding: 5px 9px; gap: 7px; }
+    .data-item { min-width: 44px; }
+    .data-label { font-size: 8.5px; }
+    .data-value { font-size: 11px; }
+    .data-sep { height: 18px; }
+    .icon-btn { width: 32px; height: 32px; font-size: 14px; }
+
+    .center-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 44px);
+        font-size: 10.5px; padding: 5px 11px;
+        white-space: normal; text-align: center; line-height: 1.35;
+    }
+
+    body #side-ctrl.side-ctrl-panel {
+        width: 226px !important;
+        right: max(8px, env(safe-area-inset-right)) !important;
+        bottom: calc(62px + env(safe-area-inset-bottom)) !important;
+        padding: 9px !important;
+        gap: 6px !important;
+        max-height: 46vh !important;
+    }
+    #side-ctrl .panel-title { font-size: 11px !important; }
+    .ctrl-tab-btn { font-size: 10.5px; padding: 6px 4px; }
+    .mode-btn { font-size: 10.5px; padding: 6px 3px; }
+    .hint-line { font-size: 10px; padding: 5px 7px; }
+
+    .left-panel {
+        left: 8px; bottom: calc(62px + env(safe-area-inset-bottom));
+        width: min(214px, calc(100vw - 244px));
+        padding: 7px 8px; gap: 5px;
+    }
+    .left-panel-title { font-size: 10px; }
+
+    .fullscreen-btn { padding: 7px 11px; font-size: 11.5px; }
+}
+
+@media (max-width: 430px) {
+    .data-card { gap: 6px; padding: 5px 8px; }
+    .data-item { min-width: 40px; }
+}
+
+/* ---------------- 모바일 가로 ---------------- */
+@media (max-height: 520px) and (orientation: landscape) {
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)); left: 6px; gap: 5px; }
+    .top-left-bar .back-btn { padding: 4px 9px; font-size: 11px; }
+    .tag-badge { padding: 4px 9px; font-size: 11px; }
+    .qr-btn, .tag-pill { display: none; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)); right: 6px; gap: 5px; }
+    .data-card { padding: 3px 8px; gap: 7px; }
+    .data-label { font-size: 8px; }
+    .data-value { font-size: 10.5px; }
+    .icon-btn { width: 28px; height: 28px; font-size: 13px; }
+    .center-tooltip { display: none; }
+    .data-card { display: none !important; }
+
+    body #side-ctrl.side-ctrl-panel {
+        top: 40px !important; bottom: auto !important;
+        right: 6px !important; width: 216px !important;
+        max-height: calc(100vh - 92px) !important;
+        padding: 7px !important; gap: 5px !important;
+    }
+    .left-panel {
+        left: 6px; top: 40px; bottom: auto;
+        width: min(190px, calc(100vw - 240px));
+        padding: 6px 7px;
+    }
+    .ctrl-tab-btn { font-size: 9.5px; padding: 5px 3px; }
+    .mode-btn { font-size: 9.5px; }
+    .fullscreen-btn { padding: 5px 9px; font-size: 10.5px; }
+}
+
+/* 실험 10 전용 */
+.seg-row { display: flex; gap: 4px; }
+.seg-btn {
+    flex: 1; min-width: 0; padding: 6px 2px; border-radius: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.08); background: rgba(255, 255, 255, 0.92);
+    color: #475569; font-family: inherit; font-size: 10.5px; font-weight: 800;
+    cursor: pointer; white-space: nowrap; transition: all .18s ease;
+}
+.seg-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+#graphCanvas { width: 100%; height: auto; display: block; border-radius: 10px; }
+body.dark-mode .seg-btn { background: rgba(45, 55, 72, 0.9); color: #cbd5e1; border-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .seg-btn.active { background: #2563eb; color: #fff; }
+@media (max-width: 900px) {
+    #graphCanvas { max-height: 118px; }
+}
+
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>마찰력과 힘의 평형 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span aria-hidden="true">📱</span> QR code</button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel" id="dataCard">
+<div class="data-item"><span class="data-label" id="dcL1">당기는 힘</span><span class="data-value" id="dcV1">0 N</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label" id="dcL2">마찰력</span><span class="data-value" id="dcV2">0 N</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label" id="dcL3">상태</span><span class="data-value" id="dcV3">정지</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip" id="centerTooltip">💡 당기는 힘을 키워 정지 마찰력에서 운동 마찰력으로 바뀌는 순간을 보고, 두 힘의 합력이 0이 되는 평형도 만들어 보세요.</div>
+<div class="left-panel glass-panel" id="graphPanel">
+    <div class="left-panel-title"><span>마찰력 그래프</span><span id="graphNote">나무판</span></div>
+    <canvas id="graphCanvas" width="600" height="330"></canvas>
+</div>
+
+<div class="bottom-control-bar glass-panel" id="bar">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel" id="side-ctrl">
+    <div class="panel-title">⚙️ 힘 조절</div>
+<div class="mode-row" id="modeRow">
+    <button class="mode-btn active" type="button" data-mode="friction">🧱 마찰력</button>
+    <button class="mode-btn" type="button" data-mode="balance">⚖️ 힘의 평형</button>
+</div>
+
+<div id="pane-friction">
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>바닥 재질</span><span class="ctrl-val" id="matVal">나무판 μ=0.50</span></div>
+        <div class="seg-row" id="matRow">
+            <button class="seg-btn" type="button" data-mat="ice">얼음</button>
+            <button class="seg-btn active" type="button" data-mat="wood">나무판</button>
+            <button class="seg-btn" type="button" data-mat="sand">사포</button>
+        </div>
+    </div>
+
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>나무도막의 질량</span><span class="ctrl-val" id="massVal">2 kg</span></div>
+        <input type="range" id="rngMass" min="1" max="10" step="1" value="2" aria-label="나무도막의 질량">
+    </div>
+
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>당기는 힘</span><span class="ctrl-val" id="forceVal">0 N</span></div>
+        <input type="range" id="rngForce" min="0" max="120" step="1" value="0" aria-label="당기는 힘">
+    </div>
+
+    <div class="status-line" id="fricStatus"><span>마찰력</span><b id="fricVal">0 N</b></div>
+    <div class="hint-line" id="fricHint">당기는 힘을 키우면 마찰력도 같이 커지다가, 최대 정지 마찰력을 넘는 순간 움직이기 시작합니다.</div>
+</div>
+
+<div id="pane-balance" style="display:none">
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>힘 F₁의 크기</span><span class="ctrl-val" id="f1Val">60 N</span></div>
+        <input type="range" id="rngF1" min="10" max="100" step="5" value="60" aria-label="힘 F1의 크기">
+    </div>
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>F₁의 방향</span><span class="ctrl-val" id="a1Val">0°</span></div>
+        <input type="range" id="rngA1" min="0" max="359" step="1" value="0" aria-label="힘 F1의 방향">
+    </div>
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>힘 F₂의 크기</span><span class="ctrl-val" id="f2Val">60 N</span></div>
+        <input type="range" id="rngF2" min="10" max="100" step="5" value="60" aria-label="힘 F2의 크기">
+    </div>
+    <div class="ctrl-row">
+        <div class="ctrl-row-h"><span>F₂의 방향</span><span class="ctrl-val" id="a2Val">120°</span></div>
+        <input type="range" id="rngA2" min="0" max="359" step="1" value="120" aria-label="힘 F2의 방향">
+    </div>
+
+    <button class="ctrl-tab-btn" type="button" id="btnBalance">⚖️ 평형 만들기</button>
+
+    <div class="status-line" id="balStatus"><span>두 힘의 합력</span><b id="balVal">60 N</b></div>
+    <div class="hint-line" id="balHint">두 힘의 크기가 같고 방향이 정반대이면 합력이 0이 되어 평형을 이룹니다.</div>
+</div>
+</div>
+
+<script>
+/* ============================================================
+   마찰력과 힘의 평형 3D
+   모드 1: 바닥 재질·질량·당기는 힘 → 정지 마찰력·최대 정지 마찰력·운동 마찰력
+   모드 2: 두 힘의 합력과 평형
+   ============================================================ */
+(function () {
+    'use strict';
+
+    var $ = function (s, r) { return (r || document).querySelector(s); };
+    var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+    var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+    var easeInOut = function (k) { return k < 0.5 ? 2 * k * k : -1 + (4 - 2 * k) * k; };
+    var G = 9.8;
+    var V3 = function (x, y, z) { return new THREE.Vector3(x, y, z); };
+    var DEG = 180 / Math.PI;
+
+    /* ---------------- 3D 환경 ---------------- */
+    var container = document.getElementById('canvas-container');
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    var scene = new THREE.Scene();
+    var SKY_LIGHT = 0xe9f1f9, SKY_DARK = 0x0b1524;
+    scene.background = new THREE.Color(SKY_LIGHT);
+
+    var camera = new THREE.PerspectiveCamera(42, 1, 0.1, 400);
+    camera.position.set(0, 7.5, 20);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 6;
+    controls.maxDistance = 44;
+    controls.maxPolarAngle = Math.PI * 0.5;
+    controls.target.set(0, 1.0, 0);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x93a2b5, 0.58));
+    var keyLight = new THREE.DirectionalLight(0xffffff, 0.62);
+    keyLight.position.set(10, 18, 12);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(1024, 1024);
+    keyLight.shadow.camera.left = -16;
+    keyLight.shadow.camera.right = 16;
+    keyLight.shadow.camera.top = 16;
+    keyLight.shadow.camera.bottom = -16;
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 60;
+    scene.add(keyLight);
+    var fillLight = new THREE.DirectionalLight(0xcfe2ff, 0.3);
+    fillLight.position.set(-12, 9, -10);
+    scene.add(fillLight);
+
+    /* ---------------- 라벨 ---------------- */
+    var labels = [];
+
+    var LABEL_FONT = '700 58px SeoulNamsan, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+    var LABEL_PX = 0.0058;
+
+    function labelWidth(text) {
+        var c = document.createElement('canvas').getContext('2d');
+        c.font = LABEL_FONT;
+        return Math.ceil(c.measureText(text).width);
+    }
+
+    function labelCanvasWidth(tw) {
+        return Math.max(250, Math.min(940, tw + 96));
+    }
+
+    function drawLabel(item) {
+        var c = item.canvas, g = item.ctx;
+        g.clearRect(0, 0, c.width, c.height);
+        g.font = LABEL_FONT;
+        var w = Math.min(c.width - 8, item.tw + 44);
+        var h = 88, x = (c.width - w) / 2, y = (c.height - h) / 2, r = 28;
+        g.fillStyle = item.bg;
+        g.beginPath();
+        g.moveTo(x + r, y);
+        g.lineTo(x + w - r, y);
+        g.quadraticCurveTo(x + w, y, x + w, y + r);
+        g.lineTo(x + w, y + h - r);
+        g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        g.lineTo(x + r, y + h);
+        g.quadraticCurveTo(x, y + h, x, y + h - r);
+        g.lineTo(x, y + r);
+        g.quadraticCurveTo(x, y, x + r, y);
+        g.closePath();
+        g.fill();
+        if (item.ring) { g.strokeStyle = item.ring; g.lineWidth = 4; g.stroke(); }
+        g.fillStyle = item.color;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(item.text, c.width / 2, y + h / 2 + 2);
+        item.tex.needsUpdate = true;
+    }
+
+    function makeLabel(text, color, bg, ring) {
+        var tw = labelWidth(text);
+        var W = labelCanvasWidth(tw);
+        var H = 132;
+        var canvas = document.createElement('canvas');
+        canvas.width = W;
+        canvas.height = H;
+        var ctx = canvas.getContext('2d');
+        var tex = new THREE.CanvasTexture(canvas);
+        tex.minFilter = THREE.LinearFilter;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+        spr.scale.set(W * LABEL_PX, H * LABEL_PX, 1);
+        spr.renderOrder = 20;
+        var item = {
+            canvas: canvas, ctx: ctx, tex: tex, sprite: spr, text: text, tw: tw,
+            color: color || '#0f172a',
+            bg: bg || 'rgba(255,255,255,0.93)',
+            ring: ring || null
+        };
+        labels.push(item);
+        drawLabel(item);
+        return item;
+    }
+
+    function setLabel(item, text) {
+        if (!item || item.text === text) return;
+        item.text = text;
+        item.tw = labelWidth(text);
+        var need = labelCanvasWidth(item.tw);
+        if (Math.abs(need - item.canvas.width) > 4) {
+            item.canvas.width = need;
+            item.sprite.scale.set(need * LABEL_PX, item.canvas.height * LABEL_PX, 1);
+        }
+        drawLabel(item);
+    }
+
+
+    if (document.fonts && document.fonts.load) {
+        document.fonts.load('700 52px SeoulNamsan').then(function () {
+            labels.forEach(drawLabel);
+        }).catch(function () {});
+    }
+
+    /* ---------------- 카메라 트윈 ---------------- */
+    var camTween = null;
+    function camFit(pos, target) {
+        var a = window.innerWidth / Math.max(1, window.innerHeight);
+        var f = a < 1.2 ? Math.min(1.8, 1.2 / Math.max(0.4, a)) : 1;
+        return target.clone().add(pos.clone().sub(target).multiplyScalar(f));
+    }
+    function flyTo(pos, target) {
+        camTween = {
+            p0: camera.position.clone(), p1: camFit(pos, target),
+            t0: controls.target.clone(), t1: target.clone(),
+            start: performance.now(), dur: 600
+        };
+    }
+
+    /* ============================================================
+       모드 1 — 마찰력
+       ============================================================ */
+    var MATERIALS = {
+        ice: { name: '얼음', muS: 0.10, muK: 0.03, color: 0xa3d4ea, rough: 0.12 },
+        wood: { name: '나무판', muS: 0.50, muK: 0.32, color: 0x8a5f33, rough: 0.72 },
+        sand: { name: '사포', muS: 0.90, muK: 0.65, color: 0x5d4530, rough: 0.98 }
+    };
+
+    var frictionGroup = new THREE.Group();
+    scene.add(frictionGroup);
+
+    var plateMat = new THREE.MeshStandardMaterial({ color: MATERIALS.wood.color, roughness: MATERIALS.wood.rough, metalness: 0.04 });
+    var plate = new THREE.Mesh(new THREE.BoxGeometry(14, 0.2, 8), plateMat);
+    plate.position.y = -0.1;
+    plate.receiveShadow = true;
+    plate.castShadow = true;
+    frictionGroup.add(plate);
+
+    var legMat = new THREE.MeshStandardMaterial({ color: 0x8f9db0, roughness: 0.5, metalness: 0.4 });
+    [[-5.6, -3.0], [5.6, -3.0], [-5.6, 3.0], [5.6, 3.0]].forEach(function (p) {
+        var leg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 4.0, 0.6), legMat);
+        leg.position.set(p[0], -2.4, p[1]);
+        leg.castShadow = true;
+        frictionGroup.add(leg);
+    });
+    var floorMesh = new THREE.Mesh(new THREE.BoxGeometry(26, 0.4, 16),
+        new THREE.MeshStandardMaterial({ color: 0xcfdae7, roughness: 0.95 }));
+    floorMesh.position.y = -4.6;
+    floorMesh.receiveShadow = true;
+    frictionGroup.add(floorMesh);
+
+    var blockMat = new THREE.MeshStandardMaterial({ color: 0x99602f, roughness: 0.8, metalness: 0.05 });
+    var bandMat2 = new THREE.MeshStandardMaterial({ color: 0x7c5533, roughness: 0.7, metalness: 0.1 });
+    var block = new THREE.Group();
+    var blockBox = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.7, 2.8), blockMat);
+    blockBox.castShadow = true;
+    blockBox.receiveShadow = true;
+    block.add(blockBox);
+    [-0.7, 0.7].forEach(function (x) {
+        var band = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.74, 2.84), bandMat2);
+        band.position.x = x;
+        block.add(band);
+    });
+    block.position.set(0, 0.85, 0);
+    frictionGroup.add(block);
+
+    function makeArrow(color) {
+        var a = new THREE.ArrowHelper(V3(1, 0, 0), V3(0, 0, 0), 1, color, 0.5, 0.28);
+        a.line.material.linewidth = 2;
+        frictionGroup.add(a);
+        return a;
+    }
+    var pullArrow = makeArrow(0xef4444);
+    var fricArrow = makeArrow(0x2563eb);
+    var normalArrow = makeArrow(0x10b981);
+    var weightArrow = makeArrow(0x8b5cf6);
+
+    var lblPull = makeLabel('당기는 힘', '#b91c1c');
+    var lblFric = makeLabel('마찰력', '#1d4ed8');
+    var lblNormal = makeLabel('수직항력', '#047857');
+    var lblWeight = makeLabel('중력', '#6d28d9');
+    [lblPull, lblFric, lblNormal, lblWeight].forEach(function (l) { frictionGroup.add(l.sprite); });
+
+
+    function setArrow(arrow, origin, dir, len) {
+        if (len < 0.06) { arrow.visible = false; return; }
+        arrow.visible = true;
+        arrow.position.copy(origin);
+        arrow.setDirection(dir);
+        arrow.setLength(len, Math.min(0.7, len * 0.34), Math.min(0.42, len * 0.22));
+    }
+
+    /* ============================================================
+       모드 2 — 힘의 평형
+       ============================================================ */
+    var balanceGroup = new THREE.Group();
+    balanceGroup.visible = false;
+    scene.add(balanceGroup);
+
+    var disc = new THREE.Mesh(new THREE.CylinderGeometry(8.6, 8.6, 0.24, 64),
+        new THREE.MeshStandardMaterial({ color: 0xdde7f2, roughness: 0.9, metalness: 0.03 }));
+    disc.position.y = -0.12;
+    disc.receiveShadow = true;
+    balanceGroup.add(disc);
+
+    var circleMat = new THREE.MeshBasicMaterial({ color: 0x9fb4cc, transparent: true, opacity: 0.75 });
+    var dashedRing = new THREE.Mesh(new THREE.RingGeometry(5.9, 6.02, 64), circleMat);
+    dashedRing.rotation.x = -Math.PI / 2;
+    dashedRing.position.y = 0.02;
+    balanceGroup.add(dashedRing);
+
+    var balRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.15, 48),
+        new THREE.MeshBasicMaterial({ color: 0x10b981, transparent: true, opacity: 0.0, side: THREE.DoubleSide }));
+    balRing.rotation.x = -Math.PI / 2;
+    balRing.position.y = 0.03;
+    balanceGroup.add(balRing);
+
+    var pivot = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 14),
+        new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.4, metalness: 0.6 }));
+    pivot.position.y = 0.25;
+    balanceGroup.add(pivot);
+
+    function makeVArrow(color) {
+        var a = new THREE.ArrowHelper(V3(1, 0, 0), V3(0, 0.1, 0), 1, color, 0.55, 0.3);
+        a.line.material.linewidth = 2;
+        balanceGroup.add(a);
+        return a;
+    }
+    var vec1 = makeVArrow(0x2563eb);
+    var vec2 = makeVArrow(0x10b981);
+    var vecR = makeVArrow(0xf59e0b);
+
+    var lblV1 = makeLabel('F₁', '#1d4ed8');
+    var lblV2 = makeLabel('F₂', '#047857');
+    var lblVR = makeLabel('합력', '#b45309');
+    [lblV1, lblV2, lblVR].forEach(function (l) { balanceGroup.add(l.sprite); });
+
+    var SCALE_V = 0.052;
+
+    /* ---------------- 상태 ---------------- */
+    var state = {
+        mode: 'friction',
+        mat: 'wood', mass: 2, force: 0, moving: false, v: 0, x: 0,
+        f1: 60, a1: 0, f2: 60, a2: 120, balanced: false
+    };
+
+    /* ---------------- 그래프 ---------------- */
+    function drawGraph() {
+        var c = $('#graphCanvas');
+        if (!c) return;
+        var ctx = c.getContext('2d');
+        var W = c.width, H = c.height;
+        var dark = document.body.classList.contains('dark-mode');
+        var mat = MATERIALS[state.mat];
+        var N = state.mass * G;
+        var fs = mat.muS * N, fk = mat.muK * N;
+        var xmax = Math.max(state.force * 1.15, fs * 1.5, 20);
+        var ymax = Math.max(fs * 1.25, 20);
+        var padL = 64, padR = 22, padT = 20, padB = 44;
+        var px = function (v) { return padL + (v / xmax) * (W - padL - padR); };
+        var py = function (v) { return H - padB - (v / ymax) * (H - padT - padB); };
+
+        ctx.clearRect(0, 0, W, H);
+        ctx.fillStyle = dark ? '#0f1a2a' : '#f8fbff';
+        ctx.fillRect(0, 0, W, H);
+
+        /* 격자 */
+        ctx.strokeStyle = dark ? 'rgba(255,255,255,0.10)' : 'rgba(15,23,42,0.10)';
+        ctx.lineWidth = 1;
+        for (var i = 0; i <= 4; i++) {
+            var gx = padL + (W - padL - padR) * i / 4;
+            var gy = padT + (H - padT - padB) * i / 4;
+            ctx.beginPath(); ctx.moveTo(gx, padT); ctx.lineTo(gx, H - padB); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(padL, gy); ctx.lineTo(W - padR, gy); ctx.stroke();
+        }
+
+        /* 축 */
+        ctx.strokeStyle = dark ? '#94a3b8' : '#64748b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padL, padT);
+        ctx.lineTo(padL, H - padB);
+        ctx.lineTo(W - padR, H - padB);
+        ctx.stroke();
+
+        /* 최대 정지 마찰력 · 운동 마찰력 기준선 */
+        ctx.setLineDash([6, 5]);
+        ctx.strokeStyle = 'rgba(37,99,235,0.45)';
+        ctx.beginPath();
+        ctx.moveTo(padL, py(fs));
+        ctx.lineTo(px(fs), py(fs));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        /* 이론 곡선 */
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 3.5;
+        ctx.beginPath();
+        ctx.moveTo(px(0), py(0));
+        ctx.lineTo(px(fs), py(fs));
+        ctx.lineTo(px(fs), py(fk));
+        ctx.lineTo(W - padR, py(fk));
+        ctx.stroke();
+
+        /* 현재 상태 점 */
+        var f = state.moving ? fk : Math.min(state.force, fs);
+        var cx = px(state.force), cy = py(f);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 11, 0, Math.PI * 2);
+        ctx.fillStyle = state.moving ? 'rgba(239,68,68,0.25)' : 'rgba(37,99,235,0.22)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+        ctx.fillStyle = state.moving ? '#ef4444' : '#2563eb';
+        ctx.fill();
+
+        /* 글자 */
+        ctx.fillStyle = dark ? '#cbd5e1' : '#475569';
+        ctx.font = '600 21px SeoulNamsan, "Apple SD Gothic Neo", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('마찰력 (N)', padL - 40, padT - 4);
+        ctx.textAlign = 'right';
+        ctx.fillText('당기는 힘 (N)', W - padR, H - 12);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#2563eb';
+        ctx.fillText('최대 정지 마찰력 ' + fs.toFixed(1) + ' N', px(fs) + 8, py(fs) - 8);
+        ctx.fillStyle = dark ? '#7dd3fc' : '#0369a1';
+        ctx.fillText('운동 마찰력 ' + fk.toFixed(1) + ' N', padL + 10, py(fk) - 8);
+    }
+
+    /* ---------------- 모드 1 갱신 ---------------- */
+    function updateFriction() {
+        var mat = MATERIALS[state.mat];
+        var N = state.mass * G;
+        var fsMax = mat.muS * N;
+        var fk = mat.muK * N;
+        var f = state.moving ? fk : Math.min(state.force, fsMax);
+
+        var l1El = $('#dcL1'), l2El = $('#dcL2'), l3El = $('#dcL3');
+        if (l1El) l1El.textContent = '당기는 힘';
+        if (l2El) l2El.textContent = '마찰력';
+        if (l3El) l3El.textContent = '상태';
+
+        block.position.set(state.x, 0.85, 0);
+        var sc = 2.5 / Math.max(5, N, state.force, f);
+        setArrow(pullArrow, V3(state.x + 1.42, 1.0, 0), V3(1, 0, 0), state.force * sc);
+        setArrow(fricArrow, V3(state.x - 1.42, 1.0, 0), V3(-1, 0, 0), f * sc);
+        setArrow(normalArrow, V3(state.x, 1.72, 0), V3(0, 1, 0), N * sc);
+        setArrow(weightArrow, V3(state.x, -0.24, 0), V3(0, -1, 0), N * sc);
+
+        var pullLen = state.force * sc;
+        lblPull.sprite.position.set(state.x + 1.5 + pullLen * 0.5, 1.9, 0);
+        setLabel(lblPull, '당기는 힘 ' + state.force.toFixed(0) + ' N');
+        lblPull.sprite.visible = pullLen > 0.2;
+
+        var fricLen = f * sc;
+        lblFric.sprite.position.set(state.x - 1.5 - fricLen * 0.5, 1.9, 0);
+        setLabel(lblFric, '마찰력 ' + f.toFixed(1) + ' N');
+        lblFric.sprite.visible = fricLen > 0.2;
+
+        lblNormal.sprite.position.set(state.x, 1.95 + N * sc, 0);
+        setLabel(lblNormal, '수직항력 ' + N.toFixed(1) + ' N');
+        lblWeight.sprite.position.set(state.x, -0.55 - N * sc, 0);
+        setLabel(lblWeight, '중력 ' + N.toFixed(1) + ' N');
+
+        var v1 = $('#dcV1'), v2 = $('#dcV2'), v3 = $('#dcV3');
+        if (v1) v1.textContent = state.force.toFixed(0) + ' N';
+        if (v2) v2.textContent = f.toFixed(1) + ' N';
+        if (v3) v3.textContent = state.moving ? '운동' : '정지';
+
+        var statusBox = $('#fricStatus');
+        var statusVal = $('#fricVal');
+        if (statusVal) statusVal.textContent = '마찰력 ' + f.toFixed(1) + ' N';
+        if (statusBox) {
+            statusBox.classList.remove('ok', 'warn');
+            if (state.moving) statusBox.classList.add('warn');
+            else statusBox.classList.add('ok');
+        }
+        var hint = $('#fricHint');
+        if (hint) {
+            if (state.moving) {
+                hint.textContent = '최대 정지 마찰력을 넘어 물체가 움직입니다. 이때는 운동 마찰력(' + fk.toFixed(1) + ' N)이 작용합니다.';
+            } else if (state.force >= fsMax - 0.05 && state.force > 0) {
+                hint.textContent = '최대 정지 마찰력에 도달했습니다. 조금만 더 세게 당기면 움직이기 시작합니다.';
+            } else {
+                hint.textContent = '정지해 있으므로 당기는 힘과 크기가 같은 정지 마찰력이 반대 방향으로 작용합니다.';
+            }
+        }
+        var matVal = $('#matVal');
+        if (matVal) matVal.textContent = mat.name + ' μ=' + mat.muS.toFixed(2);
+        var massVal = $('#massVal');
+        if (massVal) massVal.textContent = state.mass + ' kg';
+        var forceVal = $('#forceVal');
+        if (forceVal) forceVal.textContent = state.force.toFixed(0) + ' N';
+        var gnote = $('#graphNote');
+        if (gnote) gnote.textContent = mat.name + ' · 최대 ' + fsMax.toFixed(1) + ' N';
+    }
+
+    function stepPhysics(dt) {
+        var mat = MATERIALS[state.mat];
+        var N = state.mass * G;
+        var fsMax = mat.muS * N;
+        var fk = mat.muK * N;
+
+        if (!state.moving && state.force > fsMax) {
+            state.moving = true;
+            state.v = 0.15;
+        }
+        if (state.moving) {
+            var a = (state.force - fk) / state.mass;
+            state.v += a * dt;
+            if (state.v <= 0) {
+                state.v = 0;
+                state.moving = false;
+            } else {
+                state.x += state.v * dt;
+                if (state.x > 5.4) state.x = -5.4;
+            }
+        }
+        updateFriction();
+    }
+
+    /* ---------------- 모드 2 갱신 ---------------- */
+    function vectorOf(mag, angDeg) {
+        var a = angDeg / DEG;
+        return { x: mag * Math.cos(a), z: -mag * Math.sin(a), a: a };
+    }
+
+    function updateBalance() {
+        var v1 = vectorOf(state.f1, state.a1);
+        var v2 = vectorOf(state.f2, state.a2);
+        var rx = v1.x + v2.x, rz = v1.z + v2.z;
+        var mag = Math.sqrt(rx * rx + rz * rz);
+
+        setArrow(vec1, V3(0, 0.12, 0), V3(v1.x, 0, v1.z), state.f1 * SCALE_V);
+        setArrow(vec2, V3(0, 0.12, 0), V3(v2.x, 0, v2.z), state.f2 * SCALE_V);
+        if (mag > 0.6) setArrow(vecR, V3(0, 0.12, 0), V3(rx, 0, rz), mag * SCALE_V);
+        else vecR.visible = false;
+
+        var l1 = state.f1 * SCALE_V, l2 = state.f2 * SCALE_V;
+        lblV1.sprite.position.set(v1.x / state.f1 * (l1 + 0.9), 0.9, v1.z / state.f1 * (l1 + 0.9));
+        setLabel(lblV1, 'F₁ ' + state.f1 + ' N');
+        lblV2.sprite.position.set(v2.x / state.f2 * (l2 + 0.9), 0.9, v2.z / state.f2 * (l2 + 0.9));
+        setLabel(lblV2, 'F₂ ' + state.f2 + ' N');
+        if (mag > 0.6) {
+            lblVR.sprite.position.set(rx / mag * (mag * SCALE_V + 0.9), 0.9, rz / mag * (mag * SCALE_V + 0.9));
+            setLabel(lblVR, '합력 ' + mag.toFixed(1) + ' N');
+            lblVR.sprite.visible = true;
+        } else {
+            lblVR.sprite.visible = false;
+        }
+
+        var balanced = mag < 1.0;
+        state.balanced = balanced;
+        balRing.material.opacity = balanced ? 0.5 : 0.0;
+
+        var l1El = $('#dcL1'), l2El = $('#dcL2'), l3El = $('#dcL3');
+        if (l1El) l1El.textContent = '힘 F₁';
+        if (l2El) l2El.textContent = '힘 F₂';
+        if (l3El) l3El.textContent = '합력';
+        var v1El = $('#dcV1'), v2El = $('#dcV2'), v3El = $('#dcV3');
+        if (v1El) v1El.textContent = state.f1 + ' N';
+        if (v2El) v2El.textContent = state.f2 + ' N';
+        if (v3El) v3El.textContent = mag.toFixed(1) + ' N';
+
+        var statusBox = $('#balStatus');
+        var statusVal = $('#balVal');
+        if (statusVal) statusVal.textContent = balanced ? '0 N (평형)' : mag.toFixed(1) + ' N';
+        if (statusBox) {
+            statusBox.classList.remove('ok', 'warn');
+            statusBox.classList.add(balanced ? 'ok' : 'warn');
+        }
+        var hint = $('#balHint');
+        if (hint) {
+            hint.textContent = balanced
+                ? '두 힘의 합력이 0이므로 물체는 힘의 평형 상태입니다.'
+                : '합력의 크기는 ' + mag.toFixed(1) + ' N, 방향은 ' + ((Math.atan2(-rz, rx) * DEG + 360) % 360).toFixed(0) + '° 입니다.';
+        }
+        var f1Val = $('#f1Val'), a1Val = $('#a1Val'), f2Val = $('#f2Val'), a2Val = $('#a2Val');
+        if (f1Val) f1Val.textContent = state.f1 + ' N';
+        if (a1Val) a1Val.textContent = state.a1 + '°';
+        if (f2Val) f2Val.textContent = state.f2 + ' N';
+        if (a2Val) a2Val.textContent = state.a2 + '°';
+    }
+
+    /* ---------------- 모드 전환 ---------------- */
+    var FRIC_CAM = { pos: V3(0.5, 5.4, 14.5), target: V3(0, 1.4, 0) };
+    var BAL_CAM = { pos: V3(0, 16.5, 15.5), target: V3(0, 0, 0) };
+
+    function setMode(mode) {
+        state.mode = mode;
+        frictionGroup.visible = (mode === 'friction');
+        balanceGroup.visible = (mode === 'balance');
+        var paneF = $('#pane-friction'), paneB = $('#pane-balance');
+        if (paneF) paneF.style.display = mode === 'friction' ? '' : 'none';
+        if (paneB) paneB.style.display = mode === 'balance' ? '' : 'none';
+        var gp = $('#graphPanel');
+        if (gp) gp.style.display = mode === 'friction' ? '' : 'none';
+        $$('#modeRow .mode-btn').forEach(function (b) {
+            b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+        });
+        var tip = $('#centerTooltip');
+        if (tip) {
+            tip.textContent = mode === 'friction'
+                ? '💡 당기는 힘을 키워 정지 마찰력이 운동 마찰력으로 바뀌는 순간을 확인해 보세요.'
+                : '💡 두 힘의 크기와 방향을 바꾸어 합력이 0이 되는 평형을 만들어 보세요.';
+        }
+        if (mode === 'friction') {
+            flyTo(FRIC_CAM.pos, FRIC_CAM.target);
+            updateFriction();
+            drawGraph();
+        } else {
+            flyTo(BAL_CAM.pos, BAL_CAM.target);
+            updateBalance();
+        }
+    }
+
+    /* ---------------- UI ---------------- */
+    function bindUI() {
+        $$('#modeRow .mode-btn').forEach(function (b) {
+            b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
+        });
+
+        $$('#matRow .seg-btn').forEach(function (b) {
+            b.addEventListener('click', function () {
+                state.mat = b.getAttribute('data-mat');
+                $$('#matRow .seg-btn').forEach(function (o) { o.classList.toggle('active', o === b); });
+                var mat = MATERIALS[state.mat];
+                plateMat.color.setHex(mat.color);
+                plateMat.roughness = mat.rough;
+                state.v = 0;
+                state.moving = false;
+                updateFriction();
+                drawGraph();
+            });
+        });
+
+        var mass = $('#rngMass');
+        if (mass) {
+            mass.addEventListener('input', function () {
+                state.mass = parseFloat(mass.value) || 2;
+                state.moving = false;
+                state.v = 0;
+                updateFriction();
+                drawGraph();
+            });
+        }
+        var force = $('#rngForce');
+        if (force) {
+            force.addEventListener('input', function () {
+                state.force = parseFloat(force.value) || 0;
+                updateFriction();
+                drawGraph();
+            });
+        }
+
+        var f1 = $('#rngF1'), a1 = $('#rngA1'), f2 = $('#rngF2'), a2 = $('#rngA2');
+        if (f1) f1.addEventListener('input', function () { state.f1 = parseFloat(f1.value) || 10; updateBalance(); });
+        if (a1) a1.addEventListener('input', function () { state.a1 = parseFloat(a1.value) || 0; updateBalance(); });
+        if (f2) f2.addEventListener('input', function () { state.f2 = parseFloat(f2.value) || 10; updateBalance(); });
+        if (a2) a2.addEventListener('input', function () { state.a2 = parseFloat(a2.value) || 0; updateBalance(); });
+
+        var bal = $('#btnBalance');
+        if (bal) {
+            bal.addEventListener('click', function () {
+                state.f2 = state.f1;
+                state.a2 = (state.a1 + 180) % 360;
+                if (f2) f2.value = state.f2;
+                if (a2) a2.value = state.a2;
+                updateBalance();
+            });
+        }
+    }
+
+    /* ---------------- 초기화 · 시점 · 테마 · 리사이즈 ---------------- */
+    window.pageReset = function () {
+        state.mat = 'wood';
+        state.mass = 2;
+        state.force = 0;
+        state.moving = false;
+        state.v = 0;
+        state.x = 0;
+        state.f1 = 60;
+        state.a1 = 0;
+        state.f2 = 60;
+        state.a2 = 120;
+        var mass = $('#rngMass'), force = $('#rngForce'), f1 = $('#rngF1'), a1 = $('#rngA1'), f2 = $('#rngF2'), a2 = $('#rngA2');
+        if (mass) mass.value = 2;
+        if (force) force.value = 0;
+        if (f1) f1.value = 60;
+        if (a1) a1.value = 0;
+        if (f2) f2.value = 60;
+        if (a2) a2.value = 120;
+        $$('#matRow .seg-btn').forEach(function (b) {
+            b.classList.toggle('active', b.getAttribute('data-mat') === 'wood');
+        });
+        plateMat.color.setHex(MATERIALS.wood.color);
+        plateMat.roughness = MATERIALS.wood.rough;
+        setMode('friction');
+        flyTo(FRIC_CAM.pos, FRIC_CAM.target);
+        updateFriction();
+        drawGraph();
+    };
+
+    window.pageAlign = function () {
+        if (state.mode === 'balance') flyTo(BAL_CAM.pos, BAL_CAM.target);
+        else flyTo(FRIC_CAM.pos, FRIC_CAM.target);
+    };
+
+    window.pageResize = function () {
+        var w = window.innerWidth, h = window.innerHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        var a = w / Math.max(1, h);
+        if (Math.abs(a - lastAspect) > 0.18) {
+            lastAspect = a;
+            window.pageAlign();
+        }
+        drawGraph();
+    };
+
+    var lastAspect = window.innerWidth / Math.max(1, window.innerHeight);
+
+    window.pageTheme = function (dark) {
+        scene.background.setHex(dark ? SKY_DARK : SKY_LIGHT);
+        plateMat.needsUpdate = true;
+        drawGraph();
+    };
+
+    /* ---------------- 루프 ---------------- */
+    var last = performance.now();
+    function animate() {
+        requestAnimationFrame(animate);
+        var now = performance.now();
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+
+        if (camTween) {
+            var k = clamp((now - camTween.start) / camTween.dur, 0, 1);
+            var e = easeInOut(k);
+            camera.position.lerpVectors(camTween.p0, camTween.p1, e);
+            controls.target.lerpVectors(camTween.t0, camTween.t1, e);
+            if (k >= 1) camTween = null;
+        }
+
+        if (state.mode === 'friction') {
+            stepPhysics(dt);
+        } else {
+            balRing.material.opacity = state.balanced ? (0.3 + Math.abs(Math.sin(now * 0.0022)) * 0.28) : 0;
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    bindUI();
+    setMode('friction');
+    camera.position.copy(camFit(FRIC_CAM.pos, FRIC_CAM.target));
+    controls.target.copy(FRIC_CAM.target);
+    camTween = null;
+    updateFriction();
+    drawGraph();
+    window.pageResize();
+    animate();
+})();
+</script>
+<script>
+/* ============================================================
+   공통 UI 크롬: 전체화면 / 야간 모드 / 초기화·시점정렬 / 리사이즈
+   각 실험의 고유 동작은 window.pageReset · pageAlign · pageResize · pageTheme 로 연결된다.
+   ============================================================ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var fsBtn = document.getElementById('fullscreenBtn');
+    var fsIcon = document.getElementById('fullscreenIcon');
+    var fsText = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+            document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudoFs() { return docEl.classList.contains('pseudo-fs'); }
+    function syncFs() {
+        var on = realFs() || pseudoFs();
+        if (fsIcon) fsIcon.textContent = on ? '🗗' : '⛶';
+        if (fsText) fsText.textContent = on ? '창모드' : '전체화면';
+        if (fsBtn) fsBtn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+        if (window.pageResize) setTimeout(window.pageResize, 140);
+    }
+    if (fsBtn) {
+        fsBtn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                return;
+            }
+            if (pseudoFs()) { docEl.classList.remove('pseudo-fs'); syncFs(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var p = req.call(docEl);
+                    if (p && p.catch) p.catch(function () { docEl.classList.add('pseudo-fs'); syncFs(); });
+                } catch (e) { docEl.classList.add('pseudo-fs'); }
+            } else {
+                docEl.classList.add('pseudo-fs');
+            }
+            syncFs();
+        });
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, syncFs);
+    });
+    syncFs();
+
+    /* 야간 모드 */
+    var themeBtn = document.getElementById('themeBtn');
+    var saved = null;
+    try { saved = localStorage.getItem('svl_test_dark'); } catch (e) { saved = null; }
+    function applyTheme(dark) {
+        document.body.classList.toggle('dark-mode', dark);
+        if (themeBtn) {
+            themeBtn.textContent = dark ? '☀️' : '🌙';
+            themeBtn.title = dark ? '주간 모드로 전환' : '야간 모드 전환';
+        }
+        if (window.pageTheme) window.pageTheme(dark);
+    }
+    applyTheme(saved === '1');
+    if (themeBtn) {
+        themeBtn.addEventListener('click', function () {
+            var dark = !document.body.classList.contains('dark-mode');
+            applyTheme(dark);
+            try { localStorage.setItem('svl_test_dark', dark ? '1' : '0'); } catch (e) {}
+        });
+    }
+
+    /* 초기화 · 시점정렬 */
+    var btnReset = document.getElementById('btnReset');
+    var btnAlign = document.getElementById('btnAlign');
+    if (btnReset) btnReset.addEventListener('click', function () { if (window.pageReset) window.pageReset(); });
+    if (btnAlign) btnAlign.addEventListener('click', function () { if (window.pageAlign) window.pageAlign(); });
+
+    /* 리사이즈 */
+    var timer = null;
+    function schedule() {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(function () { if (window.pageResize) window.pageResize(); }, 90);
+    }
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
+    window.addEventListener('load', schedule);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', schedule);
+})();
+</script>
+<script src="../common/feedback.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+<script src="../common/lib/qrcode.min.js" defer></script>
+<script src="../common/qr-modal.js" defer></script>
+</body>
+</html>
