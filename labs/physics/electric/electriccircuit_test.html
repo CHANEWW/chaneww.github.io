@@ -1,55 +1,38 @@
 <!DOCTYPE html>
 <!--
   ============================================================================
-  Science Virtual LAB · 전기 회로 3D (테스트)  —  수행평가 학생 정보 입력 & 캡처 제출
+  Science Virtual LAB · 전기 회로 3D (테스트)  —  수행평가 [풀 보안 v2]
   ============================================================================
-  제출함 스프레드시트: https://docs.google.com/spreadsheets/d/1g6wvP20IaFOK4as0GixHQWRPXCCZA_bVOv140Ez4z64/edit
+  제출함 스프레드시트:
+  https://docs.google.com/spreadsheets/d/1g6wvP20IaFOK4as0GixHQWRPXCCZA_bVOv140Ez4z64/edit
+  Apps Script v2 전문은 이 파일 아래쪽 <script type="text/plain" id="svlCodeSrc"> 블록에
+  그대로 들어 있습니다(= downloads/electriccircuit_apps_script_v2.gs 와 동일).
 
-  [교사 1회 설정 — Apps Script 웹앱 배포]
+  [교사 1회 설정 — Apps Script v2 로 업데이트]
   1) 위 스프레드시트 → [확장 프로그램] → [Apps Script]
-  2) 아래 코드 전체를 붙여넣고 저장
-  3) [배포] → [새 배포] → 유형: 웹 앱 / 다음 사용자로 실행: 나 / 액세스 권한: 모든 사용자 → [배포] → 웹 앱 URL 복사
-  4) 이 실험실 주소 뒤에 ?hook=복사한URL 을 붙여 한 번 열면 학생 기기에 저장되어 이후 자동 전송됩니다.
-     예) .../electriccircuit_test.html?hook=https://script.google.com/macros/s/AKfy.../exec
-     (주소창에 ?school=OO중학교 를 붙이면 입력 모달의 학교 칸이 미리 채워집니다.)
-  5) 시트는 [1반]~[14반] 탭으로 나뉘어 있고, 학생이 고른 반의 탭에 한 줄씩 쌓입니다.
-     칸 순서는  A: 번호 | B: 이름 | C: 제출한 사진 | D: 제출날짜 및 시간 | E: 점수 | F: 회로 요약(비고)
+  2) 기존 Code.gs 내용을 전체 삭제하고 v2 코드를 붙여넣기 → 저장
+     (v2 코드는 이 페이지에서 ?teacher=1 → [📋 v2 코드 복사] 로 복사)
+  3) [배포] → [배포 관리] → ✏️(편집) → 버전: "새 버전" → [배포]
+     ★ 반드시 '배포 관리 → 새 버전'으로! '새 배포'를 만들면 웹앱 URL이 바뀝니다.
+  4) 웹앱 URL이 기존과 같으면 이 페이지는 그대로 동작합니다.
+     (다른 URL을 쓰려면 ...electriccircuit_test.html?hook=새URL 로 한 번 열어 주세요)
 
-  ---- 아래 [Apps Script 코드] 블록 전체를 붙여넣으세요 ----
-  const SHEET_ID = '1g6wvP20IaFOK4as0GixHQWRPXCCZA_bVOv140Ez4z64';
-  const FOLDER_NAME = '전기회로 수행평가 제출';   // 제출 사진을 모아 둘 드라이브 폴더
-  const HEADERS = ['번호', '이름', '제출한 사진', '제출날짜 및 시간', '점수', '회로 요약(비고)'];
+  [시트 구조]
+  · '시험관리' 탭: 반 / 상태(열림·닫힘) / 입장코드(PIN) / 마감시각(선택) / 문제 내용 / 1인1회제출
+                   H1:I6 교사용 사용법, H8:I8 교사 마스터 코드
+  · '1반'~'14반' 탭: A 번호 | B 이름 | C 제출한 사진 | D 제출날짜 및 시간
+                     E 점수(ARRAYFORMULA) | F 회로 요약 | G 채점 이유(ARRAYFORMULA) | H 학년·보안로그
 
-  function doPost(e) {
-    try {
-      const d = JSON.parse((e.postData && e.postData.contents) || e.parameter.payload);
-      const ss = SpreadsheetApp.openById(SHEET_ID);
-      const tab = d.className + '반';
-      let sh = ss.getSheetByName(tab);
-      if (!sh) { sh = ss.insertSheet(tab); sh.appendRow(HEADERS); sh.setFrozenRows(1); }
-      let photo = '';
-      const b64 = String(d.imageBase64 || '').split(',')[1] || '';
-      if (b64) {
-        const file = getFolder_(FOLDER_NAME).createFile(Utilities.newBlob(
-          Utilities.base64Decode(b64), 'image/png',
-          d.className + '반_' + d.studentNum + '번_' + d.studentName + '_' + d.fileStamp + '.png'));
-        photo = '=HYPERLINK("' + file.getUrl() + '","📷 사진 열기")';
-      }
-      sh.appendRow([d.studentNum, d.studentName, photo, d.timestamp, '', d.summary]);
-      return ContentService.createTextOutput(JSON.stringify({ ok: true, tab: tab }))
-        .setMimeType(ContentService.MimeType.JSON);
-    } catch (err) {
-      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-
-  function getFolder_(n) {
-    const it = DriveApp.getFoldersByName(n);
-    return it.hasNext() ? it.next() : DriveApp.createFolder(n);
-  }
-  ---- 코드 끝 ----
-============================================================================
+  [수업 운영]
+  · 들어갈 반만 상태를 '열림'으로 바꾸고 칠판에 입장코드(PIN)를 적습니다.
+    (폰에서도 ?teacher=1 → 교사 마스터 코드 입력 → 반별 열기/닫기 가능)
+  · 학생은 학년·반·번호·이름·입장코드를 넣고, 서버(doGet?action=enter)가 확인해야만
+    회로 화면과 문제가 열립니다. 문제 문장은 이 HTML에 하드코딩되어 있지 않습니다.
+  · 수업이 끝나면 '닫힘'으로 되돌립니다 → 입장·제출이 서버에서 즉시 차단됩니다.
+  · 시험 중에는 학번 워터마크가 1초마다 갱신되고, 화면 이탈 횟수가 기록되어
+    제출 이미지와 H열(학년·보안로그)에 함께 남습니다.
+  · E열·G열은 ARRAYFORMULA 열이므로 서버도 절대 쓰지 않습니다(#REF! 방지).
+  ============================================================================
 -->
 <html lang="ko">
 <head>
@@ -1037,6 +1020,115 @@ body.dark .side-ctrl-panel .control-tab-btn.svl-report-btn:hover{background:rgba
   background:rgba(15,23,42,.9);color:#fff;font-family:'SeoulNamsan',sans-serif;font-size:13px;font-weight:700;
   opacity:0;pointer-events:none;transition:opacity .22s,transform .22s;max-width:calc(100vw - 40px);text-align:center;word-break:keep-all;}
 #svlToast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ==========================================================================
+   5) 🔒 수행평가 풀 보안 — 입장 게이트 · 문제 배너 · 워터마크 · 교사 패널
+   ========================================================================== */
+/* 5-0) 잠금 상태: 3D·부품·기록장 등 배경 UI를 완전히 숨긴다 */
+body.svl-locked #top-left-wrap,
+body.svl-locked .top-right-bar,
+body.svl-locked #palette-container,
+body.svl-locked #bar,
+body.svl-locked #boardHelp,
+body.svl-locked #hint,
+body.svl-locked #svlReportDrawer,
+body.svl-locked .svl-rb-backdrop,
+body.svl-locked .side-ctrl-panel{ display:none !important; }
+body.svl-locked canvas{ visibility:hidden !important; }
+
+/* 5-1) 입장 게이트 */
+#svlExamGate{ z-index:9400; padding:16px;
+  background:linear-gradient(160deg,rgba(244,247,246,.985) 0%,rgba(228,238,249,.985) 100%);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px); }
+body.dark #svlExamGate{ background:linear-gradient(160deg,rgba(14,18,26,.985) 0%,rgba(20,29,44,.985) 100%); }
+#svlExamGate .svl-glass{ width:min(430px,100%); }
+.svl-gate-lock{ width:58px;height:58px;margin:0 auto 12px;border-radius:20px;display:flex;align-items:center;justify-content:center;
+  font-size:27px;background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.20);box-shadow:inset 0 1px 0 rgba(255,255,255,.7); }
+body.dark .svl-gate-lock{ background:rgba(96,165,250,.14);border-color:rgba(96,165,250,.28) }
+#svlExamGate .svl-m-title{ text-align:center;margin-bottom:6px }
+#svlExamGate .svl-m-sub{ text-align:center;margin-bottom:16px }
+.svl-gate-help{ margin-top:12px;padding:12px 14px;border-radius:14px;text-align:left;
+  background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.26);
+  font-size:11.5px;font-weight:700;color:#b91c1c;line-height:1.65;word-break:keep-all; }
+.svl-gate-help b{ display:block;font-size:12.5px;margin-bottom:5px;color:#991b1b }
+.svl-gate-help ol{ margin:0;padding-left:16px }
+.svl-gate-help li{ margin:2px 0 }
+body.dark .svl-gate-help{ background:rgba(248,113,113,.10);border-color:rgba(248,113,113,.30);color:#fca5a5 }
+body.dark .svl-gate-help b{ color:#fecaca }
+.svl-gate-help .svl-mini{ display:flex;gap:6px;margin-top:9px;flex-wrap:wrap }
+.svl-mini-btn{ border:1px solid rgba(15,23,42,.14);background:rgba(255,255,255,.9);color:#0b1220;
+  font-family:inherit;font-size:11.5px;font-weight:800;padding:7px 11px;border-radius:10px;cursor:pointer }
+body.dark .svl-mini-btn{ background:rgba(255,255,255,.10);color:#f1f5f9;border-color:rgba(255,255,255,.18) }
+#svlGateTeacherBtn{ display:none }
+
+/* 5-2) 문제 배너 + 남은 시간 */
+#svlExamBar{ position:fixed;z-index:120;top:16px;left:50%;transform:translateX(-50%);
+  display:none;flex-direction:column;align-items:center;gap:7px;width:max-content;max-width:min(460px,42vw); }
+body.svl-exam #svlExamBar{ display:flex }
+#svlExamBarBtn{ display:flex;align-items:center;gap:8px;padding:8px 15px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(37,99,235,.22);background:rgba(255,255,255,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  box-shadow:0 8px 24px rgba(15,23,42,.10);font-family:inherit;font-size:12.5px;font-weight:800;color:#0b1220;white-space:nowrap; }
+body.dark #svlExamBarBtn{ background:rgba(28,32,44,.86);color:#f8fafc;border-color:rgba(96,165,250,.34);box-shadow:0 8px 24px rgba(0,0,0,.42) }
+#svlExamBarBtn:hover{ transform:translateY(-1px) }
+.eb-ico{ font-size:14px }
+.eb-timer{ padding:2px 9px;border-radius:999px;background:rgba(37,99,235,.12);color:#1d4ed8;font-variant-numeric:tabular-nums;font-size:12px }
+body.dark .eb-timer{ background:rgba(96,165,250,.18);color:#bfdbfe }
+.eb-timer.warn{ background:rgba(245,158,11,.18);color:#b45309 }
+.eb-timer.over{ background:rgba(239,68,68,.18);color:#b91c1c }
+body.dark .eb-timer.warn{ color:#fcd34d } body.dark .eb-timer.over{ color:#fca5a5 }
+.eb-chev{ font-size:10px;opacity:.6 }
+#svlExamProblem{ width:100%;max-height:44vh;overflow:auto;padding:13px 15px;border-radius:16px;
+  background:rgba(255,255,255,.94);border:1px solid rgba(37,99,235,.18);box-shadow:0 18px 44px rgba(15,23,42,.16);
+  font-size:12.5px;font-weight:700;line-height:1.72;color:#1e293b;word-break:keep-all;text-align:left;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px); }
+body.dark #svlExamProblem{ background:rgba(26,31,44,.95);color:#e2e8f0;border-color:rgba(96,165,250,.26) }
+@media (max-width:1100px){
+  #svlExamBar{ top:calc(max(8px,env(safe-area-inset-top)) + 84px);left:10px;right:10px;transform:none;width:auto;max-width:none;align-items:stretch }
+  #svlExamBarBtn{ justify-content:center }
+  body.svl-exam #boardHelp{ display:none !important }
+}
+
+/* 5-3) 실시간 학번 워터마크 (화면 전체 · 클릭 통과) */
+#svlWatermark{ position:fixed;inset:-12%;z-index:950;display:none;pointer-events:none;user-select:none;-webkit-user-select:none;overflow:hidden }
+#svlWatermark.on{ display:block }
+.svl-wm-t{ position:absolute;transform:translate(-50%,-50%) rotate(-24deg);white-space:nowrap;
+  font-family:'SeoulNamsan',sans-serif;font-size:15px;font-weight:800;letter-spacing:.2px;color:rgba(15,23,42,.075) }
+body.dark .svl-wm-t{ color:rgba(255,255,255,.075) }
+body.svl-exam{ user-select:none;-webkit-user-select:none;-webkit-touch-callout:none }
+body.svl-exam input, body.svl-exam textarea{ user-select:text;-webkit-user-select:text }
+
+/* 5-4) 교사용 관리 패널 */
+#svlTeacherMask{ z-index:9600 }
+#svlTeacherMask .svl-glass{ width:min(680px,100%) }
+.svl-t-table{ margin:10px 0 4px;display:flex;flex-direction:column;gap:6px;max-height:min(52vh,430px);overflow:auto;padding-right:2px }
+.svl-t-head,.svl-t-row{ display:grid;grid-template-columns:52px 62px 74px 84px 1fr;gap:6px;align-items:center }
+.svl-t-head{ font-size:10.5px;font-weight:800;color:#94a3b8;padding:0 4px 6px;position:sticky;top:0;background:inherit;z-index:1 }
+.svl-t-row{ padding:6px;border-radius:12px;background:rgba(15,23,42,.035) }
+body.dark .svl-t-row{ background:rgba(255,255,255,.06) }
+.svl-t-row b{ font-size:12px;font-weight:800;text-align:center }
+.svl-t-st{ height:30px;border-radius:9px;border:1px solid rgba(15,23,42,.14);background:rgba(255,255,255,.9);
+  font-family:inherit;font-size:11.5px;font-weight:800;color:#475569;cursor:pointer }
+.svl-t-st.on{ background:#dcfce7;border-color:#86efac;color:#15803d }
+body.dark .svl-t-st{ background:rgba(255,255,255,.09);color:#cbd5e1;border-color:rgba(255,255,255,.16) }
+body.dark .svl-t-st.on{ background:rgba(34,197,94,.22);color:#bbf7d0;border-color:rgba(34,197,94,.4) }
+.svl-t-pin,.svl-t-dl{ width:100%;height:30px;border-radius:9px;border:1px solid rgba(15,23,42,.14);background:rgba(255,255,255,.94);
+  padding:0 7px;font-family:inherit;font-size:12px;font-weight:800;color:#0b1220;text-align:center;outline:none }
+body.dark .svl-t-pin,body.dark .svl-t-dl{ background:rgba(255,255,255,.08);color:#f8fafc;border-color:rgba(255,255,255,.18) }
+.svl-t-act{ display:flex;gap:5px;justify-content:flex-end }
+.svl-t-act button{ border:1px solid rgba(15,23,42,.12);background:rgba(255,255,255,.92);border-radius:9px;height:30px;padding:0 9px;
+  font-family:inherit;font-size:11px;font-weight:800;color:#334155;cursor:pointer;white-space:nowrap }
+body.dark .svl-t-act button{ background:rgba(255,255,255,.09);color:#e2e8f0;border-color:rgba(255,255,255,.16) }
+.svl-t-act button.primary{ background:linear-gradient(135deg,#2563eb,#1b4ed8);border:none;color:#fff }
+.svl-t-note{ font-size:11px;font-weight:700;color:#94a3b8;line-height:1.6;margin-top:8px;word-break:keep-all }
+@media(max-width:700px){
+  .svl-t-head{ display:none }
+  .svl-t-row{ grid-template-columns:44px 58px 1fr;grid-template-areas:'cls st pin' 'dl dl act';row-gap:5px }
+  .svl-t-row>b{ grid-area:cls } .svl-t-row>.svl-t-st{ grid-area:st } .svl-t-row>.svl-t-pin{ grid-area:pin }
+  .svl-t-row>.svl-t-dl{ grid-area:dl } .svl-t-row>.svl-t-act{ grid-area:act }
+}
+@media print{
+  body.svl-exam #svlWatermark, body.svl-exam #svlExamBar{ display:none !important }
+}
 </style>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
@@ -1098,32 +1190,93 @@ body.dark .side-ctrl-panel .control-tab-btn.svl-report-btn:hover{background:rgba
 <div id="dragGhost"></div>
 <div id="boardHelp">빈 공간 드래그: 화면 회전 · 부품 드래그: 이동 · 스위치 클릭: 열기/닫기</div>
 
-<!-- ===== 수행평가: 학생 정보 입력 모달 ===== -->
-<div class="svl-mask" id="svlStudentMask" role="dialog" aria-modal="true" aria-labelledby="svlStuTitle">
+<!-- ===== 수행평가: 문제 배너 + 남은 시간 ===== -->
+<div id="svlExamBar" aria-live="polite">
+  <button id="svlExamBarBtn" type="button" aria-expanded="false" aria-controls="svlExamProblem">
+    <span class="eb-ico" aria-hidden="true">📋</span>
+    <span class="eb-txt">수행평가 문제</span>
+    <span class="eb-timer" id="svlExamTimer">--:--</span>
+    <span class="eb-chev" id="svlExamChev" aria-hidden="true">▾</span>
+  </button>
+  <div id="svlExamProblem" hidden></div>
+</div>
+
+<!-- ===== 실시간 학번 워터마크 (화면 전체 · 클릭 통과) ===== -->
+<div id="svlWatermark" aria-hidden="true"></div>
+
+<!-- ===== 수행평가: 입장 게이트 (잠금 화면) ===== -->
+<div class="svl-mask" id="svlExamGate" role="dialog" aria-modal="true" aria-labelledby="svlGateTitle">
   <div class="svl-glass">
-    <div class="svl-m-title" id="svlStuTitle">🎓 수행평가 학생 정보 입력</div>
-    <div class="svl-m-sub">회로를 만든 뒤 <b>[📸 회로 캡처 및 제출]</b>을 누르면 이 정보와 함께 선생님께 제출됩니다.</div>
+    <div class="svl-gate-lock" aria-hidden="true">🔒</div>
+    <div class="svl-m-title" id="svlGateTitle">수행평가 입장</div>
+    <div class="svl-m-sub" id="svlGateSub">선생님이 시험을 연 뒤 <b>학년·반·번호·이름·입장 코드</b>를 입력하면 시작됩니다.</div>
     <div class="svl-field">
       <label for="svlSchool">학교</label>
       <input id="svlSchool" type="text" maxlength="20" placeholder="예) 문산중학교" autocomplete="off" enterkeyhint="next">
     </div>
     <div class="svl-row">
       <div class="svl-field">
+        <label for="svlGrade">학년</label>
+        <select id="svlGrade"></select>
+      </div>
+      <div class="svl-field">
         <label for="svlClass">반</label>
         <select id="svlClass"></select>
       </div>
+    </div>
+    <div class="svl-row">
       <div class="svl-field">
         <label for="svlNum">번호</label>
         <input id="svlNum" type="number" min="1" max="40" inputmode="numeric" placeholder="1~40" autocomplete="off" enterkeyhint="next">
+      </div>
+      <div class="svl-field">
+        <label for="svlPin">입장 코드</label>
+        <input id="svlPin" type="text" inputmode="numeric" maxlength="8" placeholder="칠판의 4자리" autocomplete="off" enterkeyhint="done">
       </div>
     </div>
     <div class="svl-field">
       <label for="svlName">이름</label>
       <input id="svlName" type="text" maxlength="20" placeholder="이름을 입력하세요" autocomplete="off" enterkeyhint="done">
     </div>
-    <button class="svl-btn svl-btn-primary" id="svlStartBtn" type="button" disabled>🚀 실험 시작하기</button>
-    <button class="svl-btn svl-btn-ghost" id="svlCancelBtn" type="button" style="display:none">취소</button>
-    <div class="svl-note">입력한 정보는 이 기기에만 저장되어 새로고침해도 유지됩니다.</div>
+    <button class="svl-btn svl-btn-primary" id="svlGateBtn" type="button" disabled>🔓 입장하기</button>
+    <div class="svl-status" id="svlGateStatus"></div>
+    <div class="svl-gate-help" id="svlGateHelp" hidden>
+      <b>⚠️ 서버 보안 스크립트(Apps Script v2) 배포가 필요합니다</b>
+      <ol>
+        <li>스프레드시트 → [확장 프로그램] → [Apps Script]</li>
+        <li>기존 코드 전체 삭제 → v2 코드 붙여넣기 → 저장</li>
+        <li>[배포] → [배포 관리] → ✏️ → 버전 "새 버전" → [배포]</li>
+      </ol>
+      <div class="svl-mini">
+        <button class="svl-mini-btn" id="svlGateCopyBtn" type="button">📋 v2 코드 복사</button>
+      </div>
+    </div>
+    <button class="svl-btn svl-btn-ghost" id="svlGateTeacherBtn" type="button" style="display:none">⚙ 교사용 관리 열기</button>
+    <div class="svl-note">입장 코드는 선생님이 칠판에 적어 주신 번호입니다. 시험 중 화면 캡처·이탈은 기록됩니다.</div>
+  </div>
+</div>
+
+<!-- ===== 교사용 시험 관리 패널 (?teacher=1) ===== -->
+<div class="svl-mask" id="svlTeacherMask" role="dialog" aria-modal="true" aria-labelledby="svlTTitle">
+  <div class="svl-glass">
+    <div class="svl-m-title" id="svlTTitle">⚙ 교사용 시험 관리</div>
+    <div class="svl-m-sub">시트 <b>시험관리</b> 탭을 실시간으로 열고 닫습니다. 교사 마스터 코드(시트 I8)를 입력하세요.</div>
+    <div class="svl-row">
+      <div class="svl-field" style="flex:2">
+        <label for="svlMaster">교사 마스터 코드</label>
+        <input id="svlMaster" type="password" maxlength="20" placeholder="마스터 코드" autocomplete="off">
+      </div>
+      <div class="svl-field" style="flex:1;display:flex;align-items:flex-end">
+        <button class="svl-btn svl-btn-primary" id="svlTConnect" type="button" style="height:48px">🔗 연결</button>
+      </div>
+    </div>
+    <div class="svl-status" id="svlTStatus"></div>
+    <div class="svl-t-table" id="svlTTable"></div>
+    <div class="svl-t-note">상태 버튼은 누르는 즉시 서버(시트)에 저장됩니다. 수업이 끝나면 그 반을 <b>닫힘</b>으로 되돌려 주세요.</div>
+    <button class="svl-btn svl-btn-ghost" id="svlTAllClose" type="button">🔒 전체 반 닫기</button>
+    <button class="svl-btn svl-btn-ghost" id="svlTCopy" type="button">📋 Apps Script v2 코드 복사</button>
+    <button class="svl-btn svl-btn-ghost" id="svlTPreview" type="button">👀 교사 미리보기(잠금 없이 화면 확인)</button>
+    <button class="svl-btn svl-btn-ghost" id="svlTClose" type="button">닫기</button>
   </div>
 </div>
 
@@ -2526,50 +2679,80 @@ frame();
 })();
 
 /* ==========================================================================
-   2026-11-11 · 전기 회로 3D (테스트) — 수행평가 학생 정보 입력 & 캡처 제출
+   2026-11-14 · 전기 회로 3D (테스트) — 수행평가 [풀 보안 v2]
    --------------------------------------------------------------------------
-   [교사 1회 설정]
-   ① 제출함 스프레드시트 → [확장 프로그램] → [Apps Script]
-   ② 이 파일 맨 위 주석에 있는 doPost 코드를 붙여넣고 저장
-   ③ [배포] → [새 배포] → 유형 '웹 앱' / 실행: 나 / 액세스: 모든 사용자 → [배포] → URL 복사
-   ④ 이 실험실 주소 뒤에 ?hook=복사한URL 을 붙여 한 번 열면 학생 기기에 저장됩니다.
-      예) electriccircuit_test.html?hook=https://script.google.com/macros/s/AKfy.../exec
-   ⑤ (선택) ?school=OO중학교 → 워터마크 학교명 변경,  ?teacher=1 → 제출 주소 설정 버튼 표시
+   · 입장 게이트: 학년·반·번호·이름·입장코드를 서버(Apps Script v2 doGet?action=enter)가
+     확인해야만 회로 화면이 열립니다. 문제 문장은 HTML에 없고 서버 응답으로만 표시됩니다.
+   · 시험 중: 실시간 학번 워터마크 · 화면 이탈 횟수 · 복사/저장/인쇄 억제 · 1인1회 제출 잠금.
+   · 교사: ?teacher=1 → 마스터 코드 입력 → 14개 반 열기/닫기·PIN·마감·문제 원격 제어.
+   [교사 1회 설정] 시트 → 확장 프로그램 → Apps Script → v2 코드 붙여넣기
+                   → 배포 관리 → 새 버전 → 배포 (웹앱 URL 유지)
    ========================================================================== */
 (function () {
   'use strict';
   /* 웹앱 URL을 주소창 없이 코드에 직접 넣고 싶으면 아래 따옴표 안에 붙여넣으세요. */
   const SUBMIT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwd5wqz7a5PPsbBzHqe-2flS3mLQ9n1J0cXAevRWUhliO-InpTGM-uD5Yi041_1wk4o7g/exec';
   const DEF_SCHOOL = '문산중학교';
-  const LS = { cls: 'svl_circuit_class', num: 'svl_circuit_num', name: 'svl_circuit_name', hook: 'svl_circuit_hook', school: 'svl_circuit_school' };
+  const LS = { cls: 'svl_circuit_class', num: 'svl_circuit_num', name: 'svl_circuit_name', hook: 'svl_circuit_hook', school: 'svl_circuit_school', grade: 'svl_circuit_grade' };
   const readLS = k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
   const writeLS = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const SESS_KEY = 'svl_exam_session_v1', SUB_KEY = 'svl_exam_submitted_v1';
+  const readSS = k => { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } };
+  const writeSS = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} };
+  const parseJSON = t => { try { const o = JSON.parse(t); return (o && typeof o === 'object') ? o : null; } catch (e) { return null; } };
+  const pad2 = n => String(n).padStart(2, '0');
+  const GRADE_LABEL = { '1': '1학년', '2': '2학년', '3': '3학년' };
 
   const params = new URLSearchParams(location.search);
   if (params.get('hook')) writeLS(LS.hook, params.get('hook').trim());
   if (params.get('school')) writeLS(LS.school, params.get('school').trim());
-  /* ?cls=2&num=15&name=김철수&school=문산중학교 → 입력 모달을 미리 채워서 연다 (수업 전 테스트용) */
-  const prefill = { cls: params.get('cls') || '', num: params.get('num') || '', name: params.get('name') || '', school: params.get('school') || '' };
+  /* ?grade=2&cls=3&num=15&name=김철수&pin=1003 → 게이트를 미리 채워서 연다 (수업 전 테스트용) */
+  const prefill = {
+    school: params.get('school') || '', grade: params.get('grade') || '', cls: params.get('cls') || '',
+    num: params.get('num') || '', name: params.get('name') || '', pin: params.get('pin') || ''
+  };
+  const TEACHER_MODE = params.get('teacher') === '1';
   const webhook = () => (readLS(LS.hook) || SUBMIT_WEBHOOK_URL || '').trim();
   const schoolName = () => st.school || readLS(LS.school) || DEF_SCHOOL;
+  const gradeTxt = g => GRADE_LABEL[g] || (g ? g + '학년' : '');
 
-  const st = { school: readLS(LS.school), cls: readLS(LS.cls), num: readLS(LS.num), name: readLS(LS.name) };
+  const st = { school: readLS(LS.school), grade: readLS(LS.grade), cls: readLS(LS.cls), num: readLS(LS.num), name: readLS(LS.name) };
+
+  /* ---------- 시험 세션 상태 ---------- */
+  let session = null, examActive = false, examExpired = false;
+  let blurCount = 0, lastBlurAt = 0, quietUntil = 0, lastWarnAt = 0;
+  let wmTimer = null, examTimerId = null, watchOn = false, gateBusy = false;
+  let masterCode = '', teacherList = [];
+
   const el = id => document.getElementById(id);
-  const stuMask = el('svlStudentMask'), schoolIn = el('svlSchool'), clsSel = el('svlClass'), numIn = el('svlNum'), nameIn = el('svlName'),
-        startBtn = el('svlStartBtn'), badge = el('svlStudentBadge'), badgeText = el('svlBadgeText'),
+  const gateMask = el('svlExamGate'), schoolIn = el('svlSchool'), gradeSel = el('svlGrade'), clsSel = el('svlClass'),
+        numIn = el('svlNum'), pinIn = el('svlPin'), nameIn = el('svlName'),
+        gateBtn = el('svlGateBtn'), gateStatus = el('svlGateStatus'), gateHelp = el('svlGateHelp'),
+        gateTeacherBtn = el('svlGateTeacherBtn'), gateCopyBtn = el('svlGateCopyBtn'),
+        badge = el('svlStudentBadge'), badgeText = el('svlBadgeText'),
         subMask = el('svlSubmitMask'), subSub = el('svlSubSub'), shotImg = el('svlShotImg'), loadingEl = el('svlLoading'),
         chips = el('svlInfoChips'), summaryBox = el('svlSummary'), submitBtn = el('svlSubmitBtn'),
         saveBtn = el('svlSaveBtn'), closeBtn = el('svlCloseBtn'), statusEl = el('svlStatus'),
-        capBtn = el('svlCaptureBtn'), cfgBtn = el('svlCfgBtn'), cancelBtn = el('svlCancelBtn');
+        capBtn = el('svlCaptureBtn'), cfgBtn = el('svlCfgBtn'),
+        examBar = el('svlExamBar'), examBarBtn = el('svlExamBarBtn'), examTimer = el('svlExamTimer'),
+        examProblem = el('svlExamProblem'), examChev = el('svlExamChev'), wmBox = el('svlWatermark'),
+        tMask = el('svlTeacherMask'), tMaster = el('svlMaster'), tConnect = el('svlTConnect'),
+        tStatus = el('svlTStatus'), tTable = el('svlTTable');
 
-  /* ---------- 반 선택지 ---------- */
+  /* ---------- 학년 · 반 선택지 ---------- */
   (function () {
+    const fg = document.createDocumentFragment();
+    const g0 = document.createElement('option'); g0.value = ''; g0.textContent = '학년'; fg.appendChild(g0);
+    [['1', '1학년'], ['2', '2학년'], ['3', '3학년']].forEach(function (p) {
+      const o = document.createElement('option'); o.value = p[0]; o.textContent = p[1]; fg.appendChild(o);
+    });
+    gradeSel.appendChild(fg);
     const frag = document.createDocumentFragment();
     const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '반 선택'; frag.appendChild(o0);
     for (let i = 1; i <= 14; i++) { const o = document.createElement('option'); o.value = String(i); o.textContent = i + '반'; frag.appendChild(o); }
     clsSel.appendChild(frag);
   })();
-  if (params.get('teacher') === '1') cfgBtn.style.display = 'block';
+  if (TEACHER_MODE) cfgBtn.style.display = 'block';
 
   /* ---------- 토스트 ---------- */
   let toastTimer = null;
@@ -2580,47 +2763,428 @@ frame();
     clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2600);
   }
 
-  /* ---------- 학생 정보 ---------- */
+  /* ======================================================================
+     신원 · 게이트
+     ====================================================================== */
   const hasStudent = () => !!(st.school && st.cls && st.num && st.name);
+  function studentLabel() {
+    return [gradeTxt(st.grade), st.cls ? st.cls + '반' : '', st.num ? st.num + '번' : '', st.name].filter(Boolean).join(' ');
+  }
   function renderBadge() {
-    if (hasStudent()) { badgeText.textContent = '🎓 ' + st.school + ' ' + st.cls + '반 ' + st.num + '번 ' + st.name; badge.classList.add('on'); }
+    if (hasStudent()) { badgeText.textContent = '🎓 ' + studentLabel(); badge.classList.add('on'); }
     else badge.classList.remove('on');
   }
-  function syncStart() {
+  function setGateStatus(kind, msg) { gateStatus.className = 'svl-status' + (kind ? ' ' + kind : ''); gateStatus.textContent = msg || ''; }
+  function syncGate() {
     const n = parseInt(numIn.value, 10);
-    startBtn.disabled = !(schoolIn.value.trim() && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim().length > 0);
+    gateBtn.disabled = !(schoolIn.value.trim() && gradeSel.value && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim() && pinIn.value.trim());
   }
-  function openStudentModal() {
+  function openGate() {
     schoolIn.value = st.school || prefill.school || DEF_SCHOOL;
-    clsSel.value = st.cls || prefill.cls; numIn.value = st.num || prefill.num; nameIn.value = st.name || prefill.name;
-    cancelBtn.style.display = hasStudent() ? 'flex' : 'none';
-    stuMask.classList.add('on'); syncStart();
-    setTimeout(() => { try { (st.cls ? (st.num ? nameIn : numIn) : clsSel).focus({ preventScroll: true }); } catch (e) {} }, 160);
+    gradeSel.value = st.grade || prefill.grade || '';
+    clsSel.value = st.cls || prefill.cls || '';
+    numIn.value = st.num || prefill.num || '';
+    nameIn.value = st.name || prefill.name || '';
+    pinIn.value = prefill.pin || '';
+    gateMask.classList.add('on');
+    document.body.classList.add('svl-locked');
+    if (gateHelp) gateHelp.hidden = true;
+    if (gateTeacherBtn) gateTeacherBtn.style.display = TEACHER_MODE ? 'flex' : 'none';
+    setGateStatus('', '');
+    syncGate();
   }
-  function closeStudentModal() { stuMask.classList.remove('on'); }
-  clsSel.addEventListener('change', syncStart);
-  schoolIn.addEventListener('input', syncStart);
-  numIn.addEventListener('input', syncStart);
-  nameIn.addEventListener('input', syncStart);
+  schoolIn.addEventListener('input', syncGate);
+  gradeSel.addEventListener('change', syncGate);
+  clsSel.addEventListener('change', syncGate);
+  numIn.addEventListener('input', syncGate);
+  nameIn.addEventListener('input', syncGate);
+  pinIn.addEventListener('input', syncGate);
   schoolIn.addEventListener('keydown', e => { if (e.key === 'Enter') numIn.focus(); });
-  nameIn.addEventListener('keydown', e => { if (e.key === 'Enter' && !startBtn.disabled) startBtn.click(); });
   numIn.addEventListener('keydown', e => { if (e.key === 'Enter') nameIn.focus(); });
-  startBtn.addEventListener('click', function () {
+  nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') pinIn.focus(); });
+  pinIn.addEventListener('keydown', e => { if (e.key === 'Enter' && !gateBtn.disabled) gateBtn.click(); });
+  gateBtn.addEventListener('click', gateEnter);
+
+  /* ---------- 서버 호출 (Apps Script v2 doGet) ---------- */
+  function apiUrl(q) {
+    const base = webhook();
+    if (!base) return '';
+    let u;
+    try { u = new URL(base); } catch (e) { return ''; }
+    Object.keys(q).forEach(function (k) {
+      if (q[k] !== null && q[k] !== undefined) u.searchParams.set(k, String(q[k]));
+    });
+    u.searchParams.set('_', String(Date.now()));
+    return u.toString();
+  }
+  async function apiCall(q) {
+    const url = apiUrl(q);
+    if (!url) return { ok: false, code: 'NO_HOOK', reason: '제출 주소(웹앱 URL)가 설정되지 않았습니다.' };
+    try {
+      const res = await fetch(url, { method: 'GET', cache: 'no-store', redirect: 'follow' });
+      const txt = await res.text();
+      const j = parseJSON(txt);
+      if (j) return j;
+      return { ok: false, code: 'NOT_V2', reason: '서버가 v2 형식으로 응답하지 않았습니다.' };
+    } catch (err) {
+      return { ok: false, code: 'NOT_V2', reason: '서버에 연결하지 못했습니다.' };
+    }
+  }
+
+  /* ---------- 입장 ---------- */
+  async function gateEnter() {
+    if (gateBusy) return;
     const n = parseInt(numIn.value, 10);
-    if (!(schoolIn.value.trim() && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim())) return;
-    st.school = schoolIn.value.trim();
-    st.cls = clsSel.value; st.num = String(n); st.name = nameIn.value.trim();
-    writeLS(LS.school, st.school);
-    writeLS(LS.cls, st.cls); writeLS(LS.num, st.num); writeLS(LS.name, st.name);
-    /* 다른 학생으로 바뀌면 이전 학생의 탐구 기록은 넘어가지 않는다 */
-    repSyncOwner(repOwnerId());
-    const rbTa = el('svlRbConclusion');
-    if (rbTa) { rbTa.value = repState.conclusion || ''; repRender(); repTaCount(); }
-    renderBadge(); closeStudentModal();
-    toast('👋 ' + st.cls + '반 ' + st.num + '번 ' + st.name + ' — 회로를 만들고 [📸 회로 캡처 및 제출]을 눌러주세요');
+    if (!(schoolIn.value.trim() && gradeSel.value && clsSel.value && n >= 1 && n <= 40 && nameIn.value.trim() && pinIn.value.trim())) return;
+    gateBusy = true;
+    gateBtn.disabled = true; gateBtn.textContent = '🔎 응시 자격 확인 중…';
+    setGateStatus('info', '서버에서 응시 자격을 확인하고 있습니다…');
+    const q = { action: 'enter', school: schoolIn.value.trim(), grade: gradeSel.value, cls: clsSel.value, num: String(n), name: nameIn.value.trim(), pin: pinIn.value.trim() };
+    let r = null;
+    try { r = await apiCall(q); } catch (e) { r = { ok: false, code: 'NOT_V2' }; }
+    gateBusy = false;
+    gateBtn.disabled = false; gateBtn.textContent = '🔓 입장하기';
+    if (r && r.ok) {
+      beginSession({
+        school: q.school, grade: q.grade, cls: q.cls, num: q.num, name: q.name, pin: q.pin,
+        problem: r.problem || '', deadline: r.deadline || '', oneTime: !!r.oneTime,
+        enterAt: r.serverTime || '', teacherPreview: false
+      });
+      return;
+    }
+    const code = (r && r.code) || 'NOT_V2';
+    setGateStatus('err', '⚠️ ' + ((r && r.reason) || '서버 확인에 실패했습니다.'));
+    if (code === 'BAD_PIN') { try { pinIn.focus(); pinIn.select(); } catch (e) {} }
+    if (code === 'NO_HOOK' || code === 'NOT_V2' || code === 'SETUP' || code === 'SERVER' || code === 'BAD_ACTION') {
+      if (gateHelp) gateHelp.hidden = false;
+    }
+    syncGate();
+  }
+
+  /* ---------- 세션 시작/복원 ---------- */
+  function beginSession(s) {
+    session = s;
+    writeSS(SESS_KEY, JSON.stringify(s));
+    st.school = s.school || st.school || DEF_SCHOOL;
+    st.grade = s.grade || ''; st.cls = s.cls || ''; st.num = s.num || ''; st.name = s.name || '';
+    writeLS(LS.school, st.school); writeLS(LS.grade, st.grade);
+    /* 공유 태블릿 격리: 이전 학생의 측정 기록·결론·회로를 지운다 */
+    try { localStorage.removeItem('svl_circuit_report_v1'); } catch (e) {}
+    try { repState.rows = []; repState.conclusion = ''; repState.owner = ''; } catch (e) {}
+    const rbTa = el('svlRbConclusion'); if (rbTa) rbTa.value = '';
+    try { while (parts.length) removePart(parts[0]); select(null); } catch (e) {}
+    try { repRender(); repLive(); repTaCount(); } catch (e) {}
+    renderBadge();
+    gateMask.classList.remove('on');
+    document.body.classList.remove('svl-locked');
+    document.body.classList.add('svl-exam');
+    examActive = true; examExpired = false; blurCount = 0;
+    renderProblemBar();
+    startWatermark(); startExamTimer(); startWatch();
+    toast('🔓 입장 완료 — ' + studentLabel() + ' · 문제를 확인하고 회로를 구성하세요');
+  }
+  function restoreSession() {
+    const s = parseJSON(readSS(SESS_KEY));
+    if (!s || !s.cls || !s.num || !s.name) return false;
+    session = s;
+    st.school = s.school || st.school || DEF_SCHOOL;
+    st.grade = s.grade || ''; st.cls = s.cls; st.num = s.num; st.name = s.name;
+    document.body.classList.add('svl-exam');
+    examActive = true;
+    renderBadge(); renderProblemBar(); startWatermark(); startExamTimer(); startWatch();
+    return true;
+  }
+
+  /* ---------- 문제 배너 · 남은 시간 ---------- */
+  function renderProblemBar() {
+    if (!session) return;
+    const txt = String(session.problem || '').trim();
+    examProblem.textContent = txt || '문제가 비어 있습니다. 선생님께 알려 주세요.';
+    examBar.classList.add('on');
+    examProblem.hidden = false;
+    examChev.textContent = '▴';
+    examBarBtn.setAttribute('aria-expanded', 'true');
+    updateExamTimer();
+  }
+  examBarBtn.addEventListener('click', function () {
+    const open = examProblem.hidden;
+    examProblem.hidden = !open;
+    examChev.textContent = open ? '▴' : '▾';
+    examBarBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
-  badge.addEventListener('click', openStudentModal);
-  cancelBtn.addEventListener('click', function () { if (hasStudent()) closeStudentModal(); });
+  function parseDeadline(v) {
+    const t = String(v || '').trim();
+    if (!t) return null;
+    let m = t.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})$/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 0, 0);
+    m = t.match(/^(\d{1,2}):(\d{2})$/);
+    if (m) { const d = new Date(); d.setHours(+m[1], +m[2], 0, 0); return d; }
+    return null;
+  }
+  function updateExamTimer() {
+    if (!session || !examTimer) return;
+    if (!session.deadline) { examTimer.textContent = '⏳ 마감 미지정'; examTimer.className = 'eb-timer'; return; }
+    const dl = parseDeadline(session.deadline);
+    if (!dl) { examTimer.textContent = '⏳ ' + session.deadline; examTimer.className = 'eb-timer'; return; }
+    const ms = dl.getTime() - Date.now();
+    if (ms <= 0) {
+      examTimer.textContent = '⏰ 마감됨'; examTimer.className = 'eb-timer over';
+      if (!examExpired) {
+        examExpired = true;
+        toast('⏰ 응시 마감 시간이 지났습니다 — 제출이 서버에서 차단됩니다');
+      }
+      return;
+    }
+    const sec = Math.floor(ms / 1000), mm = Math.floor(sec / 60), ss = sec % 60;
+    examTimer.textContent = '⏳ ' + pad2(mm) + ':' + pad2(ss);
+    examTimer.className = 'eb-timer' + (mm < 5 ? ' warn' : '');
+  }
+  function startExamTimer() {
+    if (examTimerId) clearInterval(examTimerId);
+    updateExamTimer();
+    examTimerId = setInterval(updateExamTimer, 1000);
+  }
+
+  /* ---------- 실시간 학번 워터마크 ---------- */
+  function wmString() {
+    const d = new Date();
+    const who = (session && session.teacherPreview)
+      ? '교사 미리보기'
+      : [gradeTxt(st.grade), st.cls ? st.cls + '반' : '', st.num ? st.num + '번' : '', st.name].filter(Boolean).join(' ');
+    const t = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+    return who + ' · ' + t + (blurCount ? ' · 이탈 ' + blurCount + '회' : '');
+  }
+  function wmTick() {
+    if (!wmBox) return;
+    const t = wmString();
+    const kids = wmBox.children;
+    for (let i = 0; i < kids.length; i++) kids[i].textContent = t;
+  }
+  function startWatermark() {
+    if (!wmBox) return;
+    if (!wmBox.childElementCount) {
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 3; c++) {
+          const sp = document.createElement('span');
+          sp.className = 'svl-wm-t';
+          sp.style.top = ((r + 0.5) * 20) + '%';
+          sp.style.left = ((c + 0.5) * (100 / 3)) + '%';
+          wmBox.appendChild(sp);
+        }
+      }
+    }
+    wmBox.classList.add('on');
+    wmTick();
+    if (wmTimer) clearInterval(wmTimer);
+    wmTimer = setInterval(wmTick, 1000);
+  }
+
+  /* ---------- 화면 이탈 감시 ---------- */
+  function quiet(ms) { quietUntil = Date.now() + (ms || 4000); }
+  function bumpBlur() {
+    if (!examActive) return;
+    const now = Date.now();
+    if (now < quietUntil) return;
+    if (now - lastBlurAt < 900) return;
+    lastBlurAt = now;
+    blurCount++;
+    toast('⚠️ 화면을 벗어났습니다 (' + blurCount + '회) — 제출 기록에 함께 전송됩니다');
+    wmTick();
+  }
+  function startWatch() {
+    if (watchOn) return;
+    watchOn = true;
+    document.addEventListener('visibilitychange', function () { if (document.hidden) bumpBlur(); });
+    window.addEventListener('blur', bumpBlur);
+    window.addEventListener('pagehide', bumpBlur);
+  }
+
+  /* ---------- 복사 · 저장 · 인쇄 · 개발자도구 억제 ---------- */
+  function warnGuard(msg) {
+    const now = Date.now();
+    if (now - lastWarnAt < 2200) return;
+    lastWarnAt = now;
+    toast(msg || '🔒 시험 중에는 복사·저장·인쇄를 사용할 수 없습니다');
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!examActive) return;
+    const k = String(e.key || '').toLowerCase();
+    const meta = e.ctrlKey || e.metaKey;
+    let hit = false;
+    if (k === 'f12' || k === 'printscreen') hit = true;
+    else if (meta && ['c', 's', 'p', 'u', 'x', 'a'].indexOf(k) >= 0) hit = true;
+    else if (meta && e.shiftKey && ['i', 'j', 'c', 'k'].indexOf(k) >= 0) hit = true;
+    if (hit) { e.preventDefault(); e.stopPropagation(); warnGuard(); }
+  }, true);
+  document.addEventListener('contextmenu', function (e) {
+    if (!examActive) return;
+    e.preventDefault(); warnGuard('🔒 우클릭 메뉴는 사용할 수 없습니다');
+  }, true);
+  ['copy', 'cut', 'dragstart'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { if (examActive) { e.preventDefault(); warnGuard(); } }, true);
+  });
+  window.addEventListener('beforeprint', function () { if (examActive) warnGuard('🔒 시험 중에는 인쇄할 수 없습니다'); });
+
+  /* ---------- 1인 1회 제출 잠금 ---------- */
+  function submittedInfo() {
+    const o = parseJSON(readSS(SUB_KEY));
+    if (!o) return null;
+    return (String(o.cls || '') === String(st.cls || '') && String(o.num || '') === String(st.num || '')) ? o : null;
+  }
+  function updateSubmitLock() {
+    const s = submittedInfo();
+    if (s && submitBtn) {
+      submitBtn.disabled = true; submitBtn.textContent = '✅ 제출 완료';
+      if (subSub) subSub.textContent = '이미 제출이 완료된 학번입니다. (' + (s.at || '') + ') — 재제출은 잠겨 있습니다.';
+    }
+  }
+  function securityLog() {
+    const t = session && session.enterAt ? String(session.enterAt).slice(0, 5) : '';
+    return [gradeTxt(st.grade), '이탈 ' + blurCount + '회', t ? '입장 ' + t : ''].filter(Boolean).join(' · ');
+  }
+  badge.addEventListener('click', function () {
+    if (examActive) { toast((session && session.teacherPreview ? '👀 교사 미리보기' : '🎓 ' + studentLabel()) + ' · 시험 중에는 정보를 바꿀 수 없습니다'); return; }
+    openGate();
+  });
+
+  /* ======================================================================
+     교사용 관리 패널 (?teacher=1)
+     ====================================================================== */
+  function openTeacher() {
+    if (!tMask) return;
+    tMask.classList.add('on');
+    if (!masterCode) { tStatus.className = 'svl-status info'; tStatus.textContent = '교사 마스터 코드(시트 시험관리 I8)를 입력하고 [🔗 연결]을 누르세요.'; }
+    try { tMaster.focus(); } catch (e) {}
+  }
+  if (gateTeacherBtn) gateTeacherBtn.addEventListener('click', openTeacher);
+  if (tConnect) tConnect.addEventListener('click', teacherConnect);
+  if (el('svlTClose')) el('svlTClose').addEventListener('click', function () { tMask.classList.remove('on'); });
+
+  async function teacherConnect() {
+    const m = tMaster.value.trim();
+    if (!m) { tStatus.className = 'svl-status err'; tStatus.textContent = '마스터 코드를 입력하세요.'; return; }
+    tConnect.disabled = true;
+    tStatus.className = 'svl-status info'; tStatus.textContent = '시험관리 탭을 불러오는 중…';
+    const r = await apiCall({ action: 'teacher_list', master: m });
+    tConnect.disabled = false;
+    if (!r || !r.ok) {
+      tStatus.className = 'svl-status err';
+      tStatus.textContent = '⚠️ ' + ((r && r.reason) || '연결하지 못했습니다.') +
+        ((r && (r.code === 'NOT_V2' || r.code === 'NO_HOOK')) ? ' — Apps Script v2 배포가 필요합니다.' : '');
+      return;
+    }
+    masterCode = m; teacherList = r.classes || [];
+    tStatus.className = 'svl-status ok';
+    tStatus.textContent = '✅ 연결됨 · 서버 시각 ' + (r.serverTime || '') + ' · 14개 반';
+    renderTeacherList();
+  }
+
+  function renderTeacherList() {
+    tTable.innerHTML = '';
+    const head = document.createElement('div');
+    head.className = 'svl-t-head';
+    ['반', '상태', '입장코드', '마감시각', '문제·저장'].forEach(function (h) {
+      const sp = document.createElement('span'); sp.textContent = h; head.appendChild(sp);
+    });
+    tTable.appendChild(head);
+    teacherList.forEach(function (c) {
+      const row = document.createElement('div');
+      row.className = 'svl-t-row';
+      const nm = document.createElement('b'); nm.textContent = c.cls; row.appendChild(nm);
+      const stBtn = document.createElement('button');
+      stBtn.type = 'button'; stBtn.className = 'svl-t-st';
+      const paint = on => { stBtn.classList.toggle('on', on); stBtn.textContent = on ? '열림' : '닫힘'; };
+      paint(c.status === '열림');
+      row.appendChild(stBtn);
+      const pin = document.createElement('input'); pin.className = 'svl-t-pin'; pin.value = c.pin || ''; pin.inputMode = 'numeric'; pin.maxLength = 8; row.appendChild(pin);
+      const dl = document.createElement('input'); dl.className = 'svl-t-dl'; dl.value = c.deadline || ''; dl.placeholder = 'HH:MM'; row.appendChild(dl);
+      const act = document.createElement('div'); act.className = 'svl-t-act';
+      const pBtn = document.createElement('button'); pBtn.type = 'button'; pBtn.textContent = '📝 문제';
+      const sBtn = document.createElement('button'); sBtn.type = 'button'; sBtn.textContent = '💾 저장'; sBtn.className = 'primary';
+      act.appendChild(pBtn); act.appendChild(sBtn); row.appendChild(act);
+      tTable.appendChild(row);
+
+      let problem = c.problem || '';
+      const save = async function (extra) {
+        const q = Object.assign({ action: 'teacher_set', master: masterCode, cls: c.cls }, extra || {
+          pin: pin.value.trim(), deadline: dl.value.trim(), problem: problem
+        });
+        sBtn.disabled = true;
+        const r = await apiCall(q);
+        sBtn.disabled = false;
+        if (r && r.ok) {
+          c.status = r.status; c.pin = r.pin; c.deadline = r.deadline; c.problem = r.problem;
+          problem = r.problem; paint(r.status === '열림'); pin.value = r.pin; dl.value = r.deadline;
+          tStatus.className = 'svl-status ok';
+          tStatus.textContent = '✅ ' + c.cls + ' 저장됨 · ' + r.status + ' / PIN ' + r.pin + ' / 마감 ' + (r.deadline || '수동');
+        } else {
+          tStatus.className = 'svl-status err';
+          tStatus.textContent = '⚠️ ' + c.cls + ' 저장 실패: ' + ((r && (r.reason || r.error)) || '알 수 없음');
+        }
+      };
+      stBtn.addEventListener('click', function () { save({ status: c.status === '열림' ? '닫힘' : '열림' }); });
+      sBtn.addEventListener('click', function () { save(); });
+      pBtn.addEventListener('click', function () {
+        quiet(6000);
+        const v = window.prompt(c.cls + ' 문제 내용을 입력하세요', problem);
+        if (v === null) return;
+        problem = v.trim();
+        toast('📝 ' + c.cls + ' 문제를 고쳤습니다 — [💾 저장]을 눌러야 반영됩니다');
+      });
+    });
+  }
+
+  if (el('svlTAllClose')) el('svlTAllClose').addEventListener('click', async function () {
+    if (!masterCode || !teacherList.length) { tStatus.className = 'svl-status err'; tStatus.textContent = '먼저 [🔗 연결]을 해 주세요.'; return; }
+    quiet(6000);
+    if (!window.confirm('모든 반을 닫을까요? (학생 입장·제출이 즉시 차단됩니다)')) return;
+    tStatus.className = 'svl-status info'; tStatus.textContent = '전체 반을 닫는 중…';
+    let n = 0;
+    for (const c of teacherList) {
+      const r = await apiCall({ action: 'teacher_set', master: masterCode, cls: c.cls, status: '닫힘' });
+      if (r && r.ok) n++;
+    }
+    tStatus.className = n === teacherList.length ? 'svl-status ok' : 'svl-status err';
+    tStatus.textContent = '🔒 ' + n + ' / ' + teacherList.length + ' 반 닫음';
+    const r2 = await apiCall({ action: 'teacher_list', master: masterCode });
+    if (r2 && r2.ok) { teacherList = r2.classes || []; renderTeacherList(); }
+  });
+
+  async function copyCodeGs() {
+    const src = el('svlCodeSrc');
+    if (!src) { toast('코드를 찾을 수 없습니다'); return; }
+    const text = (src.textContent || '').trim();
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('📋 Apps Script v2 코드를 복사했습니다');
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e2) {}
+      ta.remove();
+      toast(ok ? '📋 v2 코드를 복사했습니다' : '복사가 막혔습니다 — 시트 편집기에서 붙여넣기 해 주세요');
+    }
+  }
+  if (el('svlTCopy')) el('svlTCopy').addEventListener('click', copyCodeGs);
+  if (gateCopyBtn) gateCopyBtn.addEventListener('click', copyCodeGs);
+
+  if (el('svlTPreview')) el('svlTPreview').addEventListener('click', function () {
+    const first = teacherList.filter(c => c.problem)[0];
+    beginSession({
+      school: st.school || DEF_SCHOOL, grade: st.grade || '2', cls: st.cls || '1', num: st.num || '0', name: '교사 미리보기',
+      pin: '', problem: first ? first.problem : '(교사 미리보기) 학생이 입장할 때 이 자리에 서버의 문제가 표시됩니다.',
+      deadline: '', oneTime: false, enterAt: '', teacherPreview: true
+    });
+    tMask.classList.remove('on');
+    toast('👀 교사 미리보기 — 제출은 시트에 기록되지 않습니다');
+  });
+
+  /* ---------- 시작 ---------- */
+  renderBadge();
+  if (!restoreSession()) openGate();
+  if (TEACHER_MODE) setTimeout(openTeacher, 250);
 
   /* ---------- 회로 분석 ---------- */
   const numOf = t => parts.filter(p => p.type === t).length;
@@ -2671,7 +3235,9 @@ frame();
     const time = p(d.getHours()) + ':' + p(d.getMinutes());
     return { text: date + ' ' + time, file: date.replace(/-/g, '') + '_' + p(d.getHours()) + p(d.getMinutes()) };
   }
-  function fileName() { return st.cls + '반_' + st.num + '번_' + st.name + '_전기회로.png'; }
+  function fileName() {
+    return (st.grade ? gradeTxt(st.grade) + '_' : '') + st.cls + '반_' + st.num + '번_' + st.name + '_전기회로.png';
+  }
   function roundRect(c, x, y, w, h, r) {
     c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r);
     c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
@@ -3093,6 +3659,7 @@ frame();
     const clr = el('svlRbClear');
     if (clr) clr.addEventListener('click', function () {
       if (!repState.rows.length && !repState.conclusion) return;
+      quiet(6000);
       if (!window.confirm('기록한 측정값과 결론을 모두 지울까요?')) return;
       repState.rows = []; repState.conclusion = '';
       if (ta) ta.value = '';
@@ -3258,6 +3825,26 @@ frame();
           c.fillRect(0, 0, w, cvs.height);
           c.drawImage(img, 0, 0, w, h);
 
+          /* 캡처 본에도 학번·시각 대각선 워터마크 각인 (유출 시 출처 노출) */
+          c.save();
+          c.globalAlpha = dark ? 0.10 : 0.085;
+          c.fillStyle = dark ? '#ffffff' : '#0f172a';
+          c.font = '800 ' + Math.max(13, Math.round(w * 0.016)) + 'px ' + FONT;
+          c.textAlign = 'center'; c.textBaseline = 'middle';
+          const wmTxt = ((session && session.teacherPreview) ? '교사 미리보기'
+            : [gradeTxt(st.grade), st.cls + '반', st.num + '번', st.name].filter(Boolean).join(' ')) + ' · ' + t.text;
+          for (let wi = -2; wi < 6; wi++) {
+            for (let wj = 0; wj < 3; wj++) {
+              c.save();
+              c.translate(w * (0.18 + wj * 0.32), h * (0.12 + wi * 0.18));
+              c.rotate(-0.42);
+              c.fillText(wmTxt, 0, 0);
+              c.restore();
+            }
+          }
+          c.restore();
+          c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+
           /* 이미지 좌상단 워터마크 pill */
           const tag = '⚡ Science Virtual LAB · 전기 회로 수행평가';
           const fsTag = Math.max(11, Math.round(w * 0.0125));
@@ -3332,9 +3919,12 @@ frame();
 
           const maxW = w - padX * 2;
           c.textAlign = 'left'; c.textBaseline = 'alphabetic';
-          /* 1행: 학교 · 반 · 번호 · 이름 */
+          /* 1행: 학교 · 학년 · 반 · 번호 · 이름   (오른쪽: 보안로그) */
           c.fillStyle = '#ffffff'; c.font = '800 ' + fs1 + 'px ' + FONT;
-          c.fillText(fitText(c, schoolName() + ' · ' + st.cls + '반 ' + st.num + '번 ' + st.name, maxW), padX, y0 + barH * 0.34);
+          c.fillText(fitText(c, schoolName() + ' · ' + studentLabel(), maxW * 0.62), padX, y0 + barH * 0.34);
+          c.textAlign = 'right'; c.fillStyle = 'rgba(147,197,253,.95)'; c.font = '700 ' + fs2 + 'px ' + FONT;
+          c.fillText(fitText(c, securityLog(), maxW * 0.36), w - padX, y0 + barH * 0.34);
+          c.textAlign = 'left';
           /* 2행: 일시 | 회로 분석 */
           c.fillStyle = 'rgba(255,255,255,.88)'; c.font = '700 ' + fs2 + 'px ' + FONT;
           c.fillText(fitText(c, t.text + '  |  ' + info2.summary, maxW), padX, y0 + barH * 0.63);
@@ -3370,13 +3960,14 @@ frame();
   closeBtn.addEventListener('click', closeSubmitModal);
 
   capBtn.addEventListener('click', async function () {
-    if (!hasStudent()) { openStudentModal(); toast('먼저 반·번호·이름을 입력해 주세요'); return; }
+    if (!hasStudent()) { openGate(); toast('먼저 학년·반·번호·이름·입장 코드를 입력해 주세요'); return; }
+    if (submittedInfo()) { toast('✅ 이미 제출이 완료된 학번입니다 — 재제출할 수 없습니다'); }
     shotData = ''; lastInfo = analyze(); lastStamp = stamp();
     shotImg.removeAttribute('src'); shotImg.style.display = 'none';
     loadingEl.textContent = '🖼 캡처 준비 중…'; loadingEl.style.display = 'flex';
     openSubmitModal();
     chips.innerHTML = '';
-    [st.school, st.cls + '반', st.num + '번', st.name].forEach(function (v) {
+    [st.school, gradeTxt(st.grade), st.cls + '반', st.num + '번', st.name].filter(Boolean).forEach(function (v) {
       const s = document.createElement('span'); s.className = 'svl-chip'; s.textContent = v; chips.appendChild(s);
     });
     summaryBox.innerHTML = '<b>회로 분석</b><br>' + lastInfo.summary + '<br><span style="opacity:.72;font-weight:600">' + (lastInfo.detailRaw || lastInfo.detail) + '</span>';
@@ -3384,7 +3975,8 @@ frame();
     try {
       shotData = await composeShot(lastInfo);
       shotImg.src = shotData; shotImg.style.display = 'block'; loadingEl.style.display = 'none';
-      submitBtn.disabled = false;
+      if (submittedInfo()) { updateSubmitLock(); }
+      else { submitBtn.disabled = false; submitBtn.textContent = '🚀 제출하기'; }
     } catch (err) {
       loadingEl.textContent = '⚠️ 캡처에 실패했습니다. 다시 시도해 주세요.';
       setStatus('err', '캡처 실패: ' + (err && err.message ? err.message : err));
@@ -3407,11 +3999,19 @@ frame();
       setStatus('info', '✅ 제출용 회로 이미지가 저장되었습니다! 선생님께 이 파일을 보내 주세요.');
       return;
     }
+    if (submittedInfo()) {
+      setStatus('err', '🔒 이미 제출이 완료된 학번입니다. 재제출할 수 없습니다.');
+      submitBtn.disabled = true; submitBtn.textContent = '✅ 제출 완료';
+      return;
+    }
     const payload = {
       timestamp: lastStamp.text + ':00',
+      grade: st.grade, gradeLabel: gradeTxt(st.grade),
       className: st.cls, studentNum: st.num, studentName: st.name,
+      pin: session ? session.pin : '',
       summary: lastInfo.summary, partsCount: lastInfo.count, partsDetail: lastInfo.detail,
-      imageBase64: shotData, fileStamp: lastStamp.file, school: schoolName()
+      imageBase64: shotData, fileStamp: lastStamp.file, school: schoolName(),
+      securityLog: securityLog(), teacherPreview: !!(session && session.teacherPreview)
     };
     submitBtn.disabled = true; submitBtn.textContent = '📤 전송 중…'; setStatus('info', '선생님께 전송하고 있습니다…');
     try {
@@ -3419,8 +4019,11 @@ frame();
       let body = null; try { body = await res.json(); } catch (e) {}
       if (res.ok && (!body || body.ok !== false)) {
         submitBtn.textContent = '✅ 제출 완료';
-        setStatus('ok', '✅ 제출 완료! (' + lastStamp.text + ')' + (body && body.tab ? ' · ' + body.tab + ' 시트에 기록되었습니다.' : ''));
-        subSub.textContent = '선생님께 제출되었습니다. 필요하면 이미지를 한 번 더 저장해 두세요.';
+        submitBtn.disabled = true;
+        writeSS(SUB_KEY, JSON.stringify({ at: lastStamp.text, cls: st.cls, num: st.num, name: st.name, grade: st.grade }));
+        setStatus('ok', '✅ 제출 완료! (' + lastStamp.text + ')' + (body && body.tab ? ' · ' + body.tab + ' 시트에 기록되었습니다.' : '') +
+          (body && body.preview ? ' · (교사 미리보기·기록 안 됨)' : ''));
+        subSub.textContent = '제출이 완료되었습니다. 이 학번은 재제출이 잠겼습니다. 필요하면 이미지를 한 번 더 저장해 두세요.';
       } else {
         throw new Error((body && body.error) || ('HTTP ' + res.status));
       }
@@ -3433,6 +4036,7 @@ frame();
   });
 
   cfgBtn.addEventListener('click', function () {
+    quiet(6000);
     const cur = webhook();
     const v = window.prompt('Apps Script 웹앱 URL을 붙여넣으세요 (예: https://script.google.com/macros/s/…/exec)', cur);
     if (v === null) return;
@@ -3440,11 +4044,399 @@ frame();
     toast(v.trim() ? '✅ 제출 주소가 저장되었습니다' : '제출 주소를 비웠습니다');
   });
 
-  /* ---------- 시작 ---------- */
-  renderBadge();
-  if (!hasStudent()) openStudentModal();
 })();
 </script>
+<!-- ==== Apps Script v2 전문 (교사 1회 붙여넣기용 · ?teacher=1 → 📋 v2 코드 복사) ==== -->
+<script type="text/plain" id="svlCodeSrc">
+/* ============================================================================
+   Science Virtual LAB · 전기 회로 3D (테스트) — 수행평가 제출함  [v2 풀 보안]
+
+   ▣ 이 코드를 쓰는 곳
+     구글 스프레드시트 [Science Virtual LAB] 전기회로 수행평가 제출함
+     → [확장 프로그램] → [Apps Script] → 기존 Code.gs 전체를 지우고 이 내용을 붙여넣기 → 저장
+     → [배포] → [배포 관리] → 연필(편집) → 버전: "새 버전" → [배포]
+       (URL은 그대로 유지됩니다. 새 배포를 만들면 URL이 바뀌니 반드시 '배포 관리 → 새 버전'으로!)
+
+   ▣ 시트 구조
+     · '시험관리' 탭 (첫 번째 탭)
+        A 반 | B 상태(열림/닫힘) | C 입장코드(PIN) | D 마감시각(선택) | E 문제 내용 | F 1인1회제출
+        H1:I6 교사용 사용법 / H8 교사 마스터 코드 · I8 값
+     · '1반'~'14반' 탭
+        A 번호 | B 이름 | C 제출한 사진 | D 제출날짜 및 시간
+        E 점수(ARRAYFORMULA·절대 건드리지 않음) | F 회로 요약(비고)
+        G 채점 이유(ARRAYFORMULA·절대 건드리지 않음) | H 학년·보안로그
+
+   ▣ 보안 규칙 (서버에서 강제)
+     · '시험관리'에서 그 반이 '열림'일 때만 입장·제출할 수 있습니다.
+     · 입장코드(PIN)가 반별 값과 같아야 합니다.
+     · 마감시각이 지나면 입장·제출이 막힙니다.
+     · 1인1회제출 = '예'이면 같은 번호는 다시 제출할 수 없습니다.
+     · 문제 내용은 이 스크립트/시트에만 있고, 학생 화면(HTML)에는 들어 있지 않습니다.
+     · E열·G열에는 ARRAYFORMULA가 걸려 있으므로 절대 쓰지 않고,
+       A~D · F · H 열에만 기록합니다. (E/G에 쓰면 #REF! 로 채점표가 깨집니다)
+   ============================================================================ */
+
+var SHEET_ID = '1g6wvP20IaFOK4as0GixHQWRPXCCZA_bVOv140Ez4z64';
+var FOLDER_NAME = '전기회로 수행평가 제출';
+var ADMIN_TAB = '시험관리';
+var TZ = 'Asia/Seoul';
+var CLASS_MAX = 14;
+var NUM_MAX = 40;
+
+/* ---------------------------------------------------------------- 응답 도우미 */
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function fail_(code, reason) {
+  return { ok: false, code: code, reason: reason };
+}
+function pad2_(n) {
+  n = String(n);
+  return n.length < 2 ? '0' + n : n;
+}
+function str_(v) {
+  return v === null || v === undefined ? '' : String(v).trim();
+}
+
+/* ================================================================== doGet ==== */
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  var action = str_(p.action);
+  try {
+    if (action === 'enter') return json_(handleEnter_(p));
+    if (action === 'teacher_list') return json_(handleTeacherList_(p));
+    if (action === 'teacher_set') return json_(handleTeacherSet_(p));
+    if (action === 'ping') {
+      return json_({ ok: true, v: 2, serverTime: nowHms_() });
+    }
+    return json_(fail_('BAD_ACTION', '알 수 없는 요청입니다.'));
+  } catch (err) {
+    return json_(fail_('SERVER', '서버 오류: ' + errText_(err)));
+  }
+}
+
+function errText_(err) {
+  if (!err) return 'unknown';
+  return String(err.message || err);
+}
+function nowHms_() {
+  return Utilities.formatDate(new Date(), TZ, 'HH:mm:ss');
+}
+
+/* ------------------------------------------------------- 시트 접근 도우미 ---- */
+function book_() {
+  return SpreadsheetApp.openById(SHEET_ID);
+}
+function adminSheet_() {
+  var sh = book_().getSheetByName(ADMIN_TAB);
+  if (!sh) throw new Error("'" + ADMIN_TAB + "' 탭이 없습니다. 시트를 확인해 주세요.");
+  return sh;
+}
+function masterCode_(sh) {
+  return str_(sh.getRange('I8').getValue());
+}
+/* 시험관리 A2:F15 읽기 → [{cls:'1반', status, pin, deadlineRaw, problem, oneTime, row:2}, ...] */
+function readAdminRows_(sh) {
+  var vals = sh.getRange(2, 1, CLASS_MAX, 6).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    var r = vals[i];
+    out.push({
+      row: i + 2,
+      cls: str_(r[0]),
+      status: str_(r[1]),
+      pin: str_(r[2]),
+      deadlineRaw: r[3],
+      problem: str_(r[4]),
+      oneTime: str_(r[5])
+    });
+  }
+  return out;
+}
+function findAdminRow_(sh, cls) {
+  var want = str_(cls).replace(/반$/, '') + '반';
+  var rows = readAdminRows_(sh);
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].cls === want) return rows[i];
+  }
+  return null;
+}
+
+/* ----------------------------------------------------------- 마감시각 파싱 ---- */
+/* 'HH:MM' / 'YYYY-MM-DD HH:MM' / Date 셀값 / 오전·오후 표기 모두 처리.
+   반환: {kind:'none'} | {kind:'time', hm:'15:30'} | {kind:'date', key:'2026-11-28 15:30'} */
+function parseDeadline_(v) {
+  if (v === null || v === undefined || v === '') return { kind: 'none' };
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    if (isNaN(v.getTime())) return { kind: 'none' };
+    var y = Number(Utilities.formatDate(v, TZ, 'yyyy'));
+    if (y < 1900) return { kind: 'time', hm: Utilities.formatDate(v, TZ, 'HH:mm') };
+    return { kind: 'date', key: Utilities.formatDate(v, TZ, 'yyyy-MM-dd HH:mm') };
+  }
+  var raw = str_(v);
+  if (!raw) return { kind: 'none' };
+  var hm = raw.match(/(\d{1,2})\s*:\s*(\d{1,2})/);
+  if (!hm) return { kind: 'none' };
+  var h = parseInt(hm[1], 10), mi = parseInt(hm[2], 10);
+  if (!(h >= 0 && h <= 23 && mi >= 0 && mi <= 59)) return { kind: 'none' };
+  if (/오후|PM/i.test(raw) && h < 12) h += 12;
+  if (/오전|AM/i.test(raw) && h === 12) h = 0;
+  var hmStr = pad2_(h) + ':' + pad2_(mi);
+  var d = raw.match(/(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
+  if (d) return { kind: 'date', key: d[1] + '-' + pad2_(d[2]) + '-' + pad2_(d[3]) + ' ' + hmStr };
+  return { kind: 'time', hm: hmStr };
+}
+/* 마감이 지났으면 true */
+function deadlinePassed_(v) {
+  var d = parseDeadline_(v);
+  if (d.kind === 'none') return false;
+  var now = new Date();
+  if (d.kind === 'time') {
+    return Utilities.formatDate(now, TZ, 'HH:mm') >= d.hm;
+  }
+  return Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm') >= d.key;
+}
+/* 교사 화면에 보여줄 정규화 문자열 */
+function deadlineText_(v) {
+  var d = parseDeadline_(v);
+  if (d.kind === 'none') return '';
+  return d.kind === 'time' ? d.hm : d.key;
+}
+
+/* ------------------------------------------------------------ 중복 제출 확인 -- */
+/* 해당 반 탭 A열(번호)을 훑어 이미 제출한 번호인지 확인 */
+function alreadySubmitted_(clsTab, num, name) {
+  var sh = book_().getSheetByName(clsTab);
+  if (!sh) return false;
+  var maxRows = sh.getMaxRows();
+  if (maxRows < 2) return false;
+  var vals = sh.getRange(1, 1, Math.min(maxRows, 2000), 2).getValues();
+  var wantNum = str_(num);
+  var wantName = str_(name);
+  for (var i = 1; i < vals.length; i++) {
+    var a = str_(vals[i][0]);
+    if (!a) continue;
+    if (a === wantNum) return true;
+    if (wantName && a === wantNum && str_(vals[i][1]) === wantName) return true;
+  }
+  return false;
+}
+
+/* ================================================================ 입장(enter) */
+function handleEnter_(p) {
+  var grade = str_(p.grade);
+  var cls = str_(p.cls).replace(/반$/, '');
+  var num = str_(p.num);
+  var name = str_(p.name);
+  var pin = str_(p.pin);
+
+  if (!/^[1-3]$/.test(grade)) return fail_('BAD_INPUT', '학년을 선택해 주세요.');
+  if (!/^\d{1,2}$/.test(cls) || +cls < 1 || +cls > CLASS_MAX) return fail_('BAD_INPUT', '반을 선택해 주세요.');
+  if (!/^\d{1,2}$/.test(num) || +num < 1 || +num > NUM_MAX) return fail_('BAD_INPUT', '번호를 확인해 주세요.');
+  if (!name || name.length > 20) return fail_('BAD_INPUT', '이름을 입력해 주세요.');
+
+  var sh = adminSheet_();
+  var row = findAdminRow_(sh, cls);
+  if (!row) return fail_('SETUP', "'시험관리' 탭에 " + cls + "반 행이 없습니다. 시트를 확인해 주세요.");
+
+  if (row.status !== '열림') {
+    return fail_('CLOSED', '현재 ' + cls + '반 응시 시간이 아닙니다. 선생님이 시험을 열 때까지 기다려 주세요.');
+  }
+  if (str_(row.pin) !== pin) {
+    return fail_('BAD_PIN', '입장 코드가 올바르지 않습니다.');
+  }
+  if (deadlinePassed_(row.deadlineRaw)) {
+    return fail_('EXPIRED', '응시 마감 시간이 지났습니다.');
+  }
+  var oneTime = row.oneTime === '예';
+  if (oneTime && alreadySubmitted_(cls + '반', num, name)) {
+    return fail_('ALREADY_SUBMITTED', '이미 제출 완료된 학번입니다.');
+  }
+  return {
+    ok: true,
+    grade: grade,
+    cls: cls,
+    num: num,
+    name: name,
+    problem: row.problem,
+    deadline: deadlineText_(row.deadlineRaw),
+    serverTime: nowHms_(),
+    oneTime: oneTime,
+    version: 2
+  };
+}
+
+/* ============================================================== 교사 목록 조회 */
+function checkMaster_(p) {
+  var sh = adminSheet_();
+  var master = masterCode_(sh);
+  if (!master) return fail_('NO_MASTER', '교사 마스터 코드가 비어 있습니다. 시험관리 I8 셀을 확인해 주세요.');
+  if (str_(p.master) !== master) return fail_('BAD_MASTER', '교사 마스터 코드가 올바르지 않습니다.');
+  return { ok: true, sh: sh };
+}
+function handleTeacherList_(p) {
+  var chk = checkMaster_(p);
+  if (!chk.ok) return chk;
+  var rows = readAdminRows_(chk.sh);
+  var out = [];
+  for (var i = 0; i < rows.length; i++) {
+    out.push({
+      cls: rows[i].cls,
+      status: rows[i].status,
+      pin: rows[i].pin,
+      deadline: deadlineText_(rows[i].deadlineRaw),
+      problem: rows[i].problem,
+      oneTime: rows[i].oneTime
+    });
+  }
+  return { ok: true, classes: out, serverTime: nowHms_(), version: 2 };
+}
+
+/* ============================================================== 교사 설정 변경 */
+function handleTeacherSet_(p) {
+  var chk = checkMaster_(p);
+  if (!chk.ok) return chk;
+  var sh = chk.sh;
+  var row = findAdminRow_(sh, p.cls);
+  if (!row) return fail_('NO_ROW', "시험관리 탭에 " + str_(p.cls) + " 행이 없습니다.");
+
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(p, k); };
+
+  if (has('status')) {
+    var st = str_(p.status);
+    if (st !== '열림' && st !== '닫힘') return fail_('BAD_INPUT', "상태는 '열림' 또는 '닫힘'만 가능합니다.");
+    sh.getRange(row.row, 2).setValue(st);
+  }
+  if (has('pin')) {
+    var pin = str_(p.pin).slice(0, 8);
+    sh.getRange(row.row, 3).setNumberFormat('@').setValue(pin);
+  }
+  if (has('deadline')) {
+    var dl = str_(p.deadline).slice(0, 32);
+    var cell = sh.getRange(row.row, 4).setNumberFormat('@');
+    cell.clearContent();
+    if (dl) cell.setValue(dl);
+  }
+  if (has('problem')) {
+    sh.getRange(row.row, 5).setValue(str_(p.problem).slice(0, 1000));
+  }
+  if (has('oneTime')) {
+    var ot = str_(p.oneTime);
+    if (ot !== '예' && ot !== '아니오') return fail_('BAD_INPUT', "1인1회제출은 '예' 또는 '아니오'만 가능합니다.");
+    sh.getRange(row.row, 6).setValue(ot);
+  }
+
+  SpreadsheetApp.flush();
+  var after = findAdminRow_(sh, p.cls);
+  return {
+    ok: true,
+    cls: after.cls,
+    status: after.status,
+    pin: after.pin,
+    deadline: deadlineText_(after.deadlineRaw),
+    problem: after.problem,
+    oneTime: after.oneTime,
+    serverTime: nowHms_()
+  };
+}
+
+/* ================================================================= doPost ==== */
+function doPost(e) {
+  try {
+    var raw = (e && e.postData && e.postData.contents) || (e && e.parameter && e.parameter.payload) || '{}';
+    var d = JSON.parse(raw);
+
+    /* 교사 미리보기: 기록하지 않고 성공만 돌려준다 */
+    if (d.teacherPreview === true) {
+      return json_({ ok: true, preview: true });
+    }
+
+    var cls = str_(d.className).replace(/반$/, '');
+    var num = str_(d.studentNum);
+    var name = str_(d.studentName);
+    var grade = str_(d.grade);
+
+    /* ---- 서버 재검증 (학생 제출은 예외 없음) ---- */
+    var sh = adminSheet_();
+    var row = findAdminRow_(sh, cls);
+    if (!row) return json_({ ok: false, code: 'SETUP', error: "'시험관리' 탭에 " + cls + "반 행이 없습니다." });
+    if (row.status !== '열림') {
+      return json_({ ok: false, code: 'CLOSED', error: '현재 ' + cls + '반 응시 시간이 아닙니다. 제출이 마감되었습니다.' });
+    }
+    if (str_(row.pin) !== str_(d.pin)) {
+      return json_({ ok: false, code: 'BAD_PIN', error: '입장 코드가 확인되지 않아 제출할 수 없습니다.' });
+    }
+    if (deadlinePassed_(row.deadlineRaw)) {
+      return json_({ ok: false, code: 'EXPIRED', error: '응시 마감 시간이 지나 제출할 수 없습니다.' });
+    }
+    if (row.oneTime === '예' && alreadySubmitted_(cls + '반', num, name)) {
+      return json_({ ok: false, code: 'ALREADY_SUBMITTED', error: '이미 제출 완료된 학번입니다. 재제출할 수 없습니다.' });
+    }
+
+    /* ---- 사진 저장 ---- */
+    var photo = '';
+    var b64 = String(d.imageBase64 || '').split(',')[1] || '';
+    var tabName = cls + '반';
+    if (b64) {
+      var gLabel = grade ? grade + '학년_' : '';
+      var fname = gLabel + cls + '반_' + num + '번_' + name + '_' + str_(d.fileStamp) + '.png';
+      var file = getFolder_(FOLDER_NAME).createFile(
+        Utilities.newBlob(Utilities.base64Decode(b64), 'image/png', fname)
+      );
+      photo = '=HYPERLINK("' + file.getUrl() + '","📷 사진 열기")';
+    }
+
+    /* ---- 기록 (E·G열 ARRAYFORMULA 보호 + 동시 제출 잠금) ---- */
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) {
+      return json_({ ok: false, code: 'BUSY', error: '제출이 몰려 잠시 지연되고 있습니다. 잠시 후 다시 눌러 주세요.' });
+    }
+    try {
+      var clsSh = book_().getSheetByName(tabName);
+      if (!clsSh) return json_({ ok: false, code: 'SETUP', error: tabName + ' 시트 탭이 없습니다.' });
+
+      /* 잠금 안에서 중복 한 번 더 확인 (동시 제출 방지) */
+      if (row.oneTime === '예' && alreadySubmitted_(tabName, num, name)) {
+        return json_({ ok: false, code: 'ALREADY_SUBMITTED', error: '이미 제출 완료된 학번입니다. 재제출할 수 없습니다.' });
+      }
+
+      var r = nextRow_(clsSh);
+      clsSh.getRange(r, 1, 1, 4).setValues([[num, name, photo, str_(d.timestamp)]]);
+      clsSh.getRange(r, 6).setValue(str_(d.summary));
+      clsSh.getRange(r, 8).setValue(str_(d.securityLog));
+    } finally {
+      try { lock.releaseLock(); } catch (ignore) {}
+    }
+
+    return json_({ ok: true, tab: tabName, time: nowHms_() });
+  } catch (err) {
+    return json_({ ok: false, code: 'SERVER', error: '서버 오류: ' + errText_(err) });
+  }
+}
+
+/* A열에서 마지막으로 값이 있는 행 다음 행 번호 (ARRAYFORMULA E/G열과 무관) */
+function nextRow_(sh) {
+  var maxRows = sh.getMaxRows();
+  var vals = sh.getRange(1, 1, maxRows, 1).getValues();
+  var last = 0;
+  for (var i = 0; i < vals.length; i++) {
+    if (str_(vals[i][0]) !== '') last = i + 1;
+  }
+  var r = Math.max(2, last + 1);
+  if (r > maxRows) {
+    sh.insertRowsAfter(maxRows, r - maxRows + 20);
+  }
+  return r;
+}
+
+/* 제출 사진 폴더 */
+function getFolder_(n) {
+  var it = DriveApp.getFoldersByName(n);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(n);
+}
+</script>
+
 <!-- @@/MOBILE-JS@@ -->
 <script src="../../common/feedback.js" defer></script>
 <script src="../../common/ui-layout.js" defer></script>
