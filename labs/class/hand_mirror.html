@@ -479,9 +479,17 @@
     var TIPS = [4, 8, 12, 16, 20];
     var PALM_OUTLINE = [0, 1, 5, 9, 13, 17];
 
+    /* 손바닥 실루엣 기준점: [손목→손가락뿌리 거리 비율, 폭 비율]
+       손목 쪽은 좁고 손가락 뿌리 쪽은 넓은 둥근 판 — 매 프레임 손 크기에 맞춰 늘어난다 */
+    var PALM_SHAPE = [
+        [0.00,  0.34], [0.12,  0.54], [0.46,  0.92], [0.80,  1.00],
+        [1.02,  0.72], [1.06,  0.00], [1.02, -0.72], [0.80, -1.00],
+        [0.46, -0.92], [0.12, -0.54], [0.00, -0.34]
+    ];
+
     /* 손바닥은 6개 고리를 부드러운 곡선으로 늘어놓고 손바닥 평면에 눕혀 두께 있는 판으로 만든다.
        24개 테두리 + 앞/뒤 가운데 = 50개 정점 (앞면 1 + 24, 뒷면 1 + 24) */
-    var PALM_EDGE = PALM_OUTLINE.length;          // 6
+    var PALM_EDGE = PALM_SHAPE.length;            // 11개 기준점
     var PALM_VERTS = 24;                          // 둥근 테두리 샘플 수
     var PALM_VCOUNT = PALM_VERTS * 2 + 2;         // 50
     var PALM_INDEX = (function () {
@@ -640,6 +648,7 @@
         neon:     { boneR: 0.030, wristR: 0.046, jointR: 0.032, tipJointR: 0.038, tipR: 0.037, palmT: 0.024 }
     };
     function styleGeo() { return STYLE_GEO[state.style] || STYLE_GEO.anime; }
+    function isSmoothStyle() { return state.style === 'anime'; }
 
     /* 상태 */
     var state = {
@@ -791,6 +800,16 @@
             joints.push(j);
         }
 
+        /* 매끈한 손가락 튜브 5개 (애니메이션 스타일 전용) */
+        var tubes = FINGER_KEYS.map(function () {
+            var tb = new THREE.Mesh(makeFingerGeo(), boneMat);
+            tb.frustumCulled = false;
+            tb.renderOrder = 1;
+            tb.visible = false;
+            group.add(tb);
+            return tb;
+        });
+
         /* 손가락 끝 캡 5개 */
         var tips = TIPS.map(function () {
             var t = new THREE.Mesh(jointGeo, tipMat);
@@ -831,11 +850,11 @@
         scene.add(group);
 
         /* 손바닥 테두리를 그리는 닫힌 곡선 (매 프레임 점만 바뀐다) */
-        var curvePts = PALM_OUTLINE.map(function () { return new THREE.Vector3(); });
+        var curvePts = PALM_SHAPE.map(function () { return new THREE.Vector3(); });
         var palmCurve = new THREE.CatmullRomCurve3(curvePts, true, 'centripetal', 0.5);
 
         return {
-            group: group, palm: palm, palmPos: palmPos, bones: bones, joints: joints, tips: tips, nails: nails,
+            group: group, palm: palm, palmPos: palmPos, bones: bones, joints: joints, tips: tips, nails: nails, tubes: tubes,
             linePos: linePos, lines: lines, outlinePos: outlinePos, outline: outline,
             mats: { bone: boneMat, joint: jointMat, tip: tipMat, palm: palmMat, line: lineMat, nail: nailMat },
             normal: new THREE.Vector3(0, 0, 1),
@@ -886,6 +905,10 @@
         /* 손톱은 애니메이션 스타일에서만 */
         for (var i = 0; i < h.nails.length; i++) h.nails[i].visible = !!s.nails;
 
+        /* 애니메이션 스타일은 매끈한 손가락 튜브, 나머지는 뼈대 실린더 */
+        var smooth = isSmoothStyle();
+        for (var ti = 0; ti < h.tubes.length; ti++) h.tubes[ti].visible = smooth;
+
         /* 무대 조명 · 바닥 격자를 스타일 톤에 맞춘다 */
         rimLight.color.setHex(s.rim);
         rimLight.intensity = s.rimIntensity;
@@ -896,10 +919,75 @@
     applyStyle(hands.A);
     applyStyle(hands.B);
 
+    /* ---------- 손가락 튜브 (매끈한 한 덩어리 손가락) ---------- */
+    var TUBE_RAD = 10;                              /* 둘레 분할 */
+    var TUBE_RADII = [1.0, 0.985, 0.955, 0.92];     /* 뿌리 → 끝 굵기 */
+    var _t1 = new THREE.Vector3(), _n1 = new THREE.Vector3(), _b1 = new THREE.Vector3();
+    var _nPrev = new THREE.Vector3(), _tPrev = new THREE.Vector3();
+
+    function makeFingerGeo() {
+        var geo = new THREE.BufferGeometry();
+        var pos = new Float32Array(4 * TUBE_RAD * 3);
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        var idx = [];
+        for (var seg = 0; seg < 3; seg++) {
+            for (var a = 0; a < TUBE_RAD; a++) {
+                var i0 = seg * TUBE_RAD + a;
+                var i1 = seg * TUBE_RAD + (a + 1) % TUBE_RAD;
+                var i2 = (seg + 1) * TUBE_RAD + a;
+                var i3 = (seg + 1) * TUBE_RAD + (a + 1) % TUBE_RAD;
+                idx.push(i0, i2, i3, i0, i3, i1);
+            }
+        }
+        geo.setIndex(idx);
+        return geo;
+    }
+
+    function updateFingerTube(tube, pts, chain, baseR) {
+        var arr = tube.geometry.attributes.position.array;
+        for (var i = 0; i < 4; i++) {
+            var p = pts[chain[i]];
+            if (i === 0) _t1.subVectors(pts[chain[1]], pts[chain[0]]);
+            else if (i === 3) _t1.subVectors(pts[chain[3]], pts[chain[2]]);
+            else _t1.subVectors(pts[chain[i + 1]], pts[chain[i - 1]]);
+            if (_t1.lengthSq() < 1e-10) _t1.set(0, 1, 0);
+            _t1.normalize();
+
+            if (i === 0) {
+                _n1.set(0, 0, 1);
+                if (Math.abs(_t1.dot(_n1)) > 0.9) _n1.set(1, 0, 0);
+                _n1.addScaledVector(_t1, -_n1.dot(_t1)).normalize();
+            } else {
+                _q.setFromUnitVectors(_tPrev, _t1);
+                _n1.copy(_nPrev).applyQuaternion(_q);
+                _n1.addScaledVector(_t1, -_n1.dot(_t1));
+                if (_n1.lengthSq() < 1e-8) _n1.set(0, 0, 1);
+                _n1.normalize();
+            }
+            _b1.crossVectors(_t1, _n1).normalize();
+            _nPrev.copy(_n1);
+            _tPrev.copy(_t1);
+
+            var r = baseR * TUBE_RADII[i];
+            for (var a = 0; a < TUBE_RAD; a++) {
+                var ang = (a / TUBE_RAD) * Math.PI * 2;
+                var ca = Math.cos(ang), sa = Math.sin(ang);
+                var o = (i * TUBE_RAD + a) * 3;
+                arr[o] = p.x + (_n1.x * ca + _b1.x * sa) * r;
+                arr[o + 1] = p.y + (_n1.y * ca + _b1.y * sa) * r;
+                arr[o + 2] = p.z + (_n1.z * ca + _b1.z * sa) * r;
+            }
+        }
+        tube.geometry.attributes.position.needsUpdate = true;
+        tube.geometry.computeVertexNormals();
+        tube.geometry.computeBoundingSphere();
+    }
+
     /* 한 손의 21개 월드 좌표를 메시에 반영 */
     var _ringSmooth = [];
     for (var _ri = 0; _ri < PALM_VERTS; _ri++) _ringSmooth.push(new THREE.Vector3());
     var _pc0 = new THREE.Vector3(), _pc1 = new THREE.Vector3(), _pc2 = new THREE.Vector3();
+    var _pc3 = new THREE.Vector3(), _pc4 = new THREE.Vector3();
     var _pcen = new THREE.Vector3(), _pnrm = new THREE.Vector3();
     var _pax = new THREE.Vector3(), _pby = new THREE.Vector3();
     var _nx = new THREE.Vector3(), _ny = new THREE.Vector3(), _nz = new THREE.Vector3();
@@ -907,69 +995,81 @@
 
     /* 손바닥을 둥근 실루엣 + 두께를 가진 판으로 만든다 */
     function updatePalmShell(h, g) {
-        var pts = h.points, i, n = PALM_EDGE;
-        var ring = h.curvePts;
-        var flat = _ringSmooth;
-
-        for (i = 0; i < n; i++) ring[i].copy(pts[PALM_OUTLINE[i]]);
-
-        _pcen.set(0, 0, 0);
-        for (i = 0; i < n; i++) _pcen.add(ring[i]);
-        _pcen.multiplyScalar(1 / n);
+        var pts = h.points, i;
+        var ring = h.curvePts;      /* 손바닥 곡선 기준점 11개 (매 프레임 갱신) */
+        var flat = _ringSmooth;     /* 곡선 위 둥근 테두리 샘플 24개 */
 
         /* 손바닥 면의 법선 (손금 ↔ 손등) — 카메라 쪽(+z)을 앞면으로 둔다 */
-        _pax.subVectors(ring[2], ring[0]);
-        _pby.subVectors(ring[5], ring[0]);
+        _pax.subVectors(pts[9], pts[0]);
+        _pby.subVectors(pts[17], pts[0]);
         _pnrm.crossVectors(_pax, _pby);
         if (_pnrm.lengthSq() < 1e-9) _pnrm.set(0, 0, 1);
         _pnrm.normalize();
         if (_pnrm.z < 0) _pnrm.negate();
         h.normal.copy(_pnrm);
 
-        /* 엄지뿌리처럼 면을 벗은 점을 거의 면 위로 눕혀 판이 접히거나 꼬이지 않게 한다 */
-        for (i = 0; i < n; i++) {
-            _pc0.subVectors(ring[i], _pcen);
-            ring[i].addScaledVector(_pnrm, -_pc0.dot(_pnrm) * 0.92);
+        /* 손바닥 축: 손목 → 손가락 뿌리 중심, 폭: 검지뿌리 ~ 소지뿌리 */
+        _pc0.copy(pts[5]).add(pts[9]).add(pts[13]).multiplyScalar(1 / 3);
+        _pax.subVectors(_pc0, pts[0]);
+        var L = _pax.length();
+        if (L < 1e-4) return;
+        _pax.divideScalar(L);                        /* u: 손바닥 길이 방향 */
+        _pby.crossVectors(_pnrm, _pax).normalize();   /* v: 손바닥 폭 방향 */
+
+        _pc1.subVectors(pts[5], pts[17]);
+        var halfW = Math.abs(_pc1.dot(_pby)) * 0.5;
+        if (halfW < L * 0.2) halfW = L * 0.52;
+        halfW *= 1.05;
+        var len = L * 1.04;
+
+        for (i = 0; i < PALM_EDGE; i++) {
+            var sp = PALM_SHAPE[i];
+            ring[i].copy(pts[0])
+                .addScaledVector(_pax, sp[0] * len)
+                .addScaledVector(_pby, sp[1] * halfW);
         }
 
-        /* 6개 점을 지나는 부드러운 닫힘 곡선으로 둥근 손바닥 실루엣 */
+        /* 기준점을 지나는 부드러운 닫힘 곡선으로 둥근 손바닥 실루엣 */
         for (i = 0; i < PALM_VERTS; i++) {
             h.palmCurve.getPoint(i / PALM_VERTS, flat[i]);
-            flat[i].sub(_pcen).multiplyScalar(1.05).add(_pcen);
         }
 
-        /* 테두리 감기 방향을 앞면(+법선) 기준으로 통일 */
+        /* 곡선 중심과 면적 방향 확인 */
+        _pc2.set(0, 0, 0);
+        for (i = 0; i < PALM_VERTS; i++) _pc2.add(flat[i]);
+        _pc2.multiplyScalar(1 / PALM_VERTS);
+
         var area = 0;
         for (i = 0; i < PALM_VERTS; i++) {
-            _pc1.subVectors(flat[i], _pcen);
-            _pc2.subVectors(flat[(i + 1) % PALM_VERTS], _pcen);
-            area += _pc1.cross(_pc2).dot(_pnrm);
+            _pc1.subVectors(flat[i], _pc2);
+            _pc3.subVectors(flat[(i + 1) % PALM_VERTS], _pc2);
+            area += _pc1.cross(_pc3).dot(_pnrm);
         }
         if (area < 0) {
             for (i = 0; i < PALM_VERTS >> 1; i++) {
-                _pc0.copy(flat[i]);
+                _pc4.copy(flat[i]);
                 flat[i].copy(flat[PALM_VERTS - 1 - i]);
-                flat[PALM_VERTS - 1 - i].copy(_pc0);
+                flat[PALM_VERTS - 1 - i].copy(_pc4);
             }
         }
 
         /* 앞·뒤 두 겹으로 띄우고 가운데를 볼록하게 */
         var t = (g.palmT || 0.03) * 0.5;
         var pos = h.palmPos;
-        var dome = t * 1.15;
+        var dome = t * 1.25;
 
-        pos[0] = _pcen.x + _pnrm.x * dome;
-        pos[1] = _pcen.y + _pnrm.y * dome;
-        pos[2] = _pcen.z + _pnrm.z * dome;
+        pos[0] = _pc2.x + _pnrm.x * dome;
+        pos[1] = _pc2.y + _pnrm.y * dome;
+        pos[2] = _pc2.z + _pnrm.z * dome;
 
         var backC = (PALM_VERTS + 1) * 3;
-        pos[backC] = _pcen.x - _pnrm.x * dome;
-        pos[backC + 1] = _pcen.y - _pnrm.y * dome;
-        pos[backC + 2] = _pcen.z - _pnrm.z * dome;
+        pos[backC] = _pc2.x - _pnrm.x * dome;
+        pos[backC + 1] = _pc2.y - _pnrm.y * dome;
+        pos[backC + 2] = _pc2.z - _pnrm.z * dome;
 
         for (i = 0; i < PALM_VERTS; i++) {
             var p = flat[i];
-            var f = 1 + i * 3;
+            var f = (1 + i) * 3;
             var b = (PALM_VERTS + 2 + i) * 3;
             pos[f] = p.x + _pnrm.x * t;
             pos[f + 1] = p.y + _pnrm.y * t;
@@ -1001,7 +1101,7 @@
             _dir.subVectors(b, a);
             var len = _dir.length();
             if (len < 1e-5) { m.visible = false; continue; }
-            m.visible = true;
+            m.visible = !isSmoothStyle();
             _dir.divideScalar(len);
             _va.addVectors(a, b).multiplyScalar(0.5);
             m.position.copy(_va);
@@ -1009,6 +1109,12 @@
             m.quaternion.copy(_q);
             var r = g.boneR * (BONE_GIRTH[i] || 1);
             m.scale.set(r, len, r);
+        }
+
+        /* 매끈한 손가락 튜브 */
+        for (i = 0; i < FINGER_KEYS.length; i++) {
+            var fk = FINGER_KEYS[i];
+            updateFingerTube(h.tubes[i], pts, FINGER_CHAINS[fk], g.boneR * (FINGER_GIRTH[fk] || 1));
         }
 
         /* 관절 */
