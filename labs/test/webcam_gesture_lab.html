@@ -95,9 +95,10 @@ body.dark .status.live{color:#34d399}
     position:relative; border-radius:22px; border:1px solid var(--line); background:var(--card);
     box-shadow:var(--shadow); overflow:hidden; height:min(62vh,560px); min-height:380px;
 }
-#stage{display:block; width:100%; height:100%; touch-action:none; cursor:crosshair}
+#stage{position:relative; z-index:1; display:block; width:100%; height:100%; touch-action:none; cursor:crosshair}
+.cam-src{position:absolute; left:0; top:0; width:2px; height:2px; opacity:0; pointer-events:none; z-index:0}
 .stage-hint{
-    position:absolute; left:12px; bottom:10px; right:12px; font-size:11.5px; font-weight:800; color:var(--muted);
+    position:absolute; left:12px; bottom:10px; right:12px; z-index:3; font-size:11.5px; font-weight:800; color:var(--muted);
     background:rgba(255,255,255,.7); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
     padding:6px 10px; border-radius:10px; pointer-events:none; text-align:center;
 }
@@ -119,16 +120,32 @@ body.dark .stage-hint{background:rgba(20,26,38,.72); color:#94a3b8}
 }
 .mini button.on{background:var(--accent); color:#fff; border-color:transparent}
 
-.cam-card{position:relative; border-radius:18px; overflow:hidden; border:1px solid var(--line); background:#0b0f16; box-shadow:var(--shadow)}
-.cam-card video,.cam-card canvas{display:block; width:100%; aspect-ratio:4/3; object-fit:cover}
-.cam-card video{transform:scaleX(-1); opacity:0; position:absolute; inset:0; height:100%}
-.cam-card canvas{position:relative; z-index:2; background:#0b0f16}
-.cam-label{position:absolute; left:8px; top:8px; z-index:3; font-size:10.5px; font-weight:900; color:#fff; background:rgba(0,0,0,.5); padding:3px 8px; border-radius:999px}
-.cam-empty{
-    position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:6px; color:#8ea3bd; font-size:11.5px; font-weight:800; text-align:center; padding:10px;
+/* 무대 위 AR 카메라 배지 */
+.stage-badge{
+    position:absolute; left:10px; bottom:46px; z-index:4; display:inline-flex; align-items:center; gap:7px;
+    padding:6px 12px; border-radius:999px; font-size:11.5px; font-weight:900; color:#fff;
+    background:rgba(15,23,42,.66); border:1px solid rgba(255,255,255,.16);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    pointer-events:none; transition:background .18s ease;
 }
-.cam-empty .big{font-size:26px}
+.stage-badge .dot{width:7px; height:7px; border-radius:50%; background:#94a3b8; box-shadow:0 0 0 3px rgba(148,163,184,.22); flex:0 0 auto}
+.stage-badge.live{background:rgba(2,132,199,.82)}
+.stage-badge.live .dot{background:#38bdf8; box-shadow:0 0 0 3px rgba(56,189,248,.26)}
+.stage-badge.pinch{background:rgba(5,150,105,.88)}
+.stage-badge.pinch .dot{background:#34d399; box-shadow:0 0 0 3px rgba(52,211,153,.3)}
+
+/* 손 인식 상태 패널 */
+.hand-state{
+    display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:12px; margin-bottom:8px;
+    background:var(--soft); border:1px solid var(--line); transition:background .18s ease;
+}
+.hand-state .ico{font-size:20px; line-height:1; flex:0 0 auto}
+.hand-state .txt{display:flex; flex-direction:column; gap:1px; min-width:0}
+.hand-state b{font-size:12px; font-weight:900}
+.hand-state span{font-size:10.5px; font-weight:800; color:var(--muted); line-height:1.35}
+.hand-state.pinch{background:rgba(16,185,129,.18)}
+.pinch-gauge{height:9px; border-radius:999px; background:var(--solid); border:1px solid var(--line); overflow:hidden; margin:2px 0 7px}
+.pinch-gauge i{display:block; height:100%; width:0%; border-radius:999px; background:linear-gradient(90deg,#38bdf8,#10b981); transition:width .12s linear}
 
 /* 전체화면 */
 #btn-fullscreen{
@@ -160,8 +177,8 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     .app{top:100px; padding:8px 10px 64px}
     .stage-grid{grid-template-columns:minmax(0,1fr)}
     .stage-card{height:min(46vh,360px); min-height:300px}
-    .cam-card{display:none}
     .stage-hint{right:96px; left:8px; font-size:11px}
+    .stage-badge{bottom:50px; left:8px; padding:5px 10px; font-size:11px}
     .toolbar{padding:8px 9px; gap:7px}
     .seg button{padding:7px 10px; font-size:11.5px}
     .btn{padding:8px 11px; font-size:11.5px}
@@ -202,17 +219,24 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
 
     <div class="stage-grid">
         <div class="stage-card">
+            <video id="cam" class="cam-src" playsinline muted autoplay></video>
             <canvas id="stage"></canvas>
+            <div class="stage-badge" id="stageBadge"><span class="dot"></span><span id="badgeMain">카메라 OFF</span></div>
             <div class="stage-hint" id="stageHint">비커를 누른 채 위로 들면 기울어져 용액이 떨어져요</div>
         </div>
 
         <aside class="side">
-            <div class="cam-card">
-                <span class="cam-label" id="camLabel">웹캠 OFF</span>
-                <video id="cam" playsinline muted autoplay></video>
-                <canvas id="camMask"></canvas>
-                <div class="cam-empty" id="camEmpty"><span class="big">🎥</span><span>웹캠을 켜면<br>손의 움직임이 그대로 손이 돼요</span></div>
-            </div>
+            <section class="card" id="panelHand">
+                <h3>🖐️ 손 인식 상태</h3>
+                <div class="hand-state" id="handState">
+                    <span class="ico" id="handIco">🎥</span>
+                    <span class="txt"><b id="handTitle">웹캠 꺼짐</b><span id="handSub">웹캠을 켜면 비커 뒤에 내 모습이 배경으로 나와요</span></span>
+                </div>
+                <div class="pinch-gauge"><i id="pinchBar"></i></div>
+                <div class="row"><span>핀치 닫힘 정도</span><b id="pinchVal">—</b></div>
+                <div class="row"><span>잡은 비커</span><b id="heldVal">없음</b></div>
+                <p class="tip">엄지·검지를 <b>맞대면(🤏)</b> 비커가 잡히고, <b>손을 펴면(🖐️)</b> 놓여요. 잡은 채 손을 <b>위로 들면</b> 기울어져 부어집니다.</p>
+            </section>
 
             <section class="card" id="panelPour">
                 <h3>💧 비커 상태</h3>
@@ -254,8 +278,9 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
 <script>
 /* ==========================================================
    제스처 조작 실험실
-   - 웹캠 움직임 영역 추적으로 손 커서를 만들고,
-     손이 비커에 머무르면 집기(dwell) → 위로 들면 기울어져 붓기
+   - 무대 전체 배경에 좌우 반전 웹캠(AR) 영상을 깔고,
+     MediaPipe 21관절 손 추적의 엄지-검지 핀치로 비커를 집고,
+     손을 위로 들면 기울어져 붓기
    - 권한·지원이 없으면 터치·마우스 드래그로 동일하게 조작
    ========================================================== */
 (function () {
@@ -271,9 +296,9 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     var camOn = false, camStream = null, camReady = false;
 
     /* ---------- 상태 ---------- */
-    var cur = { x: 0, y: 0, tx: 0, ty: 0, live: false, dwell: 0 };
+    var cur = { x: 0, y: 0, tx: 0, ty: 0, live: false };
     var beaker = {
-        x: 0, y: 0, w: 96, h: 96, tilt: 0, held: false,
+        x: 0, y: 0, w: 96, h: 96, tilt: 0, held: false, byHand: false,
         offx: 0, offy: 0, grabY: 0, hover: 0, homeX: 0, homeY: 0
     };
     var flask = { cx: 0, cy: 0, w: 120, h: 170, top: 0, mouth: 60 };
@@ -421,17 +446,19 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         ctx.stroke();
         ctx.restore();
 
-        // 눈금 라벨 없이, 집기 안내 링
+        // 집기 가능 위치 안내 링
         if (!beaker.held && mode === 'pour') {
-            var p = beaker.hover / 0.28;
-            ctx.save();
-            ctx.translate(beaker.x, beaker.y);
-            ctx.strokeStyle = 'rgba(10,132,255,.55)';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(0, 0, beaker.w * 0.66, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p));
-            ctx.stroke();
-            ctx.restore();
+            var nearP = cur.live ? Math.max(0, 1 - Math.hypot(cur.x - beaker.x, cur.y - beaker.y) / (beaker.w * 2.0)) : 0;
+            if (nearP > 0.02) {
+                ctx.save();
+                ctx.translate(beaker.x, beaker.y);
+                ctx.strokeStyle = camOn ? (hand.pinching ? 'rgba(5,150,105,.9)' : 'rgba(2,132,199,.62)') : 'rgba(10,132,255,.55)';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, beaker.w * 0.66, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, nearP));
+                ctx.stroke();
+                ctx.restore();
+            }
         }
         if (beaker.held) {
             ctx.save();
@@ -842,6 +869,7 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     /* ---------- 손 커서 ---------- */
     function drawCursor() {
         if (!cur.live) return;
+        if (camOn && hand.present) return;      // 손 추적 중에는 핀치 포인터가 커서 역할을 한다
         if (mode === 'pour' && beaker.held) return;
         ctx.save();
         ctx.translate(cur.x, cur.y);
@@ -859,19 +887,155 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         ctx.restore();
     }
 
+    /* ---------- AR 카메라 배경 ---------- */
+    function drawCamLayer() {
+        if (!camOn || !vid.videoWidth) return false;
+        var t = camTransform();
+        ctx.save();
+        ctx.translate(W, 0);               // 좌우 반전(거울상)
+        ctx.scale(-1, 1);
+        ctx.drawImage(vid, t.dx, t.dy, t.dw, t.dh);
+        ctx.restore();
+
+        // 비커·용액·글자가 묻히지 않게 반투명 명암 오버레이
+        var dark = document.body.classList.contains('dark');
+        var g = ctx.createLinearGradient(0, 0, 0, H);
+        if (dark) {
+            g.addColorStop(0, 'rgba(9,14,22,.38)');
+            g.addColorStop(0.62, 'rgba(9,14,22,.46)');
+            g.addColorStop(1, 'rgba(9,14,22,.58)');
+        } else {
+            g.addColorStop(0, 'rgba(248,251,255,.30)');
+            g.addColorStop(0.62, 'rgba(246,250,253,.38)');
+            g.addColorStop(1, 'rgba(238,244,250,.50)');
+        }
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+        return true;
+    }
+
+    function drawTag(text, x, y, align) {
+        ctx.save();
+        ctx.font = '800 11.5px ' + FONT;
+        var tw = ctx.measureText(text).width + 18;
+        var bx = align === 'right' ? x - tw : x;
+        roundRectPath(bx, y - 13, tw, 21, 10);
+        ctx.fillStyle = document.body.classList.contains('dark') ? 'rgba(15,23,42,.68)' : 'rgba(255,255,255,.82)';
+        ctx.fill();
+        ctx.strokeStyle = document.body.classList.contains('dark') ? 'rgba(255,255,255,.14)' : 'rgba(15,23,42,.08)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = document.body.classList.contains('dark') ? '#e2e8f0' : '#334155';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, bx + 9, y - 2);
+        ctx.restore();
+        ctx.textBaseline = 'alphabetic';
+    }
+
+    /* ---------- 손 21관절 · 핀치 포인터 ---------- */
+    function drawHand() {
+        if (!camOn || !hand.points || !hand.points.length) return;
+        var pts = hand.points;
+        var pinch = hand.pinching;
+        var line = pinch ? 'rgba(5,150,105,.95)' : 'rgba(2,132,199,.88)';
+        var joint = pinch ? '#059669' : '#0284c7';
+
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // 손바닥 영역
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pts[5].x, pts[5].y);
+        ctx.lineTo(pts[9].x, pts[9].y);
+        ctx.lineTo(pts[13].x, pts[13].y);
+        ctx.lineTo(pts[17].x, pts[17].y);
+        ctx.closePath();
+        ctx.fillStyle = pinch ? 'rgba(16,185,129,.12)' : 'rgba(56,189,248,.10)';
+        ctx.fill();
+
+        // 뼈대 21관절
+        ctx.strokeStyle = line;
+        ctx.lineWidth = 3.4;
+        for (var i = 0; i < HAND_CONN.length; i++) {
+            var a = pts[HAND_CONN[i][0]], b = pts[HAND_CONN[i][1]];
+            if (!a || !b) continue;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+        }
+        for (var j = 0; j < pts.length; j++) {
+            var tip = FINGERTIPS.indexOf(j) >= 0;
+            ctx.beginPath();
+            ctx.arc(pts[j].x, pts[j].y, tip ? 5.2 : 3.4, 0, Math.PI * 2);
+            ctx.fillStyle = tip ? '#ffffff' : joint;
+            ctx.fill();
+            if (tip) { ctx.strokeStyle = joint; ctx.lineWidth = 2; ctx.stroke(); }
+        }
+
+        // 엄지(4) - 검지(8) 핀치 포인터
+        var p = { x: (pts[4].x + pts[8].x) / 2, y: (pts[4].y + pts[8].y) / 2 };
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = line;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(pts[4].x, pts[4].y);
+        ctx.lineTo(pts[8].x, pts[8].y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        var r = pinch ? 15 : 19;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = pinch ? 'rgba(16,185,129,.30)' : 'rgba(255,255,255,.22)';
+        ctx.fill();
+        ctx.strokeStyle = pinch ? '#059669' : 'rgba(2,132,199,.92)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        if (pinch) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r + 7, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(52,211,153,.55)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // 포인터 옆 상태표시
+        var label = pinch ? '🤏 집기' : '🖐️ 열림';
+        ctx.font = '900 10.5px ' + FONT;
+        var lw = ctx.measureText(label).width + 14;
+        var lx = Math.min(W - lw - 6, p.x + r + 8);
+        var ly = Math.max(6, p.y - r - 24);
+        roundRectPath(lx, ly, lw, 19, 9.5);
+        ctx.fillStyle = pinch ? 'rgba(5,150,105,.92)' : 'rgba(15,23,42,.72)';
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, lx + 7, ly + 10);
+        ctx.restore();
+        ctx.textBaseline = 'alphabetic';
+    }
+
     /* ---------- 그리기 ---------- */
     function draw() {
         ctx.clearRect(0, 0, W, H);
-        var bg = ctx.createLinearGradient(0, 0, 0, H);
-        if (document.body.classList.contains('dark')) {
-            bg.addColorStop(0, '#111827');
-            bg.addColorStop(1, '#0b1018');
-        } else {
-            bg.addColorStop(0, '#f7fafc');
-            bg.addColorStop(1, '#e8eef6');
+        var camBg = drawCamLayer();
+        if (!camBg) {
+            var bg = ctx.createLinearGradient(0, 0, 0, H);
+            if (document.body.classList.contains('dark')) {
+                bg.addColorStop(0, '#111827');
+                bg.addColorStop(1, '#0b1018');
+            } else {
+                bg.addColorStop(0, '#f7fafc');
+                bg.addColorStop(1, '#e8eef6');
+            }
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, W, H);
         }
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, W, H);
 
         if (mode === 'pour') {
             drawTable();
@@ -879,17 +1043,25 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
             drawReadout();
             drawBeaker();
             drawDrops();
-            // 안내 텍스트
-            ctx.fillStyle = 'rgba(100,116,139,.9)';
-            ctx.font = '700 11.5px ' + FONT;
-            ctx.textAlign = 'left';
-            ctx.fillText('0.10 M HCl 50 mL', 16, 24);
-            ctx.textAlign = 'right';
-            ctx.fillText('0.10 M NaOH', W - 16, 24);
-            ctx.textAlign = 'left';
+            if (camBg) {
+                drawTag('0.10 M HCl 50 mL', 12, 30, 'left');
+                drawTag('0.10 M NaOH', W - 12, 30, 'right');
+            } else {
+                ctx.fillStyle = 'rgba(100,116,139,.9)';
+                ctx.font = '700 11.5px ' + FONT;
+                ctx.textAlign = 'left';
+                ctx.fillText('0.10 M HCl 50 mL', 16, 24);
+                ctx.textAlign = 'right';
+                ctx.fillText('0.10 M NaOH', W - 16, 24);
+                ctx.textAlign = 'left';
+            }
         } else {
             drawLensScene();
+            if (camBg) {
+                drawTag('손을 좌우로 움직여 렌즈를 옮겨 보세요', 12, 30, 'left');
+            }
         }
+        drawHand();
         drawCursor();
     }
 
@@ -898,8 +1070,16 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     function loop(ts) {
         var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
         last = ts;
+
+        if (camOn) trackHand(ts);
+
         cur.x += (cur.tx - cur.x) * 0.35;
         cur.y += (cur.ty - cur.y) * 0.35;
+
+        // 핀치를 유지한 채 비커 위로 옮겨도 잡히게
+        if (camOn && hand.present && hand.pinching && mode === 'pour' && !beaker.held && nearBeaker()) {
+            grabBeaker(true);
+        }
 
         if (mode === 'pour') stepPour(dt);
         else {
@@ -912,13 +1092,36 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         requestAnimationFrame(loop);
     }
 
-    /* ---------- 웹캠 움직임 추적 ---------- */
-    var vid = $('#cam'), camCv = $('#camMask'), camCtx = camCv.getContext('2d');
-    var proc = document.createElement('canvas');
-    proc.width = 96; proc.height = 72;
-    var pctx = proc.getContext('2d', { willReadFrequently: true });
-    var prevData = null;
-    var motionTimer = null;
+    /* ==========================================================
+       웹캠 AR 배경 + MediaPipe HandLandmarker 손 추적
+       - 무대 전체에 좌우 반전된 웹캠 영상을 깔고,
+         21개 관절과 엄지(4)-검지(8) 핀치 포인터를 그린다.
+       - 핀치(🤏)로 비커를 잡고, 손을 펴면(🖐️) 놓는다.
+       ========================================================== */
+    var vid = $('#cam');
+
+    var CDN = [
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs',
+        'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
+    ];
+    var WASM = [
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
+        'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm'
+    ];
+    var MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+    var HAND_CONN = [
+        [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8],
+        [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15],
+        [15, 16], [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]
+    ];
+    var FINGERTIPS = [4, 8, 12, 16, 20];
+    var PINCH_CLOSE = 0.55;      // 손바닥 폭 대비 엄지-검지 거리. 이보다 가까우면 집기
+    var PINCH_OPEN = 0.75;       // 이보다 멀어지면 놓기 (히스테리시스)
+
+    var hand = { present: false, points: null, ratio: 1, pinching: false, px: 0, py: 0, seenAt: 0, metrics: null };
+    var modelState = 'idle';     // idle | loading | ready | error
+    var landmarker = null, landmarkLoading = null, lastDetect = 0;
 
     function setStatus(txt, cls) {
         var el = $('#camStatus');
@@ -926,116 +1129,287 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         el.className = 'status' + (cls ? ' ' + cls : '');
     }
 
+    function setBadge(txt, cls) {
+        var b = $('#stageBadge');
+        if (!b) return;
+        b.className = 'stage-badge' + (cls ? ' ' + cls : '');
+        $('#badgeMain').textContent = txt;
+    }
+
     function camFail(msg) {
-        camOn = false;
-        $('#btnCam').classList.remove('on');
-        $('#btnCam').textContent = '🎥 웹캠 손 추적 켜기';
-        $('#camLabel').textContent = '웹캠 OFF';
-        $('#camEmpty').style.display = 'flex';
+        stopCam();
         setStatus(msg + ' · 터치·마우스로 조작', 'err');
+        toast(msg);
+    }
+
+    function getLandmarker() {
+        if (landmarker) return Promise.resolve(landmarker);
+        if (landmarkLoading) return landmarkLoading;
+        modelState = 'loading';
+        landmarkLoading = (async function () {
+            var mod = null, lastErr = null;
+            for (var i = 0; i < CDN.length; i++) {
+                try { mod = await import(CDN[i]); break; } catch (e) { lastErr = e; }
+            }
+            if (!mod) throw (lastErr || new Error('mediapipe load failed'));
+
+            var fileset = null;
+            for (var j = 0; j < WASM.length; j++) {
+                try { fileset = await mod.FilesetResolver.forVisionTasks(WASM[j]); break; } catch (e2) { lastErr = e2; }
+            }
+            if (!fileset) throw (lastErr || new Error('wasm load failed'));
+
+            var opts = {
+                baseOptions: { modelAssetPath: MODEL, delegate: 'GPU' },
+                runningMode: 'VIDEO',
+                numHands: 2,
+                minHandDetectionConfidence: 0.35,
+                minHandPresenceConfidence: 0.35,
+                minTrackingConfidence: 0.35
+            };
+            try {
+                landmarker = await mod.HandLandmarker.createFromOptions(fileset, opts);
+            } catch (e3) {
+                opts.baseOptions.delegate = 'CPU';
+                landmarker = await mod.HandLandmarker.createFromOptions(fileset, opts);
+            }
+            modelState = 'ready';
+            return landmarker;
+        })().catch(function (err) {
+            modelState = 'error';
+            landmarkLoading = null;
+            throw err;
+        });
+        return landmarkLoading;
+    }
+
+    function explainCamError(err) {
+        var n = (err && err.name) || '';
+        if (n === 'NotAllowedError' || n === 'SecurityError') return '웹캠 권한이 거부되었어요(주소창의 카메라 아이콘에서 허용)';
+        if (n === 'NotFoundError' || n === 'OverconstrainedError') return '웹캠을 찾지 못했어요';
+        if (n === 'NotReadableError') return '다른 앱이 웹캠을 쓰고 있어요';
+        return '웹캠을 켜지 못했어요(' + (n || '알 수 없는 오류') + ')';
     }
 
     function startCam() {
+        if (camOn) return;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             camFail('이 브라우저는 웹캠을 지원하지 않아요');
             return;
         }
-        $('#camEmpty').style.display = 'none';
-        $('#camLabel').textContent = '연결 중…';
         setStatus('웹캠 권한을 허용해 주세요');
-        navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' }, audio: false })
+        setBadge('연결 중…', 'live');
+        navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false })
             .then(function (stream) {
                 camStream = stream;
                 vid.srcObject = stream;
                 return vid.play().catch(function () { });
             })
             .then(function () {
-                camOn = true; camReady = true; prevData = null;
+                camOn = true; camReady = true;
                 $('#btnCam').classList.add('on');
-                $('#btnCam').textContent = '🎥 웹캠 손 추적 끄기';
-                $('#camLabel').textContent = 'LIVE · 움직임 추적';
-                setStatus('손을 움직여 커서를 옮기고, 비커 위에 잠시 멈추면 집혀요', 'live');
-                if (motionTimer) clearInterval(motionTimer);
-                motionTimer = setInterval(trackMotion, 66);
+                $('#btnCam').textContent = '🎥 웹캠 AR 끄기';
+                setBadge('카메라 AR · 손 추적 준비 중', 'live');
+                setStatus('손 인식 모델을 불러오는 중… (처음 한 번만)');
+                return getLandmarker().then(function () {
+                    modelState = 'ready';
+                    setBadge('카메라 AR · 손을 보여 주세요', 'live');
+                    setStatus('손을 화면에 보여 주세요 · 엄지·검지를 맞대면 비커를 잡아요', 'live');
+                    setHint('엄지·검지를 맞대면(🤏) 비커를 잡고, 위로 들면 부어집니다');
+                }, function () {
+                    modelState = 'error';
+                    setBadge('카메라 AR · 배경만 켜짐', 'live');
+                    setStatus('손 인식 모델을 불러오지 못했어요 · 마우스로 조작해 주세요', 'err');
+                    toast('손 인식 모델 로드 실패 · 카메라 배경과 마우스 조작은 그대로 쓸 수 있어요');
+                });
             })
             .catch(function (e) {
-                camFail('웹캠을 켤 수 없어요(권한 거부 또는 보안 연결 필요)');
+                camFail(explainCamError(e));
             });
     }
 
     function stopCam() {
-        camOn = false; camReady = false; prevData = null;
-        if (motionTimer) { clearInterval(motionTimer); motionTimer = null; }
+        camOn = false; camReady = false;
+        hand.present = false; hand.points = null; hand.pinching = false; hand.ratio = 1;
+        if (beaker.held && beaker.byHand) releaseBeaker();
         if (camStream) {
             camStream.getTracks().forEach(function (t) { t.stop(); });
             camStream = null;
         }
-        vid.srcObject = null;
-        $('#btnCam').classList.remove('on');
-        $('#btnCam').textContent = '🎥 웹캠 손 추적 켜기';
-        $('#camLabel').textContent = '웹캠 OFF';
-        $('#camEmpty').style.display = 'flex';
-        camCtx.clearRect(0, 0, camCv.width, camCv.height);
+        try { vid.srcObject = null; } catch (e) { }
+        var b = $('#btnCam');
+        if (b) { b.classList.remove('on'); b.textContent = '🎥 웹캠 손 추적 켜기'; }
+        if (!camOn) setBadge('카메라 OFF', '');
         setStatus('터치·마우스로 조작 중 · 비커를 잡아 보세요');
+        setHint('비커를 누른 채 위로 들면 기울어져 용액이 떨어져요');
+        syncHandPanel();
     }
 
-    function trackMotion() {
-        if (!camOn || !vid.videoWidth) return;
-        pctx.save();
-        pctx.scale(-1, 1);                   // 거울상
-        pctx.drawImage(vid, -96, 0, 96, 72);
-        pctx.restore();
-        var img = pctx.getImageData(0, 0, 96, 72);
-        var d = img.data;
+    function camTransform() {
+        var vw = vid.videoWidth || 640, vh = vid.videoHeight || 480;
+        var s = Math.max(W / vw, H / vh);
+        var dw = vw * s, dh = vh * s;
+        return { vw: vw, vh: vh, dw: dw, dh: dh, dx: (W - dw) / 2, dy: (H - dh) / 2 };
+    }
 
-        if (camCv.width !== 96) { camCv.width = 96; camCv.height = 72; }
+    function toStage(lm) {
+        var t = camTransform();
+        return { x: t.dx + (1 - lm.x) * t.dw, y: t.dy + lm.y * t.dh };
+    }
 
-        var cg = camCtx.createImageData(96, 72);
-        var out = cg.data;
-        var sx = 0, sy = 0, n = 0, minx = 96, maxx = 0, miny = 72, maxy = 0, sumE = 0;
+    function lmDist(a, b, ar) {
+        var dx = (a.x - b.x) * ar, dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
 
-        if (prevData) {
-            for (var i = 0; i < d.length; i += 4) {
-                var diff = Math.abs(d[i] - prevData[i]) + Math.abs(d[i + 1] - prevData[i + 1]) + Math.abs(d[i + 2] - prevData[i + 2]);
-                var px = (i / 4) % 96, py = Math.floor((i / 4) / 96);
-                var lv = 26 + 0.30 * (d[i] + d[i + 1] + d[i + 2]) / 3;   // 어두운 곳은 덜 민감
-                var hit = diff > lv;
-                out[i] = hit ? 16 : Math.round(d[i] * 0.35 + 18);
-                out[i + 1] = hit ? 185 : Math.round(d[i + 1] * 0.35 + 18);
-                out[i + 2] = hit ? 129 : Math.round(d[i + 2] * 0.35 + 18);
-                out[i + 3] = 255;
-                if (hit) {
-                    sx += px; sy += py; n++; sumE += diff;
-                    if (px < minx) minx = px;
-                    if (px > maxx) maxx = px;
-                    if (py < miny) miny = py;
-                    if (py > maxy) maxy = py;
-                }
+    function pinchRatioOf(lms) {
+        var t = camTransform();
+        var ar = t.vw / t.vh;
+        var palmLen = lmDist(lms[0], lms[9], ar);      // 손목 ~ 가운데손가락 뿌리
+        var palmW = lmDist(lms[5], lms[17], ar);       // 검지 뿌리 ~ 약지 뿌리(손바닥 폭)
+        var d = lmDist(lms[4], lms[8], ar);            // 엄지 끝 ~ 검지 끝
+        var base = Math.max(palmW, 1e-4);
+        var ratio = Math.max(d / base, 1e-4);
+        hand.metrics = {
+            d48: Math.round(d * 1000) / 1000,
+            palmW: Math.round(palmW * 1000) / 1000,
+            palmLen: Math.round(palmLen * 1000) / 1000,
+            rPalmW: Math.round(ratio * 1000) / 1000,
+            rPalmLen: Math.round((d / Math.max(palmLen, 1e-4)) * 1000) / 1000
+        };
+        return ratio;
+    }
+
+    function syncHandPointer() {
+        if (!hand.points) return;
+        var p = { x: (hand.points[4].x + hand.points[8].x) / 2, y: (hand.points[4].y + hand.points[8].y) / 2 };
+        hand.px = p.x; hand.py = p.y;
+        cur.tx = p.x; cur.ty = p.y;
+        if (!cur.live) { cur.x = p.x; cur.y = p.y; }
+        cur.live = true;
+    }
+
+    function nearBeaker(pad) {
+        if (!cur.live) return false;
+        return Math.hypot(cur.x - beaker.x, cur.y - beaker.y) < beaker.w * (pad || 1.15);
+    }
+
+    var lastNudge = 0;
+    function nudgePinch() {
+        var now = performance.now();
+        if (now - lastNudge < 4000) return;
+        lastNudge = now;
+        toast('엄지·검지를 비커 위에서 맞대 보세요 🤏');
+    }
+
+    function onPinchChange(pinching) {
+        if (!pinching) {
+            if (beaker.held && beaker.byHand) releaseBeaker();
+            return;
+        }
+        if (mode === 'pour' && !beaker.held) {
+            if (nearBeaker()) grabBeaker(true);
+            else nudgePinch();
+        }
+        syncHandPanel();
+    }
+
+    function trackHand(now) {
+        if (!camOn) return;
+        if (modelState !== 'ready' || !landmarker || vid.readyState < 2) return;
+
+        if (now - lastDetect < 45) {
+            if (hand.present) syncHandPointer();
+            return;
+        }
+        lastDetect = now;
+
+        var res = null;
+        try { res = landmarker.detectForVideo(vid, now); } catch (e) { res = null; }
+
+        if (!res || !res.landmarks || !res.landmarks.length) {
+            hand.present = false;
+            if (hand.pinching && now - hand.seenAt > 260) {
+                hand.pinching = false;
+                if (beaker.held && beaker.byHand) releaseBeaker();
             }
-        } else {
-            for (var k = 0; k < d.length; k += 4) {
-                out[k] = Math.round(d[k] * 0.35 + 18);
-                out[k + 1] = Math.round(d[k + 1] * 0.35 + 18);
-                out[k + 2] = Math.round(d[k + 2] * 0.35 + 18);
-                out[k + 3] = 255;
+            if (now - hand.seenAt > 600) hand.points = null;
+            syncHandPanel();
+            return;
+        }
+
+        var pick = res.landmarks[0];
+        if (res.landmarks.length > 1 && cur.live) {
+            var bd = Infinity;
+            for (var i = 0; i < res.landmarks.length; i++) {
+                var mp = toStage({ x: (res.landmarks[i][4].x + res.landmarks[i][8].x) / 2, y: (res.landmarks[i][4].y + res.landmarks[i][8].y) / 2 });
+                var dd = Math.hypot(mp.x - cur.x, mp.y - cur.y);
+                if (dd < bd) { bd = dd; pick = res.landmarks[i]; }
             }
         }
-        prevData = new Uint8ClampedArray(d);
-        camCtx.putImageData(cg, 0, 0);
 
-        // 움직임 영역 표시
-        if (n > 46) {
-            camCtx.strokeStyle = 'rgba(16,185,129,.95)';
-            camCtx.lineWidth = 1.6;
-            camCtx.strokeRect(minx - 1, miny - 1, maxx - minx + 2, maxy - miny + 2);
-            var cx = sx / n / 96, cy = sy / n / 72;
-            if (cur.live) {
-                cur.tx = cur.tx * 0.55 + (cx * W) * 0.45;
-                cur.ty = cur.ty * 0.55 + (cy * H) * 0.45;
-            } else {
-                cur.tx = cx * W; cur.ty = cy * H; cur.x = cur.tx; cur.y = cur.ty;
-            }
-            cur.live = true;
+        var pts = [];
+        for (var j = 0; j < pick.length; j++) pts.push(toStage(pick[j]));
+        hand.points = pts;
+        hand.present = true;
+        hand.seenAt = now;
+
+        var ratio = pinchRatioOf(pick);
+        hand.ratio = ratio;
+        var wasPinching = hand.pinching;
+        hand.pinching = wasPinching ? (ratio < PINCH_OPEN) : (ratio < PINCH_CLOSE);
+
+        syncHandPointer();
+
+        if (hand.pinching && !wasPinching) onPinchChange(true);
+        else if (!hand.pinching && wasPinching) onPinchChange(false);
+
+        syncHandPanel();
+    }
+
+    function syncHandPanel() {
+        var box = $('#handState'), ico = $('#handIco'), title = $('#handTitle'), sub = $('#handSub');
+        var bar = $('#pinchBar'), pv = $('#pinchVal'), hv = $('#heldVal');
+        if (!box) return;
+
+        var ratio = hand.ratio;
+        var close = Math.max(0, Math.min(1, (PINCH_OPEN - ratio) / (PINCH_OPEN - 0.25)));
+        bar.style.width = Math.round(close * 100) + '%';
+        pv.textContent = hand.present ? Math.round(close * 100) + '%' : '—';
+        hv.textContent = beaker.held ? (beaker.byHand ? '🤏 들고 있음' : '✋ 들고 있음') : '없음';
+        hv.style.color = beaker.held ? '#059669' : '';
+
+        box.classList.toggle('pinch', !!hand.pinching);
+        if (!camOn) {
+            ico.textContent = '🎥';
+            title.textContent = '웹캠 꺼짐';
+            sub.textContent = '웹캠을 켜면 비커 뒤에 내 모습이 배경으로 나와요';
+            setBadge('카메라 OFF', '');
+        } else if (modelState === 'loading') {
+            ico.textContent = '⏳';
+            title.textContent = '손 인식 준비 중';
+            sub.textContent = '모델을 불러오는 중이에요 (처음 한 번만)';
+            setBadge('카메라 AR · 준비 중', 'live');
+        } else if (modelState === 'error') {
+            ico.textContent = '⚠️';
+            title.textContent = '손 인식 불가';
+            sub.textContent = '카메라 배경만 나와요 · 마우스로 잡을 수 있어요';
+            setBadge('카메라 AR · 배경만', 'live');
+        } else if (hand.pinching) {
+            ico.textContent = '🤏';
+            title.textContent = '집는 중';
+            sub.textContent = beaker.held ? '손을 위로 들면 비커가 기울어져요' : '비커 위에서 손을 펴면 놓여요';
+            setBadge('🤏 집는 중 · 비커를 들면 부어져요', 'pinch');
+        } else if (hand.present) {
+            ico.textContent = '🖐️';
+            title.textContent = '손 인식 중 · 손 펴짐';
+            sub.textContent = '엄지·검지를 맞대면 비커를 잡아요';
+            setBadge('🖐️ 손 추적 중 · 엄지·검지를 맞대 보세요', 'live');
+        } else {
+            ico.textContent = '🔍';
+            title.textContent = '손을 찾는 중';
+            sub.textContent = '손바닥이 카메라를 향하게 보여 주세요';
+            setBadge('카메라 AR · 손을 찾는 중', 'live');
         }
     }
 
@@ -1047,7 +1421,7 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
 
     cv.addEventListener('pointermove', function (e) {
         var p = pos(e);
-        if (camOn && cur.live) return;
+        if (camOn && hand.present) return;
         cur.tx = p.x; cur.ty = p.y;
         if (!cur.live) { cur.x = p.x; cur.y = p.y; cur.live = true; }
     }, { passive: true });
@@ -1055,50 +1429,42 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     cv.addEventListener('pointerdown', function (e) {
         var p = pos(e);
         cur.tx = p.x; cur.ty = p.y;
-        if (!camOn || !cur.live) { cur.x = p.x; cur.y = p.y; }
+        if (!(camOn && hand.present)) { cur.x = p.x; cur.y = p.y; }
         cur.live = true;
         if (mode === 'pour') {
             var d = Math.hypot(p.x - beaker.x, p.y - beaker.y);
-            if (!beaker.held && d < beaker.w * 0.95) grabBeaker();
-            else if (beaker.held) { /* 이미 잡음 */ }
+            if (!beaker.held && d < beaker.w * 0.95) grabBeaker(false);
         }
         try { cv.setPointerCapture(e.pointerId); } catch (err) { }
     });
 
-    cv.addEventListener('pointerup', function () { if (mode === 'pour') releaseBeaker(); });
-    cv.addEventListener('pointercancel', function () { if (mode === 'pour') releaseBeaker(); });
-    cv.addEventListener('pointerleave', function () { });
+    cv.addEventListener('pointerup', function () { if (mode === 'pour' && !beaker.byHand) releaseBeaker(); });
+    cv.addEventListener('pointercancel', function () { if (mode === 'pour' && !beaker.byHand) releaseBeaker(); });
 
-    function grabBeaker() {
+    function grabBeaker(byHand) {
         beaker.held = true;
+        beaker.byHand = !!byHand;
         beaker.offx = beaker.x - cur.x;
         beaker.offy = beaker.y - cur.y;
         beaker.grabY = cur.y;
         beaker.hover = 0;
-        setHint('잡았어요 — 위로 들면 기울어져요. 플라스크 위에서 부어 보세요');
+        if (byHand) setHint('🤏 잡았어요 — 손을 위로 들면 기울어져 부어져요. 손을 펴면 놓여요');
+        else setHint('잡았어요 — 위로 들면 기울어져요. 플라스크 위에서 부어 보세요');
+        syncHandPanel();
     }
 
     function releaseBeaker() {
         beaker.held = false;
+        beaker.byHand = false;
         beaker.tilt = 0;
         if (beaker.y < tableY - beaker.h) {
             beaker.x = beaker.homeX;
             beaker.y = beaker.homeY;
         }
-        setHint('비커를 누른 채 위로 들면 기울어져 용액이 떨어져요');
+        setHint(camOn ? '엄지·검지를 맞대면(🤏) 비커를 잡고, 위로 들면 부어집니다'
+                      : '비커를 누른 채 위로 들면 기울어져 용액이 떨어져요');
+        syncHandPanel();
     }
-
-    // 웹캠 모드: 비커 위에 손을 잠시 두면 집기
-    var dwellTick = setInterval(function () {
-        if (!camOn || mode !== 'pour' || beaker.held || !cur.live) return;
-        var d = Math.hypot(cur.x - beaker.x, cur.y - beaker.y);
-        if (d < beaker.w * 0.95) {
-            beaker.hover += 0.09;
-            if (beaker.hover >= 0.28) grabBeaker();
-        } else {
-            beaker.hover = Math.max(0, beaker.hover - 0.09);
-        }
-    }, 90);
 
     function setHint(t) { $('#stageHint').textContent = t; }
 
@@ -1120,7 +1486,7 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
             $('#sharpVal').style.color = lens.sharp > 92 ? '#059669' : '';
         }
     }
-    setInterval(syncPanel, 120);
+    setInterval(function () { syncPanel(); syncHandPanel(); }, 120);
 
     /* ---------- 모드 · 지시약 · 초점거리 ---------- */
     $('#modeSeg').addEventListener('click', function (e) {
@@ -1132,13 +1498,15 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         $('#panelLens').hidden = mode !== 'lens';
         if (mode === 'pour') {
             releaseBeaker();
-            setHint('비커를 누른 채 위로 들면 기울어져 용액이 떨어져요');
+            setHint(camOn ? '엄지·검지를 맞대면(🤏) 비커를 잡고, 위로 들면 부어집니다'
+                          : '비커를 누른 채 위로 들면 기울어져 용액이 떨어져요');
             if (!camOn) setStatus('터치·마우스로 조작 중 · 비커를 잡아 보세요');
         } else {
             setHint('손을 좌우로 움직여 렌즈를 옮기고, 상이 또렷한 자리를 찾아보세요');
             if (!camOn) setStatus('터치·마우스로 조작 중 · 손을 움직여 렌즈를 옮겨요');
             lens.x = Math.max(lens.ox + 30, Math.min(lens.sx - 40, cur.live ? cur.x : (lens.ox + lens.sx) / 2));
         }
+        syncHandPanel();
         draw();
     });
 
@@ -1162,9 +1530,10 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     $('#btnDrop').addEventListener('click', function () { releaseBeaker(); });
     $('#btnReset').addEventListener('click', function () {
         pour.vBase = 0; pour.pH = phOf(0); pour.drops = []; pour.acc = 0; pour.passed = false; pour.spill = 0;
-        beaker.held = false; beaker.tilt = 0; beaker.x = beaker.homeX; beaker.y = beaker.homeY; beaker.hover = 0;
+        beaker.held = false; beaker.byHand = false; beaker.tilt = 0; beaker.x = beaker.homeX; beaker.y = beaker.homeY; beaker.hover = 0;
         lens.x = (lens.ox + lens.sx) / 2;
         syncPanel();
+        syncHandPanel();
         toast('처음 상태로 돌아왔어요');
     });
 
@@ -1250,6 +1619,27 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
 
     function toast(msg) { window.__svlToast && window.__svlToast(msg); }
 
+    /* 실측·점검용 상태 노출(화면에는 보이지 않음) */
+    window.__gestureLab = {
+        get state() {
+            return {
+                camOn: camOn, modelState: modelState, handPresent: hand.present,
+                landmarkCount: hand.points ? hand.points.length : 0,
+                pinchRatio: Math.round(hand.ratio * 1000) / 1000, pinching: hand.pinching, metrics: hand.metrics,
+                held: beaker.held, byHand: beaker.byHand, tilt: Math.round(beaker.tilt),
+                mode: mode, vBase: pour.vBase, pH: Math.round(pour.pH * 100) / 100,
+                drops: pour.drops.length, badge: ($('#badgeMain') || {}).textContent || '',
+                hint: ($('#stageHint') || {}).textContent || '',
+                pointer: cur.live ? { x: Math.round(cur.x), y: Math.round(cur.y) } : null,
+                beaker: { x: Math.round(beaker.x), y: Math.round(beaker.y), w: Math.round(beaker.w) },
+                flask: { x: Math.round(flask.cx), top: Math.round(flask.top), mouth: Math.round(flask.mouth) },
+                stage: { w: Math.round(W), h: Math.round(H) },
+                cam: { w: vid.videoWidth, h: vid.videoHeight }
+            };
+        },
+        thresholds: { close: PINCH_CLOSE, open: PINCH_OPEN }
+    };
+
     /* ---------- 시작 ---------- */
     pour.pH = phOf(0);
     resize();
@@ -1257,6 +1647,7 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     if (window.ResizeObserver) { new ResizeObserver(resize).observe(cv.parentElement); }
     if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function () { layout(); }).catch(function () { }); }
     syncPanel();
+    syncHandPanel();
     requestAnimationFrame(loop);
 })();
 </script>
