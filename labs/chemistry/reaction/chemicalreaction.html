@@ -888,6 +888,10 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     .side-ctrl-panel .control-tab-btn { padding: 7px 4px; font-size: 10.5px; }
     .side-ctrl-panel .panel-title { font-size: 11px; }
 }
+
+/* 반응 4종 선택 — 2×2 그리드 */
+.seg-row { flex-wrap: wrap; }
+.seg-btn { flex: 1 1 calc(50% - 3px); font-size: 11.5px; white-space: nowrap; padding-left: 4px; padding-right: 4px; }
     </style>
 <link rel="stylesheet" href="../../common/qr-modal.css">
 <link rel="stylesheet" href="../../common/ui-layout.css">
@@ -928,8 +932,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     <div class="divider"></div>
     <div class="legend-row" id="legend-row">
         <span><i style="background:#eef2f8; box-shadow: inset 0 0 0 1px #c9d3e0;"></i>H 수소</span>
-        <span><i style="background:#ff3b30;"></i>O 산소</span>
+        <span><i style="background:#3a3f47;"></i>C 탄소</span>
         <span><i style="background:#3b5bff;"></i>N 질소</span>
+        <span><i style="background:#ff3b30;"></i>O 산소</span>
     </div>
 </div>
 
@@ -942,6 +947,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     <div class="seg-row">
         <button class="seg-btn active" id="seg-water">💧 물 합성</button>
         <button class="seg-btn" id="seg-ammonia">💨 암모니아 합성</button>
+        <button class="seg-btn" id="seg-carbon">🔥 탄소 연소</button>
+        <button class="seg-btn" id="seg-peroxide">🧪 과산화 수소 분해</button>
     </div>
     <div class="slider-row">
         <div class="slider-header"><span>반응 진행률</span><span id="txt-progress">0 %</span></div>
@@ -967,7 +974,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 화학 반응이 일어나면 분자는 새로 만들어지지만, <b>원자는 새로 생기거나 사라지지 않아요</b>.
                 반응물의 원자들이 <b>결합을 끊고 다시 연결</b>되면서 생성물이 되는 것이에요.
             </div>
-            <div class="formula">2H₂ + O₂ → 2H₂O &nbsp;|&nbsp; N₂ + 3H₂ → 2NH₃</div>
+            <div class="formula">2H₂ + O₂ → 2H₂O &nbsp;|&nbsp; N₂ + 3H₂ → 2NH₃<br>C + O₂ → CO₂ &nbsp;|&nbsp; 2H₂O₂ → 2H₂O + O₂</div>
             <div>
                 <b>2. 질량 보존 법칙</b><br>
                 원자의 종류와 개수가 같으므로 반응 전후의 <b>총 질량도 같아요</b>.
@@ -988,8 +995,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             </div>
             <div>
                 <b>5. CPK 색상</b><br>
-                원자 모형의 색은 원소를 구별하기 위한 약속이에요. 수소는 흰색, 산소는 빨간색, 질소는 파란색으로 나타내요.
-                화면의 구슬을 돌려 보며 분자의 <b>입체 구조</b>(물은 굽은형, 암모니아는 삼각뿔형)를 확인해 보세요.
+                원자 모형의 색은 원소를 구별하기 위한 약속이에요. 수소는 흰색, 탄소는 검은색, 질소는 파란색, 산소는 빨간색으로 나타내요.
+                화면의 구슬을 돌려 보며 분자의 <b>입체 구조</b>(물은 굽은형, 암모니아는 삼각뿔형, 이산화 탄소는 직선형)를 확인해 보세요.
             </div>
         </div>
     </div>
@@ -1020,7 +1027,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 <script>
 /* ============================================================
    화학 반응식과 분자 결합 3D
-   - 2H₂ + O₂ → 2H₂O / N₂ + 3H₂ → 2NH₃
+   - 2H₂ + O₂ → 2H₂O / N₂ + 3H₂ → 2NH₃ / C + O₂ → CO₂ / 2H₂O₂ → 2H₂O + O₂
    - 원자 구슬의 충돌 · 결합 끊김 · 재배열 애니메이션
    - 원자 수 · 질량 보존 카운터
    ============================================================ */
@@ -1028,6 +1035,7 @@ const $ = function (id) { return document.getElementById(id); };
 
 const ELEM = {
     H: { color: 0xdae3f1, radius: 0.50, mass: 1, css: '#eef2f8', outline: '#c9d3e0', name: '수소' },
+    C: { color: 0x3a3f47, radius: 0.78, mass: 12, css: '#3a3f47', outline: '#1d2126', name: '탄소' },
     O: { color: 0xff3b30, radius: 0.80, mass: 16, css: '#ff3b30', outline: '#b3271f', name: '산소' },
     N: { color: 0x3b5bff, radius: 0.82, mass: 14, css: '#3b5bff', outline: '#2639b0', name: '질소' }
 };
@@ -1037,14 +1045,20 @@ const SHAPES = {
     O2:  { els: ['O', 'O'], bonds: [[0, 1, 2]] },
     N2:  { els: ['N', 'N'], bonds: [[0, 1, 3]] },
     H2O: { els: ['O', 'H', 'H'], bonds: [[0, 1, 1], [0, 2, 1]] },
-    NH3: { els: ['N', 'H', 'H', 'H'], bonds: [[0, 1, 1], [0, 2, 1], [0, 3, 1]] }
+    NH3: { els: ['N', 'H', 'H', 'H'], bonds: [[0, 1, 1], [0, 2, 1], [0, 3, 1]] },
+    C:   { els: ['C'], bonds: [] },
+    CO2: { els: ['C', 'O', 'O'], bonds: [[0, 1, 2], [0, 2, 2]] },
+    H2O2: { els: ['H', 'O', 'O', 'H'], bonds: [[0, 1, 1], [1, 2, 1], [2, 3, 1]] }
 };
 const SHAPE_POS = {
     H2:  [[-0.95, 0, 0], [0.95, 0, 0]],
     O2:  [[-0.85, 0, 0], [0.85, 0, 0]],
     N2:  [[-0.80, 0, 0], [0.80, 0, 0]],
     H2O: [[0, 0, 0], [1.45, 1.12, 0], [-1.45, 1.12, 0]],
-    NH3: [[0, 0, 0], [1.66, -0.69, 0], [-0.83, -0.69, 1.44], [-0.83, -0.69, -1.44]]
+    NH3: [[0, 0, 0], [1.66, -0.69, 0], [-0.83, -0.69, 1.44], [-0.83, -0.69, -1.44]],
+    C:   [[0, 0, 0]],
+    CO2: [[0, 0, 0], [1.95, 0, 0], [-1.95, 0, 0]],
+    H2O2: [[-1.78, 1.02, 0.62], [-0.95, 0, 0], [0.95, 0, 0], [1.78, -1.02, -0.62]]
 };
 
 const SPECS = {
@@ -1077,6 +1091,34 @@ const SPECS = {
         products: [
             { shape: 'NH3', pos: [6.6, 2.3, 1.1], rot: [0.1, 0.4, 0], map: [0, 2, 3, 4], name: 'NH₃' },
             { shape: 'NH3', pos: [6.6, -2.6, -1.1], rot: [0.1, -0.4, 0], map: [1, 5, 6, 7], name: 'NH₃' }
+        ]
+    },
+    carbon: {
+        key: 'carbon', name: '탄소의 연소',
+        html: 'C + O<sub>2</sub> <span class="arrow">→</span> CO<sub>2</sub>',
+        heat: '발열 반응 · 394 kJ',
+        note: '탄소 원자 1개와 산소 분자 1개가 만나 이산화 탄소 분자 1개가 돼요.',
+        reactants: [
+            { shape: 'C', pos: [-8.6, 2.4, 0.9], rot: [0, 0, 0], mid: [-2.6, 1.6, 0.6], name: 'C' },
+            { shape: 'O2', pos: [-8.2, -2.6, -1.2], rot: [0.35, 0.25, 0.9], mid: [0.8, -1.1, -0.7], name: 'O₂' }
+        ],
+        products: [
+            { shape: 'CO2', pos: [6.2, 0.1, 0.5], rot: [0.22, 0.42, 0.18], map: [0, 1, 2], name: 'CO₂' }
+        ]
+    },
+    peroxide: {
+        key: 'peroxide', name: '과산화 수소 분해',
+        html: '2H<sub>2</sub>O<sub>2</sub> <span class="arrow">→</span> 2H<sub>2</sub>O + O<sub>2</sub>',
+        heat: '발열 반응 · 98 kJ',
+        note: '과산화 수소 분자 2개가 물 분자 2개와 산소 분자 1개로 나뉘어요.',
+        reactants: [
+            { shape: 'H2O2', pos: [-7.9, 2.6, 0.8], rot: [0.25, 0.35, 0.2], mid: [-2.4, 2.0, 0.5], name: 'H₂O₂' },
+            { shape: 'H2O2', pos: [-7.7, -2.8, -1.1], rot: [-0.2, -0.3, 0.35], mid: [-1.6, -2.0, -0.8], name: 'H₂O₂' }
+        ],
+        products: [
+            { shape: 'H2O', pos: [6.0, 3.9, 0.9], rot: [0, 0.35, 0], map: [1, 0, 3], name: 'H₂O' },
+            { shape: 'O2', pos: [7.6, 0.0, -1.2], rot: [0.25, 0.3, 0.95], map: [2, 6], name: 'O₂' },
+            { shape: 'H2O', pos: [6.0, -3.9, 0.9], rot: [0, -0.35, 0], map: [5, 4, 7], name: 'H₂O' }
         ]
     }
 };
@@ -1339,7 +1381,7 @@ function renderCounters() {
         before[a.el] = (before[a.el] || 0) + 1;
         after[a.el] = (after[a.el] || 0) + 1;
     });
-    const order = ['H', 'O', 'N'].filter(function (k) { return before[k] || after[k]; });
+    const order = ['H', 'C', 'N', 'O'].filter(function (k) { return before[k] || after[k]; });
     let html = '';
     let massBefore = 0, massAfter = 0;
     order.forEach(function (el) {
@@ -1520,15 +1562,16 @@ $('btn-help').addEventListener('click', function () { $('help-modal').classList.
 $('modal-close').addEventListener('click', function () { $('help-modal').classList.remove('show'); });
 $('help-modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
 
-$('seg-water').addEventListener('click', function () {
-    state.reaction = 'water';
-    this.classList.add('active'); $('seg-ammonia').classList.remove('active');
-    buildReaction('water');
-});
-$('seg-ammonia').addEventListener('click', function () {
-    state.reaction = 'ammonia';
-    this.classList.add('active'); $('seg-water').classList.remove('active');
-    buildReaction('ammonia');
+/* 반응 선택 버튼 — 4종 */
+var SEG_KEYS = ['water', 'ammonia', 'carbon', 'peroxide'];
+SEG_KEYS.forEach(function (k) {
+    var btn = $('seg-' + k);
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+        state.reaction = k;
+        SEG_KEYS.forEach(function (kk) { $('seg-' + kk).classList.toggle('active', kk === k); });
+        buildReaction(k);
+    });
 });
 
 $('chk-bonds').addEventListener('change', function () { state.bonds = this.checked; updateBonds(state.p); });
