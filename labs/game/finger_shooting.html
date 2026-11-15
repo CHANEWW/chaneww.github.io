@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>핑거 슈팅 | Science Virtual LAB</title>
+<meta name="description" content="웹캠 앞에서 검지로 조준하고 엄지를 접어(핀치) 발사하는 사격 게임. 움직이는 과학 표적을 맞혀 콤보와 명중률을 올려 보세요.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+@font-face{
+    font-family:'SeoulNamsan';
+    src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+        url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+    --bg:#0a1020; --ink:#eaf1fb; --muted:#9aa8bd; --line:rgba(255,255,255,.14);
+    --glass:rgba(20,26,44,.62); --accent:#0a84ff; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+}
+body.dark-mode{--bg:#05080f;--glass:rgba(10,16,28,.76)}
+html,body{margin:0;padding:0;width:100%;height:100%}
+body{
+    font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    color:var(--ink); background:var(--bg); overflow:hidden; -webkit-user-select:none; user-select:none;
+}
+.glass{
+    background:var(--glass); backdrop-filter:blur(18px) saturate(170%); -webkit-backdrop-filter:blur(18px) saturate(170%);
+    border:1px solid var(--line); box-shadow:0 10px 30px rgba(0,0,0,.32); border-radius:18px;
+}
+.top-left-bar{
+    position:fixed; top:calc(max(10px,env(safe-area-inset-top)) + 4px); left:16px; z-index:30;
+    display:flex; align-items:center; gap:8px; min-width:0; max-width:calc(100vw - 210px);
+}
+.back-btn{
+    display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px;
+    border:1px solid var(--line); background:var(--glass); color:inherit; font-family:inherit;
+    font-size:13px; font-weight:800; text-decoration:none; white-space:nowrap; cursor:pointer;
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+}
+.tag-badge{
+    display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border-radius:999px; min-width:0;
+    border:1px solid var(--line); background:var(--glass); font-size:13px; font-weight:900;
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); white-space:nowrap; overflow:hidden;
+}
+.tag-badge .t{overflow:hidden; text-overflow:ellipsis; min-width:0}
+.tag-pill{
+    flex:0 0 auto; font-size:9.5px; font-weight:900; letter-spacing:.2px; padding:2px 7px; border-radius:999px;
+    background:linear-gradient(135deg,#ff2d95,#ff6ec4); color:#fff;
+}
+.top-right-bar{z-index:30}
+#theme-toggle{
+    width:40px; height:40px; flex:0 0 40px; display:inline-flex; align-items:center; justify-content:center;
+    border-radius:50%; border:1px solid var(--line); background:var(--glass); color:inherit;
+    font-family:inherit; font-size:15px; line-height:1; cursor:pointer;
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+}
+#stage{position:fixed; left:0; right:0; top:60px; bottom:0; z-index:0}
+#cv{display:block; width:100%; height:100%; touch-action:none; cursor:crosshair}
+body.pseudo-fs #stage{top:0}
+body.pseudo-fs .top-left-bar{transform:translateY(-140%); opacity:0; pointer-events:none}
+body.pseudo-fs #hud{top:calc(max(8px,env(safe-area-inset-top)) + 8px)}
+
+#hud{
+    position:fixed; top:calc(60px + 10px); left:16px; z-index:14;
+    display:flex; align-items:center; gap:7px; flex-wrap:wrap; max-width:calc(100vw - 200px); pointer-events:none;
+}
+.chip{
+    display:inline-flex; align-items:baseline; gap:6px; padding:6px 11px; border-radius:999px;
+    background:rgba(12,18,32,.7); border:1px solid var(--line); color:#eaf1fb;
+    font-size:11px; font-weight:800; white-space:nowrap; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+.chip b{font-size:14px; font-weight:900; font-variant-numeric:tabular-nums}
+.chip.hot b{color:var(--warn)}
+.chip.cam{color:#cbd5e1}
+.chip.cam.live{color:#6ee7b7; border-color:rgba(52,211,153,.4)}
+.chip.cam.err{color:#fca5a5; border-color:rgba(248,113,113,.4)}
+
+.overlay{
+    position:fixed; inset:0; z-index:40; display:none; align-items:center; justify-content:center; padding:18px;
+    background:rgba(5,8,16,.56); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+}
+.overlay.show{display:flex}
+.card{
+    width:min(520px,100%); max-height:calc(100vh - 40px); overflow-y:auto; padding:22px 22px 20px;
+    border-radius:24px; background:rgba(16,22,38,.95); border:1px solid var(--line);
+    box-shadow:0 24px 60px rgba(0,0,0,.5); text-align:center;
+}
+body.dark-mode .card{background:rgba(8,12,22,.97)}
+.card h1{margin:0 0 6px; font-size:23px; font-weight:900; letter-spacing:-.5px}
+.card p.sub{margin:0 0 14px; font-size:12.5px; font-weight:700; color:var(--muted); line-height:1.6}
+.rule{display:flex; flex-direction:column; gap:7px; text-align:left; margin:0 0 16px}
+.rule div{
+    display:flex; align-items:flex-start; gap:8px; font-size:12px; font-weight:700; color:#cbd5e1;
+    line-height:1.5; padding:8px 11px; border-radius:12px; background:rgba(255,255,255,.05);
+}
+.rule span.ic{flex:0 0 auto; font-size:14px; line-height:1.35}
+.primary{
+    display:inline-flex; align-items:center; justify-content:center; gap:7px; width:100%;
+    padding:13px 18px; border-radius:14px; border:none; cursor:pointer; font-family:inherit;
+    font-size:14.5px; font-weight:900; color:#fff; background:linear-gradient(135deg,#0a84ff,#0060df);
+    box-shadow:0 10px 24px rgba(10,132,255,.32);
+}
+.primary:active{transform:scale(.985)}
+.ghost{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; width:100%; margin-top:8px;
+    padding:11px 14px; border-radius:13px; border:1px solid var(--line); background:transparent;
+    color:inherit; font-family:inherit; font-size:12.5px; font-weight:800; cursor:pointer;
+}
+.big-score{font-size:40px; font-weight:900; letter-spacing:-1px; margin:4px 0 2px; color:#7dd3fc}
+.res-row{display:flex; justify-content:center; gap:8px; margin:10px 0 4px; flex-wrap:wrap}
+.res-row div{flex:1 1 92px; padding:9px 8px; border-radius:13px; background:rgba(255,255,255,.06); border:1px solid var(--line)}
+.res-row b{display:block; font-size:17px; font-weight:900; font-variant-numeric:tabular-nums}
+.res-row span{font-size:10.5px; font-weight:800; color:var(--muted)}
+
+#bar{gap:7px}
+#bar .control-tab-btn{display:inline-flex; align-items:center; gap:5px}
+#bar .control-tab-btn.on{background:#0a84ff !important; color:#fff !important; border-color:#0a84ff !important}
+#fullscreenBtn{border:1px solid var(--line); background:var(--glass); color:inherit; font-family:inherit; font-weight:800; font-size:12.5px; cursor:pointer; border-radius:999px; padding:9px 14px; display:inline-flex; align-items:center; gap:6px; backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px)}
+body.dark-mode #fullscreenBtn{background:rgba(12,18,32,.8); color:#eaf1fb}
+
+.svl-toast{
+    position:fixed; left:50%; bottom:calc(88px + env(safe-area-inset-bottom)); transform:translate(-50%,8px);
+    z-index:2000; max-width:86vw; padding:10px 16px; border-radius:14px; background:rgba(14,20,34,.95);
+    color:#fff; font-size:12.5px; font-weight:700; line-height:1.45; text-align:center;
+    box-shadow:0 10px 26px rgba(0,0,0,.4); opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
+    font-family:inherit;
+}
+.svl-toast.show{opacity:1; transform:translate(-50%,0)}
+
+@media (max-width:900px){
+    .top-left-bar{top:calc(max(6px,env(safe-area-inset-top)) + 6px); left:10px; gap:6px; max-width:calc(100vw - 152px)}
+    .back-btn{padding:7px 11px; font-size:12px}
+    .tag-badge{padding:7px 10px; font-size:12px; gap:5px}
+    .tag-pill{font-size:8.5px; padding:1px 5px}
+    #theme-toggle{width:34px; height:34px; flex:0 0 34px; font-size:13px}
+    .top-right-bar{top:calc(max(6px,env(safe-area-inset-top)) + 8px) !important; right:10px !important}
+    #stage{top:52px}
+    #hud{top:calc(52px + 8px); left:10px; gap:5px; max-width:calc(100vw - 24px)}
+    .chip{padding:5px 9px; font-size:10px; gap:4px}
+    .chip b{font-size:12.5px}
+    body #bar{bottom:calc(52px + env(safe-area-inset-bottom)) !important; gap:5px; padding:4px 8px !important; max-width:calc(100vw - 12px) !important}
+    #bar .control-tab-btn{font-size:10.5px !important; padding:6px 9px !important}
+    #fullscreenBtn{bottom:calc(8px + env(safe-area-inset-bottom)) !important; right:10px !important; padding:7px 11px; font-size:11.5px}
+    .svl-toast{bottom:calc(104px + env(safe-area-inset-bottom))}
+    .card{padding:18px 16px 16px}
+    .card h1{font-size:20px}
+}
+@media (max-width:420px){
+    .tag-badge .t{max-width:96px}
+    .chip.hide-xs{display:none}
+}
+@media (max-height:520px) and (orientation:landscape){
+    #stage{top:44px}
+    #hud{top:calc(44px + 6px)}
+    body #bar{bottom:calc(46px + env(safe-area-inset-bottom)) !important}
+}
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="cv"></canvas></div>
+
+<div class="top-left-bar">
+    <a href="../../index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span><span>메인</span></a>
+    <div class="tag-badge"><span class="t">🎯 핑거 슈팅</span><span class="tag-pill">visionOS</span></div>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button id="theme-toggle" type="button" title="야간 모드" aria-label="야간 모드">🌙</button>
+    </div>
+</div>
+
+<div id="hud">
+    <div class="chip"><span>점수</span><b id="hScore">0</b></div>
+    <div class="chip hot"><span>콤보</span><b id="hCombo">0</b></div>
+    <div class="chip"><span>명중률</span><b id="hAcc">—</b></div>
+    <div class="chip cam hide-xs" id="hCam">🎥 카메라 OFF</div>
+</div>
+
+<div class="overlay show" id="ovStart">
+    <div class="card">
+        <h1>🎯 핑거 슈팅</h1>
+        <p class="sub">검지로 조준하고, 엄지를 접어(핀치) 발사!</p>
+        <div class="rule">
+            <div><span class="ic">☝️</span><span>카메라를 켜면 <b>검지 손끝</b>이 조준점이 돼요. 마우스는 커서, 클릭이 발사예요.</span></div>
+            <div><span class="ic">🤏</span><span>엄지와 검지를 <b>맞대면(핀치)</b> 그 자리에서 발사! 다시 펴면 다음 발이 장전돼요.</span></div>
+            <div><span class="ic">🧪</span><span>표적을 맞히면 점수, 연속 명중이면 <b>콤보 배수</b>가 붙어요.</span></div>
+            <div><span class="ic">🌟</span><span>노란 테두리의 <b>보너스 표적</b>은 점수가 3배!</span></div>
+            <div><span class="ic">⏱️</span><span><b>40초</b> 동안 최고 점수와 명중률에 도전해요.</span></div>
+        </div>
+        <button class="primary" id="btnStart" type="button">🎮 시작하기</button>
+        <button class="ghost" id="btnStartCam" type="button">🎥 카메라 켜고 시작</button>
+    </div>
+</div>
+
+<div class="overlay" id="ovOver">
+    <div class="card">
+        <h1>결과</h1>
+        <div class="big-score" id="rScore">0</div>
+        <p class="sub" id="rMsg">수고했어요!</p>
+        <div class="res-row">
+            <div><b id="rHit">0</b><span>명중</span></div>
+            <div><b id="rAcc">0%</b><span>명중률</span></div>
+            <div><b id="rCombo">0</b><span>최대 콤보</span></div>
+        </div>
+        <button class="primary" id="btnAgain" type="button">🔄 다시 하기</button>
+    </div>
+</div>
+
+<div id="bar" class="bottom-control-bar">
+    <button class="control-tab-btn" id="btnCam" type="button">🎥 카메라</button>
+    <button class="control-tab-btn" id="btnFacing" type="button">📷 전면</button>
+    <button class="control-tab-btn" id="btnFire" type="button">💥 발사</button>
+    <button class="control-tab-btn" id="btnPause" type="button">⏸ 일시정지</button>
+    <button class="control-tab-btn" id="btnReset" type="button">🔄 처음부터</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fsIcon">⛶</span><span id="fsText">전체화면</span>
+    </button>
+</div>
+
+<script src="../common/feedback.js" defer></script>
+<script src="../common/game-core.js"></script>
+<script>
+/* ==========================================================
+   핑거 슈팅 — 검지(8번) 조준 + 엄지-검지 핀치(4↔8) 발사
+   · 마우스: 커서 조준 + 클릭 발사 (동일 규칙)
+   · 움직이는 분자 표적 · 콤보 배수 · 명중률
+   ========================================================== */
+(function () {
+    'use strict';
+    var U = SVL.utils, $ = function (s) { return document.querySelector(s); };
+
+    var cv = $('#cv'), ctx = cv.getContext('2d');
+    var W = 900, H = 620, DPR = 1;
+
+    var theme = SVL.initTheme('theme-toggle', 'svl_shoot_theme');
+    SVL.initFullscreen('fullscreenBtn', 'fsIcon', 'fsText');
+
+    var TARGETS = [
+        { s: 'H₂O', n: '물', c: '#38bdf8' }, { s: 'CO₂', n: '이산화 탄소', c: '#a78bfa' },
+        { s: 'O₂', n: '산소', c: '#4ade80' }, { s: 'N₂', n: '질소', c: '#60a5fa' },
+        { s: 'CH₄', n: '메테인', c: '#fbbf24' }, { s: 'NH₃', n: '암모니아', c: '#f472b6' },
+        { s: 'Na⁺', n: '나트륨 이온', c: '#f87171' }, { s: 'Cl⁻', n: '염화 이온', c: '#34d399' },
+        { s: 'H₂', n: '수소', c: '#c4b5fd' }, { s: 'C₆H₁₂O₆', n: '포도당', c: '#fb923c' }
+    ];
+
+    var G = {
+        mode: 'ready', t: 0, left: 40,
+        score: 0, combo: 0, maxCombo: 0, shots: 0, hits: 0,
+        targets: [], shotsFx: [], parts: [], pops: [], spawnAcc: 0, shake: 0, recoil: 0
+    };
+
+    var cam = SVL.createCamera({
+        onChange: function () { syncCamUI(); },
+        onStatus: function (msg, kind) { setCamChip(msg, kind); }
+    });
+
+    function resize() {
+        var box = $('#stage').getBoundingClientRect();
+        W = Math.max(300, box.width);
+        H = Math.max(320, box.height);
+        DPR = Math.min(2, window.devicePixelRatio || 1);
+        cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+
+    /* ---------------- 입력 ---------------- */
+    var aim = { x: 0, y: 0, tx: 0, ty: 0, live: false, hand: false, lastMove: 0 };
+    var hand = { lm: null, seen: 0, present: false, ready: false, arm: 0 };
+    var handLM = null, lastDetect = 0;
+    var PINCH_CLOSE = 0.55, PINCH_OPEN = 0.78;
+    var pinching = false, lastFire = 0;
+
+    window.addEventListener('pointermove', function (e) {
+        var r = cv.getBoundingClientRect();
+        var x = e.clientX - r.left, y = e.clientY - r.top;
+        if (!aim.live) { aim.x = x; aim.y = y; aim.tx = x; aim.ty = y; aim.live = true; }
+        aim.tx = x; aim.ty = y;
+        if (!aim.hand) { aim.x = x; aim.y = y; }
+        aim.lastMove = performance.now();
+        aim.hand = false;
+    }, { passive: true });
+    cv.addEventListener('pointerdown', function (e) {
+        var r = cv.getBoundingClientRect();
+        aim.tx = e.clientX - r.left; aim.ty = e.clientY - r.top;
+        if (!aim.hand) { aim.x = aim.tx; aim.y = aim.ty; }
+        aim.live = true;
+        fire();
+    });
+
+    function syncCamUI() {
+        var i = cam.info();
+        var b = $('#btnCam'), f = $('#btnFacing');
+        if (b) { b.textContent = i.on ? '🎥 카메라 끄기' : '🎥 카메라'; b.classList.toggle('on', i.on); }
+        if (f) f.textContent = '📷 ' + i.label;
+        if (!i.on) setCamChip('🎥 카메라 OFF · 클릭으로 발사', '');
+    }
+    function setCamChip(txt, kind) {
+        var el = $('#hCam');
+        if (!el) return;
+        el.textContent = txt;
+        el.className = 'chip cam hide-xs' + (kind ? ' ' + kind : '');
+    }
+    function startCam() {
+        cam.start().then(function (ok) {
+            if (!ok) return;
+            SVL.handTracker.get().then(function (lm) {
+                handLM = lm; hand.ready = true;
+                setCamChip('☝️ 검지로 조준 · 핀치로 발사', 'live');
+            }, function () {
+                hand.ready = false;
+                setCamChip('⚠️ 손 인식 불가 · 클릭으로 발사', 'err');
+                SVL.toast('손 인식 모델을 불러오지 못했어요 · 마우스 클릭으로 계속 즐길 수 있어요');
+            });
+        });
+    }
+    function stopCam() {
+        cam.stop();
+        hand.present = false; hand.lm = null;
+        syncCamUI();
+    }
+
+    function lmDist(a, b) {
+        var m = cam.metrics(W, H);
+        var ar = m.vw / m.vh;
+        var dx = (a.x - b.x) * ar, dy = a.y - b.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function trackHand(now) {
+        if (!cam.isOn() || !handLM || cam.video.readyState < 2) return;
+        if (now - lastDetect < 50) return;
+        lastDetect = now;
+        var res = null;
+        try { res = handLM.detectForVideo(cam.video, now); } catch (e) { res = null; }
+        if (!res || !res.landmarks || !res.landmarks.length) {
+            if (now - hand.seen > 420) { hand.present = false; pinching = false; }
+            return;
+        }
+        var lm = res.landmarks[0];
+        hand.lm = lm; hand.seen = now; hand.present = true;
+        var tip = cam.toStage(lm[8].x, lm[8].y, W, H);
+        var wr = cam.toStage(lm[0].x, lm[0].y, W, H);
+        hand.arm = Math.atan2(tip.y - wr.y, tip.x - wr.x);
+        aim.tx = tip.x; aim.ty = tip.y;
+        if (!aim.live) { aim.x = tip.x; aim.y = tip.y; aim.live = true; }
+        aim.hand = true;
+        aim.lastMove = now;
+
+        /* 핀치 비율 (손바닥 폭 대비 엄지-검지 거리) */
+        var palmW = Math.max(lmDist(lm[5], lm[17]), 1e-4);
+        var ratio = lmDist(lm[4], lm[8]) / palmW;
+        var wasPinch = pinching;
+        pinching = wasPinch ? (ratio < PINCH_OPEN) : (ratio < PINCH_CLOSE);
+        if (pinching && !wasPinch) fire();
+    }
+
+    /* ---------------- 발사 ---------------- */
+    function fire() {
+        if (G.mode !== 'play') return;
+        var now = performance.now();
+        if (now - lastFire < 190) return;
+        lastFire = now;
+        G.shots++;
+        G.recoil = 1;
+
+        var hitIdx = -1, best = Infinity;
+        for (var i = 0; i < G.targets.length; i++) {
+            var t = G.targets[i];
+            var d = U.dist(aim.x, aim.y, t.x, t.y);
+            if (d < t.r + 12 && d < best) { best = d; hitIdx = i; }
+        }
+        /* 명중 트레이서 */
+        var from = (cam.isOn() && hand.present) ? cam.toStage(hand.lm[0].x, hand.lm[0].y, W, H)
+            : { x: W / 2, y: H + 20 };
+        G.shotsFx.push({ x1: from.x, y1: from.y, x2: aim.x, y2: aim.y, life: 1, hit: hitIdx >= 0 });
+
+        if (hitIdx >= 0) {
+            var t2 = G.targets[hitIdx];
+            G.hits++;
+            G.combo++;
+            if (G.combo > G.maxCombo) G.maxCombo = G.combo;
+            var mult = t2.bonus ? 3 : U.clamp(1 + Math.floor(G.combo / 3) * 0.5, 1, 4);
+            var gain = Math.round(10 * mult);
+            G.score += gain;
+            burst(t2.x, t2.y, t2.c, 18, 240);
+            pop(t2.x, t2.y2 || t2.y, '+' + gain + (mult > 1 ? ' ×' + mult : ''), t2.bonus ? '#fde68a' : '#a7f3d0');
+            G.shake = 0.5;
+            G.targets.splice(hitIdx, 1);
+            ensureTargets();
+        } else {
+            G.combo = 0;
+            burst(aim.x, aim.y, '#94a3b8', 5, 90);
+        }
+        syncHud();
+    }
+
+    /* ---------------- 표적 ---------------- */
+    function makeTarget(bonus) {
+        var d = U.pick(TARGETS);
+        var r = U.clamp(H * 0.062, 24, 44);
+        var speed = U.rand(W * 0.06, W * 0.13);
+        var m = r * 1.6;
+        var x = 0, y = 0, ok = false;
+        for (var tries = 0; tries < 14 && !ok; tries++) {
+            x = U.rand(m, W - m);
+            y = U.rand(H * 0.16 + m, H * 0.86 - m);
+            ok = true;
+            for (var i = 0; i < G.targets.length; i++) {
+                if (U.dist(x, y, G.targets[i].x, G.targets[i].y) < (r + G.targets[i].r) * 1.25) { ok = false; break; }
+            }
+        }
+        return {
+            x: x, y: y,
+            vx: Math.random() < 0.5 ? -speed : speed, vy: U.rand(-30, 30),
+            r: r, c: d.c, s: d.s, n: d.n, bonus: !!bonus, rot: 0, born: 0, pulse: U.rand(0, 6.28)
+        };
+    }
+    function ensureTargets() {
+        var want = 4;
+        while (G.targets.length < want) {
+            var bonus = Math.random() < 0.18;
+            G.targets.push(makeTarget(bonus));
+        }
+    }
+
+    function burst(x, y, c, n, sp) {
+        for (var i = 0; i < n; i++) {
+            var a = U.rand(0, Math.PI * 2), v = U.rand(sp * 0.3, sp);
+            G.parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, r: U.rand(1.5, 4), color: c });
+        }
+    }
+    function pop(x, y, text, c) { G.pops.push({ x: x, y: y, text: text, color: c, life: 1 }); }
+
+    /* ---------------- 흐름 ---------------- */
+    function startGame() {
+        G.mode = 'play'; G.t = 0; G.left = 40; G.score = 0; G.combo = 0; G.maxCombo = 0;
+        G.shots = 0; G.hits = 0; G.targets = []; G.shotsFx = []; G.parts = []; G.pops = [];
+        G.spawnAcc = 0; G.shake = 0; G.recoil = 0;
+        $('#ovStart').classList.remove('show');
+        $('#ovOver').classList.remove('show');
+        $('#btnPause').textContent = '⏸ 일시정지';
+        ensureTargets();
+        syncHud();
+        SVL.toast(cam.isOn() ? '검지로 조준하고 엄지를 접어 발사!' : '커서로 조준하고 클릭해서 발사!');
+    }
+    function endGame() {
+        G.mode = 'over';
+        $('#rScore').textContent = G.score;
+        $('#rHit').textContent = G.hits;
+        $('#rAcc').textContent = (G.shots ? Math.round(G.hits / G.shots * 100) : 0) + '%';
+        $('#rCombo').textContent = G.maxCombo;
+        $('#rMsg').textContent = G.score >= 400 ? '저격수 등장! 🏆' : (G.score >= 200 ? '훌륭해요! 👏' : '한 번 더 도전해 볼까요?');
+        $('#ovOver').classList.add('show');
+    }
+    function resetGame() {
+        G.mode = 'ready'; G.targets = []; G.shotsFx = []; G.parts = []; G.pops = [];
+        G.score = 0; G.combo = 0; G.shots = 0; G.hits = 0; G.left = 40;
+        $('#ovOver').classList.remove('show');
+        $('#ovStart').classList.add('show');
+        $('#btnPause').textContent = '⏸ 일시정지';
+        syncHud();
+    }
+
+    /* ---------------- 업데이트 ---------------- */
+    function update(dt) {
+        var now = performance.now();
+        trackHand(now);
+
+        /* 조준점 부드럽게 따라가기 */
+        aim.x += (aim.tx - aim.x) * Math.min(1, dt * 18);
+        aim.y += (aim.ty - aim.y) * Math.min(1, dt * 18);
+
+        if (G.mode === 'play') {
+            G.t += dt; G.left = Math.max(0, 40 - G.t);
+            /* 표적 이동 */
+            for (var i = 0; i < G.targets.length; i++) {
+                var t = G.targets[i];
+                t.x += t.vx * dt; t.y += t.vy * dt;
+                t.pulse += dt * 4;
+                if (t.x < t.r * 1.7) { t.x = t.r * 1.7; t.vx = Math.abs(t.vx); }
+                if (t.x > W - t.r * 1.7) { t.x = W - t.r * 1.7; t.vx = -Math.abs(t.vx); }
+                if (t.y < H * 0.14 + t.r * 1.6) { t.y = H * 0.14 + t.r * 1.6; t.vy = Math.abs(t.vy); }
+                if (t.y > H * 0.88 - t.r * 1.6) { t.y = H * 0.88 - t.r * 1.6; t.vy = -Math.abs(t.vy); }
+                if (Math.random() < 0.008) t.vy = -t.vy;
+            }
+            if (G.left <= 0) endGame();
+        }
+
+        for (var s = G.shotsFx.length - 1; s >= 0; s--) {
+            G.shotsFx[s].life -= dt * 3.2;
+            if (G.shotsFx[s].life <= 0) G.shotsFx.splice(s, 1);
+        }
+        for (var p = G.parts.length - 1; p >= 0; p--) {
+            var pt = G.parts[p];
+            pt.vy += 380 * dt; pt.x += pt.vx * dt; pt.y += pt.vy * dt; pt.life -= dt * 1.8;
+            if (pt.life <= 0) G.parts.splice(p, 1);
+        }
+        for (var q = G.pops.length - 1; q >= 0; q--) {
+            var po = G.pops[q]; po.y -= 42 * dt; po.life -= dt * 1.15;
+            if (po.life <= 0) G.pops.splice(q, 1);
+        }
+        G.shake = Math.max(0, G.shake - dt * 2.4);
+        G.recoil = Math.max(0, G.recoil - dt * 4.5);
+    }
+
+    /* ---------------- 그리기 ---------------- */
+    function hexA(hex, a) {
+        var n = parseInt(hex.slice(1), 16);
+        return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+
+    function drawBg() {
+        var camOk = cam.drawCover(ctx, W, H, 1);
+        if (camOk) {
+            var g = ctx.createLinearGradient(0, 0, 0, H);
+            g.addColorStop(0, 'rgba(5,8,18,.56)');
+            g.addColorStop(0.6, 'rgba(5,8,18,.64)');
+            g.addColorStop(1, 'rgba(5,8,18,.76)');
+            ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        } else {
+            var bg = ctx.createRadialGradient(W * 0.5, H * 0.2, 60, W * 0.5, H * 0.4, H * 1.1);
+            bg.addColorStop(0, '#182444');
+            bg.addColorStop(0.6, '#0a1020');
+            bg.addColorStop(1, '#04060c');
+            ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+            ctx.save();
+            for (var i = 0; i < 40; i++) {
+                var sx = (i * 149.7) % W, sy = (i * 199.3) % H;
+                ctx.globalAlpha = 0.08 + (i % 6) * 0.035;
+                ctx.fillStyle = i % 5 === 0 ? '#7dd3fc' : '#ffffff';
+                ctx.beginPath(); ctx.arc(sx, sy, 1.1, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.restore();
+        }
+    }
+
+    function drawTarget(t) {
+        var r = t.r * (1 + Math.sin(t.pulse) * 0.03);
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        var gr = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.5);
+        gr.addColorStop(0, hexA(t.c, 0.4)); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gr;
+        ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2); ctx.fill();
+
+        /* 링 */
+        ctx.strokeStyle = t.bonus ? 'rgba(253,224,71,.95)' : hexA(t.c, 0.9);
+        ctx.lineWidth = t.bonus ? 3.4 : 2.2;
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = t.bonus ? 'rgba(253,224,71,.35)' : hexA(t.c, 0.3);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(0, 0, r * 0.78, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, r * 1.22, 0, Math.PI * 2); ctx.stroke();
+
+        /* 십자 눈금 */
+        ctx.strokeStyle = t.bonus ? 'rgba(253,224,71,.6)' : hexA(t.c, 0.5);
+        ctx.lineWidth = 1.2;
+        [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(function (d) {
+            ctx.beginPath();
+            ctx.moveTo(d[0] * r * 1.24, d[1] * r * 1.24);
+            ctx.lineTo(d[0] * r * 1.38, d[1] * r * 1.38);
+            ctx.stroke();
+        });
+
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        var sLen = (t.s || '').length;
+        var fs = r * (sLen <= 3 ? 0.58 : (sLen <= 5 ? 0.44 : 0.34));
+        ctx.font = '900 ' + Math.round(fs) + 'px "SeoulNamsan", system-ui, sans-serif';
+        while (ctx.measureText(t.s).width > r * 1.55 && fs > r * 0.2) {
+            fs -= r * 0.03;
+            ctx.font = '900 ' + Math.round(fs) + 'px "SeoulNamsan", system-ui, sans-serif';
+        }
+        ctx.fillStyle = '#f8fafc';
+        ctx.strokeStyle = 'rgba(4,8,16,.9)'; ctx.lineWidth = 3.4;
+        ctx.strokeText(t.s, 0, -r * 0.12);
+        ctx.fillText(t.s, 0, -r * 0.12);
+        ctx.font = '800 ' + Math.round(r * 0.27) + 'px "SeoulNamsan", sans-serif';
+        ctx.fillStyle = t.bonus ? '#fde68a' : 'rgba(226,232,240,.92)';
+        ctx.strokeText(t.n, 0, r * 0.48);
+        ctx.fillText(t.n, 0, r * 0.48);
+        ctx.restore();
+    }
+
+    function drawCrosshair() {
+        if (!aim.live || G.mode === 'ready' || G.mode === 'over') return;
+        var x = aim.x, y = aim.y;
+        ctx.save();
+        ctx.strokeStyle = pinching ? 'rgba(52,211,153,.95)' : 'rgba(248,113,113,.92)';
+        ctx.lineWidth = 2.2;
+        var r = 16 + G.recoil * 8;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+        [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(function (d) {
+            ctx.beginPath();
+            ctx.moveTo(x + d[0] * (r + 4), y + d[1] * (r + 4));
+            ctx.lineTo(x + d[0] * (r + 13), y + d[1] * (r + 13));
+            ctx.stroke();
+        });
+        ctx.fillStyle = 'rgba(255,255,255,.9)';
+        ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
+        /* 팔 방향 안내 */
+        if (cam.isOn() && hand.present && hand.lm) {
+            var wr = cam.toStage(hand.lm[0].x, hand.lm[0].y, W, H);
+            ctx.setLineDash([5, 7]);
+            ctx.strokeStyle = 'rgba(148,163,184,.5)';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath(); ctx.moveTo(wr.x, wr.y); ctx.lineTo(x, y); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        ctx.restore();
+    }
+
+    function drawFx() {
+        for (var i = 0; i < G.shotsFx.length; i++) {
+            var s = G.shotsFx[i];
+            ctx.globalAlpha = Math.max(0, s.life);
+            ctx.strokeStyle = s.hit ? 'rgba(253,224,71,.9)' : 'rgba(148,163,184,.75)';
+            ctx.lineWidth = s.hit ? 3 : 1.8;
+            ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        for (var j = 0; j < G.parts.length; j++) {
+            var p = G.parts[j];
+            ctx.globalAlpha = Math.max(0, p.life);
+            ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (var k = 0; k < G.pops.length; k++) {
+            var po = G.pops[k];
+            ctx.globalAlpha = Math.max(0, Math.min(1, po.life * 1.4));
+            ctx.font = '900 ' + Math.round(U.clamp(H * 0.036, 15, 24)) + 'px "SeoulNamsan", sans-serif';
+            ctx.strokeStyle = 'rgba(4,8,16,.85)'; ctx.lineWidth = 4;
+            ctx.strokeText(po.text, po.x, po.y);
+            ctx.fillStyle = po.color;
+            ctx.fillText(po.text, po.x, po.y);
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    function drawTimer() {
+        if (G.mode !== 'play') return;
+        ctx.save();
+        ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+        ctx.font = '900 ' + Math.round(U.clamp(H * 0.05, 19, 30)) + 'px "SeoulNamsan", sans-serif';
+        ctx.fillStyle = G.left <= 8 ? '#f87171' : 'rgba(234,241,251,.92)';
+        ctx.strokeStyle = 'rgba(4,8,16,.6)'; ctx.lineWidth = 5;
+        ctx.strokeText(Math.ceil(G.left) + '초', W - 16, 12);
+        ctx.fillText(Math.ceil(G.left) + '초', W - 16, 12);
+        ctx.restore();
+    }
+
+    function drawPaused() {
+        if (G.mode !== 'pause') return;
+        ctx.fillStyle = 'rgba(4,8,16,.6)'; ctx.fillRect(0, 0, W, H);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = '900 ' + Math.round(U.clamp(H * 0.055, 20, 32)) + 'px "SeoulNamsan", sans-serif';
+        ctx.fillStyle = '#eaf1fb';
+        ctx.fillText('⏸ 일시정지', W / 2, H / 2 - 6);
+        ctx.font = '800 13px "SeoulNamsan", sans-serif';
+        ctx.fillStyle = 'rgba(203,213,225,.85)';
+        ctx.fillText('아래 [▶ 계속] 을 눌러 이어서 하세요', W / 2, H / 2 + 26);
+    }
+
+    function draw() {
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        ctx.save();
+        if (G.shake > 0) {
+            var s = G.shake * 7;
+            ctx.translate(U.rand(-s, s), U.rand(-s, s));
+        }
+        drawBg();
+        for (var i = 0; i < G.targets.length; i++) drawTarget(G.targets[i]);
+        drawFx();
+        ctx.restore();
+        drawCrosshair();
+        drawTimer();
+        drawPaused();
+    }
+
+    var lastHud = { s: -1, c: -1, a: '' };
+    function syncHud() {
+        if (G.score !== lastHud.s) { $('#hScore').textContent = G.score; lastHud.s = G.score; }
+        var c = G.combo > 0 ? '×' + G.combo : '0';
+        if (c !== lastHud.c) { $('#hCombo').textContent = c; lastHud.c = c; }
+        var a = G.shots ? Math.round(G.hits / G.shots * 100) + '%' : '—';
+        if (a !== lastHud.a) { $('#hAcc').textContent = a; lastHud.a = a; }
+    }
+
+    var last = 0;
+    function loop(ts) {
+        var dt = last ? Math.min(0.05, (ts - last) / 1000) : 0.016;
+        last = ts;
+        update(dt);
+        draw();
+        syncHud();
+        requestAnimationFrame(loop);
+    }
+
+    $('#btnStart').addEventListener('click', startGame);
+    $('#btnStartCam').addEventListener('click', function () { startCam(); setTimeout(startGame, 60); });
+    $('#btnAgain').addEventListener('click', startGame);
+    $('#btnReset').addEventListener('click', resetGame);
+    $('#btnCam').addEventListener('click', function () { if (cam.isOn()) stopCam(); else startCam(); });
+    $('#btnFacing').addEventListener('click', function () { cam.toggleFacing().then(syncCamUI); });
+    $('#btnFire').addEventListener('click', function () { fire(); });
+    $('#btnPause').addEventListener('click', function () {
+        if (G.mode === 'play') { G.mode = 'pause'; this.textContent = '▶ 계속'; }
+        else if (G.mode === 'pause') { G.mode = 'play'; this.textContent = '⏸ 일시정지'; }
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            if (G.mode === 'play') fire();
+        }
+    });
+
+    resize();
+    window.addEventListener('resize', resize);
+    syncCamUI(); syncHud();
+    requestAnimationFrame(loop);
+
+    window.__shoot = {
+        get state() {
+            return {
+                mode: G.mode, score: G.score, combo: G.combo, maxCombo: G.maxCombo,
+                shots: G.shots, hits: G.hits, left: Math.round(G.left * 10) / 10,
+                targets: G.targets.length, camOn: cam.isOn(), facing: cam.facing(),
+                handPresent: hand.present, pinching: pinching,
+                aim: { x: Math.round(aim.x), y: Math.round(aim.y) },
+                targetList: G.targets.map(function (t) { return { x: Math.round(t.x), y: Math.round(t.y), r: Math.round(t.r), s: t.s }; }),
+                stage: { w: Math.round(W), h: Math.round(H) }
+            };
+        },
+        start: startGame, reset: resetGame, fire: fire,
+        aimAt: function (x, y) { aim.live = true; aim.tx = x; aim.ty = y; aim.x = x; aim.y = y; aim.hand = false; }
+    };
+})();
+</script>
+</body>
+</html>
