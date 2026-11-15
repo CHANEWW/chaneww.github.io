@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.62">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>화산 분출과 화성암 3D</title>
+<meta name="description" content="SiO₂ 함량과 냉각 위치에 따라 달라지는 화산 분출과 화성암의 알갱이를 3D로 비교하는 실험">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<style>
+
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eef2f8; color: #1c1c1e;
+    transition: background-color 0.35s ease, color 0.35s ease;
+    -webkit-user-select: none; user-select: none;
+}
+#canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+#canvas-container canvas { display: block; touch-action: none; }
+
+/* ---------- visionOS 글래스모피즘 ---------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* ---------- 상단 좌측 ---------- */
+.top-left-bar { position: absolute; top: 16px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px;
+    text-decoration: none; color: #1c1c1e; font-weight: bold; font-size: 13.5px; cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease; border: none; font-family: inherit; white-space: nowrap;
+}
+.back-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.tag-badge { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+.tag-pill { background: rgba(0, 122, 255, 0.14); color: #007aff; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 800; letter-spacing: 0.2px; }
+.qr-btn-icon { font-size: 14px; line-height: 1; }
+.qr-btn-label { font-size: 12.5px; }
+
+/* ---------- 상단 우측 ---------- */
+.top-right-bar { position: absolute; top: 16px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex: 0 0 40px;
+    border: none; color: #1c1c1e; font-family: inherit; transition: all 0.2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.data-card { display: inline-flex; align-items: center; gap: 14px; padding: 7px 16px; border-radius: 16px; }
+.data-item { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.data-label { font-size: 9.5px; color: #64748b; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value { font-size: 13.5px; font-weight: 900; color: #0284c7; margin-top: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+
+/* ---------- 중앙 힌트 ---------- */
+.center-tooltip {
+    position: absolute; top: 84px; left: 46%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 16px; font-size: 11.5px; font-weight: bold; color: #334155;
+    pointer-events: none; z-index: 10; white-space: normal; text-align: center; line-height: 1.5;
+    letter-spacing: -0.2px; transition: opacity 0.35s ease; max-width: min(700px, calc(100vw - 460px)); word-break: keep-all;
+}
+.center-tooltip.hidden { opacity: 0; }
+
+/* ---------- 하단 중앙 ---------- */
+.bottom-ctrl-bar {
+    position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; z-index: 40;
+}
+.action-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.92); color: #1c1c1e;
+    font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.action-btn:hover { background: #fff; transform: translateY(-1px); }
+.action-btn.on { background: #0f172a; color: #fff; border-color: #0f172a; }
+
+/* ---------- 우측 하단 전체화면 ---------- */
+.bottom-right-bar { position: absolute; bottom: 22px; right: 20px; z-index: 45; }
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+    border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 800; color: #1c1c1e; white-space: nowrap;
+}
+
+/* ---------- 우측 조절 패널 ---------- */
+.side-ctrl-panel {
+    position: absolute; right: 20px; bottom: 76px; width: 232px; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px; z-index: 60; border-radius: 18px;
+    max-height: calc(100vh - 150px);
+}
+.panel-title {
+    font-size: 12px; font-weight: 800; color: #475569; letter-spacing: -0.2px; text-align: center;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); flex: 0 0 auto;
+}
+.panel-body { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg.four { grid-template-columns: repeat(4, 1fr); }
+.seg-btn {
+    padding: 8px 1px; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; letter-spacing: -0.3px; transition: all 0.2s ease;
+}
+.seg-btn:hover { background: #ffffff; }
+.seg-btn.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.seg-btn.accent.active { background: #0ea5e9; border-color: #0ea5e9; }
+.btn-start {
+    width: 100%; padding: 11px 8px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb); color: #ffffff; font-family: inherit;
+    font-size: 12.5px; font-weight: 900; letter-spacing: -0.2px; cursor: pointer;
+    box-shadow: 0 5px 16px rgba(37, 99, 235, 0.28); transition: all 0.2s ease; white-space: nowrap;
+}
+.btn-start:hover { transform: translateY(-1px); }
+.btn-start.on { background: linear-gradient(135deg, #22c55e, #0d9488); box-shadow: 0 5px 16px rgba(13, 148, 136, 0.26); }
+.btn-start.off { background: linear-gradient(135deg, #94a3b8, #64748b); box-shadow: 0 5px 16px rgba(100, 116, 139, 0.24); }
+.btn-ghost {
+    width: 100%; padding: 9px 8px; border-radius: 12px; border: 1px dashed rgba(37, 99, 235, 0.35);
+    background: rgba(37, 99, 235, 0.07); color: #1d4ed8; font-family: inherit; font-size: 11.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.2s ease; letter-spacing: -0.3px;
+}
+.btn-ghost:hover { background: rgba(37, 99, 235, 0.14); }
+.ctrl-row { display: flex; align-items: center; gap: 4px; }
+.ctrl-row .lbl { flex: 0 0 30px; font-size: 9.5px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.mini {
+    flex: 1 1 0; min-width: 0; padding: 6px 0; border-radius: 9px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.18s ease;
+}
+.mini:hover { background: #ffffff; }
+.mini.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.slider-row { display: flex; flex-direction: column; gap: 3px; }
+.slider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.slider-name { font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.slider-val { font-size: 10.5px; font-weight: 900; color: #2563eb; font-variant-numeric: tabular-nums; white-space: nowrap; }
+input[type="range"].ctrl-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px;
+    background: #e2e8f0; outline: none; cursor: pointer; margin: 0;
+}
+input[type="range"].ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: #3b82f6; cursor: pointer; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4); border: 2px solid #fff;
+}
+input[type="range"].ctrl-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: #3b82f6; border: 2px solid #fff; cursor: pointer;
+}
+.state-badge {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    padding: 7px 8px; border-radius: 12px; background: rgba(2, 132, 199, 0.09);
+    border: 1px dashed rgba(2, 132, 199, 0.28); font-size: 10.5px; font-weight: 800; color: #0369a1;
+    letter-spacing: -0.3px; text-align: center; overflow: hidden;
+}
+.state-badge .sb-note { font-size: 8.5px; font-weight: 700; opacity: 0.82; white-space: nowrap; }
+.state-badge.good { background: rgba(22, 163, 74, 0.11); border-color: rgba(22, 163, 74, 0.32); color: #15803d; }
+.state-badge.warn { background: rgba(234, 88, 12, 0.11); border-color: rgba(234, 88, 12, 0.32); color: #c2410c; }
+
+/* ---------- 좌측 데이터/그래프 패널 ---------- */
+.sub-panel {
+    position: absolute; right: 264px; bottom: 76px; width: 340px; max-height: 78vh; overflow-y: auto;
+    display: none; flex-direction: column; gap: 10px; padding: 13px 15px; border-radius: 18px; z-index: 55;
+    -webkit-overflow-scrolling: touch;
+}
+.sub-panel.show { display: flex; }
+@media (min-width: 901px) {
+    body .sub-panel.left { left: 20px !important; right: auto !important; top: auto !important; bottom: 76px !important; width: 318px !important; max-width: 318px !important; max-height: 62vh !important; }
+}
+.sub-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.sub-panel-title { font-size: 12.5px; font-weight: 800; color: #1e293b; letter-spacing: -0.3px; }
+.sub-close { background: rgba(0, 0, 0, 0.06); border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 11px; font-weight: bold; color: #64748b; font-family: inherit; flex: 0 0 24px; }
+.graph-canvas { width: 100%; height: 178px; display: block; border-radius: 12px; background: rgba(248, 250, 252, 0.9); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 9.5px; font-weight: 800; color: #64748b; }
+.legend i { display: inline-block; width: 14px; height: 8px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.note { font-size: 9.5px; color: #7c8899; line-height: 1.45; letter-spacing: -0.2px; }
+
+/* ---------- 통계 막대 ---------- */
+.stat-block { display: flex; flex-direction: column; gap: 5px; }
+.stat-title { font-size: 10.5px; font-weight: 900; color: #334155; letter-spacing: -0.3px; display: flex; justify-content: space-between; align-items: center; }
+.stat-title b { color: #2563eb; font-variant-numeric: tabular-nums; }
+.stat-row { display: grid; grid-template-columns: 62px 1fr 54px; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; }
+.stat-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-row .bar { height: 9px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; }
+.stat-row .bar i { display: block; height: 100%; width: 0%; border-radius: 999px; transition: width 0.35s ease; }
+.stat-row .vl { text-align: right; font-variant-numeric: tabular-nums; color: #0f172a; }
+.mini-table { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; }
+.mini-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; padding: 2px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.3); }
+.mini-row .vl { font-variant-numeric: tabular-nums; color: #0f172a; }
+.hr { height: 1px; background: rgba(0, 0, 0, 0.07); margin: 1px 0; }
+
+/* ---------- 다크 모드 ---------- */
+body.dark-mode { background-color: #0b1220; color: #e2e8f0; }
+body.dark-mode .glass-panel { background-color: rgba(22, 30, 45, 0.92); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45); }
+body.dark-mode .sub-panel, body.dark-mode .side-ctrl-panel { background-color: rgba(22, 30, 45, 0.94); }
+body.dark-mode .back-btn, body.dark-mode .tag-badge, body.dark-mode .icon-btn { color: #e2e8f0; }
+body.dark-mode .data-label { color: #94a3b8; }
+body.dark-mode .data-value { color: #38bdf8; }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.12); }
+body.dark-mode .panel-title { color: #94a3b8; border-bottom-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .seg-btn, body.dark-mode .mini { background: rgba(44, 54, 74, 0.92); border-color: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+body.dark-mode .seg-btn.active { background: #e2e8f0; border-color: #e2e8f0; color: #0f172a; }
+body.dark-mode .seg-btn.accent.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+body.dark-mode .mini.active { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+body.dark-mode .state-badge { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3); }
+body.dark-mode .state-badge.good { background: rgba(34, 197, 94, 0.16); color: #86efac; border-color: rgba(34, 197, 94, 0.34); }
+body.dark-mode .state-badge.warn { background: rgba(251, 146, 60, 0.16); color: #fdba74; border-color: rgba(251, 146, 60, 0.34); }
+body.dark-mode .action-btn, body.dark-mode .fullscreen-btn { background: rgba(44, 54, 74, 0.92); color: #e2e8f0; border-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .action-btn.on { background: #e2e8f0; color: #0f172a; }
+body.dark-mode .sub-panel-title { color: #f1f5f9; }
+body.dark-mode .sub-close { background: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+body.dark-mode .graph-canvas { background: rgba(15, 23, 42, 0.9); }
+body.dark-mode .legend, body.dark-mode .note { color: #94a3b8; }
+body.dark-mode .center-tooltip { color: #cbd5e1; }
+body.dark-mode .stat-title, body.dark-mode .stat-row { color: #cbd5e1; }
+body.dark-mode .stat-row .vl, body.dark-mode .mini-row .vl { color: #f1f5f9; }
+body.dark-mode .mini-row { color: #cbd5e1; border-bottom-color: rgba(148, 163, 184, 0.22); }
+body.dark-mode input[type="range"].ctrl-slider { background: #334155; }
+
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 공통 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+@media (max-width: 900px) {
+    .top-left-bar { top: max(8px, env(safe-area-inset-top)) !important; left: 8px !important; right: 56px !important; gap: 6px !important; flex-wrap: nowrap !important; align-items: center !important; overflow: hidden; }
+    .top-left-bar .back-btn, .top-left-bar > a { flex: 0 0 auto; padding: 6px 10px !important; font-size: 12px !important; gap: 4px !important; white-space: nowrap; }
+    .top-left-bar .tag-badge { flex: 0 1 auto; min-width: 0; padding: 6px 10px !important; font-size: 12px !important; gap: 5px !important; white-space: nowrap; overflow: hidden; }
+    .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .qr-btn-label { display: none !important; }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    .top-right-bar { top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important; right: 8px !important; gap: 6px !important; flex-wrap: nowrap !important; }
+    .data-card { flex: 0 1 auto; min-width: 0; gap: 7px !important; padding: 5px 9px !important; overflow: hidden; }
+    .data-item { min-width: 0; }
+    .data-label { font-size: 8.5px !important; line-height: 1.2; letter-spacing: -0.4px; }
+    .data-value { font-size: 12px !important; line-height: 1.25; }
+    .data-sep { height: 18px; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 34px; }
+
+    body.is-3d .bottom-right-bar { top: max(8px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 8px !important; left: auto !important; z-index: 20; }
+    body .bottom-right-bar button { padding: 7px 10px !important; font-size: 14px !important; gap: 4px !important; line-height: 1; }
+    body .bottom-right-bar #fullscreenText { display: none !important; }
+
+    .center-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 78px) !important; left: 8px !important; right: 8px !important;
+        transform: none !important; margin: 0 auto; width: auto !important; max-width: none !important;
+        font-size: 11px !important; padding: 6px 12px !important; white-space: normal !important;
+        line-height: 1.45; text-align: center; z-index: 15 !important; text-overflow: clip;
+    }
+
+    .bottom-ctrl-bar { left: 8px !important; right: 8px !important; bottom: calc(6px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; border-radius: 16px !important; padding: 6px !important; gap: 5px !important; justify-content: center !important; flex-wrap: wrap !important; }
+    .action-btn { padding: 7px 12px !important; font-size: 11.5px !important; }
+
+    .side-ctrl-panel { right: 8px !important; left: auto !important; bottom: calc(60px + env(safe-area-inset-bottom)) !important; width: min(212px, calc(100vw - 16px)) !important; padding: 8px !important; gap: 6px !important; max-height: 46vh !important; }
+    .panel-title { font-size: 10.5px !important; padding-bottom: 4px !important; }
+    .seg-btn { padding: 7px 1px !important; font-size: 9.5px !important; }
+    .btn-start { padding: 9px 6px !important; font-size: 11.5px !important; }
+    .btn-ghost { padding: 7px 6px !important; font-size: 10px !important; }
+    .ctrl-row .lbl { font-size: 9px !important; flex-basis: 28px !important; }
+    .mini { padding: 5px 0 !important; font-size: 9.5px !important; }
+    .slider-name { font-size: 9.5px !important; }
+    .slider-val { font-size: 10px !important; }
+    .state-badge { font-size: 9.5px !important; padding: 6px 6px !important; }
+
+    .sub-panel { left: 8px !important; right: 8px !important; bottom: calc(66px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; max-width: none !important; max-height: 42vh !important; padding: 10px 12px !important; gap: 7px !important; }
+    .sub-panel-title { font-size: 11px !important; }
+    .graph-canvas { height: 140px !important; }
+    .legend { font-size: 8.5px !important; gap: 7px !important; }
+    .note { font-size: 8.5px !important; }
+    .stat-row { grid-template-columns: 56px 1fr 48px; font-size: 9px; }
+}
+
+@media (max-width: 430px) {
+    .tag-pill { display: none !important; }
+    .data-label { font-size: 8px !important; }
+    .data-value { font-size: 11px !important; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)) !important; left: 6px !important; right: auto !important; max-width: 46vw; gap: 5px; }
+    .top-left-bar .back-btn, .top-left-bar > a, .top-left-bar .tag-badge { padding: 4px 9px !important; font-size: 11px !important; height: 30px; }
+    .tag-pill { display: none !important; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)) !important; right: 72px !important; left: auto !important; gap: 5px; flex-direction: column !important; align-items: flex-end !important; }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; flex: 0 0 28px; }
+    body.is-3d .bottom-right-bar { top: max(6px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 6px !important; z-index: 20; }
+    body.is-3d .bottom-right-bar button { padding: 4px 8px !important; font-size: 13px !important; }
+    body.is-3d .bottom-right-bar #fullscreenText { display: none !important; }
+    .center-tooltip { top: auto !important; bottom: 48px !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; width: max-content !important; max-width: 46vw !important; font-size: 10px !important; padding: 4px 9px !important; line-height: 1.3; white-space: nowrap !important; }
+    .side-ctrl-panel { top: 44px !important; right: 8px !important; left: auto !important; bottom: auto !important; width: 196px !important; max-height: calc(100vh - 56px) !important; padding: 7px 8px !important; gap: 5px !important; overflow-y: auto !important; }
+    .panel-title { font-size: 9.5px !important; padding-bottom: 3px !important; }
+    .seg-btn { padding: 5px 1px !important; font-size: 9px !important; }
+    .btn-start { padding: 6px 4px !important; font-size: 10px !important; }
+    .btn-ghost { padding: 5px 4px !important; font-size: 9px !important; }
+    .ctrl-row .lbl { font-size: 8px !important; flex-basis: 22px !important; }
+    .mini { padding: 3px 0 !important; font-size: 8.5px !important; }
+    .slider-name { font-size: 8.5px !important; }
+    .slider-val { font-size: 9px !important; }
+    .state-badge { font-size: 8.5px !important; padding: 4px 4px !important; }
+    .bottom-ctrl-bar { left: 50% !important; right: auto !important; bottom: 4px !important; transform: translateX(-50%) !important; width: auto !important; max-width: calc(100vw - 12px); border-radius: 14px !important; padding: 4px 8px !important; gap: 3px !important; }
+    .action-btn { padding: 5px 11px !important; font-size: 10px !important; }
+    .sub-panel { left: auto !important; right: 8px !important; top: 44px !important; bottom: auto !important; width: min(320px, calc(100vw - 220px)) !important; max-width: none !important; max-height: calc(100vh - 56px) !important; padding: 8px 10px !important; gap: 6px !important; }
+    .graph-canvas { height: 118px !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .center-tooltip { display: none !important; }
+html.pseudo-fs .top-right-bar { display: flex !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
+
+
+.lens-tag { display:flex; align-items:center; justify-content:space-between; padding:6px 9px; border-radius:10px;
+    background:rgba(15,23,42,0.05); font-size:9.5px; font-weight:800; color:#475569; letter-spacing:-0.2px; }
+.lens-tag b { color:#0f172a; font-size:10.5px; }
+body.dark-mode .lens-tag { background:rgba(255,255,255,0.07); color:#cbd5e1; }
+body.dark-mode .lens-tag b { color:#f1f5f9; }
+
+</style>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+</head>
+<body class="is-3d">
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>화산 분출과 화성암 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+
+<div class="data-item"><span class="data-label">SiO₂</span><span class="data-value" id="dSio2">52%</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label">냉각</span><span class="data-value" id="dCool">지표 · 빠름</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label">암석</span><span class="data-value" id="dRock">현무암</span></div>
+
+    </div>
+</div>
+
+<div class="center-tooltip glass-panel" id="centerTooltip">🌋 SiO₂ 함량과 냉각 위치를 바꾸며 분출과 암석 알갱이를 비교해 보세요.</div>
+
+<div class="bottom-ctrl-bar glass-panel">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+    <div class="panel-title">🌋 화산 조절</div>
+    <div class="panel-body">
+
+<div class="seg" id="segMode">
+  <button class="seg-btn active" data-mode="surface">🏔 지표 냉각</button>
+  <button class="seg-btn" data-mode="deep">🕳 지하 냉각</button>
+</div>
+<div class="slider-row">
+  <div class="slider-head"><span class="slider-name">SiO₂ 함량</span><span class="slider-val" id="sio2Val">52 %</span></div>
+  <input type="range" class="ctrl-slider" id="sio2" min="45" max="75" step="1" value="52">
+</div>
+<button class="btn-start" id="btnErupt">🌋 분출 시작</button>
+<div class="state-badge"><span id="coolTxt">대기</span><span class="sb-note">냉각 진행</span>
+  <div style="width:100%;height:4px;border-radius:999px;background:rgba(2,132,199,0.16);margin-top:3px;overflow:hidden"><i id="coolBar" style="display:block;height:100%;width:0%;background:#0ea5e9;border-radius:999px"></i></div>
+</div>
+<div class="hr"></div>
+<div class="panel-title" style="border:0;padding:0 0 2px">🔍 암석 6종 비교</div>
+<div class="seg three">
+  <button class="seg-btn" data-rock="basalt">현무암</button>
+  <button class="seg-btn" data-rock="andesite">안산암</button>
+  <button class="seg-btn" data-rock="rhyolite">유문암</button>
+</div>
+<div class="seg three">
+  <button class="seg-btn" data-rock="gabbro">반려암</button>
+  <button class="seg-btn" data-rock="diorite">섬록암</button>
+  <button class="seg-btn" data-rock="granite">화강암</button>
+</div>
+<div class="lens-tag" id="lensTag"><b>현무암</b><span>0.5 mm 이하</span></div>
+
+    </div>
+</div>
+
+
+<script>
+/* ============ 공통 3D 기반 (씬·카메라·조명·테마·반응형) ============ */
+window.SVL = (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var LIGHT_BG = 0xeef2f8, DARK_BG = 0x0b1220;
+
+    var container = $('canvas-container');
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(LIGHT_BG);
+
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / Math.max(1, window.innerHeight), 0.1, 400);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 3;
+    controls.maxDistance = 60;
+    controls.minPolarAngle = Math.PI * 0.06;
+    controls.maxPolarAngle = Math.PI * 0.55;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    if (THREE.TOUCH) { controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; }
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0xd7e2ee, 0.78);
+    scene.add(hemi);
+    var key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(6, 18, 9);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.left = -12;
+    key.shadow.camera.right = 12;
+    key.shadow.camera.top = 12;
+    key.shadow.camera.bottom = -12;
+    key.shadow.camera.near = 1;
+    key.shadow.camera.far = 50;
+    key.shadow.radius = 3;
+    scene.add(key);
+    var fill = new THREE.DirectionalLight(0xffffff, 0.34);
+    fill.position.set(-7, 6, -6);
+    scene.add(fill);
+
+    var benchMat = new THREE.MeshStandardMaterial({ color: 0xdfe8f3, roughness: 0.94, metalness: 0.02 });
+    var bench = new THREE.Mesh(new THREE.PlaneGeometry(90, 60), benchMat);
+    bench.rotation.x = -Math.PI / 2;
+    bench.receiveShadow = true;
+    scene.add(bench);
+
+    /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ---- */
+    var labelList = [];
+    function drawLabel(cv, text, color) {
+        var g = cv.getContext('2d');
+        g.clearRect(0, 0, 512, 128);
+        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        var tw = Math.min(470, g.measureText(text).width + 46);
+        var x0 = (512 - tw) / 2, r = 30;
+        g.fillStyle = 'rgba(255,255,255,0.93)';
+        g.beginPath();
+        g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
+        g.quadraticCurveTo(x0 + tw, 22, x0 + tw, 22 + r);
+        g.lineTo(x0 + tw, 106 - r);
+        g.quadraticCurveTo(x0 + tw, 106, x0 + tw - r, 106);
+        g.lineTo(x0 + r, 106);
+        g.quadraticCurveTo(x0, 106, x0, 106 - r);
+        g.lineTo(x0, 22 + r);
+        g.quadraticCurveTo(x0, 22, x0 + r, 22);
+        g.closePath();
+        g.fill();
+        g.fillStyle = color || '#124';
+        g.fillText(text, 256, 66);
+    }
+    function makeLabel(text, color, w) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 128;
+        drawLabel(cv, text, color);
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+        var ww = w || 1.9;
+        spr.scale.set(ww, ww * 0.25, 1);
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color };
+        labelList.push(spr);
+        return spr;
+    }
+    function relabelAll() {
+        for (var i = 0; i < labelList.length; i++) {
+            var L = labelList[i].userData.label;
+            if (!L) continue;
+            drawLabel(L.cv, L.text, L.color);
+            if (L.tex) L.tex.needsUpdate = true;
+        }
+    }
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { setTimeout(relabelAll, 30); }).catch(function () {});
+    }
+    window.addEventListener('load', function () { setTimeout(relabelAll, 120); });
+
+    /* ---- 안내 문구 ---- */
+    var hintEl = $('centerTooltip');
+    var hintTimer = null;
+    function setHint(text, sticky) {
+        if (!hintEl) return;
+        hintEl.textContent = text;
+        hintEl.classList.remove('hidden');
+        if (hintTimer) clearTimeout(hintTimer);
+        if (!sticky) hintTimer = setTimeout(function () { hintEl.classList.add('hidden'); }, 5200);
+    }
+
+    /* ---- 테마 ---- */
+    var isDark = false;
+    var themeCbs = [];
+    function applyTheme() {
+        document.body.classList.toggle('dark-mode', isDark);
+        scene.background = new THREE.Color(isDark ? DARK_BG : LIGHT_BG);
+        benchMat.color.setHex(isDark ? 0x16203a : 0xdfe8f3);
+        hemi.intensity = isDark ? 0.42 : 0.78;
+        key.intensity = isDark ? 0.82 : 1.05;
+        fill.intensity = isDark ? 0.26 : 0.34;
+        $('themeBtn').textContent = isDark ? '☀️' : '🌙';
+        $('themeBtn').title = isDark ? '주간 모드로 전환' : '야간 모드로 전환';
+        for (var i = 0; i < themeCbs.length; i++) { try { themeCbs[i](isDark); } catch (e) {} }
+    }
+    $('themeBtn').addEventListener('click', function () { isDark = !isDark; applyTheme(); });
+
+    /* ---- 크기/시점 ---- */
+    function onResize() {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        camera.updateProjectionMatrix();
+        if (typeof svlFit === 'function') svlFit();
+    }
+    var svlFit = null;
+
+    window.addEventListener('resize', onResize);
+
+    /* ---- 실험 훅 ---- */
+    var hooks = { reset: null, align: null, fit: null };
+    $('btnReset').addEventListener('click', function () { if (hooks.reset) hooks.reset(); else { svlFit && svlFit(); } });
+    $('btnAlign').addEventListener('click', function () {
+        if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit();
+        setHint('🎥 정면 시점으로 정렬했습니다.', false);
+    });
+
+    function alignView() { if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit(); }
+
+    var frameCbs = [];
+    var clock = new THREE.Clock();
+    var last = performance.now();
+    function frame(now) {
+        requestAnimationFrame(frame);
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        for (var i = 0; i < frameCbs.length; i++) { try { frameCbs[i](dt, now); } catch (e) {} }
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    requestAnimationFrame(frame);
+
+    return {
+        $: $, scene: scene, camera: camera, renderer: renderer, controls: controls,
+        hemi: hemi, key: key, fill: fill, benchMat: benchMat,
+        LIGHT_BG: LIGHT_BG, DARK_BG: DARK_BG,
+        makeLabel: makeLabel, setHint: setHint, relabel: relabelAll,
+        onTheme: function (fn) { themeCbs.push(fn); },
+        onFrame: function (fn) { frameCbs.push(fn); },
+        isDark: function () { return isDark; },
+        hooks: hooks,
+        setFit: function (fn) { hooks.fit = fn; svlFit = fn; window.svlFitCamera = fn; },
+        setReset: function (fn) { hooks.reset = fn; },
+        setAlign: function (fn) { hooks.align = fn; },
+        alignView: alignView
+    };
+})();
+</script>
+<script>
+
+(function () {
+  'use strict';
+  var S = window.SVL, $ = S.$, scene = S.scene;
+
+  /* ---------- 규격 ---------- */
+  var R = 5.5, GH = 2.9, TOP = 2.98;      /* 지반 반지름 / 깊이 / 화산 최대 높이 */
+  var PX = 120;                            /* 단면 캔버스 1m = 120px */
+
+  var ROCKS = {
+    basalt:   { name: '현무암',  base: '#494d53', cry: '#6f757c', dark: '#2f3338', grain: 'fine',   size: '0.5 mm 이하', txt: '어두운 색 · 알갱이 작음' },
+    andesite: { name: '안산암',  base: '#767c83', cry: '#a2a9af', dark: '#4c5157', grain: 'fine',   size: '0.5 mm 이하', txt: '회색 · 알갱이 작음' },
+    rhyolite: { name: '유문암',  base: '#cdc4b6', cry: '#efe9dd', dark: '#a89e8e', grain: 'flow',   size: '0.5 mm 이하', txt: '밝은 색 · 유리질' },
+    gabbro:   { name: '반려암',  base: '#3f444a', cry: '#767e87', dark: '#282d33', grain: 'coarse', size: '2~5 mm',      txt: '어두운 색 · 알갱이 큼' },
+    diorite:  { name: '섬록암',  base: '#7b828a', cry: '#bac2ca', dark: '#565c63', grain: 'coarse', size: '2~5 mm',      txt: '회색 · 알갱이 큼' },
+    granite:  { name: '화강암',  base: '#cfc7ba', cry: '#f4efe6', dark: '#a49a8b', grain: 'coarse', size: '2~5 mm',      txt: '밝은 색 · 알갱이 큼' }
+  };
+  var TIER = {
+    mafic:   { surface: 'basalt',   deep: 'gabbro',  word: '고철질' },
+    inter:   { surface: 'andesite', deep: 'diorite', word: '중간질' },
+    felsic:  { surface: 'rhyolite', deep: 'granite', word: '규장질' }
+  };
+
+  var state = {
+    mode: 'surface',   /* surface = 지표(빠른 냉각) / deep = 지하(느린 냉각) */
+    sio2: 52,
+    active: false,     /* 분출/냉각 진행 */
+    prog: 0,           /* 냉각 진행 0~1 */
+    ep: 0,             /* 분출 강도 0~1 */
+    lens: null         /* 직접 고른 암석(없으면 자동) */
+  };
+  var simTime = 0;
+
+  /* ---------- 지반 + 단면 ---------- */
+  var soilMat = new THREE.MeshStandardMaterial({ color: 0x7d6a58, roughness: 0.97, metalness: 0.02, side: THREE.DoubleSide });
+  var grassMat = new THREE.MeshStandardMaterial({ color: 0x7c9a6a, roughness: 0.95, metalness: 0.02 });
+
+  /* 공통 바닥판은 지하 단면을 가리므로 이 실험에서는 숨긴다 */
+  scene.traverse(function (o) {
+    if (o.isMesh && o.material === S.benchMat) o.visible = false;
+  });
+
+  var ground = new THREE.Mesh(
+    new THREE.CylinderGeometry(R, R, GH, 72, 1, false, Math.PI / 2, Math.PI),
+    [soilMat, grassMat, soilMat]
+  );
+  ground.position.y = -GH / 2;
+  ground.receiveShadow = true;
+  ground.castShadow = true;
+  scene.add(ground);
+
+  var CW = Math.round(2 * R * PX), CH = Math.round((GH + TOP) * PX);
+  var secCv = document.createElement('canvas');
+  secCv.width = CW; secCv.height = CH;
+  var secTex = new THREE.CanvasTexture(secCv);
+  secTex.minFilter = THREE.LinearFilter;
+  var secPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(2 * R, GH + TOP),
+    new THREE.MeshBasicMaterial({ map: secTex, transparent: true, side: THREE.DoubleSide })
+  );
+  secPlane.position.set(0, (TOP - GH) / 2, 0.015);
+  scene.add(secPlane);
+
+  function toPx(x) { return (x + R) * PX; }
+  function toPy(y) { return (TOP - y) * PX; }
+
+  function coneBase() { return 3.85 - (state.sio2 - 45) * 0.032; }   /* 3.85 ~ 2.89 */
+  function coneH() { return 2.05 + (state.sio2 - 45) * 0.029; }      /* 2.05 ~ 2.92 */
+
+  function tierNow() { return state.sio2 < 52 ? 'mafic' : (state.sio2 < 63 ? 'inter' : 'felsic'); }
+  function rockNow() { return TIER[tierNow()][state.mode]; }
+  function lensRock() { return state.lens || rockNow(); }
+
+  /* ---------- 화산 외곽 3D ---------- */
+  var volcanoGroup = new THREE.Group();
+  scene.add(volcanoGroup);
+  var coneMesh = null;
+
+  function buildCone() {
+    if (coneMesh) { volcanoGroup.remove(coneMesh); coneMesh.geometry.dispose(); }
+    var h = coneH(), b = coneBase();
+    var col = state.sio2 < 52 ? 0x4b423a : (state.sio2 < 63 ? 0x6d6258 : 0x9a9084);
+    var mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.94, metalness: 0.03, side: THREE.DoubleSide, flatShading: false });
+    var geo = new THREE.CylinderGeometry(b * 0.2, b, h, 64, 10, true, Math.PI / 2, Math.PI);
+    coneMesh = new THREE.Mesh(geo, mat);
+    coneMesh.position.y = h / 2;
+    coneMesh.castShadow = true;
+    coneMesh.receiveShadow = true;
+    volcanoGroup.add(coneMesh);
+    craterGlow.position.set(0, h - 0.26, 0.08);
+    craterLight.position.set(0, h + 0.25, 0.4);
+    buildLavaTubes();
+  }
+
+  function buildLavaTubes() { /* 용암 흐름은 단면 캔버스에 그린다 */ }
+
+  /* ---------- 분출 입자 ---------- */
+  var bombGroup = new THREE.Group();
+  scene.add(bombGroup);
+  var bombs = [];
+  var bombGeo = new THREE.IcosahedronGeometry(1, 0);
+  var bombMat = new THREE.MeshStandardMaterial({ color: 0xff6a1a, emissive: 0xff3d00, emissiveIntensity: 1.2, roughness: 0.4 });
+  for (var i = 0; i < 46; i++) {
+    var m = new THREE.Mesh(bombGeo, bombMat);
+    var s = 0.05 + Math.random() * 0.075;
+    m.scale.setScalar(s);
+    m.visible = false;
+    bombGroup.add(m);
+    bombs.push({ mesh: m, v: new THREE.Vector3(), life: 0, idle: Math.random() * 2 });
+  }
+
+  function softTexture(color) {
+    var cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    var g = cv.getContext('2d');
+    var grd = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    grd.addColorStop(0, color); grd.addColorStop(0.55, color.replace('1)', '0.55)')); grd.addColorStop(1, color.replace('1)', '0)'));
+    g.fillStyle = grd; g.beginPath(); g.arc(32, 32, 31, 0, Math.PI * 2); g.fill();
+    var t = new THREE.CanvasTexture(cv); t.minFilter = THREE.LinearFilter; return t;
+  }
+  var ashTex = softTexture('rgba(88,86,84,1)');
+  var ashGroup = new THREE.Group();
+  scene.add(ashGroup);
+  var ashes = [];
+  for (var j = 0; j < 60; j++) {
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ashTex, transparent: true, opacity: 0.0, depthWrite: false }));
+    sp.visible = false;
+    ashGroup.add(sp);
+    ashes.push({ s: sp, v: new THREE.Vector3(), life: 0, max: 1, scale: 1 });
+  }
+
+  var craterLight = new THREE.PointLight(0xff5a10, 0, 9, 2);
+  craterLight.position.set(0, 2.1, 0.4);
+  scene.add(craterLight);
+
+  var craterGlow = new THREE.Mesh(
+    new THREE.SphereGeometry(0.34, 20, 14),
+    new THREE.MeshBasicMaterial({ color: 0xff7a24, transparent: true, opacity: 0.0, depthWrite: false })
+  );
+  craterGlow.position.set(0, TOP - 0.34, 0.08);
+  craterGlow.scale.set(1.5, 0.55, 1.0);
+  scene.add(craterGlow);
+
+  /* ---------- 3D 라벨 ---------- */
+  var labMagma = S.makeLabel('마그마 방', '#b91c1c', 2.05); labMagma.position.set(-2.85, -2.45, 1.35); scene.add(labMagma);
+  var labConduit = S.makeLabel('화도', '#b45309', 1.1); labConduit.position.set(0.92, 0.62, 0.4); scene.add(labConduit);
+  var labVent = S.makeLabel('분화구', '#b45309', 1.3); labVent.position.set(-1.15, TOP - 0.02, 0.4); scene.add(labVent);
+  var labSurf = S.makeLabel('지표 · 빠른 냉각', '#15803d', 2.45); labSurf.position.set(-4.15, 0.32, 0.4); scene.add(labSurf);
+  var labDeep = S.makeLabel('지하 깊은 곳 · 느린 냉각', '#1d4ed8', 2.85); labDeep.position.set(2.5, -2.1, 1.35); scene.add(labDeep);
+  var labCool = S.makeLabel('냉각 중', '#0f172a', 1.5); labCool.position.set(1.55, -0.95, 0.44); labCool.visible = false; scene.add(labCool);
+
+  /* ---------- 단면 그리기 ---------- */
+  function drawSection() {
+    var g = secCv.getContext('2d');
+    g.clearRect(0, 0, CW, CH);
+    var y0 = toPy(0);
+    var h = coneH(), b = coneBase();
+
+    /* 지하 지층 */
+    var soil = g.createLinearGradient(0, y0, 0, CH);
+    soil.addColorStop(0, '#a68d6f'); soil.addColorStop(0.45, '#8a735a'); soil.addColorStop(1, '#5a493a');
+    g.fillStyle = soil;
+    g.fillRect(0, y0, CW, CH - y0);
+
+    var bands = [
+      { y: -0.42, h: 0.34, c: 'rgba(120,96,70,0.55)' },
+      { y: -1.02, h: 0.26, c: 'rgba(96,80,60,0.55)' },
+      { y: -1.72, h: 0.4, c: 'rgba(132,112,90,0.5)' },
+      { y: -2.42, h: 0.3, c: 'rgba(74,62,50,0.55)' }
+    ];
+    bands.forEach(function (bd) {
+      g.beginPath();
+      g.moveTo(0, toPy(bd.y));
+      for (var x = 0; x <= CW; x += 30) {
+        g.lineTo(x, toPy(bd.y) + Math.sin(x * 0.018 + bd.y * 6) * 5);
+      }
+      g.lineTo(CW, toPy(bd.y - bd.h)); 
+      for (var x2 = CW; x2 >= 0; x2 -= 30) {
+        g.lineTo(x2, toPy(bd.y - bd.h) + Math.sin(x2 * 0.02 + bd.y * 4) * 5);
+      }
+      g.closePath();
+      g.fillStyle = bd.c; g.fill();
+    });
+    /* 지하 자갈 */
+    g.fillStyle = 'rgba(60,50,40,0.22)';
+    for (var d = 0; d < 420; d++) {
+      var dx = Math.random() * CW, dy = y0 + Math.random() * (CH - y0);
+      g.beginPath(); g.ellipse(dx, dy, 1.6 + Math.random() * 3.4, 1.2 + Math.random() * 2.4, Math.random() * 3, 0, Math.PI * 2); g.fill();
+    }
+
+    /* 마그마 방 */
+    var mx = toPx(0), my = toPy(-1.68), mrx = 1.62 * PX, mry = 0.93 * PX;
+    g.save(); g.translate(mx, my); g.scale(1, mry / mrx);
+    var hot = g.createRadialGradient(0, 0, mrx * 0.08, 0, 0, mrx);
+    hot.addColorStop(0, 'rgba(255,247,205,0.98)');
+    hot.addColorStop(0.3, 'rgba(255,196,86,0.96)');
+    hot.addColorStop(0.64, 'rgba(249,115,22,0.88)');
+    hot.addColorStop(0.9, 'rgba(178,42,12,0.42)');
+    hot.addColorStop(1, 'rgba(178,42,12,0.0)');
+    g.fillStyle = hot; g.beginPath(); g.arc(0, 0, mrx, 0, Math.PI * 2); g.fill();
+    g.restore();
+    /* 마그마 방 테두리 */
+    g.save(); g.strokeStyle = 'rgba(150,50,20,0.45)'; g.lineWidth = 3;
+    g.beginPath(); g.ellipse(mx, my, mrx * 0.92, mry * 0.92, 0, 0, Math.PI * 2); g.stroke(); g.restore();
+
+    /* 마그마 방 결정 (느린 냉각) */
+    if (state.mode === 'deep' && state.prog > 0.02 && state.lens === null) {
+      g.save();
+      g.globalAlpha = Math.min(0.95, 0.25 + state.prog * 1.2);
+      var cr = 0.06 + state.prog * 0.4;
+      for (var c = 0; c < 34; c++) {
+        var ang = c * 2.399, rad = Math.sqrt(c / 34) * mrx * 0.78;
+        var cx = mx + Math.cos(ang) * rad, cy = my + Math.sin(ang) * rad * (mry / mrx);
+        var sz = mrx * (0.06 + Math.random() * 0.1) * (0.4 + state.prog);
+        g.beginPath();
+        for (var v = 0; v < 6; v++) {
+          var va = v / 6 * Math.PI * 2 + Math.random() * 0.2;
+          var rr = sz * (0.7 + Math.random() * 0.5);
+          g[v ? 'lineTo' : 'moveTo'](cx + Math.cos(va) * rr, cy + Math.sin(va) * rr * 0.72);
+        }
+        g.closePath();
+        g.fillStyle = 'rgba(228,224,214,0.78)';
+        g.strokeStyle = 'rgba(120,110,96,0.55)'; g.lineWidth = 1.4;
+        g.fill(); g.stroke();
+      }
+      g.restore();
+    }
+
+    /* 화도 */
+    g.save();
+    g.beginPath();
+    g.moveTo(toPx(-0.34), toPy(-1.5));
+    g.bezierCurveTo(toPx(-0.24), toPy(-0.6), toPx(-0.3), toPy(1.0), toPx(-0.2), toPy(h - 0.18));
+    g.lineTo(toPx(0.24), toPy(h - 0.18));
+    g.bezierCurveTo(toPx(0.3), toPy(1.0), toPx(0.3), toPy(-0.6), toPx(0.4), toPy(-1.5));
+    g.closePath();
+    var cg = g.createLinearGradient(0, toPy(-1.5), 0, toPy(h));
+    cg.addColorStop(0, 'rgba(214,64,20,0.9)');
+    cg.addColorStop(0.5, 'rgba(182,46,14,0.85)');
+    cg.addColorStop(1, 'rgba(120,30,10,0.7)');
+    g.fillStyle = cg; g.fill();
+    if (state.active || state.ep > 0.02) {
+      g.globalAlpha = 0.35 + 0.35 * Math.sin(simTime * 5);
+      g.fillStyle = 'rgba(255,206,120,0.9)'; g.fill();
+    }
+    g.restore();
+
+    /* 화산 단면 실루엣 */
+    g.save();
+    var sb = b * 0.99, sh = h * 0.995;
+    g.beginPath();
+    g.moveTo(toPx(-sb), toPy(0.02));
+    g.lineTo(toPx(-sb * 0.2), toPy(sh - 0.16));
+    g.lineTo(toPx(-0.34), toPy(sh - 0.1));
+    g.lineTo(toPx(-0.26), toPy(sh - 0.42));
+    g.lineTo(toPx(0.26), toPy(sh - 0.42));
+    g.lineTo(toPx(0.34), toPy(sh - 0.1));
+    g.lineTo(toPx(sb * 0.2), toPy(sh - 0.16));
+    g.lineTo(toPx(sb), toPy(0.02));
+    g.closePath();
+    g.clip();
+
+    var baseCol = state.sio2 < 52 ? '#5a5046' : (state.sio2 < 63 ? '#7d7266' : '#a89e91');
+    g.fillStyle = baseCol;
+    g.fillRect(0, 0, CW, CH);
+    var vg = g.createLinearGradient(0, 0, 0, toPy(0));
+    vg.addColorStop(0, 'rgba(255,255,255,0.10)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.22)');
+    g.fillStyle = vg; g.fillRect(0, 0, CW, CH);
+
+    /* 겹겹이 쌓인 분출물 층 (화산 경사를 따라) */
+    for (var L = 0; L < 11; L++) {
+      var fy = 0.06 + L * 0.088;
+      var yy = h * fy;
+      var half = b * (1 - fy * 0.82);
+      g.beginPath();
+      g.moveTo(toPx(-half), toPy(yy));
+      g.bezierCurveTo(toPx(-half * 0.4), toPy(yy + 0.06), toPx(half * 0.4), toPy(yy - 0.05), toPx(half), toPy(yy + 0.02));
+      g.lineTo(toPx(half), toPy(yy - 0.09));
+      g.bezierCurveTo(toPx(half * 0.4), toPy(yy - 0.16), toPx(-half * 0.4), toPy(yy - 0.05), toPx(-half), toPy(yy - 0.09));
+      g.closePath();
+      g.fillStyle = L % 2 ? 'rgba(255,236,214,0.17)' : 'rgba(20,14,10,0.26)';
+      g.fill();
+    }
+    /* 흘러내린 용암 */
+    var lavaAmt = state.mode === 'surface' ? Math.max(state.ep * 0.95, state.prog > 0.02 ? 0.55 : 0) : 0;
+    if (lavaAmt > 0.03) {
+      g.save(); g.globalAlpha = lavaAmt;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(toPx(0.28), toPy(sh - 0.4));
+      g.quadraticCurveTo(toPx(sb * 0.62), toPy(h * 0.42), toPx(sb * 0.95), toPy(0.05));
+      g.lineWidth = 0.17 * PX; g.strokeStyle = '#e8440f'; g.stroke();
+      g.lineWidth = 0.09 * PX; g.strokeStyle = '#ff8a2b'; g.stroke();
+      g.lineWidth = 0.035 * PX; g.strokeStyle = '#ffe1a3'; g.stroke();
+      g.restore();
+    }
+
+    /* 화구 분화구 */
+    g.beginPath();
+    g.ellipse(toPx(0), toPy(h - 0.3), 0.3 * PX, 0.11 * PX, 0, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(255,120,40,' + (0.5 + 0.45 * state.ep) + ')'; g.fill();
+    g.strokeStyle = 'rgba(60,30,20,0.7)'; g.lineWidth = 2.5; g.stroke();
+    /* 화구 근처 붉은 열 */
+    var hg = g.createRadialGradient(toPx(0), toPy(h - 0.5), 4, toPx(0), toPy(h - 0.5), 1.9 * PX);
+    hg.addColorStop(0, 'rgba(255,120,40,' + (0.28 + 0.45 * state.ep) + ')');
+    hg.addColorStop(1, 'rgba(255,120,40,0)');
+    g.fillStyle = hg; g.fillRect(0, 0, CW, CH);
+    g.restore();
+
+    /* 절단면 테두리 하이라이트 */
+    g.beginPath();
+    g.moveTo(toPx(-sb), toPy(0.02));
+    g.lineTo(toPx(-sb * 0.2), toPy(sh - 0.16));
+    g.lineTo(toPx(-0.34), toPy(sh - 0.1));
+    g.lineTo(toPx(-0.26), toPy(sh - 0.42));
+    g.lineTo(toPx(0.26), toPy(sh - 0.42));
+    g.lineTo(toPx(0.34), toPy(sh - 0.1));
+    g.lineTo(toPx(sb * 0.2), toPy(sh - 0.16));
+    g.lineTo(toPx(sb), toPy(0.02));
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 2.5; g.stroke();
+
+    /* 지표면 띠 */
+    g.fillStyle = '#6f8f5e';
+    g.fillRect(0, toPy(0) - 3, CW, 7);
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(0, toPy(0) - 3, CW, 2);
+
+    secTex.needsUpdate = true;
+  }
+
+  /* ---------- 암석 확대 렌즈 ---------- */
+  var lensGroup = new THREE.Group();
+  lensGroup.position.set(4.35, 2.0, 1.1);
+  lensGroup.rotation.y = -0.22;
+  scene.add(lensGroup);
+
+  var lensCv = document.createElement('canvas');
+  lensCv.width = lensCv.height = 512;
+  var lensTex = new THREE.CanvasTexture(lensCv);
+  lensTex.minFilter = THREE.LinearFilter;
+
+  var lensRim = new THREE.Mesh(
+    new THREE.TorusGeometry(1.06, 0.075, 16, 64),
+    new THREE.MeshStandardMaterial({ color: 0xcfd7e0, roughness: 0.3, metalness: 0.55 })
+  );
+  lensGroup.add(lensRim);
+  var lensFace = new THREE.Mesh(
+    new THREE.CircleGeometry(1.03, 64),
+    new THREE.MeshBasicMaterial({ map: lensTex })
+  );
+  lensFace.position.z = 0.012;
+  lensGroup.add(lensFace);
+  var lensGlass = new THREE.Mesh(
+    new THREE.CircleGeometry(1.03, 64),
+    new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, roughness: 0.1, metalness: 0.0 })
+  );
+  lensGlass.position.z = 0.03;
+  lensGroup.add(lensGlass);
+
+  /* 렌즈 손잡이 */
+  var standMat = new THREE.MeshStandardMaterial({ color: 0x5b6472, roughness: 0.5, metalness: 0.25 });
+  var handle = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 1.15, 14), standMat);
+  handle.position.set(0.78, -0.78, -0.02);
+  handle.rotation.z = -Math.PI / 4;
+  lensGroup.add(handle);
+  var handleEnd = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), standMat);
+  handleEnd.position.set(1.2, -1.2, -0.02);
+  lensGroup.add(handleEnd);
+
+  var lensTitle = S.makeLabel('암석 확대', '#0f172a', 1.9);
+  lensTitle.position.set(4.35, 3.35, 1.1);
+  scene.add(lensTitle);
+  var lensName = S.makeLabel('현무암', '#0f172a', 1.75);
+  lensName.position.set(4.35, 0.72, 1.1);
+  scene.add(lensName);
+  var lensNote = S.makeLabel('알갱이 작음', '#334155', 2.05);
+  lensNote.position.set(4.35, 0.34, 1.1);
+  scene.add(lensNote);
+
+  /* 손에 든 암석 표본 */
+  var sampleGeo = new THREE.DodecahedronGeometry(0.34, 0);
+  var sampleMat = new THREE.MeshStandardMaterial({ color: 0x4a4d52, roughness: 0.9, flatShading: true });
+  var sample = new THREE.Mesh(sampleGeo, sampleMat);
+  sample.position.set(2.9, 1.25, 2.0);
+  sample.scale.set(1.15, 0.85, 0.9);
+  scene.add(sample);
+  var sampleLab = S.makeLabel('표본', '#475569', 0.95);
+  sampleLab.position.set(2.9, 1.85, 2.0);
+  scene.add(sampleLab);
+
+  function drawLens() {
+    var rk = ROCKS[lensRock()];
+    var g = lensCv.getContext('2d');
+    g.clearRect(0, 0, 512, 512);
+    g.fillStyle = rk.base;
+    g.fillRect(0, 0, 512, 512);
+
+    if (rk.grain === 'flow') {
+      /* 유문암: 유상 조직 */
+      for (var f = 0; f < 26; f++) {
+        g.beginPath();
+        var yy = f * 20 + Math.random() * 8;
+        g.moveTo(0, yy);
+        g.bezierCurveTo(140, yy + 10, 320, yy - 12, 512, yy + 4);
+        g.lineTo(512, yy + 9);
+        g.bezierCurveTo(320, yy - 3, 140, yy + 19, 0, yy + 9);
+        g.closePath();
+        g.fillStyle = f % 2 ? 'rgba(255,255,255,0.22)' : 'rgba(120,100,80,0.14)';
+        g.fill();
+      }
+      for (var q = 0; q < 16; q++) {
+        g.beginPath();
+        g.arc(Math.random() * 512, Math.random() * 512, 2.5 + Math.random() * 4, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(255,255,255,0.55)'; g.fill();
+      }
+    } else if (rk.grain === 'coarse') {
+      /* 조립질: 서로 맞물린 큰 결정 */
+      var cells = 5, step = 512 / cells;
+      for (var cy = 0; cy < cells; cy++) {
+        for (var cx = 0; cx < cells; cx++) {
+          var centx = cx * step + step * 0.5 + (Math.random() - 0.5) * step * 0.35;
+          var centy = cy * step + step * 0.5 + (Math.random() - 0.5) * step * 0.35;
+          var n = 5 + Math.floor(Math.random() * 3);
+          g.beginPath();
+          for (var v2 = 0; v2 < n; v2++) {
+            var a2 = v2 / n * Math.PI * 2 + Math.random() * 0.35;
+            var rad2 = step * (0.42 + Math.random() * 0.34);
+            var px2 = centx + Math.cos(a2) * rad2, py2 = centy + Math.sin(a2) * rad2;
+            g[v2 ? 'lineTo' : 'moveTo'](px2, py2);
+          }
+          g.closePath();
+          var shade = 0.86 + Math.random() * 0.3;
+          g.fillStyle = mix(rk.cry, rk.base, Math.random() * 0.5);
+          g.globalAlpha = 0.95;
+          g.fill();
+          g.globalAlpha = 1;
+          g.strokeStyle = 'rgba(40,40,40,0.35)'; g.lineWidth = 2; g.stroke();
+          /* 결정 내부 반사 */
+          g.beginPath();
+          g.arc(centx - step * 0.1, centy - step * 0.12, step * 0.13, 0, Math.PI * 2);
+          g.fillStyle = 'rgba(255,255,255,' + (0.18 * shade) + ')'; g.fill();
+        }
+      }
+      /* 검은 광물 알갱이 */
+      for (var d2 = 0; d2 < 40; d2++) {
+        g.beginPath();
+        g.arc(Math.random() * 512, Math.random() * 512, 2 + Math.random() * 4.5, 0, Math.PI * 2);
+        g.fillStyle = 'rgba(38,42,48,0.6)'; g.fill();
+      }
+    } else {
+      /* 세립질: 촘촘한 바탕 + 소량의 반정 */
+      for (var pt = 0; pt < 5200; pt++) {
+        var s2 = 0.8 + Math.random() * 2.2;
+        g.beginPath();
+        g.arc(Math.random() * 512, Math.random() * 512, s2, 0, Math.PI * 2);
+        g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.13)';
+        g.fill();
+      }
+      for (var ph = 0; ph < 14; ph++) {
+        var pcx = Math.random() * 512, pcy = Math.random() * 512, pr = 7 + Math.random() * 8;
+        g.beginPath();
+        for (var v3 = 0; v3 < 6; v3++) {
+          var a3 = v3 / 6 * Math.PI * 2;
+          var rr3 = pr * (0.7 + Math.random() * 0.5);
+          g[v3 ? 'lineTo' : 'moveTo'](pcx + Math.cos(a3) * rr3, pcy + Math.sin(a3) * rr3);
+        }
+        g.closePath();
+        g.fillStyle = rk.cry; g.globalAlpha = 0.85; g.fill(); g.globalAlpha = 1;
+        g.strokeStyle = 'rgba(30,30,30,0.4)'; g.lineWidth = 1.2; g.stroke();
+      }
+      /* 기공 (현무암) */
+      if (lensRock() === 'basalt' || lensRock() === 'andesite') {
+        for (var bub = 0; bub < 22; bub++) {
+          g.beginPath();
+          g.arc(Math.random() * 512, Math.random() * 512, 2 + Math.random() * 4, 0, Math.PI * 2);
+          g.fillStyle = 'rgba(20,22,26,0.45)'; g.fill();
+        }
+      }
+    }
+    /* 조명 느낌 */
+    var lg = g.createLinearGradient(0, 0, 512, 512);
+    lg.addColorStop(0, 'rgba(255,255,255,0.16)');
+    lg.addColorStop(0.5, 'rgba(255,255,255,0)');
+    lg.addColorStop(1, 'rgba(0,0,0,0.16)');
+    g.fillStyle = lg; g.fillRect(0, 0, 512, 512);
+    lensTex.needsUpdate = true;
+
+    lensName.userData.label.text = rk.name;
+    lensName.userData.label.color = '#0f172a';
+    lensNote.userData.label.text = rk.txt + ' · ' + rk.size;
+    sampleMat.color.set(rk.base);
+    S.relabel();
+  }
+
+  function mix(a, b, t) {
+    function h2r(h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; }
+    var A = h2r(a), B = h2r(b);
+    return 'rgb(' + Math.round(A[0] + (B[0] - A[0]) * t) + ',' + Math.round(A[1] + (B[1] - A[1]) * t) + ',' + Math.round(A[2] + (B[2] - A[2]) * t) + ')';
+  }
+
+  /* ---------- UI ---------- */
+  function $(id) { return document.getElementById(id); }
+  function updateUI() {
+    $('dSio2').textContent = state.sio2 + '%';
+    $('dCool').textContent = state.mode === 'surface' ? '지표 · 빠름' : '지하 · 느림';
+    $('dRock').textContent = ROCKS[lensRock()].name;
+    $('sio2Val').textContent = state.sio2 + ' %';
+    $('sio2').value = state.sio2;
+    Array.prototype.forEach.call(document.querySelectorAll('#segMode .seg-btn'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-mode') === state.mode);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-rock]'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-rock') === lensRock());
+    });
+    var bt = $('btnErupt');
+    if (state.active) { bt.textContent = '⏹ 멈추기'; bt.classList.add('on'); }
+    else { bt.textContent = '🌋 분출 시작'; bt.classList.remove('on'); }
+    $('coolBar').style.width = Math.round(state.prog * 100) + '%';
+    $('coolTxt').textContent = state.active ? ('냉각 ' + Math.round(state.prog * 100) + '%') : (state.prog > 0.01 ? '냉각 완료' : '대기');
+    $('lensTag').innerHTML = '<b>' + ROCKS[lensRock()].name + '</b><span>' + ROCKS[lensRock()].size + '</span>';
+  }
+
+  document.getElementById('segMode').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-mode]') : null;
+    if (!b) return;
+    state.mode = b.getAttribute('data-mode');
+    state.prog = 0; state.active = false; state.ep = 0; state.lens = null;
+    resetParticles();
+    drawSection(); drawLens(); updateUI();
+    S.setHint(state.mode === 'surface' ? '🌋 지표로 분출한 마그마는 빨리 식어 알갱이가 잘 자라지 못해요.' : '🪨 지하 깊은 곳의 마그마는 천천히 식어 알갱이가 크게 자라요.', false);
+  });
+
+  document.getElementById('sio2').addEventListener('input', function (e) {
+    state.sio2 = parseInt(e.target.value, 10);
+    buildCone(); drawSection(); if (!state.lens) drawLens(); updateUI();
+  });
+
+  document.getElementById('btnErupt').addEventListener('click', function () {
+    state.active = !state.active;
+    if (state.active) {
+      state.prog = 0; state.ep = 0; state.lens = null;
+      S.setHint(state.mode === 'surface' ? '💨 분출! 마그마가 지표에서 빠르게 식고 있어요.' : '⏳ 마그마가 지하에서 천천히 식는 중…', false);
+    } else {
+      state.ep = 0;
+    }
+    updateUI();
+  });
+
+  document.querySelectorAll('[data-rock]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.lens = b.getAttribute('data-rock');
+      drawLens(); updateUI();
+    });
+  });
+
+  function resetParticles() {
+    bombs.forEach(function (b) { b.mesh.visible = false; b.life = 0; });
+    ashes.forEach(function (a) { a.s.visible = false; a.life = 0; });
+    craterLight.intensity = 0;
+    craterGlow.material.opacity = 0;
+    labCool.visible = false;
+  }
+
+  /* ---------- 초기화 / 시점 ---------- */
+  S.setReset(function () {
+    state.mode = 'surface'; state.sio2 = 52; state.active = false; state.prog = 0; state.ep = 0; state.lens = null;
+    simTime = 0;
+    resetParticles(); buildCone(); drawSection(); drawLens(); updateUI(); S.hooks.fit();
+  });
+  var fitFn = function () {
+    var w = window.innerWidth, h = window.innerHeight;
+    var dist = h > w ? 24.0 : (h <= 520 ? 17.6 : 13.8);
+    S.camera.position.set(0.5, h > w ? 5.6 : (h <= 520 ? 4.3 : 3.1), dist);
+    S.controls.target.set(0.5, 0.75, 0);
+    S.camera.fov = h > w ? 54 : 44;
+    S.camera.updateProjectionMatrix();
+    S.controls.update();
+  };
+  S.setFit(fitFn);
+  S.setAlign(fitFn);
+
+  /* ---------- 애니메이션 ---------- */
+  S.onFrame(function (dt) {
+    simTime += dt;
+    var erupt = state.active && state.mode === 'surface';
+
+    /* 냉각 진행 */
+    if (state.active) {
+      var rate = state.mode === 'surface' ? 0.26 : 0.075;
+      var pct = Math.round(state.prog * 100);
+      if (pct !== drawSection._pct) {
+        drawSection._pct = pct;
+        $('coolTxt').textContent = '냉각 ' + pct + '%';
+        $('coolBar').style.width = pct + '%';
+      }
+      state.prog = Math.min(1, state.prog + dt * rate);
+      if (state.prog >= 1) { state.active = false; updateUI(); S.setHint('✅ 냉각 완료 · ' + ROCKS[rockNow()].name + ' 완성', false); state.lens = null; drawLens(); }
+      if ((state.mode === 'deep') && state.prog < 1) {
+        labCool.visible = true;
+        labCool.userData.label.text = '천천히 냉각 중 ' + Math.round(state.prog * 100) + '%';
+        S.relabel();
+      }
+    }
+
+    /* 분출 강도 */
+    var target = erupt ? 1 : 0;
+    state.ep += (target - state.ep) * Math.min(1, dt * 2.2);
+
+    /* 화구 빛 */
+    var glow = state.ep * (0.6 + 0.4 * Math.sin(simTime * 7));
+    craterLight.intensity = glow * 2.2;
+    craterGlow.material.opacity = state.ep * 0.55;
+    craterGlow.scale.set(1.5 + 0.09 * Math.sin(simTime * 9), 0.55 + 0.05 * Math.sin(simTime * 9), 1.0);
+
+    /* 분출 입자 */
+    if (state.ep > 0.05) {
+      var ventY = coneH() - 0.2;
+      bombs.forEach(function (b) {
+        b.idle -= dt;
+        if (!b.mesh.visible && b.idle <= 0 && Math.random() < 0.5 * state.ep) {
+          b.mesh.visible = true;
+          b.mesh.position.set((Math.random() - 0.5) * 0.5, ventY, (Math.random() - 0.5) * 0.5);
+          var sp = 2.6 + Math.random() * 2.6;
+          b.v.set((Math.random() - 0.5) * 1.9, sp, (Math.random() - 0.5) * 1.2);
+          b.life = 1.9;
+        }
+        if (b.mesh.visible) {
+          b.life -= dt;
+          b.v.y -= 9.8 * dt;
+          b.mesh.position.addScaledVector(b.v, dt);
+          b.mesh.rotation.x += dt * 4; b.mesh.rotation.y += dt * 3;
+          if (b.life <= 0 || b.mesh.position.y < 0.1) { b.mesh.visible = false; b.idle = Math.random() * 0.6; }
+        }
+      });
+
+      var ashAmt = state.sio2 > 60 ? 1 : 0.35;
+      ashes.forEach(function (a) {
+        if (!a.s.visible && Math.random() < 0.32 * state.ep * ashAmt) {
+          a.s.visible = true;
+          a.s.position.set((Math.random() - 0.5) * 0.7, ventY + 0.1, (Math.random() - 0.5) * 0.7);
+          a.v.set((Math.random() - 0.5) * 0.5, 1.1 + Math.random() * 1.3, (Math.random() - 0.5) * 0.5);
+          a.life = 0; a.max = 2.6 + Math.random() * 1.8; a.scale = 0.35 + Math.random() * 0.4;
+        }
+        if (a.s.visible) {
+          a.life += dt;
+          a.v.y += dt * 0.28;
+          a.v.x += (Math.random() - 0.5) * dt * 0.5;
+          a.s.position.addScaledVector(a.v, dt);
+          var f = a.life / a.max;
+          a.s.scale.setScalar(a.scale * (0.6 + f * 3.4));
+          a.s.material.opacity = Math.max(0, (1 - f)) * 0.42 * ashAmt;
+          if (f >= 1) a.s.visible = false;
+        }
+      });
+    } else {
+      bombs.forEach(function (b) { if (b.mesh.visible) { b.life -= dt; b.v.y -= 9.8 * dt; b.mesh.position.addScaledVector(b.v, dt); if (b.mesh.position.y < 0.1) { b.mesh.visible = false; b.idle = 0.3; } } });
+    }
+
+    /* 화도/마그마 단면은 진행 중일 때만 가끔 갱신 */
+    if (state.active && Math.floor(simTime * 6) !== drawSection._last) {
+      drawSection._last = Math.floor(simTime * 6);
+      drawSection();
+    }
+  });
+
+  /* ---------- 시작 ---------- */
+  buildCone();
+  drawSection();
+  drawLens();
+  updateUI();
+  fitFn();
+  S.setHint('🌋 SiO₂ 함량과 냉각 위치를 바꾸며 분출과 암석 알갱이를 비교해 보세요.', false);
+})();
+
+</script>
+
+<script>
+/* ============ 전체화면 / 창모드 + 모바일 화면 재조정 (공통) ============ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '\uD83D\uDDD7' : '\u26F6';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) {
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            btn.title = on ? '창모드로 전환' : '전체화면으로 전환';
+        }
+        document.body.classList.toggle('is-fullscreen', on);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (window.SVL && window.SVL.hooks && window.SVL.hooks.fit) window.SVL.hooks.fit();
+        }, 150);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (window.SVL && window.SVL.hooks && window.SVL.hooks.fit) window.SVL.hooks.fit();
+        }, 440);
+    }
+
+    function onKey(e) {
+        if (e.key !== 'Escape' && e.key !== 'Esc') return;
+        if (pseudo() && !realFs()) { docEl.classList.remove('pseudo-fs'); setUI(); }
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+                return;
+            }
+            if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var r = req.call(docEl);
+                    if (r && typeof r.catch === 'function') r.catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                } catch (err) {
+                    docEl.classList.add('pseudo-fs');
+                }
+            } else {
+                docEl.classList.add('pseudo-fs');
+                try { window.scrollTo(0, 1); } catch (e) {}
+                toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+            }
+            setUI();
+        }, false);
+    }
+
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+    document.addEventListener('keydown', onKey);
+
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+</body>
+</html>

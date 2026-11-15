@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.62">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>무게와 질량 3D</title>
+<meta name="description" content="지구와 달에서 용수철저울과 양팔저울로 무게와 질량을 비교하는 3D 실험">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<style>
+
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eef2f8; color: #1c1c1e;
+    transition: background-color 0.35s ease, color 0.35s ease;
+    -webkit-user-select: none; user-select: none;
+}
+#canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+#canvas-container canvas { display: block; touch-action: none; }
+
+/* ---------- visionOS 글래스모피즘 ---------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* ---------- 상단 좌측 ---------- */
+.top-left-bar { position: absolute; top: 16px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px;
+    text-decoration: none; color: #1c1c1e; font-weight: bold; font-size: 13.5px; cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease; border: none; font-family: inherit; white-space: nowrap;
+}
+.back-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.tag-badge { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+.tag-pill { background: rgba(0, 122, 255, 0.14); color: #007aff; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 800; letter-spacing: 0.2px; }
+.qr-btn-icon { font-size: 14px; line-height: 1; }
+.qr-btn-label { font-size: 12.5px; }
+
+/* ---------- 상단 우측 ---------- */
+.top-right-bar { position: absolute; top: 16px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex: 0 0 40px;
+    border: none; color: #1c1c1e; font-family: inherit; transition: all 0.2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.data-card { display: inline-flex; align-items: center; gap: 14px; padding: 7px 16px; border-radius: 16px; }
+.data-item { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.data-label { font-size: 9.5px; color: #64748b; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value { font-size: 13.5px; font-weight: 900; color: #0284c7; margin-top: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+
+/* ---------- 중앙 힌트 ---------- */
+.center-tooltip {
+    position: absolute; top: 84px; left: 46%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 16px; font-size: 11.5px; font-weight: bold; color: #334155;
+    pointer-events: none; z-index: 10; white-space: normal; text-align: center; line-height: 1.5;
+    letter-spacing: -0.2px; transition: opacity 0.35s ease; max-width: min(700px, calc(100vw - 460px)); word-break: keep-all;
+}
+.center-tooltip.hidden { opacity: 0; }
+
+/* ---------- 하단 중앙 ---------- */
+.bottom-ctrl-bar {
+    position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; z-index: 40;
+}
+.action-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.92); color: #1c1c1e;
+    font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.action-btn:hover { background: #fff; transform: translateY(-1px); }
+.action-btn.on { background: #0f172a; color: #fff; border-color: #0f172a; }
+
+/* ---------- 우측 하단 전체화면 ---------- */
+.bottom-right-bar { position: absolute; bottom: 22px; right: 20px; z-index: 45; }
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+    border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 800; color: #1c1c1e; white-space: nowrap;
+}
+
+/* ---------- 우측 조절 패널 ---------- */
+.side-ctrl-panel {
+    position: absolute; right: 20px; bottom: 76px; width: 232px; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px; z-index: 60; border-radius: 18px;
+    max-height: calc(100vh - 150px);
+}
+.panel-title {
+    font-size: 12px; font-weight: 800; color: #475569; letter-spacing: -0.2px; text-align: center;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); flex: 0 0 auto;
+}
+.panel-body { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg.four { grid-template-columns: repeat(4, 1fr); }
+.seg-btn {
+    padding: 8px 1px; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; letter-spacing: -0.3px; transition: all 0.2s ease;
+}
+.seg-btn:hover { background: #ffffff; }
+.seg-btn.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.seg-btn.accent.active { background: #0ea5e9; border-color: #0ea5e9; }
+.btn-start {
+    width: 100%; padding: 11px 8px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb); color: #ffffff; font-family: inherit;
+    font-size: 12.5px; font-weight: 900; letter-spacing: -0.2px; cursor: pointer;
+    box-shadow: 0 5px 16px rgba(37, 99, 235, 0.28); transition: all 0.2s ease; white-space: nowrap;
+}
+.btn-start:hover { transform: translateY(-1px); }
+.btn-start.on { background: linear-gradient(135deg, #22c55e, #0d9488); box-shadow: 0 5px 16px rgba(13, 148, 136, 0.26); }
+.btn-start.off { background: linear-gradient(135deg, #94a3b8, #64748b); box-shadow: 0 5px 16px rgba(100, 116, 139, 0.24); }
+.btn-ghost {
+    width: 100%; padding: 9px 8px; border-radius: 12px; border: 1px dashed rgba(37, 99, 235, 0.35);
+    background: rgba(37, 99, 235, 0.07); color: #1d4ed8; font-family: inherit; font-size: 11.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.2s ease; letter-spacing: -0.3px;
+}
+.btn-ghost:hover { background: rgba(37, 99, 235, 0.14); }
+.ctrl-row { display: flex; align-items: center; gap: 4px; }
+.ctrl-row .lbl { flex: 0 0 30px; font-size: 9.5px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.mini {
+    flex: 1 1 0; min-width: 0; padding: 6px 0; border-radius: 9px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.18s ease;
+}
+.mini:hover { background: #ffffff; }
+.mini.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.slider-row { display: flex; flex-direction: column; gap: 3px; }
+.slider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.slider-name { font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.slider-val { font-size: 10.5px; font-weight: 900; color: #2563eb; font-variant-numeric: tabular-nums; white-space: nowrap; }
+input[type="range"].ctrl-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px;
+    background: #e2e8f0; outline: none; cursor: pointer; margin: 0;
+}
+input[type="range"].ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: #3b82f6; cursor: pointer; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4); border: 2px solid #fff;
+}
+input[type="range"].ctrl-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: #3b82f6; border: 2px solid #fff; cursor: pointer;
+}
+.state-badge {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    padding: 7px 8px; border-radius: 12px; background: rgba(2, 132, 199, 0.09);
+    border: 1px dashed rgba(2, 132, 199, 0.28); font-size: 10.5px; font-weight: 800; color: #0369a1;
+    letter-spacing: -0.3px; text-align: center; overflow: hidden;
+}
+.state-badge .sb-note { font-size: 8.5px; font-weight: 700; opacity: 0.82; white-space: nowrap; }
+.state-badge.good { background: rgba(22, 163, 74, 0.11); border-color: rgba(22, 163, 74, 0.32); color: #15803d; }
+.state-badge.warn { background: rgba(234, 88, 12, 0.11); border-color: rgba(234, 88, 12, 0.32); color: #c2410c; }
+
+/* ---------- 좌측 데이터/그래프 패널 ---------- */
+.sub-panel {
+    position: absolute; right: 264px; bottom: 76px; width: 340px; max-height: 78vh; overflow-y: auto;
+    display: none; flex-direction: column; gap: 10px; padding: 13px 15px; border-radius: 18px; z-index: 55;
+    -webkit-overflow-scrolling: touch;
+}
+.sub-panel.show { display: flex; }
+@media (min-width: 901px) {
+    body .sub-panel.left { left: 20px !important; right: auto !important; top: auto !important; bottom: 76px !important; width: 318px !important; max-width: 318px !important; max-height: 62vh !important; }
+}
+.sub-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.sub-panel-title { font-size: 12.5px; font-weight: 800; color: #1e293b; letter-spacing: -0.3px; }
+.sub-close { background: rgba(0, 0, 0, 0.06); border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 11px; font-weight: bold; color: #64748b; font-family: inherit; flex: 0 0 24px; }
+.graph-canvas { width: 100%; height: 178px; display: block; border-radius: 12px; background: rgba(248, 250, 252, 0.9); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 9.5px; font-weight: 800; color: #64748b; }
+.legend i { display: inline-block; width: 14px; height: 8px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.note { font-size: 9.5px; color: #7c8899; line-height: 1.45; letter-spacing: -0.2px; }
+
+/* ---------- 통계 막대 ---------- */
+.stat-block { display: flex; flex-direction: column; gap: 5px; }
+.stat-title { font-size: 10.5px; font-weight: 900; color: #334155; letter-spacing: -0.3px; display: flex; justify-content: space-between; align-items: center; }
+.stat-title b { color: #2563eb; font-variant-numeric: tabular-nums; }
+.stat-row { display: grid; grid-template-columns: 62px 1fr 54px; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; }
+.stat-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-row .bar { height: 9px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; }
+.stat-row .bar i { display: block; height: 100%; width: 0%; border-radius: 999px; transition: width 0.35s ease; }
+.stat-row .vl { text-align: right; font-variant-numeric: tabular-nums; color: #0f172a; }
+.mini-table { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; }
+.mini-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; padding: 2px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.3); }
+.mini-row .vl { font-variant-numeric: tabular-nums; color: #0f172a; }
+.hr { height: 1px; background: rgba(0, 0, 0, 0.07); margin: 1px 0; }
+
+/* ---------- 다크 모드 ---------- */
+body.dark-mode { background-color: #0b1220; color: #e2e8f0; }
+body.dark-mode .glass-panel { background-color: rgba(22, 30, 45, 0.92); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45); }
+body.dark-mode .sub-panel, body.dark-mode .side-ctrl-panel { background-color: rgba(22, 30, 45, 0.94); }
+body.dark-mode .back-btn, body.dark-mode .tag-badge, body.dark-mode .icon-btn { color: #e2e8f0; }
+body.dark-mode .data-label { color: #94a3b8; }
+body.dark-mode .data-value { color: #38bdf8; }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.12); }
+body.dark-mode .panel-title { color: #94a3b8; border-bottom-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .seg-btn, body.dark-mode .mini { background: rgba(44, 54, 74, 0.92); border-color: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+body.dark-mode .seg-btn.active { background: #e2e8f0; border-color: #e2e8f0; color: #0f172a; }
+body.dark-mode .seg-btn.accent.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+body.dark-mode .mini.active { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+body.dark-mode .state-badge { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3); }
+body.dark-mode .state-badge.good { background: rgba(34, 197, 94, 0.16); color: #86efac; border-color: rgba(34, 197, 94, 0.34); }
+body.dark-mode .state-badge.warn { background: rgba(251, 146, 60, 0.16); color: #fdba74; border-color: rgba(251, 146, 60, 0.34); }
+body.dark-mode .action-btn, body.dark-mode .fullscreen-btn { background: rgba(44, 54, 74, 0.92); color: #e2e8f0; border-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .action-btn.on { background: #e2e8f0; color: #0f172a; }
+body.dark-mode .sub-panel-title { color: #f1f5f9; }
+body.dark-mode .sub-close { background: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+body.dark-mode .graph-canvas { background: rgba(15, 23, 42, 0.9); }
+body.dark-mode .legend, body.dark-mode .note { color: #94a3b8; }
+body.dark-mode .center-tooltip { color: #cbd5e1; }
+body.dark-mode .stat-title, body.dark-mode .stat-row { color: #cbd5e1; }
+body.dark-mode .stat-row .vl, body.dark-mode .mini-row .vl { color: #f1f5f9; }
+body.dark-mode .mini-row { color: #cbd5e1; border-bottom-color: rgba(148, 163, 184, 0.22); }
+body.dark-mode input[type="range"].ctrl-slider { background: #334155; }
+
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 공통 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+@media (max-width: 900px) {
+    .top-left-bar { top: max(8px, env(safe-area-inset-top)) !important; left: 8px !important; right: 56px !important; gap: 6px !important; flex-wrap: nowrap !important; align-items: center !important; overflow: hidden; }
+    .top-left-bar .back-btn, .top-left-bar > a { flex: 0 0 auto; padding: 6px 10px !important; font-size: 12px !important; gap: 4px !important; white-space: nowrap; }
+    .top-left-bar .tag-badge { flex: 0 1 auto; min-width: 0; padding: 6px 10px !important; font-size: 12px !important; gap: 5px !important; white-space: nowrap; overflow: hidden; }
+    .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .qr-btn-label { display: none !important; }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    .top-right-bar { top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important; right: 8px !important; gap: 6px !important; flex-wrap: nowrap !important; }
+    .data-card { flex: 0 1 auto; min-width: 0; gap: 7px !important; padding: 5px 9px !important; overflow: hidden; }
+    .data-item { min-width: 0; }
+    .data-label { font-size: 8.5px !important; line-height: 1.2; letter-spacing: -0.4px; }
+    .data-value { font-size: 12px !important; line-height: 1.25; }
+    .data-sep { height: 18px; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 34px; }
+
+    body.is-3d .bottom-right-bar { top: max(8px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 8px !important; left: auto !important; z-index: 20; }
+    body .bottom-right-bar button { padding: 7px 10px !important; font-size: 14px !important; gap: 4px !important; line-height: 1; }
+    body .bottom-right-bar #fullscreenText { display: none !important; }
+
+    .center-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 78px) !important; left: 8px !important; right: 8px !important;
+        transform: none !important; margin: 0 auto; width: auto !important; max-width: none !important;
+        font-size: 11px !important; padding: 6px 12px !important; white-space: normal !important;
+        line-height: 1.45; text-align: center; z-index: 15 !important; text-overflow: clip;
+    }
+
+    .bottom-ctrl-bar { left: 8px !important; right: 8px !important; bottom: calc(6px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; border-radius: 16px !important; padding: 6px !important; gap: 5px !important; justify-content: center !important; flex-wrap: wrap !important; }
+    .action-btn { padding: 7px 12px !important; font-size: 11.5px !important; }
+
+    .side-ctrl-panel { right: 8px !important; left: auto !important; bottom: calc(60px + env(safe-area-inset-bottom)) !important; width: min(212px, calc(100vw - 16px)) !important; padding: 8px !important; gap: 6px !important; max-height: 46vh !important; }
+    .panel-title { font-size: 10.5px !important; padding-bottom: 4px !important; }
+    .seg-btn { padding: 7px 1px !important; font-size: 9.5px !important; }
+    .btn-start { padding: 9px 6px !important; font-size: 11.5px !important; }
+    .btn-ghost { padding: 7px 6px !important; font-size: 10px !important; }
+    .ctrl-row .lbl { font-size: 9px !important; flex-basis: 28px !important; }
+    .mini { padding: 5px 0 !important; font-size: 9.5px !important; }
+    .slider-name { font-size: 9.5px !important; }
+    .slider-val { font-size: 10px !important; }
+    .state-badge { font-size: 9.5px !important; padding: 6px 6px !important; }
+
+    .sub-panel { left: 8px !important; right: 8px !important; bottom: calc(66px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; max-width: none !important; max-height: 42vh !important; padding: 10px 12px !important; gap: 7px !important; }
+    .sub-panel-title { font-size: 11px !important; }
+    .graph-canvas { height: 140px !important; }
+    .legend { font-size: 8.5px !important; gap: 7px !important; }
+    .note { font-size: 8.5px !important; }
+    .stat-row { grid-template-columns: 56px 1fr 48px; font-size: 9px; }
+}
+
+@media (max-width: 430px) {
+    .tag-pill { display: none !important; }
+    .data-label { font-size: 8px !important; }
+    .data-value { font-size: 11px !important; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)) !important; left: 6px !important; right: auto !important; max-width: 46vw; gap: 5px; }
+    .top-left-bar .back-btn, .top-left-bar > a, .top-left-bar .tag-badge { padding: 4px 9px !important; font-size: 11px !important; height: 30px; }
+    .tag-pill { display: none !important; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)) !important; right: 72px !important; left: auto !important; gap: 5px; flex-direction: column !important; align-items: flex-end !important; }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; flex: 0 0 28px; }
+    body.is-3d .bottom-right-bar { top: max(6px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 6px !important; z-index: 20; }
+    body.is-3d .bottom-right-bar button { padding: 4px 8px !important; font-size: 13px !important; }
+    body.is-3d .bottom-right-bar #fullscreenText { display: none !important; }
+    .center-tooltip { top: auto !important; bottom: 48px !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; width: max-content !important; max-width: 46vw !important; font-size: 10px !important; padding: 4px 9px !important; line-height: 1.3; white-space: nowrap !important; }
+    .side-ctrl-panel { top: 44px !important; right: 8px !important; left: auto !important; bottom: auto !important; width: 196px !important; max-height: calc(100vh - 56px) !important; padding: 7px 8px !important; gap: 5px !important; overflow-y: auto !important; }
+    .panel-title { font-size: 9.5px !important; padding-bottom: 3px !important; }
+    .seg-btn { padding: 5px 1px !important; font-size: 9px !important; }
+    .btn-start { padding: 6px 4px !important; font-size: 10px !important; }
+    .btn-ghost { padding: 5px 4px !important; font-size: 9px !important; }
+    .ctrl-row .lbl { font-size: 8px !important; flex-basis: 22px !important; }
+    .mini { padding: 3px 0 !important; font-size: 8.5px !important; }
+    .slider-name { font-size: 8.5px !important; }
+    .slider-val { font-size: 9px !important; }
+    .state-badge { font-size: 8.5px !important; padding: 4px 4px !important; }
+    .bottom-ctrl-bar { left: 50% !important; right: auto !important; bottom: 4px !important; transform: translateX(-50%) !important; width: auto !important; max-width: calc(100vw - 12px); border-radius: 14px !important; padding: 4px 8px !important; gap: 3px !important; }
+    .action-btn { padding: 5px 11px !important; font-size: 10px !important; }
+    .sub-panel { left: auto !important; right: 8px !important; top: 44px !important; bottom: auto !important; width: min(320px, calc(100vw - 220px)) !important; max-width: none !important; max-height: calc(100vh - 56px) !important; padding: 8px 10px !important; gap: 6px !important; }
+    .graph-canvas { height: 118px !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .center-tooltip { display: none !important; }
+html.pseudo-fs .top-right-bar { display: flex !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
+
+
+@media (max-width: 900px) {
+  .top-left-bar { right: 152px !important; }
+}
+
+@media (min-width: 901px) {
+  body .sub-panel.left { width: 236px !important; max-width: 236px !important; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  body .sub-panel.left { display: none !important; }
+}
+.mini-table { grid-template-columns: 1fr !important; }
+@media (max-width: 900px) {
+  body .sub-panel.left { left: 8px !important; right: auto !important; bottom: calc(66px + env(safe-area-inset-bottom)) !important;
+      width: 152px !important; max-width: 152px !important; padding: 7px 8px !important; max-height: 30vh !important; gap: 4px !important; }
+  body .sub-panel.left .sub-panel-title { font-size: 9px !important; }
+  body .sub-panel.left .mini-row { font-size: 8px !important; }
+  body .sub-panel.left .note { display: none !important; }
+  body .side-ctrl-panel { width: min(190px, calc(100vw - 164px)) !important; }
+}
+
+</style>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+</head>
+<body class="is-3d">
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>무게와 질량 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+
+<div class="data-item"><span class="data-label">중력</span><span class="data-value" id="dGrav">9.8</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label">무게</span><span class="data-value" id="dWeight">9.8 N</span></div>
+<div class="data-sep"></div>
+<div class="data-item"><span class="data-label">질량</span><span class="data-value" id="dMass">1 kg</span></div>
+
+    </div>
+</div>
+
+<div class="center-tooltip glass-panel" id="centerTooltip">🌍 지구와 🌕 달에서 같은 물체를 재어 보세요.</div>
+
+<div class="bottom-ctrl-bar glass-panel">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+    <div class="panel-title">⚖️ 무게와 질량</div>
+    <div class="panel-body">
+
+<div class="seg" style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+  <button class="seg-btn active" data-env="earth">🌍 지구</button>
+  <button class="seg-btn" data-env="moon">🌕 달</button>
+</div>
+<div class="seg three" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
+  <button class="seg-btn active" data-mass="1">1 kg</button>
+  <button class="seg-btn" data-mass="2">2 kg</button>
+  <button class="seg-btn" data-mass="5">5 kg</button>
+</div>
+<button class="btn-start" id="btnRead">🔍 저울 읽기</button>
+<div class="state-badge"><span id="badgeW">무게 9.8 N</span><span class="sb-note" id="badgeM">질량 1 kg · 어디서나 같음</span></div>
+
+    </div>
+</div>
+
+<div class="sub-panel left show glass-panel" id="leftPanel">
+  <div class="sub-head"><span class="sub-panel-title">📋 두 저울의 측정값</span></div>
+  <div class="mini-table">
+    <div class="mini-row"><span>용수철저울 · 지구</span><span class="vl" id="tWe">9.8 N</span></div>
+    <div class="mini-row"><span>용수철저울 · 달</span><span class="vl" id="tWm">1.6 N</span></div>
+    <div class="mini-row"><span>양팔저울 · 지구</span><span class="vl" id="tMe">1 kg</span></div>
+    <div class="mini-row"><span>양팔저울 · 달</span><span class="vl" id="tMm">1 kg</span></div>
+  </div>
+  <div class="note">무게는 중력에 따라 달라지고(달에서는 약 1/6), 질량은 장소가 바뀌어도 변하지 않아요.</div>
+</div>
+
+
+<script>
+/* ============ 공통 3D 기반 (씬·카메라·조명·테마·반응형) ============ */
+window.SVL = (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var LIGHT_BG = 0xeef2f8, DARK_BG = 0x0b1220;
+
+    var container = $('canvas-container');
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(LIGHT_BG);
+
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / Math.max(1, window.innerHeight), 0.1, 400);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 3;
+    controls.maxDistance = 60;
+    controls.minPolarAngle = Math.PI * 0.06;
+    controls.maxPolarAngle = Math.PI * 0.55;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    if (THREE.TOUCH) { controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; }
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0xd7e2ee, 0.78);
+    scene.add(hemi);
+    var key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(6, 18, 9);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.left = -12;
+    key.shadow.camera.right = 12;
+    key.shadow.camera.top = 12;
+    key.shadow.camera.bottom = -12;
+    key.shadow.camera.near = 1;
+    key.shadow.camera.far = 50;
+    key.shadow.radius = 3;
+    scene.add(key);
+    var fill = new THREE.DirectionalLight(0xffffff, 0.34);
+    fill.position.set(-7, 6, -6);
+    scene.add(fill);
+
+    var benchMat = new THREE.MeshStandardMaterial({ color: 0xdfe8f3, roughness: 0.94, metalness: 0.02 });
+    var bench = new THREE.Mesh(new THREE.PlaneGeometry(90, 60), benchMat);
+    bench.rotation.x = -Math.PI / 2;
+    bench.receiveShadow = true;
+    scene.add(bench);
+
+    /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ---- */
+    var labelList = [];
+    function drawLabel(cv, text, color) {
+        var g = cv.getContext('2d');
+        g.clearRect(0, 0, 512, 128);
+        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        var tw = Math.min(470, g.measureText(text).width + 46);
+        var x0 = (512 - tw) / 2, r = 30;
+        g.fillStyle = 'rgba(255,255,255,0.93)';
+        g.beginPath();
+        g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
+        g.quadraticCurveTo(x0 + tw, 22, x0 + tw, 22 + r);
+        g.lineTo(x0 + tw, 106 - r);
+        g.quadraticCurveTo(x0 + tw, 106, x0 + tw - r, 106);
+        g.lineTo(x0 + r, 106);
+        g.quadraticCurveTo(x0, 106, x0, 106 - r);
+        g.lineTo(x0, 22 + r);
+        g.quadraticCurveTo(x0, 22, x0 + r, 22);
+        g.closePath();
+        g.fill();
+        g.fillStyle = color || '#124';
+        g.fillText(text, 256, 66);
+    }
+    function makeLabel(text, color, w) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 128;
+        drawLabel(cv, text, color);
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+        var ww = w || 1.9;
+        spr.scale.set(ww, ww * 0.25, 1);
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color };
+        labelList.push(spr);
+        return spr;
+    }
+    function relabelAll() {
+        for (var i = 0; i < labelList.length; i++) {
+            var L = labelList[i].userData.label;
+            if (!L) continue;
+            drawLabel(L.cv, L.text, L.color);
+            if (L.tex) L.tex.needsUpdate = true;
+        }
+    }
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { setTimeout(relabelAll, 30); }).catch(function () {});
+    }
+    window.addEventListener('load', function () { setTimeout(relabelAll, 120); });
+
+    /* ---- 안내 문구 ---- */
+    var hintEl = $('centerTooltip');
+    var hintTimer = null;
+    function setHint(text, sticky) {
+        if (!hintEl) return;
+        hintEl.textContent = text;
+        hintEl.classList.remove('hidden');
+        if (hintTimer) clearTimeout(hintTimer);
+        if (!sticky) hintTimer = setTimeout(function () { hintEl.classList.add('hidden'); }, 5200);
+    }
+
+    /* ---- 테마 ---- */
+    var isDark = false;
+    var themeCbs = [];
+    function applyTheme() {
+        document.body.classList.toggle('dark-mode', isDark);
+        scene.background = new THREE.Color(isDark ? DARK_BG : LIGHT_BG);
+        benchMat.color.setHex(isDark ? 0x16203a : 0xdfe8f3);
+        hemi.intensity = isDark ? 0.42 : 0.78;
+        key.intensity = isDark ? 0.82 : 1.05;
+        fill.intensity = isDark ? 0.26 : 0.34;
+        $('themeBtn').textContent = isDark ? '☀️' : '🌙';
+        $('themeBtn').title = isDark ? '주간 모드로 전환' : '야간 모드로 전환';
+        for (var i = 0; i < themeCbs.length; i++) { try { themeCbs[i](isDark); } catch (e) {} }
+    }
+    $('themeBtn').addEventListener('click', function () { isDark = !isDark; applyTheme(); });
+
+    /* ---- 크기/시점 ---- */
+    function onResize() {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        camera.updateProjectionMatrix();
+        if (typeof svlFit === 'function') svlFit();
+    }
+    var svlFit = null;
+
+    window.addEventListener('resize', onResize);
+
+    /* ---- 실험 훅 ---- */
+    var hooks = { reset: null, align: null, fit: null };
+    $('btnReset').addEventListener('click', function () { if (hooks.reset) hooks.reset(); else { svlFit && svlFit(); } });
+    $('btnAlign').addEventListener('click', function () {
+        if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit();
+        setHint('🎥 정면 시점으로 정렬했습니다.', false);
+    });
+
+    function alignView() { if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit(); }
+
+    var frameCbs = [];
+    var clock = new THREE.Clock();
+    var last = performance.now();
+    function frame(now) {
+        requestAnimationFrame(frame);
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        for (var i = 0; i < frameCbs.length; i++) { try { frameCbs[i](dt, now); } catch (e) {} }
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    requestAnimationFrame(frame);
+
+    return {
+        $: $, scene: scene, camera: camera, renderer: renderer, controls: controls,
+        hemi: hemi, key: key, fill: fill, benchMat: benchMat,
+        LIGHT_BG: LIGHT_BG, DARK_BG: DARK_BG,
+        makeLabel: makeLabel, setHint: setHint, relabel: relabelAll,
+        onTheme: function (fn) { themeCbs.push(fn); },
+        onFrame: function (fn) { frameCbs.push(fn); },
+        isDark: function () { return isDark; },
+        hooks: hooks,
+        setFit: function (fn) { hooks.fit = fn; svlFit = fn; window.svlFitCamera = fn; },
+        setReset: function (fn) { hooks.reset = fn; },
+        setAlign: function (fn) { hooks.align = fn; },
+        alignView: alignView
+    };
+})();
+</script>
+<script>
+
+(function () {
+  'use strict';
+  var S = window.SVL, $ = S.$, scene = S.scene;
+  var GRAV = { earth: 9.8, moon: 1.6 };
+  var MASS = { '1': { r: 0.26, h: 0.34 }, '2': { r: 0.32, h: 0.44 }, '5': { r: 0.36, h: 0.56 } };
+  var state = { env: 'earth', mass: 1, pulling: 0 };
+
+  /* ---------- 배경 · 지면 ---------- */
+  scene.background = new THREE.Color(0xcfe4f7);
+  scene.traverse(function (o) { if (o.isMesh && o.material === S.benchMat) o.visible = false; });
+
+  var groundMat = new THREE.MeshStandardMaterial({ color: 0x8cae94, roughness: 0.98, metalness: 0.0 });
+  var ground = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 0.24, 64), groundMat);
+  ground.position.y = -0.12;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  /* 달 크레이터 · 지구 잔디 결 */
+  var craterMat = new THREE.MeshStandardMaterial({ color: 0x8b929c, roughness: 1.0 });
+  var craters = new THREE.Group();
+  var cdat = [[-6.5, -3.2, 1.5], [-5.2, 2.4, 1.0], [7.2, -2.6, 1.8], [6.0, 3.0, 1.2], [-9.5, 0.6, 2.1], [9.4, 1.4, 1.3]];
+  cdat.forEach(function (c) {
+    var ring = new THREE.Mesh(new THREE.CylinderGeometry(c[2], c[2], 0.06, 28), craterMat);
+    ring.position.set(c[0], 0.01, c[1]);
+    craters.add(ring);
+    var hole = new THREE.Mesh(new THREE.CylinderGeometry(c[2] * 0.72, c[2] * 0.72, 0.07, 28), new THREE.MeshStandardMaterial({ color: 0x7d848e, roughness: 1.0 }));
+    hole.position.set(c[0], 0.0, c[1]);
+    craters.add(hole);
+  });
+  scene.add(craters);
+  craters.visible = false;
+
+  /* 별 (달에서만) */
+  var starGeo = new THREE.BufferGeometry();
+  var starPos = [];
+  for (var i = 0; i < 340; i++) {
+    var th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI * 0.46;
+    var rr = 42;
+    starPos.push(Math.cos(th) * Math.sin(ph + 0.1) * rr, Math.cos(ph) * rr * 0.7 + 6, Math.sin(th) * Math.sin(ph + 0.1) * rr);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+  var stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.42, sizeAttenuation: true, transparent: true, opacity: 0.9 }));
+  scene.add(stars);
+  stars.visible = false;
+
+  /* 달에서 보이는 지구 */
+  var earthSky = new THREE.Group();
+  var earthBall = new THREE.Mesh(new THREE.SphereGeometry(1.15, 32, 24), new THREE.MeshBasicMaterial({ color: 0x3f86d4 }));
+  earthSky.add(earthBall);
+  var cloudBall = new THREE.Mesh(new THREE.SphereGeometry(1.16, 24, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 }));
+  earthSky.add(cloudBall);
+  earthSky.position.set(-8.8, 6.7, -13);
+  earthSky.scale.setScalar(0.9);
+  scene.add(earthSky);
+  earthSky.visible = false;
+
+  /* ---------- 재질 ---------- */
+  var steelMat = new THREE.MeshStandardMaterial({ color: 0xc9d2dc, roughness: 0.32, metalness: 0.55 });
+  var darkSteel = new THREE.MeshStandardMaterial({ color: 0x5b6674, roughness: 0.45, metalness: 0.4 });
+  var whiteBody = new THREE.MeshStandardMaterial({ color: 0xf7fafc, roughness: 0.55, metalness: 0.08 });
+  var brassMat = new THREE.MeshStandardMaterial({ color: 0xd6a94b, roughness: 0.35, metalness: 0.6 });
+  var woodMat = new THREE.MeshStandardMaterial({ color: 0xd7b48c, roughness: 0.85 });
+  var weightMat = new THREE.MeshStandardMaterial({ color: 0x6f7b8a, roughness: 0.42, metalness: 0.35 });
+
+  /* ---------- 용수철저울 (왼쪽) ---------- */
+  var springRig = new THREE.Group();
+  springRig.position.set(-2.35, 0, 0);
+  scene.add(springRig);
+
+  var baseP = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.1, 1.35), steelMat);
+  baseP.position.y = 0.05;
+  baseP.castShadow = true; baseP.receiveShadow = true;
+  springRig.add(baseP);
+  [-0.8, 0.8].forEach(function (px) {
+    var post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 2.42, 14), steelMat);
+    post.position.set(px, 1.26, 0);
+    post.castShadow = true;
+    springRig.add(post);
+  });
+  var cross = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.1, 0.12), steelMat);
+  cross.position.set(0, 2.47, 0);
+  cross.castShadow = true;
+  springRig.add(cross);
+
+  var scaleBody = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.82, 28), whiteBody);
+  scaleBody.position.set(0, 2.0, 0);
+  scaleBody.castShadow = true;
+  springRig.add(scaleBody);
+  var capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.24, 0.1, 24), steelMat);
+  capTop.position.set(0, 2.46, 0);
+  springRig.add(capTop);
+
+  /* 눈금판 */
+  var dialCv = document.createElement('canvas');
+  dialCv.width = dialCv.height = 512;
+  var dg = dialCv.getContext('2d');
+  var dialTex = new THREE.CanvasTexture(dialCv);
+  var dialMesh = new THREE.Mesh(new THREE.CircleGeometry(0.255, 44), new THREE.MeshBasicMaterial({ map: dialTex }));
+  dialMesh.position.set(0, 2.0, 0.303);
+  springRig.add(dialMesh);
+  var dialBezel = new THREE.Mesh(new THREE.TorusGeometry(0.262, 0.022, 8, 34), darkSteel);
+  dialBezel.position.copy(dialMesh.position);
+  springRig.add(dialBezel);
+
+  function drawDial(v) {
+    var cx = 256, cy = 256, R = 230;
+    dg.clearRect(0, 0, 512, 512);
+    dg.fillStyle = '#fbfdff';
+    dg.beginPath(); dg.arc(cx, cy, R, 0, Math.PI * 2); dg.fill();
+    dg.strokeStyle = '#cfd8e3'; dg.lineWidth = 6; dg.stroke();
+    dg.strokeStyle = '#8d99a8';
+    dg.beginPath(); dg.arc(cx, cy, R - 14, Math.PI * 0.83, Math.PI * 0.17); dg.stroke();
+    for (var k = 0; k <= 50; k += 1) {
+      var a = (150 + 240 * (k / 50)) * Math.PI / 180;
+      var long = (k % 10 === 0), mid = (k % 5 === 0);
+      if (!mid) continue;
+      var r0 = long ? R - 52 : R - 34;
+      dg.beginPath();
+      dg.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+      dg.lineTo(cx + Math.cos(a) * (R - 14), cy + Math.sin(a) * (R - 14));
+      dg.strokeStyle = long ? '#334155' : '#94a3b8';
+      dg.lineWidth = long ? 7 : 4;
+      dg.stroke();
+      if (long) {
+        dg.fillStyle = '#334155';
+        dg.font = "bold 44px 'SeoulNamsan', sans-serif";
+        dg.textAlign = 'center'; dg.textBaseline = 'middle';
+        dg.fillText(String(k), cx + Math.cos(a) * (R - 84), cy + Math.sin(a) * (R - 84));
+      }
+    }
+    /* 바늘 */
+    var an = (150 + 240 * Math.max(0, Math.min(50, v)) / 50) * Math.PI / 180;
+    dg.beginPath();
+    dg.moveTo(cx, cy);
+    dg.lineTo(cx + Math.cos(an) * (R - 46), cy + Math.sin(an) * (R - 46));
+    dg.strokeStyle = '#e11d48'; dg.lineWidth = 9; dg.lineCap = 'round';
+    dg.stroke();
+    dg.beginPath(); dg.arc(cx, cy, 16, 0, Math.PI * 2); dg.fillStyle = '#e11d48'; dg.fill();
+    dg.fillStyle = '#0f172a';
+    dg.font = "bold 58px 'SeoulNamsan', sans-serif";
+    dg.textAlign = 'center'; dg.textBaseline = 'middle';
+    dg.fillText(v.toFixed(1), cx, cy + 132);
+    dg.fillStyle = '#64748b';
+    dg.font = "bold 34px 'SeoulNamsan', sans-serif";
+    dg.fillText('N', cx, cy + 182);
+    dialTex.needsUpdate = true;
+  }
+
+  /* 용수철 */
+  function helixGeo(len, turns, rad) {
+    var pts = [];
+    var n = Math.round(turns * 16);
+    for (var i = 0; i <= n; i++) {
+      var t = i / n;
+      pts.push(new THREE.Vector3(Math.cos(t * Math.PI * 2 * turns) * rad, -t * len, Math.sin(t * Math.PI * 2 * turns) * rad));
+    }
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n * 2, 0.016, 6, false);
+  }
+  var springMat = new THREE.MeshStandardMaterial({ color: 0xa9b6c6, roughness: 0.3, metalness: 0.7 });
+  var springMesh = new THREE.Mesh(helixGeo(1, 9, 0.115), springMat);
+  springRig.add(springMesh);
+  var hookMesh = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.016, 8, 18), springMat);
+  springRig.add(hookMesh);
+
+  /* 추 (용수철저울용) */
+  var objS = new THREE.Group();
+  var objSB = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 30), weightMat);
+  objS.add(objSB);
+  var objSRing = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.022, 8, 18), steelMat);
+  objS.add(objSRing);
+  var objSClamp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.14, 12), steelMat);
+  objS.add(objSClamp);
+  springRig.add(objS);
+
+  /* 추 (양팔저울용) */
+  var objB = new THREE.Group();
+  var objBB = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 30), weightMat);
+  objB.add(objBB);
+  var objBRing = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.022, 8, 18), steelMat);
+  objB.add(objBRing);
+  var objBClamp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.14, 12), steelMat);
+  objB.add(objBClamp);
+
+  /* ---------- 양팔저울 (오른쪽) ---------- */
+  var balRig = new THREE.Group();
+  balRig.position.set(2.5, 0, 0);
+  scene.add(balRig);
+
+  var baseB = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 1.05), woodMat);
+  baseB.position.y = 0.06;
+  baseB.castShadow = true; baseB.receiveShadow = true;
+  balRig.add(baseB);
+  var colB = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.095, 1.44, 16), steelMat);
+  colB.position.y = 0.78;
+  colB.castShadow = true;
+  balRig.add(colB);
+  var knob = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), brassMat);
+  knob.position.y = 1.5;
+  balRig.add(knob);
+
+  var beamGroup = new THREE.Group();
+  beamGroup.position.set(0, 1.52, 0);
+  balRig.add(beamGroup);
+  var beam = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.075, 0.1), brassMat);
+  beam.castShadow = true;
+  beamGroup.add(beam);
+  var ptr = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.34, 0.045), darkSteel);
+  ptr.position.set(0, -0.18, 0);
+  beamGroup.add(ptr);
+  var ptrTip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 10), darkSteel);
+  ptrTip.position.set(0, -0.4, 0);
+  ptrTip.rotation.x = Math.PI;
+  beamGroup.add(ptrTip);
+  var scaleArc = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.012, 6, 24, Math.PI * 0.5), darkSteel);
+  scaleArc.position.set(0, -0.02, 0.06);
+  scaleArc.rotation.z = -Math.PI * 0.75;
+  balRig.add(scaleArc);
+
+  function makePan() {
+    var g = new THREE.Group();
+    var disc = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.4, 0.06, 30), steelMat);
+    disc.castShadow = true; disc.receiveShadow = true;
+    g.add(disc);
+    var rim = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.018, 8, 30), darkSteel);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.03;
+    g.add(rim);
+    return g;
+  }
+  /* 접시를 매단 3줄 */
+  function hangStrings(pan, beamEndX) {
+    var pts = [];
+    var angs = [Math.PI / 2, Math.PI / 2 + Math.PI * 2 / 3, Math.PI / 2 + Math.PI * 4 / 3];
+    angs.forEach(function (a) {
+      pts.push(new THREE.Vector3(beamEndX, 1.52, 0));
+      pts.push(new THREE.Vector3(beamEndX + Math.cos(a) * 0.36, pan.position.y + 0.03, Math.sin(a) * 0.36));
+    });
+    var lg = new THREE.BufferGeometry().setFromPoints(pts);
+    var line = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0x7c8797 }));
+    balRig.add(line);
+  }
+  var panL = makePan();
+  panL.position.set(-1.02, 0.76, 0);
+  balRig.add(panL);
+  var panR = makePan();
+  panR.position.set(1.02, 0.76, 0);
+  balRig.add(panR);
+  hangStrings(panL, -1.09);
+  hangStrings(panR, 1.09);
+  objB.position.set(-1.02, 1.06, 0);
+  balRig.add(objB);
+
+  /* 표준 추 더미 (오른쪽 접시) */
+  var stdGroup = new THREE.Group();
+  stdGroup.position.set(1.02, 0.79, 0);
+  balRig.add(stdGroup);
+
+  /* ---------- 3D 라벨 ---------- */
+  function lab(t, c, w, x, y, z, parent) {
+    var l = S.makeLabel(t, c, w);
+    l.position.set(x, y, z);
+    (parent || scene).add(l);
+    return l;
+  }
+  var labSpring = lab('용수철저울 · 무게', '#0f172a', 1.95, -2.4, 3.05, 0);
+  var labBal = lab('양팔저울 · 질량', '#0f172a', 1.8, 2.55, 2.22, 0);
+  var labMass = lab('1 kg', '#b45309', 0.8, -2.55, 0.0, 0.0);
+  var labPanL = lab('이 물체', '#1d4ed8', 1.05, 0, 0, 0);
+  var labPanR = lab('1 kg 표준추', '#15803d', 1.25, 0, 0, 0);
+  var labEnv = lab('지구 · 중력 9.8 m/s²', '#1d4ed8', 2.05, 0, 2.95, -2.6);
+
+  [labSpring, labBal, labMass, labPanL, labPanR, labEnv].forEach(function (l) { l.userData.bw = l.scale.x; });
+  function scaleLabels(f) {
+    [labSpring, labBal, labMass, labPanL, labPanR, labEnv].forEach(function (l) {
+      var b = l.userData.bw || l.scale.x;
+      l.scale.set(b * f, b * 0.25 * f, 1);
+    });
+  }
+
+  function setText(spr, txt) { if (spr.userData.label.text !== txt) { spr.userData.label.text = txt; S.relabel(); } }
+
+  /* ---------- 계산 ---------- */
+  function weightN() { return state.mass * GRAV[state.env]; }
+
+  var stretch = 0;
+  var RIG_SX = -2.35, RIG_BX = 2.5, rigScale = 1;
+
+  function layout() {
+    var m = MASS[String(state.mass)];
+    var w = weightN();
+
+    /* 용수철 늘어남: 0.26 ~ 0.62 */
+    var target = 0.26 + 0.36 * Math.min(1, w / 49);
+    stretch += (target - stretch) * 0.16;
+    var springTop = 1.585;
+    var springLen = stretch;
+    springMesh.scale.set(1, springLen, 1);
+    springMesh.position.set(0, springTop, 0);
+    hookMesh.position.set(0, springTop - springLen - 0.02, 0);
+
+    var blockTop = springTop - springLen - 0.07;
+    objSB.scale.set(m.r, m.h, m.r);
+    objS.position.set(0, blockTop - m.h / 2, 0);
+    objSRing.position.set(0, m.h / 2 + 0.06, 0);
+    objSClamp.position.set(0, m.h / 2 + 0.12, 0);
+
+    labMass.position.set(RIG_SX - (m.r + 0.42) * rigScale, blockTop - m.h / 2, 0.35);
+    setText(labMass, state.mass + ' kg');
+
+    /* 양팔저울 */
+    var th = m.h;
+    objBB.scale.set(m.r, m.h, m.r);
+    objB.position.set(-1.02, 0.79 + th / 2 + 0.01, 0);
+    objBRing.position.set(0, m.h / 2 + 0.06, 0);
+    objBClamp.position.set(0, m.h / 2 + 0.12, 0);
+
+    /* 표준추: 질량만큼 원판 쌓기 (1kg = 큰 원판, 5kg = 5장) */
+    while (stdGroup.children.length) stdGroup.remove(stdGroup.children[0]);
+    var n = state.mass;
+    for (var i = 0; i < n; i++) {
+      var disc = new THREE.Mesh(new THREE.CylinderGeometry(0.3 - i * 0.012, 0.3 - i * 0.012, 0.14, 26), brassMat);
+      disc.position.y = 0.08 + i * 0.15;
+      disc.castShadow = true;
+      stdGroup.add(disc);
+      var hk = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.013, 8, 14), darkSteel);
+      hk.position.y = 0.08 + i * 0.15 + 0.09;
+      hk.rotation.x = Math.PI / 2;
+      stdGroup.add(hk);
+    }
+
+    labPanL.position.set(RIG_BX - 1.02 * rigScale, 0.48 * rigScale, 0);
+    labPanR.position.set(RIG_BX + 1.02 * rigScale, 0.48 * rigScale, 0);
+    setText(labPanL, '이 물체 ' + state.mass + ' kg');
+    setText(labPanR, state.mass + ' kg 표준추');
+
+    /* 눈금 · 데이터 */
+    drawDial(w);
+    var gTxt = state.env === 'earth' ? '9.8' : '1.6';
+    $('dGrav').textContent = gTxt;
+    $('dWeight').textContent = w.toFixed(1) + ' N';
+    $('dMass').textContent = state.mass + ' kg';
+    $('badgeW').textContent = '무게 ' + w.toFixed(1) + ' N';
+    $('badgeW').parentNode.classList.toggle('good', state.env === 'moon');
+    $('badgeM').textContent = '질량 ' + state.mass + ' kg · 어디서나 같음';
+    $('tWe').textContent = (state.mass * 9.8).toFixed(1) + ' N';
+    $('tWm').textContent = (state.mass * 1.6).toFixed(1) + ' N';
+    $('tMe').textContent = state.mass + ' kg';
+    $('tMm').textContent = state.mass + ' kg';
+    setText(labEnv, (state.env === 'earth' ? '지구 · 중력 9.8 m/s²' : '달 · 중력 1.6 m/s²'));
+  }
+
+  /* ---------- 환경 전환 ---------- */
+  function applyEnv() {
+    var moon = state.env === 'moon';
+    scene.background = new THREE.Color(moon ? 0x060a13 : 0xcfe4f7);
+    groundMat.color.setHex(moon ? 0x5f646c : 0x8cae94);
+    groundMat.roughness = moon ? 1.0 : 0.95;
+    craters.visible = moon;
+    stars.visible = moon;
+    earthSky.visible = moon;
+    S.hemi.intensity = moon ? 0.34 : 0.56;
+    S.key.intensity = moon ? 0.85 : 0.72;
+    S.fill.intensity = moon ? 0.16 : 0.24;
+    document.querySelectorAll('[data-env]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-env') === state.env);
+    });
+    S.setHint(moon
+      ? '🌕 달에서는 중력이 1/6이라 무게는 줄지만, 질량은 그대로 1 kg이에요.'
+      : '🌍 지구에서 무게는 9.8 N, 양팔저울로 잰 질량은 1 kg이에요.', false);
+    layout();
+  }
+
+  document.querySelectorAll('[data-env]').forEach(function (b) {
+    b.addEventListener('click', function () { state.env = b.getAttribute('data-env'); applyEnv(); });
+  });
+  document.querySelectorAll('[data-mass]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.mass = parseInt(b.getAttribute('data-mass'), 10);
+      document.querySelectorAll('[data-mass]').forEach(function (x) {
+        x.classList.toggle('active', x === b);
+      });
+      stretch = 0.26;
+      layout();
+    });
+  });
+
+  $('btnRead').addEventListener('click', function () {
+    state.pulling = 1.2;
+    S.setHint('🔍 용수철저울은 무게(' + weightN().toFixed(1) + ' N), 양팔저울은 질량(' + state.mass + ' kg)을 재요.', false);
+  });
+
+  /* ---------- 시점 ---------- */
+  function fit() {
+    var w = window.innerWidth, h = window.innerHeight;
+    var portrait = h > w;
+    var landscape = h <= 520 && w > h;
+    var sc = portrait ? 0.62 : (landscape ? 0.9 : 1);
+    rigScale = sc;
+    RIG_SX = portrait ? -1.32 : (landscape ? -1.9 : -2.35);
+    RIG_BX = portrait ? 1.36 : (landscape ? 1.9 : 2.5);
+    springRig.position.set(RIG_SX, 0, 0);
+    balRig.position.set(RIG_BX, 0, 0);
+    springRig.rotation.y = 0; balRig.rotation.y = 0;
+    springRig.scale.setScalar(sc);
+    balRig.scale.setScalar(sc);
+    scaleLabels(portrait ? 0.58 : (landscape ? 0.8 : 1));
+    labSpring.position.set(RIG_SX, 3.02 * sc + 0.28, 0);
+    labBal.position.set(RIG_BX, 2.22 * sc + 0.22, 0);
+    labEnv.position.set(0, 2.95 * sc + 0.35, -2.4);
+    layout();
+    var dist = portrait ? 10.2 : (landscape ? 6.6 : 7.6);
+    S.camera.position.set(0, portrait ? 1.95 : (landscape ? 1.95 : 2.15), dist);
+    S.controls.target.set(landscape ? 0.45 : 0.05, portrait ? 1.05 : (landscape ? 1.2 : 1.35), 0);
+    S.camera.fov = portrait ? 52 : (landscape ? 50 : 44);
+    S.camera.updateProjectionMatrix();
+    S.controls.update();
+  }
+  S.setFit(fit);
+
+  S.setReset(function () {
+    state.env = 'earth'; state.mass = 1; stretch = 0.26;
+    document.querySelectorAll('[data-env]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-env') === 'earth'); });
+    document.querySelectorAll('[data-mass]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mass') === '1'); });
+    applyEnv();
+    fit();
+  });
+
+  /* ---------- 애니메이션 ---------- */
+  var t0 = 0;
+  S.onFrame(function (dt, now) {
+    var w = weightN();
+    var target = 0.26 + 0.36 * Math.min(1, w / 49);
+    stretch += (target - stretch) * Math.min(1, dt * 6);
+    var springTop = 1.585;
+    springMesh.scale.set(1, stretch, 1);
+    springMesh.position.set(0, springTop, 0);
+    hookMesh.position.set(0, springTop - stretch - 0.02, 0);
+    var m = MASS[String(state.mass)];
+    objS.position.y = springTop - stretch - 0.07 - m.h / 2;
+    labMass.position.y = objS.position.y;
+
+    /* 양팔저울 살짝 흔들림 */
+    if (state.pulling > 0) {
+      state.pulling = Math.max(0, state.pulling - dt);
+      beamGroup.rotation.z = Math.sin(now * 0.012) * 0.05 * state.pulling;
+    } else {
+      beamGroup.rotation.z *= 0.9;
+    }
+    earthBall.rotation.y += dt * 0.12;
+    cloudBall.rotation.y -= dt * 0.09;
+  });
+
+  applyEnv();
+  layout();
+  fit();
+  S.setHint('🌍 지구와 🌕 달에서 같은 물체를 재어 보세요. 무게는 달라지고 질량은 그대로예요.', false);
+})();
+
+</script>
+
+<script>
+/* ============ 전체화면 / 창모드 + 모바일 화면 재조정 (공통) ============ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '\uD83D\uDDD7' : '\u26F6';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) {
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            btn.title = on ? '창모드로 전환' : '전체화면으로 전환';
+        }
+        document.body.classList.toggle('is-fullscreen', on);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (window.SVL && window.SVL.hooks && window.SVL.hooks.fit) window.SVL.hooks.fit();
+        }, 150);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (window.SVL && window.SVL.hooks && window.SVL.hooks.fit) window.SVL.hooks.fit();
+        }, 440);
+    }
+
+    function onKey(e) {
+        if (e.key !== 'Escape' && e.key !== 'Esc') return;
+        if (pseudo() && !realFs()) { docEl.classList.remove('pseudo-fs'); setUI(); }
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+                return;
+            }
+            if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var r = req.call(docEl);
+                    if (r && typeof r.catch === 'function') r.catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                } catch (err) {
+                    docEl.classList.add('pseudo-fs');
+                }
+            } else {
+                docEl.classList.add('pseudo-fs');
+                try { window.scrollTo(0, 1); } catch (e) {}
+                toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+            }
+            setUI();
+        }, false);
+    }
+
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+    document.addEventListener('keydown', onKey);
+
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+</body>
+</html>

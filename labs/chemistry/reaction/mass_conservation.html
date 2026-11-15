@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>질량 보존 법칙 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+<style>
+
+    @font-face {
+        font-family: 'SeoulNamsan';
+        src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+             url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+        font-weight: 400; font-style: normal; font-display: swap;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(120% 100% at 50% 6%, #ffffff 0%, #eef3fa 48%, #e2eaf4 100%);
+        color: #1c1c1e; touch-action: none; user-select: none; -webkit-user-select: none;
+        transition: background .35s ease, color .35s ease;
+    }
+    body.dark-mode {
+        background: radial-gradient(120% 100% at 50% 6%, #1a2433 0%, #101725 55%, #080c14 100%);
+        color: #eef3fa;
+    }
+    #canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+    #canvas-container canvas { display: block; }
+
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.76);
+        backdrop-filter: blur(22px) saturate(180%);
+        -webkit-backdrop-filter: blur(22px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 0 10px 30px rgba(16, 32, 64, 0.10);
+        z-index: 11;
+    }
+    body.dark-mode .glass-panel {
+        background: rgba(22, 29, 42, 0.78);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
+        color: #eaf1fb;
+    }
+
+    /* ---------- 좌상단 ---------- */
+    .top-left-bar { position: fixed; top: 18px; left: 20px; display: flex; align-items: center; gap: 9px; z-index: 12; }
+    .back-btn {
+        display: flex; align-items: center; gap: 6px; padding: 9px 16px;
+        font-family: inherit; font-size: 14px; font-weight: 700; color: #1c1c1e;
+        text-decoration: none; cursor: pointer; border-radius: 999px; border: none;
+        transition: transform .18s ease, background .18s ease;
+    }
+    .back-btn span:first-child { font-weight: 900; font-size: 15px; }
+    .back-btn:hover { transform: translateY(-1px); }
+    body.dark-mode .back-btn { color: #ecf2fd; }
+    .tag-badge {
+        display: flex; align-items: center; gap: 8px; padding: 9px 16px;
+        border-radius: 999px; font-size: 14px; font-weight: 800; color: #111;
+        white-space: nowrap;
+    }
+    body.dark-mode .tag-badge { color: #f2f7ff; }
+    .tag-pill { background: rgba(10, 132, 255, 0.16); color: #0a84ff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 800; }
+    body.dark-mode .tag-pill { background: rgba(10, 132, 255, 0.26); color: #79bdff; }
+    .qr-btn { padding: 9px 14px; }
+
+    /* ---------- 우상단 ---------- */
+    .top-right-bar { position: fixed; top: 18px; right: 20px; display: flex; align-items: center; gap: 9px; z-index: 12; }
+    .tr-util { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+        width: 40px; height: 40px; min-width: 40px; border: none; border-radius: 999px;
+        font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; font-family: inherit; color: #1c1c1e;
+    }
+    body.dark-mode .icon-btn { color: #eaf1fb; }
+    .data-card { display: flex; align-items: center; gap: 15px; padding: 9px 16px; border-radius: 999px; }
+    .data-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+    .data-label { font-size: 10.5px; font-weight: 700; color: #7b8794; white-space: nowrap; }
+    body.dark-mode .data-label { color: #93a3b8; }
+    .data-value { font-size: 13.5px; font-weight: 800; color: #1c1c1e; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    body.dark-mode .data-value { color: #f2f7ff; }
+    .data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+    body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.14); }
+
+    /* ---------- 중앙 안내 ---------- */
+    #guide-tooltip {
+        position: fixed; top: 92px; left: 50%; transform: translateX(-50%);
+        padding: 9px 18px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+        color: #fff; background: rgba(24, 30, 42, .82); border: none;
+        white-space: nowrap; pointer-events: none; z-index: 12;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+        transition: opacity .5s ease;
+    }
+    body.dark-mode #guide-tooltip { color: #eef4ff; background: rgba(8, 12, 20, .88); }
+    #guide-tooltip.fade { opacity: 0; }
+
+    /* ---------- 좌측 데이터 패널 ---------- */
+    .left-panel {
+        position: fixed; left: 20px; top: 132px; width: 236px;
+        max-height: calc(100vh - 210px); overflow-y: auto;
+        padding: 12px 13px; border-radius: 18px;
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .lp-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; font-weight: 800; color: #334155; padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, .07); }
+    body.dark-mode .lp-title { color: #dce7f7; border-bottom-color: rgba(255, 255, 255, .12); }
+    .lp-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+    .lp-k { color: #6b7684; font-weight: 700; white-space: nowrap; }
+    body.dark-mode .lp-k { color: #9db0c9; }
+    .lp-v { font-weight: 800; color: #1c1c1e; font-variant-numeric: tabular-nums; text-align: right; }
+    body.dark-mode .lp-v { color: #f2f7ff; }
+    .lp-note { font-size: 10.8px; line-height: 1.45; color: #7b8794; word-break: keep-all; }
+    body.dark-mode .lp-note { color: #93a3b8; }
+    .lp-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .lp-tbl th { font-size: 10.3px; color: #7b8794; font-weight: 800; text-align: left; padding: 3px 2px; border-bottom: 1px solid rgba(0, 0, 0, .08); }
+    .lp-tbl td { padding: 3px 2px; border-bottom: 1px dashed rgba(0, 0, 0, .07); font-weight: 700; color: #334155; font-variant-numeric: tabular-nums; }
+    body.dark-mode .lp-tbl th { color: #93a3b8; border-bottom-color: rgba(255, 255, 255, .16); }
+    body.dark-mode .lp-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255, 255, .09); }
+    canvas.lp-canvas { width: 100%; height: 104px; display: block; border-radius: 10px; background: rgba(248, 251, 255, .7); }
+    body.dark-mode canvas.lp-canvas { background: rgba(255, 255, 255, .06); }
+    .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.4px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #eaf2ff; color: #0a84ff; white-space: nowrap; }
+    body.dark-mode .chip { background: rgba(10, 132, 255, .22); color: #8cc7ff; }
+    .chip.ok { background: #e6f8ee; color: #1a9e54; }
+    body.dark-mode .chip.ok { background: rgba(26, 158, 84, .22); color: #6ddfa1; }
+    .chip.warn { background: #fff2e5; color: #d97706; }
+    body.dark-mode .chip.warn { background: rgba(217, 119, 6, .22); color: #ffc974; }
+    .lp-bar { height: 7px; border-radius: 999px; background: rgba(0, 0, 0, .08); overflow: hidden; }
+    body.dark-mode .lp-bar { background: rgba(255, 255, 255, .14); }
+    .lp-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #34c759, #0a84ff); transition: width .3s; }
+
+    /* ---------- 우측 조절 패널 ---------- */
+    .side-ctrl-panel {
+        position: fixed; right: 20px; bottom: 74px; width: 226px;
+        max-height: calc(100vh - 150px); overflow-y: auto;
+        padding: 12px; border-radius: 18px;
+        display: flex; flex-direction: column; gap: 9px;
+    }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; font-weight: 800; color: #334155; padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, .07); }
+    body.dark-mode .panel-title { color: #dce7f7; border-bottom-color: rgba(255, 255, 255, .12); }
+    .panel-sub { font-size: 10.6px; font-weight: 700; color: #7b8794; }
+    body.dark-mode .panel-sub { color: #93a3b8; }
+    .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .ctrl-grid.one { grid-template-columns: 1fr; }
+    .control-tab-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+        border: none; border-radius: 13px; padding: 9px 8px;
+        background: rgba(255, 255, 255, .92); color: #1c1c1e;
+        font-family: inherit; font-size: 11.6px; font-weight: 800;
+        cursor: pointer; white-space: nowrap; line-height: 1.2;
+        box-shadow: 0 1px 4px rgba(16, 32, 64, .08);
+        transition: transform .14s ease, background .14s ease, color .14s ease;
+    }
+    .control-tab-btn:hover { transform: translateY(-1px); }
+    .control-tab-btn:active { transform: scale(.97); }
+    .control-tab-btn.on { background: #0a84ff; color: #fff; box-shadow: 0 4px 12px rgba(10, 132, 255, .34); }
+    body.dark-mode .control-tab-btn { background: rgba(70, 84, 106, .55); color: #edf3fd; }
+    body.dark-mode .control-tab-btn.on { background: #0a84ff; color: #fff; }
+    .control-tab-btn .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .7) inset; }
+    .control-tab-btn.wide { width: 100%; }
+    .ctrl-row { display: flex; flex-direction: column; gap: 3px; }
+    .ctrl-row-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11.2px; font-weight: 700; color: #6b7684; }
+    body.dark-mode .ctrl-row-head { color: #9db0c9; }
+    .ctrl-val { font-weight: 800; color: #0a84ff; }
+    input[type=range].ctrl-slider { width: 100%; height: 22px; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+    input[type=range].ctrl-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: #dbe4f0; }
+    input[type=range].ctrl-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%; background: #0a84ff; margin-top: -5.5px; box-shadow: 0 2px 6px rgba(10, 132, 255, .4); }
+    input[type=range].ctrl-slider::-moz-range-track { height: 6px; border-radius: 999px; background: #dbe4f0; }
+    input[type=range].ctrl-slider::-moz-range-thumb { width: 17px; height: 17px; border: none; border-radius: 50%; background: #0a84ff; }
+    body.dark-mode input[type=range].ctrl-slider::-webkit-slider-runnable-track { background: #3b4b63; }
+    .panel-hr { height: 1px; background: rgba(0, 0, 0, .07); margin: 1px 0; }
+    body.dark-mode .panel-hr { background: rgba(255, 255, 255, .12); }
+    .seg-row { display: flex; gap: 6px; }
+    .seg-row .control-tab-btn { flex: 1; }
+
+    /* ---------- 하단 ---------- */
+    .bottom-control-bar {
+        position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 999px;
+        z-index: 12; white-space: nowrap;
+    }
+    .bottom-control-bar .control-tab-btn { padding: 8px 15px; border-radius: 999px; font-size: 12.5px; background: rgba(255, 255, 255, .6); box-shadow: none; }
+    body.dark-mode .bottom-control-bar .control-tab-btn { background: rgba(255, 255, 255, .1); }
+    .bottom-right-bar { position: fixed; right: 20px; bottom: 18px; display: flex; align-items: center; gap: 8px; z-index: 12; }
+    .bottom-right-bar .back-btn { padding: 9px 16px; border-radius: 999px; font-size: 12.5px; font-weight: 800; }
+
+    #svl-toast {
+        position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom));
+        transform: translateX(-50%) translateY(6px); opacity: 0; pointer-events: none;
+        background: rgba(24, 30, 42, .9); color: #fff; font-size: 12.5px; font-weight: 700;
+        padding: 10px 16px; border-radius: 14px; z-index: 9999; max-width: 82vw; text-align: center;
+        transition: opacity .25s ease, transform .25s ease; line-height: 1.4;
+    }
+    #svl-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* 실험별 추가 스타일 */
+    .lp-eq{font-size:10.4px;font-weight:700;color:#475569;background:rgba(70,110,160,.08);border-radius:9px;padding:6px 7px;line-height:1.5;text-align:center}
+body.dark-mode .lp-eq{color:#c9d8ea;background:rgba(255,255,255,.07)}
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 7px !important;
+        font-size: 10px !important;
+        gap: 0 !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+
+@media (max-width: 900px) and (min-height: 501px) {
+    #bTheme { top: max(8px, env(safe-area-inset-top)) !important; right: 46px !important; padding: 5px 9px !important; font-size: 11px !important; }
+    #top-left-wrap { left: 8px !important; top: max(8px, env(safe-area-inset-top)) !important; gap: 6px !important; height: 34px !important; }
+    #top-left-wrap .back-btn { padding: 0 10px !important; font-size: 12px !important; }
+    #hint { top: calc(max(8px, env(safe-area-inset-top)) + 46px) !important; font-size: 10.5px !important; padding: 6px 12px !important; white-space: normal !important; }
+    #boardHelp { display: none !important; }
+    #bar { left: 8px !important; right: 8px !important; bottom: calc(4px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; flex-wrap: wrap !important; justify-content: center !important; padding: 6px !important; gap: 5px !important; border-radius: 14px !important; }
+    .cbtn { font-size: 11px !important; padding: 6px 10px !important; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+    #bTheme { top: max(6px, env(safe-area-inset-top)) !important; right: 42px !important; padding: 3px 7px !important; font-size: 10px !important; }
+    #top-left-wrap { left: 6px !important; top: max(6px, env(safe-area-inset-top)) !important; gap: 5px !important; height: 28px !important; }
+    #top-left-wrap .back-btn { padding: 0 8px !important; font-size: 10.5px !important; }
+    #hint { top: calc(max(6px, env(safe-area-inset-top)) + 36px) !important; font-size: 10px !important; padding: 4px 10px !important; }
+    #boardHelp { display: none !important; }
+    #bar { left: 50% !important; right: auto !important; bottom: 3px !important; transform: translateX(-50%) !important; width: auto !important; flex-wrap: nowrap !important; padding: 3px 6px !important; gap: 4px !important; border-radius: 12px !important; }
+    .cbtn { font-size: 9.5px !important; padding: 3px 7px !important; }
+}
+
+/* @@/MOBILE-BASE@@ */
+
+    /* ---------- 신규 3D 공통: 모바일 패널 배치 ---------- */
+    @media (max-width: 900px) {
+        .left-panel {
+            left: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 76px);
+            width: min(43vw, 168px); max-height: 40vh;
+            padding: 8px 9px; gap: 5px; border-radius: 14px;
+        }
+        .lp-title { font-size: 10.4px; padding-bottom: 4px; }
+        .lp-row { font-size: 10px; gap: 4px; }
+        .lp-note { font-size: 9px; line-height: 1.35; }
+        .lp-tbl { font-size: 9.4px; }
+        .lp-tbl th { font-size: 8.6px; }
+        .lp-tbl td { padding: 2px 1px; }
+        canvas.lp-canvas { height: 68px; border-radius: 8px; }
+        .chip { font-size: 9px; padding: 1px 6px; }
+        .side-ctrl-panel {
+            right: 8px; bottom: calc(60px + env(safe-area-inset-bottom));
+            width: min(49vw, 210px); max-height: 52vh; padding: 8px; gap: 6px; border-radius: 14px;
+        }
+        .panel-title { font-size: 10.4px; padding-bottom: 4px; }
+        .panel-sub { font-size: 9px; }
+        .ctrl-grid { gap: 4px; }
+        .control-tab-btn { font-size: 9.8px; padding: 7px 3px; border-radius: 10px; gap: 3px; }
+        .ctrl-row-head { font-size: 9.6px; }
+        .bottom-control-bar { gap: 4px; padding: 5px 7px; }
+        .bottom-control-bar .control-tab-btn { padding: 7px 11px; font-size: 11px; }
+        .bottom-right-bar .back-btn { padding: 7px 10px; font-size: 12px; }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+        .left-panel {
+            left: 8px; top: calc(max(6px, env(safe-area-inset-top)) + 38px);
+            width: 178px; max-height: 62vh; padding: 7px 8px; gap: 4px; border-radius: 12px;
+        }
+        .lp-title { font-size: 9.6px; padding-bottom: 3px; }
+        .lp-row { font-size: 9.2px; }
+        .lp-note { font-size: 8.4px; }
+        canvas.lp-canvas { height: 54px; }
+        .side-ctrl-panel { right: 8px; bottom: calc(42px + env(safe-area-inset-bottom)); width: 186px; max-height: 64vh; padding: 7px; gap: 4px; border-radius: 12px; }
+        .control-tab-btn { font-size: 9.2px; padding: 5px 3px; }
+        .panel-title { font-size: 9.6px; }
+    }
+
+    /* ---------- 모바일: 좌측 데이터 패널 접기/펼치기 ---------- */
+    #lp-fab { display: none; }
+    .lp-close { display: none; }
+    @media (max-width: 768px) {
+        .left-panel {
+            display: none; left: 8px; right: 8px; width: auto;
+            top: calc(max(8px, env(safe-area-inset-top)) + 132px); bottom: auto;
+            max-height: calc(100vh - 300px); z-index: 140; padding: 10px 12px; gap: 6px;
+        }
+        .left-panel.open { display: flex; }
+        .lp-close {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; border-radius: 50%; border: none;
+            background: rgba(120, 130, 148, .18); color: inherit;
+            font-family: inherit; font-size: 11px; font-weight: 800; cursor: pointer;
+            margin-left: 4px; flex: 0 0 auto;
+        }
+        #lp-fab {
+            display: inline-flex; align-items: center; gap: 5px;
+            position: fixed; left: 8px; bottom: calc(62px + env(safe-area-inset-bottom));
+            padding: 8px 13px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .8);
+            font-family: inherit; font-size: 11.5px; font-weight: 800; color: #1c1c1e;
+            z-index: 80; cursor: pointer; box-shadow: 0 6px 18px rgba(16, 32, 64, .14);
+        }
+        #lp-fab.on { background: #0a84ff; color: #fff; }
+        body.dark-mode #lp-fab { color: #eaf1fb; border-color: rgba(255, 255, 255, .14); }
+        body.dark-mode #lp-fab.on { background: #0a84ff; color: #fff; }
+        #guide-tooltip {
+            top: calc(max(8px, env(safe-area-inset-top)) + 150px) !important;
+            max-width: 88vw; white-space: normal; text-align: center;
+            font-size: 11px; padding: 7px 13px; line-height: 1.35;
+        }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+        .left-panel {
+            display: none; left: 8px; right: 8px; width: auto;
+            top: calc(max(6px, env(safe-area-inset-top)) + 36px); bottom: auto;
+            max-height: calc(100vh - 110px); z-index: 140; padding: 8px 10px;
+        }
+        .left-panel.open { display: flex; }
+        #lp-fab { bottom: calc(44px + env(safe-area-inset-bottom)); left: 8px; padding: 6px 11px; font-size: 10.5px; }
+        #guide-tooltip { display: none; }
+    }
+
+
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="/index.html" class="back-btn glass-panel" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>질량 보존 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span></button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel" id="theme-toggle" type="button" title="야간 모드" aria-label="야간 모드">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+<div class="data-item"><span class="data-label">용기</span><span class="data-value" id="val-vessel">열린 비커</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">반응</span><span class="data-value" id="val-rx">앙금 생성</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">저울</span><span class="data-value" id="val-mass">250.0 g</span></div>
+    </div>
+</div>
+
+<div class="glass-panel" id="guide-tooltip">열린 비커와 닫힌 페트병에서 반응 전후 질량을 저울로 비교해 보세요</div>
+
+<div class="left-panel glass-panel">
+<div class="lp-title"><span>⚖️ 질량 측정</span><span class="chip" id="lp-verdict">질량 보존 ✓</span></div>
+        <div class="lp-row"><span class="lp-k">반응</span><span class="lp-v" id="lp-rx">앙금 생성</span></div>
+        <div class="lp-row"><span class="lp-k">용기</span><span class="lp-v" id="lp-vessel">열린 비커</span></div>
+        <div class="lp-row"><span class="lp-k">반응 전</span><span class="lp-v" id="lp-before">250.0 g</span></div>
+        <div class="lp-row"><span class="lp-k">반응 후</span><span class="lp-v" id="lp-after">250.0 g</span></div>
+        <div class="lp-row"><span class="lp-k">차이</span><span class="lp-v" id="lp-diff">0.0 g</span></div>
+        <canvas class="lp-canvas" id="cv-mass"></canvas>
+        <div class="lp-eq" id="lp-eq">CaCl₂ + Na₂CO₃ → CaCO₃↓ + 2NaCl</div>
+        <div class="lp-note" id="lp-note">닫힌 용기에서는 기체가 밖으로 나가지 못해 질량이 그대로예요.</div>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+<div class="panel-title"><span>⚙️ 실험 조절</span><span class="panel-sub">반응 선택</span></div>
+        <div class="ctrl-grid">
+            <button class="control-tab-btn on" id="btn-sed" type="button">🧪 앙금 생성</button>
+            <button class="control-tab-btn" id="btn-gas" type="button">💨 기체 발생</button>
+        </div>
+        <div class="panel-hr"></div>
+        <div class="panel-sub">용기 선택</div>
+        <div class="ctrl-grid">
+            <button class="control-tab-btn on" id="btn-open" type="button">🥛 열린 비커</button>
+            <button class="control-tab-btn" id="btn-closed" type="button">🧴 닫힌 페트병</button>
+        </div>
+        <button class="control-tab-btn wide" id="btn-react" type="button">▶ 반응 시작</button>
+        <button class="control-tab-btn wide" id="btn-again" type="button">🔄 다시 하기</button>
+</div>
+
+<div id="bar" class="glass-panel bottom-control-bar">
+    <button class="control-tab-btn" id="btn-reset" type="button">🔄 초기화</button>
+    <button class="control-tab-btn" id="btn-align" type="button">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" class="back-btn glass-panel" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<script>
+/* ============================================================
+   Science Virtual LAB — 3D 실험 공통 코어 (Batch 1)
+   renderer / camera / orbit / 조명 / 라벨 / 테마 / 전체화면 / 초기화
+   ============================================================ */
+(function () {
+    'use strict';
+
+    var $ = function (id) { return document.getElementById(String(id).replace(/^#/, '')); };
+    var FONT = "'SeoulNamsan', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    /* ---------- renderer ---------- */
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    $('canvas-container').appendChild(renderer.domElement);
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+
+    var HOME = { x: 0, y: 9, z: 17, tx: 0, ty: 1.7, tz: 0, fov: 38 };
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.075;
+    controls.rotateSpeed = 0.85;
+    controls.zoomSpeed = 0.9;
+    controls.minDistance = 5;
+    controls.maxDistance = 34;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.minPolarAngle = 0.12;
+
+    function sizeRenderer() {
+        var w = window.innerWidth, h = window.innerHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+
+    /* ---------- 조명 ---------- */
+    var hemi = new THREE.HemisphereLight(0xffffff, 0xc9d6e6, 0.62);
+    scene.add(hemi);
+    var amb = new THREE.AmbientLight(0xffffff, 0.18);
+    scene.add(amb);
+    var key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(6, 14, 9);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
+    key.shadow.radius = 3;
+    key.shadow.bias = -0.0008;
+    scene.add(key);
+    var rim = new THREE.DirectionalLight(0xbfd8ff, 0.30);
+    rim.position.set(-8, 6, -7);
+    scene.add(rim);
+
+    /* ---------- 바닥 ---------- */
+    var boardMat = new THREE.MeshStandardMaterial({ color: 0xe9eff8, roughness: 0.94, metalness: 0.02 });
+    var board = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, 0.3, 64), boardMat);
+    board.position.y = -0.15;
+    board.receiveShadow = true;
+    scene.add(board);
+    var boardRimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+    var boardRim = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.035, 8, 80), boardRimMat);
+    boardRim.rotation.x = Math.PI / 2;
+    boardRim.position.y = 0.005;
+    scene.add(boardRim);
+
+    /* ---------- 재질 · 도형 도우미 ---------- */
+    function mat(color, opt) {
+        return new THREE.MeshStandardMaterial(Object.assign({
+            color: color, roughness: 0.48, metalness: 0.06
+        }, opt || {}));
+    }
+    function glassMat(color, opacity) {
+        return new THREE.MeshPhysicalMaterial({
+            color: color || 0xdff2ff, transparent: true, opacity: opacity || 0.24,
+            roughness: 0.08, metalness: 0.0, transmission: 0.0,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+    }
+    function shadow(mesh, cast, receive) {
+        mesh.castShadow = cast !== false;
+        mesh.receiveShadow = receive !== false;
+        return mesh;
+    }
+    function add(parent, geo, material, pos) {
+        var m = new THREE.Mesh(geo, material);
+        if (pos) m.position.set(pos[0], pos[1], pos[2]);
+        shadow(m);
+        (parent || scene).add(m);
+        return m;
+    }
+
+    /* ---------- 3D 텍스트 라벨 (서울남산체 캔버스) ---------- */
+    var labels = [];
+    function makeLabel(text, opts) {
+        var o = Object.assign({
+            size: 0.5, color: '#1c1c1e', lightColor: '#1c1c1e',
+            bg: 'rgba(255,255,255,0.80)', darkBg: 'rgba(22,28,40,0.82)',
+            darkColor: '#e9f0fb', pad: 0.36, weight: 700, align: 'center', border: false
+        }, opts || {});
+
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: texture, transparent: true, depthWrite: false, depthTest: false
+        }));
+        sprite.renderOrder = 20;
+        var current = text;
+
+        function draw() {
+            var dark = document.body.classList.contains('dark-mode');
+            var fs = 64;
+            ctx.font = o.weight + ' ' + fs + 'px ' + FONT;
+            var w = Math.ceil(ctx.measureText(current).width);
+            var pw = Math.max(64, w + fs * 1.1);
+            var ph = fs * 1.9;
+            if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
+            ctx.clearRect(0, 0, pw, ph);
+            ctx.font = o.weight + ' ' + fs + 'px ' + FONT;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            var bg = dark ? o.darkBg : o.bg;
+            if (bg) {
+                var r = ph * 0.36;
+                ctx.fillStyle = bg;
+                ctx.beginPath();
+                ctx.moveTo(r, ph * 0.08);
+                ctx.lineTo(pw - r, ph * 0.08);
+                ctx.quadraticCurveTo(pw, ph * 0.08, pw, ph * 0.08 + r);
+                ctx.lineTo(pw, ph * 0.92 - r);
+                ctx.quadraticCurveTo(pw, ph * 0.92, pw - r, ph * 0.92);
+                ctx.lineTo(r, ph * 0.92);
+                ctx.quadraticCurveTo(0, ph * 0.92, 0, ph * 0.92 - r);
+                ctx.lineTo(0, ph * 0.08 + r);
+                ctx.quadraticCurveTo(0, ph * 0.08, r, ph * 0.08);
+                ctx.fill();
+            }
+            ctx.fillStyle = dark ? o.darkColor : o.color;
+            ctx.fillText(current, pw / 2, ph / 2 + fs * 0.02);
+            texture.needsUpdate = true;
+            var s = (o.size * pw) / ph;
+            sprite.scale.set(s, o.size, 1);
+        }
+
+        draw();
+        sprite.userData.isLabel = true;
+        sprite.userData.draw = draw;
+        sprite.userData.setText = function (t) { current = String(t); draw(); };
+        sprite.userData.getText = function () { return current; };
+        labels.push(sprite);
+        return sprite;
+    }
+
+    function redrawLabels() { labels.forEach(function (s) { try { s.userData.draw(); } catch (e) {} }); }
+    var chartRedraws = [];
+    function registerChartRedraw(fn) { chartRedraws.push(fn); try { fn(); } catch (e) {} }
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { redrawLabels(); chartRedraws.forEach(function (f) { try { f(); } catch (e) {} }); }).catch(function () {});
+        if (document.fonts.addEventListener) {
+            try { document.fonts.addEventListener('loadingdone', function () { redrawLabels(); }); } catch (e) {}
+        }
+    }
+    setTimeout(function () { redrawLabels(); }, 1200);
+
+    /* ---------- 테마 ---------- */
+    var dark = false;
+    var themeHooks = [];
+    var boardBase = 0xe9eff8, boardDark = 0x1b2433;
+    function applyTheme(d) {
+        dark = !!d;
+        document.body.classList.toggle('dark-mode', dark);
+        document.body.classList.add(dark ? 'dark' : 'light');
+        document.body.classList.toggle('dark', dark);
+        var t = $('theme-toggle');
+        if (t) { t.textContent = dark ? '☀️' : '🌙'; t.title = dark ? '주간 모드' : '야간 모드'; }
+        boardMat.color.setHex(dark ? boardDark : boardBase);
+        boardRimMat.color.setHex(dark ? 0x2b3648 : 0xffffff);
+        hemi.intensity = dark ? 0.34 : 0.62;
+        amb.intensity = dark ? 0.14 : 0.18;
+        key.intensity = dark ? 0.62 : 1.05;
+        rim.intensity = dark ? 0.22 : 0.34;
+        redrawLabels();
+        themeHooks.forEach(function (f) { try { f(dark); } catch (e) {} });
+        chartRedraws.forEach(function (f) { try { f(); } catch (e) {} });
+    }
+
+    /* ---------- 토스트 ---------- */
+    var toastTimer = null;
+    function toast(msg, ms) {
+        var el = $('svl-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'svl-toast';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { el.classList.remove('show'); }, ms || 2200);
+    }
+
+    /* ---------- 레이캐스트 도우미 ---------- */
+    var raycaster = new THREE.Raycaster();
+    var ndc = new THREE.Vector2();
+    function pointerNDC(ev) {
+        var r = renderer.domElement.getBoundingClientRect();
+        ndc.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+        ndc.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+        return ndc;
+    }
+    function pick(objects, ev) {
+        pointerNDC(ev);
+        raycaster.setFromCamera(ndc, camera);
+        var hits = raycaster.intersectObjects(objects, true);
+        return hits;
+    }
+    /* 카메라를 향한 가상 평면에서의 드래그 좌표 */
+    function planePoint(ev, planeZ) {
+        pointerNDC(ev);
+        raycaster.setFromCamera(ndc, camera);
+        var plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(planeZ || 0));
+        var p = new THREE.Vector3();
+        raycaster.ray.intersectPlane(plane, p);
+        return p;
+    }
+
+    /* ---------- 차트 도우미 ---------- */
+    function setupCanvas(id) {
+        var cv = $(id);
+        if (!cv) return null;
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var w = cv.clientWidth || cv.parentNode.clientWidth || 200;
+        var h = cv.clientHeight || 120;
+        cv.width = Math.max(1, Math.round(w * dpr));
+        cv.height = Math.max(1, Math.round(h * dpr));
+        var ctx = cv.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { cv: cv, ctx: ctx, w: w, h: h };
+    }
+    function cssColor(name, darkVal) {
+        return document.body.classList.contains('dark-mode') ? (darkVal || '#cbd5e1') : name;
+    }
+
+    /* ---------- 전체화면 / 몰입 모드 ---------- */
+    function initFullscreen() {
+        var btn = $('fullscreenBtn'), icon = $('fullscreenIcon'), text = $('fullscreenText');
+        function realFs() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                document.mozFullScreenElement || document.msFullscreenElement);
+        }
+        function pseudo() { return document.documentElement.classList.contains('pseudo-fs'); }
+        function setUI() {
+            var on = realFs() || pseudo();
+            if (icon) icon.textContent = on ? '🗗' : '⛶';
+            if (text) text.textContent = on ? '창모드' : '전체화면';
+            if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            document.body.classList.toggle('is-fullscreen', on);
+            sizeRenderer();
+        }
+        if (btn) {
+            btn.addEventListener('click', function () {
+                var wasReal = realFs(), wasPseudo = pseudo();
+                try {
+                    if (!wasReal && !wasPseudo) {
+                        var req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) {
+                            var p = req.call(document.documentElement);
+                            if (p && p.catch) p.catch(function () {});
+                        } else {
+                            document.documentElement.classList.add('pseudo-fs');
+                        }
+                    } else if (wasReal) {
+                        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    } else {
+                        document.documentElement.classList.remove('pseudo-fs');
+                    }
+                } catch (err) {
+                    document.documentElement.classList.add('pseudo-fs');
+                }
+                setTimeout(setUI, 320);
+                setTimeout(setUI, 700);
+            });
+        }
+        ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+            document.addEventListener(ev, setUI);
+        });
+        setUI();
+        return setUI;
+    }
+
+    /* ---------- 모바일 시야각 보정 ---------- */
+    var baseFov = HOME.fov;
+    function mobileFit() {
+        var w = window.innerWidth, h = window.innerHeight, f = 1;
+        var attr = document.documentElement.getAttribute('data-mzoom');
+        var k = 0.62;
+        if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+        if (w < h) f = 1 + (1 - w / h) * k;
+        else if (h <= 500) f = 1 + k * 0.16;
+        camera.fov = Math.min(88, baseFov * f);
+        camera.updateProjectionMatrix();
+    }
+
+    /* ---------- 좌측 데이터 패널: 모바일 접기/펼치기 ---------- */
+    function initLeftPanel() {
+        var lp = document.querySelector('.left-panel');
+        if (!lp) return;
+        var fab = document.createElement('button');
+        fab.type = 'button';
+        fab.id = 'lp-fab';
+        fab.className = 'glass-panel';
+        fab.innerHTML = '<span>📊</span> 데이터';
+        document.body.appendChild(fab);
+        fab.addEventListener('click', function () {
+            lp.classList.toggle('open');
+            fab.classList.toggle('on', lp.classList.contains('open'));
+        });
+        var title = lp.querySelector('.lp-title');
+        if (title) {
+            var close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'lp-close';
+            close.setAttribute('aria-label', '데이터 패널 닫기');
+            close.innerHTML = '✕';
+            close.addEventListener('click', function () {
+                lp.classList.remove('open');
+                fab.classList.remove('on');
+            });
+            title.appendChild(close);
+        }
+    }
+
+    /* ---------- 실행 ---------- */
+    var updateHook = null, resetHook = null, built = false;
+    var clock = new THREE.Clock();
+
+    function alignCamera(animate) {
+        camera.position.set(HOME.x, HOME.y, HOME.z);
+        controls.target.set(HOME.tx, HOME.ty, HOME.tz);
+        controls.update();
+    }
+
+    function frame() {
+        requestAnimationFrame(frame);
+        var dt = Math.min(0.12, clock.getDelta() || 0.016);
+        if (controls) controls.update();
+        if (updateHook) { try { updateHook(dt, clock.elapsedTime); } catch (e) { console.error(e); } }
+        renderer.render(scene, camera);
+    }
+
+    function start(cfg) {
+        cfg = cfg || {};
+        HOME = Object.assign({ x: 0, y: 9, z: 17, tx: 0, ty: 1.7, tz: 0, fov: 38 }, cfg.home || {});
+        baseFov = HOME.fov;
+        camera.fov = baseFov;
+        camera.updateProjectionMatrix();
+        if (cfg.build) cfg.build();
+        initLeftPanel();
+        built = true;
+        updateHook = cfg.update || null;
+        resetHook = cfg.reset || null;
+        if (cfg.onDark) themeHooks.push(cfg.onDark);
+
+        var align = function () { alignCamera(true); };
+        if ($('btn-align')) $('btn-align').addEventListener('click', align);
+        if ($('btn-reset')) $('btn-reset').addEventListener('click', function () {
+            try { if (resetHook) resetHook(); } catch (e) { console.error(e); }
+            alignCamera(true);
+            toast('🔄 초기 상태로 되돌렸습니다');
+        });
+        if ($('theme-toggle')) $('theme-toggle').addEventListener('click', function () { applyTheme(!dark); });
+        initFullscreen();
+
+        var hint = $('guide-tooltip');
+        if (hint) {
+            setTimeout(function () { hint.classList.add('fade'); }, 6500);
+            renderer.domElement.addEventListener('pointerdown', function () { hint.classList.add('fade'); }, { once: true });
+        }
+
+        sizeRenderer();
+        mobileFit();
+        alignCamera(false);
+        window.addEventListener('resize', function () {
+            sizeRenderer();
+            mobileFit();
+            chartRedraws.forEach(function (f) { try { f(); } catch (e) {} });
+        });
+        window.addEventListener('orientationchange', function () { setTimeout(function () { sizeRenderer(); mobileFit(); }, 220); });
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { setTimeout(function () { sizeRenderer(); mobileFit(); }, 160); });
+
+        clock.start();
+        requestAnimationFrame(frame);
+
+        /* 야간 모드 기본값은 항상 낮 모드 */
+        applyTheme(false);
+    }
+
+    window.SVL = {
+        $: $, scene: scene, camera: camera, renderer: renderer, controls: controls,
+        mat: mat, glassMat: glassMat, add: add, shadow: shadow,
+        makeLabel: makeLabel, redrawLabels: redrawLabels, registerChartRedraw: registerChartRedraw,
+        toast: toast, pick: pick, planePoint: planePoint, pointerNDC: pointerNDC,
+        setupCanvas: setupCanvas, cssColor: cssColor,
+        start: start, applyTheme: applyTheme, alignCamera: alignCamera,
+        isDark: function () { return dark; },
+        HOME: function () { return HOME; }
+    };
+})();
+
+</script>
+<script>
+/* ============================================================
+   질량 보존 법칙 3D — 열린 용기 vs 닫힌 페트병
+   ============================================================ */
+(function () {
+    'use strict';
+    var S = window.SVL;
+    var $ = S.$;
+    var scene = S.scene;
+
+    var RX = {
+        sediment: {
+            name: '앙금 생성', eq: 'CaCl₂ + Na₂CO₃ → CaCO₃↓ + 2NaCl',
+            before: 250.0, gas: 0, a: 0xa9d8f2, b: 0xc2e4b0, prod: 0xf2f2e8, prodName: '흰 앙금'
+        },
+        gas: {
+            name: '기체 발생', eq: 'CaCO₃ + 2HCl → CaCl₂ + H₂O + CO₂↑',
+            before: 260.0, gas: 4.4, a: 0xd6dee7, b: 0xeee2a8, prod: 0xf7f7f2, prodName: '이산화 탄소 기체'
+        }
+    };
+    var state = { rx: 'sediment', vessel: 'open', p: 0, running: false, shown: 250.0 };
+
+    /* ---------- 저울 ---------- */
+    var balance = new THREE.Group();
+    balance.position.set(0, 0, 0);
+    scene.add(balance);
+    var bodyMat = new THREE.MeshStandardMaterial({ color: 0xe9eef5, roughness: 0.5, metalness: 0.12 });
+    var body = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.46, 1.8), bodyMat);
+    body.position.y = 0.23;
+    body.castShadow = true;
+    body.receiveShadow = true;
+    balance.add(body);
+    var bodyEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2.6, 0.46, 1.8)), new THREE.LineBasicMaterial({ color: 0xa9b8c8, transparent: true, opacity: 0.75 }));
+    bodyEdge.position.y = 0.23;
+    balance.add(bodyEdge);
+    var feet = [[-1.1, -0.72], [1.1, -0.72], [-1.1, 0.72], [1.1, 0.72]];
+    feet.forEach(function (f) {
+        var ft = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.08, 12), new THREE.MeshStandardMaterial({ color: 0x8b97a6, roughness: 0.5 }));
+        ft.position.set(f[0], 0.04, f[1]);
+        balance.add(ft);
+    });
+    // 팬
+    var pan = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.07, 40), new THREE.MeshStandardMaterial({ color: 0xcfd9e4, roughness: 0.35, metalness: 0.55 }));
+    pan.position.set(0, 0.5, -0.18);
+    pan.receiveShadow = true;
+    balance.add(pan);
+    var panRim = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.02, 6, 50), new THREE.MeshStandardMaterial({ color: 0xb6c2d0, roughness: 0.3, metalness: 0.6 }));
+    panRim.rotation.x = Math.PI / 2;
+    panRim.position.set(0, 0.54, -0.18);
+    balance.add(panRim);
+
+    // 표시창 (캔버스 텍스처)
+    var dc = document.createElement('canvas');
+    dc.width = 512; dc.height = 160;
+    var dctx = dc.getContext('2d');
+    var dtex = new THREE.CanvasTexture(dc);
+    var display = new THREE.Mesh(new THREE.PlaneGeometry(1.35, 0.42),
+        new THREE.MeshBasicMaterial({ map: dtex }));
+    display.position.set(0, 0.25, 0.936);
+    balance.add(display);
+    var displayFrame = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.52, 0.06), new THREE.MeshStandardMaterial({ color: 0x2b3440, roughness: 0.5 }));
+    displayFrame.position.set(0, 0.25, 0.9);
+    balance.add(displayFrame);
+    // 전원 표시
+    var led = new THREE.Mesh(new THREE.CircleGeometry(0.032, 16), new THREE.MeshBasicMaterial({ color: 0x34c759 }));
+    led.position.set(1.12, 0.38, 0.606);
+    balance.add(led);
+
+    function drawDisplay() {
+        dctx.fillStyle = '#101722';
+        dctx.fillRect(0, 0, 512, 160);
+        dctx.strokeStyle = '#1e2a3a';
+        dctx.lineWidth = 6;
+        dctx.strokeRect(3, 3, 506, 154);
+        dctx.fillStyle = '#7ff2b0';
+        dctx.font = "700 92px 'SeoulNamsan', monospace";
+        dctx.textAlign = 'right';
+        dctx.textBaseline = 'middle';
+        dctx.fillText(state.shown.toFixed(1), 410, 84);
+        dctx.font = "700 46px 'SeoulNamsan', sans-serif";
+        dctx.textAlign = 'left';
+        dctx.fillText('g', 424, 88);
+        dtex.needsUpdate = true;
+    }
+    drawDisplay();
+    var massLabel = S.makeLabel('전자저울', { size: 0.24, color: '#475569', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    massLabel.position.set(-1.55, 0.12, 1.25);
+    scene.add(massLabel);
+
+    /* ---------- 용기 ---------- */
+    var vesselGroup = new THREE.Group();
+    vesselGroup.position.set(0, 0.56, -0.18);
+    scene.add(vesselGroup);
+
+    var glassMat = new THREE.MeshPhysicalMaterial({ color: 0xe4f4ff, transparent: true, opacity: 0.24, roughness: 0.06, side: THREE.DoubleSide, depthWrite: false });
+    // 비커
+    var beaker = new THREE.Group();
+    vesselGroup.add(beaker);
+    var bWall = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.68, 1.25, 44, 1, true), glassMat);
+    bWall.position.y = 0.63;
+    beaker.add(bWall);
+    var bBottom = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.66, 0.07, 44), glassMat);
+    bBottom.position.y = 0.035;
+    beaker.add(bBottom);
+    var bRim = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.02, 6, 50), new THREE.MeshBasicMaterial({ color: 0xa9c4d8, transparent: true, opacity: 0.6 }));
+    bRim.rotation.x = Math.PI / 2;
+    bRim.position.y = 1.255;
+    beaker.add(bRim);
+
+    // 페트병
+    var bottle = new THREE.Group();
+    bottle.visible = false;
+    vesselGroup.add(bottle);
+    var bottleMat = new THREE.MeshPhysicalMaterial({ color: 0xdff0ff, transparent: true, opacity: 0.3, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false });
+    var bBody = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.1, 40, 1, true), bottleMat);
+    bBody.position.y = 0.55;
+    bottle.add(bBody);
+    var bShoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.6, 0.3, 40, 1, true), bottleMat);
+    bShoulder.position.y = 1.25;
+    bottle.add(bShoulder);
+    var bCap = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.2, 24), new THREE.MeshStandardMaterial({ color: 0x2f9e5a, roughness: 0.5 }));
+    bCap.position.y = 1.48;
+    bCap.visible = false;
+    bottle.add(bCap);
+    var capLabel = S.makeLabel('뚜껑 닫음', { size: 0.2, color: '#1a7d47', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    capLabel.position.set(0.95, 1.55, 0);
+    bottle.add(capLabel);
+
+    // 용액 A / B
+    var solA = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.64, 0.5, 40),
+        new THREE.MeshPhysicalMaterial({ color: RX.sediment.a, transparent: true, opacity: 0.78, roughness: 0.2, depthWrite: false }));
+    solA.position.y = 0.3;
+    vesselGroup.add(solA);
+    var solB = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.5, 0.34, 36),
+        new THREE.MeshPhysicalMaterial({ color: RX.sediment.b, transparent: true, opacity: 0.0, roughness: 0.2, depthWrite: false }));
+    solB.position.y = 0.62;
+    vesselGroup.add(solB);
+
+    // 앙금/기포 표현
+    var prodParticles = [];
+    for (var i = 0; i < 26; i++) {
+        var pp = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8),
+            new THREE.MeshStandardMaterial({ color: RX.sediment.prod, roughness: 0.5, transparent: true, opacity: 0 }));
+        pp.userData.seed = Math.random();
+        pp.userData.ang = Math.random() * Math.PI * 2;
+        pp.userData.r = Math.random() * 0.5;
+        vesselGroup.add(pp);
+        prodParticles.push(pp);
+    }
+
+    /* ---------- 저울 숫자 그래프 ---------- */
+    function drawChart() {
+        var c = S.setupCanvas('cv-mass');
+        if (!c) return;
+        var ctx = c.ctx, w = c.w, h = c.h;
+        var dark = document.body.classList.contains('dark-mode');
+        ctx.clearRect(0, 0, w, h);
+        var rx = RX[state.rx];
+        var after = massAfter();
+        var padB = 20, padT = 14;
+        var maxV = rx.before + 10;
+        var bars = [
+            { label: '반응 전', v: rx.before, color: '#3f9be0' },
+            { label: '반응 후', v: after, color: (after < rx.before - 0.05) ? '#e2452f' : '#34c759' }
+        ];
+        var bw = Math.min(46, (w - 40) / 3);
+        ctx.font = "800 9px 'SeoulNamsan', sans-serif";
+        bars.forEach(function (b, i) {
+            var x = w / 2 - bw - 12 + i * (bw + 24);
+            var bh = (b.v / maxV) * (h - padT - padB);
+            var y = h - padB - bh;
+            ctx.fillStyle = dark ? 'rgba(255,255,255,0.1)' : 'rgba(70,90,120,0.09)';
+            ctx.fillRect(x, padT, bw, h - padT - padB);
+            ctx.fillStyle = b.color;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(x, y, bw, bh, 5); else ctx.rect(x, y, bw, bh);
+            ctx.fill();
+            ctx.fillStyle = dark ? '#eaf1fb' : '#1c1c1e';
+            ctx.textAlign = 'center';
+            ctx.fillText(b.v.toFixed(1) + ' g', x + bw / 2, y - 4);
+            ctx.fillStyle = dark ? '#93a3b8' : '#7b8794';
+            ctx.fillText(b.label, x + bw / 2, h - 7);
+        });
+
+    }
+    S.registerChartRedraw(drawChart);
+
+    function massAfter() {
+        var rx = RX[state.rx];
+        if (!rx.gas) return rx.before;
+        if (state.vessel === 'closed') return rx.before;
+        return rx.before - rx.gas * state.p;
+    }
+
+    /* ---------- 패널 ---------- */
+    function updatePanel() {
+        var rx = RX[state.rx];
+        var open = state.vessel === 'open';
+        $('#lp-rx').textContent = rx.name;
+        $('#lp-vessel').textContent = open ? '열린 비커' : '닫힌 페트병';
+        $('#lp-before').textContent = rx.before.toFixed(1) + ' g';
+        $('#lp-after').textContent = massAfter().toFixed(1) + ' g';
+        var diff = massAfter() - rx.before;
+        $('#lp-diff').textContent = (Math.abs(diff) < 0.05 ? '0.0' : diff.toFixed(1)) + ' g';
+        $('#lp-diff').style.color = Math.abs(diff) < 0.05 ? '#1a9e54' : '#d97706';
+        var chip = $('#lp-verdict');
+        if (!open && rx.gas) { chip.textContent = '질량 보존 ✓ (기체가 갇힘)'; chip.className = 'chip ok'; }
+        else if (open && rx.gas) { chip.textContent = '기체가 빠져나가 질량 감소'; chip.className = 'chip warn'; }
+        else { chip.textContent = '질량 보존 ✓ (기체 없음)'; chip.className = 'chip ok'; }
+        $('#lp-eq').innerHTML = rx.eq;
+        $('#lp-note').textContent = (open && rx.gas)
+            ? '열린 용기에서는 발생한 기체가 밖으로 빠져나가 저울의 질량이 줄어요.'
+            : (rx.gas ? '닫힌 페트병에서는 기체가 밖으로 나가지 못해 질량이 그대로예요.'
+                      : '기체가 생기지 않는 반응이라 열린 용기에서도 질량이 그대로예요.');
+        $('#val-vessel').textContent = open ? '열린 비커' : '닫힌 페트병';
+        $('#val-rx').textContent = rx.name;
+        $('#val-mass').textContent = state.shown.toFixed(1) + ' g';
+        drawChart();
+    }
+
+    /* ---------- 반응 ---------- */
+    function setVessel(v) {
+        state.vessel = v;
+        beaker.visible = v === 'open';
+        bottle.visible = v === 'closed';
+        bCap.visible = v === 'closed';
+        solA.scale.set(1, 1, 1);
+        // 페트병일 때 액체를 병 안에 맞춘다
+        var sc = v === 'closed' ? 0.92 : 1;
+        solA.scale.set(sc, 1, sc);
+        solB.scale.set(sc, 1, sc);
+        updatePanel();
+        updateButtons();
+    }
+
+    function startReaction() {
+        if (state.running) return;
+        state.running = true;
+        state.p = 0;
+        S.toast(state.vessel === 'closed' ? '뚜껑을 닫고 반응시켜요 · 기체가 밖으로 나가지 못해요' : '열린 용기에서 반응시켜요 · 기체가 빠져나갈 수 있어요');
+    }
+
+    function updateButtons() {
+        $('#btn-sed').classList.toggle('on', state.rx === 'sediment');
+        $('#btn-gas').classList.toggle('on', state.rx === 'gas');
+        $('#btn-open').classList.toggle('on', state.vessel === 'open');
+        $('#btn-closed').classList.toggle('on', state.vessel === 'closed');
+    }
+
+    /* ---------- 업데이트 ---------- */
+    function update(dt, t) {
+        var rx = RX[state.rx];
+        var open = state.vessel === 'open';
+        if (state.running) {
+            state.p = Math.min(1, state.p + dt * 0.28);
+            if (state.p >= 1) {
+                state.running = false;
+                var diff = massAfter() - rx.before;
+                if (Math.abs(diff) < 0.05) S.toast('✅ 반응 후에도 질량이 그대로예요 (' + rx.before.toFixed(1) + ' g)');
+                else S.toast('질량이 ' + diff.toFixed(1) + ' g 줄었어요 · 기체가 빠져나갔기 때문이에요', 2800);
+            }
+            // 용액 B 부어지기
+            solB.material.opacity = Math.min(0.75, state.p * 2.4);
+            solB.position.y = 0.62 - Math.min(0.28, state.p * 0.6);
+            solA.material.opacity = 0.78;
+            // 생성물
+            var prod = (state.rx === 'sediment') ? (state.p > 0.25 ? Math.min(1, (state.p - 0.25) * 2.5) : 0) : 0;
+            prodParticles.forEach(function (pp, i) {
+                if (state.rx === 'sediment') {
+                    pp.material.opacity = prod * 0.95;
+                    pp.material.color.setHex(rx.prod);
+                    pp.position.set(Math.cos(pp.userData.ang) * pp.userData.r, 0.08 + pp.userData.seed * 0.08, Math.sin(pp.userData.ang) * pp.userData.r);
+                    pp.scale.setScalar(0.9 + pp.userData.seed * 0.7);
+                } else {
+                    // 기체 방울: 위로 떠오른다
+                    var life = ((t * 0.6 + pp.userData.seed) % 1);
+                    pp.material.opacity = (open ? 0.85 : 0.5) * state.p * (1 - life);
+                    pp.material.color.setHex(0xffffff);
+                    pp.position.set(Math.cos(pp.userData.ang) * pp.userData.r * 0.9, 0.15 + life * 0.95, Math.sin(pp.userData.ang) * pp.userData.r * 0.9);
+                    pp.scale.setScalar(0.5 + life * 0.5);
+                }
+            });
+            updatePanel();
+        }
+        // 저울 숫자 부드럽게
+        var target = massAfter();
+        state.shown += (target - state.shown) * Math.min(1, dt * 6);
+        if (Math.abs(state.shown - target) < 0.02) state.shown = target;
+        drawDisplay();
+        // 저울 팬 미세 진동
+        pan.position.y = 0.5 + (state.running ? Math.sin(t * 22) * 0.004 : 0);
+        solA.rotation.y = 0;
+    }
+
+    S.start({
+        home: { x: 0, y: 3.1, z: 8.6, tx: 0, ty: 1.0, tz: 0.05, fov: 40 },
+        build: function () {
+            $('#btn-sed').addEventListener('click', function () {
+                state.rx = 'sediment'; state.p = 0; state.running = false;
+                solA.material.color.setHex(RX.sediment.a);
+                solB.material.color.setHex(RX.sediment.b);
+                solB.material.opacity = 0.0;
+                solB.position.y = 0.62;
+                prodParticles.forEach(function (pp) { pp.material.opacity = 0; });
+                state.shown = RX.sediment.before;
+                updatePanel(); updateButtons();
+                S.toast('염화칼슘 수용액과 탄산나트륨 수용액을 준비했어요');
+            });
+            $('#btn-gas').addEventListener('click', function () {
+                state.rx = 'gas'; state.p = 0; state.running = false;
+                solA.material.color.setHex(RX.gas.a);
+                solB.material.color.setHex(RX.gas.b);
+                solB.material.opacity = 0.0;
+                solB.position.y = 0.62;
+                prodParticles.forEach(function (pp) { pp.material.opacity = 0; });
+                state.shown = RX.gas.before;
+                updatePanel(); updateButtons();
+                S.toast('탄산칼슘과 묽은 염산을 준비했어요 · 기체가 발생해요');
+            });
+            $('#btn-open').addEventListener('click', function () { setVessel('open'); });
+            $('#btn-closed').addEventListener('click', function () { setVessel('closed'); });
+            $('#btn-react').addEventListener('click', startReaction);
+            $('#btn-again').addEventListener('click', function () {
+                state.p = 0; state.running = false; state.shown = RX[state.rx].before;
+                solB.material.opacity = 0; solB.position.y = 0.62;
+                prodParticles.forEach(function (pp) { pp.material.opacity = 0; });
+                updatePanel();
+                S.toast('반응 전 상태로 되돌렸어요');
+            });
+            setVessel('open');
+            updatePanel(); updateButtons();
+        },
+        update: update,
+        reset: function () {
+            state.rx = 'sediment';
+            state.p = 0; state.running = false;
+            state.shown = RX.sediment.before;
+            solA.material.color.setHex(RX.sediment.a);
+            solB.material.color.setHex(RX.sediment.b);
+            solB.material.opacity = 0;
+            solB.position.y = 0.62;
+            prodParticles.forEach(function (pp) { pp.material.opacity = 0; });
+            setVessel('open');
+            updatePanel(); updateButtons();
+        },
+        onDark: drawChart
+    });
+})();
+
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>

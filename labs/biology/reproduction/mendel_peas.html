@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.62">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>멘델의 완두 교배 3D</title>
+<meta name="description" content="부모 세대 완두의 유전자형을 골라 수분시키면 3D 밭에 자손 완두콩이 열리고, F1·F2 세대의 표현형과 유전자형 비율이 통계 패널에 쌓이는 가상실험입니다.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<style>
+
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eef2f8; color: #1c1c1e;
+    transition: background-color 0.35s ease, color 0.35s ease;
+    -webkit-user-select: none; user-select: none;
+}
+#canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+#canvas-container canvas { display: block; touch-action: none; }
+
+/* ---------- visionOS 글래스모피즘 ---------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* ---------- 상단 좌측 ---------- */
+.top-left-bar { position: absolute; top: 16px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px;
+    text-decoration: none; color: #1c1c1e; font-weight: bold; font-size: 13.5px; cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease; border: none; font-family: inherit; white-space: nowrap;
+}
+.back-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.tag-badge { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+.tag-pill { background: rgba(0, 122, 255, 0.14); color: #007aff; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 800; letter-spacing: 0.2px; }
+.qr-btn-icon { font-size: 14px; line-height: 1; }
+.qr-btn-label { font-size: 12.5px; }
+
+/* ---------- 상단 우측 ---------- */
+.top-right-bar { position: absolute; top: 16px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex: 0 0 40px;
+    border: none; color: #1c1c1e; font-family: inherit; transition: all 0.2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+.data-card { display: inline-flex; align-items: center; gap: 14px; padding: 7px 16px; border-radius: 16px; }
+.data-item { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.data-label { font-size: 9.5px; color: #64748b; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value { font-size: 13.5px; font-weight: 900; color: #0284c7; margin-top: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+
+/* ---------- 중앙 힌트 ---------- */
+.center-tooltip {
+    position: absolute; top: 84px; left: 46%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 16px; font-size: 11.5px; font-weight: bold; color: #334155;
+    pointer-events: none; z-index: 10; white-space: normal; text-align: center; line-height: 1.5;
+    letter-spacing: -0.2px; transition: opacity 0.35s ease; max-width: min(700px, calc(100vw - 460px)); word-break: keep-all;
+}
+.center-tooltip.hidden { opacity: 0; }
+
+/* ---------- 하단 중앙 ---------- */
+.bottom-ctrl-bar {
+    position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; z-index: 40;
+}
+.action-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.92); color: #1c1c1e;
+    font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.action-btn:hover { background: #fff; transform: translateY(-1px); }
+.action-btn.on { background: #0f172a; color: #fff; border-color: #0f172a; }
+
+/* ---------- 우측 하단 전체화면 ---------- */
+.bottom-right-bar { position: absolute; bottom: 22px; right: 20px; z-index: 45; }
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+    border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 800; color: #1c1c1e; white-space: nowrap;
+}
+
+/* ---------- 우측 조절 패널 ---------- */
+.side-ctrl-panel {
+    position: absolute; right: 20px; bottom: 76px; width: 232px; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px; z-index: 60; border-radius: 18px;
+    max-height: calc(100vh - 150px);
+}
+.panel-title {
+    font-size: 12px; font-weight: 800; color: #475569; letter-spacing: -0.2px; text-align: center;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); flex: 0 0 auto;
+}
+.panel-body { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg.four { grid-template-columns: repeat(4, 1fr); }
+.seg-btn {
+    padding: 8px 1px; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; letter-spacing: -0.3px; transition: all 0.2s ease;
+}
+.seg-btn:hover { background: #ffffff; }
+.seg-btn.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.seg-btn.accent.active { background: #0ea5e9; border-color: #0ea5e9; }
+.btn-start {
+    width: 100%; padding: 11px 8px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb); color: #ffffff; font-family: inherit;
+    font-size: 12.5px; font-weight: 900; letter-spacing: -0.2px; cursor: pointer;
+    box-shadow: 0 5px 16px rgba(37, 99, 235, 0.28); transition: all 0.2s ease; white-space: nowrap;
+}
+.btn-start:hover { transform: translateY(-1px); }
+.btn-start.on { background: linear-gradient(135deg, #22c55e, #0d9488); box-shadow: 0 5px 16px rgba(13, 148, 136, 0.26); }
+.btn-start.off { background: linear-gradient(135deg, #94a3b8, #64748b); box-shadow: 0 5px 16px rgba(100, 116, 139, 0.24); }
+.btn-ghost {
+    width: 100%; padding: 9px 8px; border-radius: 12px; border: 1px dashed rgba(37, 99, 235, 0.35);
+    background: rgba(37, 99, 235, 0.07); color: #1d4ed8; font-family: inherit; font-size: 11.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.2s ease; letter-spacing: -0.3px;
+}
+.btn-ghost:hover { background: rgba(37, 99, 235, 0.14); }
+.ctrl-row { display: flex; align-items: center; gap: 4px; }
+.ctrl-row .lbl { flex: 0 0 30px; font-size: 9.5px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.mini {
+    flex: 1 1 0; min-width: 0; padding: 6px 0; border-radius: 9px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.18s ease;
+}
+.mini:hover { background: #ffffff; }
+.mini.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.slider-row { display: flex; flex-direction: column; gap: 3px; }
+.slider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.slider-name { font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.slider-val { font-size: 10.5px; font-weight: 900; color: #2563eb; font-variant-numeric: tabular-nums; white-space: nowrap; }
+input[type="range"].ctrl-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px;
+    background: #e2e8f0; outline: none; cursor: pointer; margin: 0;
+}
+input[type="range"].ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: #3b82f6; cursor: pointer; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4); border: 2px solid #fff;
+}
+input[type="range"].ctrl-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: #3b82f6; border: 2px solid #fff; cursor: pointer;
+}
+.state-badge {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    padding: 7px 8px; border-radius: 12px; background: rgba(2, 132, 199, 0.09);
+    border: 1px dashed rgba(2, 132, 199, 0.28); font-size: 10.5px; font-weight: 800; color: #0369a1;
+    letter-spacing: -0.3px; text-align: center; overflow: hidden;
+}
+.state-badge .sb-note { font-size: 8.5px; font-weight: 700; opacity: 0.82; white-space: nowrap; }
+.state-badge.good { background: rgba(22, 163, 74, 0.11); border-color: rgba(22, 163, 74, 0.32); color: #15803d; }
+.state-badge.warn { background: rgba(234, 88, 12, 0.11); border-color: rgba(234, 88, 12, 0.32); color: #c2410c; }
+
+/* ---------- 좌측 데이터/그래프 패널 ---------- */
+.sub-panel {
+    position: absolute; right: 264px; bottom: 76px; width: 340px; max-height: 78vh; overflow-y: auto;
+    display: none; flex-direction: column; gap: 10px; padding: 13px 15px; border-radius: 18px; z-index: 55;
+    -webkit-overflow-scrolling: touch;
+}
+.sub-panel.show { display: flex; }
+@media (min-width: 901px) {
+    body .sub-panel.left { left: 20px !important; right: auto !important; top: auto !important; bottom: 76px !important; width: 318px !important; max-width: 318px !important; max-height: 62vh !important; }
+}
+.sub-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.sub-panel-title { font-size: 12.5px; font-weight: 800; color: #1e293b; letter-spacing: -0.3px; }
+.sub-close { background: rgba(0, 0, 0, 0.06); border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 11px; font-weight: bold; color: #64748b; font-family: inherit; flex: 0 0 24px; }
+.graph-canvas { width: 100%; height: 178px; display: block; border-radius: 12px; background: rgba(248, 250, 252, 0.9); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 9.5px; font-weight: 800; color: #64748b; }
+.legend i { display: inline-block; width: 14px; height: 8px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.note { font-size: 9.5px; color: #7c8899; line-height: 1.45; letter-spacing: -0.2px; }
+
+/* ---------- 통계 막대 ---------- */
+.stat-block { display: flex; flex-direction: column; gap: 5px; }
+.stat-title { font-size: 10.5px; font-weight: 900; color: #334155; letter-spacing: -0.3px; display: flex; justify-content: space-between; align-items: center; }
+.stat-title b { color: #2563eb; font-variant-numeric: tabular-nums; }
+.stat-row { display: grid; grid-template-columns: 62px 1fr 54px; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; }
+.stat-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-row .bar { height: 9px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; }
+.stat-row .bar i { display: block; height: 100%; width: 0%; border-radius: 999px; transition: width 0.35s ease; }
+.stat-row .vl { text-align: right; font-variant-numeric: tabular-nums; color: #0f172a; }
+.mini-table { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; }
+.mini-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; padding: 2px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.3); }
+.mini-row .vl { font-variant-numeric: tabular-nums; color: #0f172a; }
+.hr { height: 1px; background: rgba(0, 0, 0, 0.07); margin: 1px 0; }
+
+/* ---------- 다크 모드 ---------- */
+body.dark-mode { background-color: #0b1220; color: #e2e8f0; }
+body.dark-mode .glass-panel { background-color: rgba(22, 30, 45, 0.92); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45); }
+body.dark-mode .sub-panel, body.dark-mode .side-ctrl-panel { background-color: rgba(22, 30, 45, 0.94); }
+body.dark-mode .back-btn, body.dark-mode .tag-badge, body.dark-mode .icon-btn { color: #e2e8f0; }
+body.dark-mode .data-label { color: #94a3b8; }
+body.dark-mode .data-value { color: #38bdf8; }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.12); }
+body.dark-mode .panel-title { color: #94a3b8; border-bottom-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .seg-btn, body.dark-mode .mini { background: rgba(44, 54, 74, 0.92); border-color: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+body.dark-mode .seg-btn.active { background: #e2e8f0; border-color: #e2e8f0; color: #0f172a; }
+body.dark-mode .seg-btn.accent.active { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+body.dark-mode .mini.active { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+body.dark-mode .state-badge { background: rgba(56, 189, 248, 0.14); color: #7dd3fc; border-color: rgba(56, 189, 248, 0.3); }
+body.dark-mode .state-badge.good { background: rgba(34, 197, 94, 0.16); color: #86efac; border-color: rgba(34, 197, 94, 0.34); }
+body.dark-mode .state-badge.warn { background: rgba(251, 146, 60, 0.16); color: #fdba74; border-color: rgba(251, 146, 60, 0.34); }
+body.dark-mode .action-btn, body.dark-mode .fullscreen-btn { background: rgba(44, 54, 74, 0.92); color: #e2e8f0; border-color: rgba(255, 255, 255, 0.1); }
+body.dark-mode .action-btn.on { background: #e2e8f0; color: #0f172a; }
+body.dark-mode .sub-panel-title { color: #f1f5f9; }
+body.dark-mode .sub-close { background: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+body.dark-mode .graph-canvas { background: rgba(15, 23, 42, 0.9); }
+body.dark-mode .legend, body.dark-mode .note { color: #94a3b8; }
+body.dark-mode .center-tooltip { color: #cbd5e1; }
+body.dark-mode .stat-title, body.dark-mode .stat-row { color: #cbd5e1; }
+body.dark-mode .stat-row .vl, body.dark-mode .mini-row .vl { color: #f1f5f9; }
+body.dark-mode .mini-row { color: #cbd5e1; border-bottom-color: rgba(148, 163, 184, 0.22); }
+body.dark-mode input[type="range"].ctrl-slider { background: #334155; }
+
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 공통 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+@media (max-width: 900px) {
+    .top-left-bar { top: max(8px, env(safe-area-inset-top)) !important; left: 8px !important; right: 56px !important; gap: 6px !important; flex-wrap: nowrap !important; align-items: center !important; overflow: hidden; }
+    .top-left-bar .back-btn, .top-left-bar > a { flex: 0 0 auto; padding: 6px 10px !important; font-size: 12px !important; gap: 4px !important; white-space: nowrap; }
+    .top-left-bar .tag-badge { flex: 0 1 auto; min-width: 0; padding: 6px 10px !important; font-size: 12px !important; gap: 5px !important; white-space: nowrap; overflow: hidden; }
+    .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .qr-btn-label { display: none !important; }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    .top-right-bar { top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important; right: 8px !important; gap: 6px !important; flex-wrap: nowrap !important; }
+    .data-card { flex: 0 1 auto; min-width: 0; gap: 7px !important; padding: 5px 9px !important; overflow: hidden; }
+    .data-item { min-width: 0; }
+    .data-label { font-size: 8.5px !important; line-height: 1.2; letter-spacing: -0.4px; }
+    .data-value { font-size: 12px !important; line-height: 1.25; }
+    .data-sep { height: 18px; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 34px; }
+
+    body.is-3d .bottom-right-bar { top: max(8px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 8px !important; left: auto !important; z-index: 20; }
+    body .bottom-right-bar button { padding: 7px 10px !important; font-size: 14px !important; gap: 4px !important; line-height: 1; }
+    body .bottom-right-bar #fullscreenText { display: none !important; }
+
+    .center-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 78px) !important; left: 8px !important; right: 8px !important;
+        transform: none !important; margin: 0 auto; width: auto !important; max-width: none !important;
+        font-size: 11px !important; padding: 6px 12px !important; white-space: normal !important;
+        line-height: 1.45; text-align: center; z-index: 15 !important; text-overflow: clip;
+    }
+
+    .bottom-ctrl-bar { left: 8px !important; right: 8px !important; bottom: calc(6px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; border-radius: 16px !important; padding: 6px !important; gap: 5px !important; justify-content: center !important; flex-wrap: wrap !important; }
+    .action-btn { padding: 7px 12px !important; font-size: 11.5px !important; }
+
+    .side-ctrl-panel { right: 8px !important; left: auto !important; bottom: calc(60px + env(safe-area-inset-bottom)) !important; width: min(212px, calc(100vw - 16px)) !important; padding: 8px !important; gap: 6px !important; max-height: 46vh !important; }
+    .panel-title { font-size: 10.5px !important; padding-bottom: 4px !important; }
+    .seg-btn { padding: 7px 1px !important; font-size: 9.5px !important; }
+    .btn-start { padding: 9px 6px !important; font-size: 11.5px !important; }
+    .btn-ghost { padding: 7px 6px !important; font-size: 10px !important; }
+    .ctrl-row .lbl { font-size: 9px !important; flex-basis: 28px !important; }
+    .mini { padding: 5px 0 !important; font-size: 9.5px !important; }
+    .slider-name { font-size: 9.5px !important; }
+    .slider-val { font-size: 10px !important; }
+    .state-badge { font-size: 9.5px !important; padding: 6px 6px !important; }
+
+    .sub-panel { left: 8px !important; right: 8px !important; bottom: calc(66px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; max-width: none !important; max-height: 42vh !important; padding: 10px 12px !important; gap: 7px !important; }
+    .sub-panel-title { font-size: 11px !important; }
+    .graph-canvas { height: 140px !important; }
+    .legend { font-size: 8.5px !important; gap: 7px !important; }
+    .note { font-size: 8.5px !important; }
+    .stat-row { grid-template-columns: 56px 1fr 48px; font-size: 9px; }
+}
+
+@media (max-width: 430px) {
+    .tag-pill { display: none !important; }
+    .data-label { font-size: 8px !important; }
+    .data-value { font-size: 11px !important; }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)) !important; left: 6px !important; right: auto !important; max-width: 46vw; gap: 5px; }
+    .top-left-bar .back-btn, .top-left-bar > a, .top-left-bar .tag-badge { padding: 4px 9px !important; font-size: 11px !important; height: 30px; }
+    .tag-pill { display: none !important; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)) !important; right: 72px !important; left: auto !important; gap: 5px; flex-direction: column !important; align-items: flex-end !important; }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; flex: 0 0 28px; }
+    body.is-3d .bottom-right-bar { top: max(6px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 6px !important; z-index: 20; }
+    body.is-3d .bottom-right-bar button { padding: 4px 8px !important; font-size: 13px !important; }
+    body.is-3d .bottom-right-bar #fullscreenText { display: none !important; }
+    .center-tooltip { top: auto !important; bottom: 48px !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; width: max-content !important; max-width: 46vw !important; font-size: 10px !important; padding: 4px 9px !important; line-height: 1.3; white-space: nowrap !important; }
+    .side-ctrl-panel { top: 44px !important; right: 8px !important; left: auto !important; bottom: auto !important; width: 196px !important; max-height: calc(100vh - 56px) !important; padding: 7px 8px !important; gap: 5px !important; overflow-y: auto !important; }
+    .panel-title { font-size: 9.5px !important; padding-bottom: 3px !important; }
+    .seg-btn { padding: 5px 1px !important; font-size: 9px !important; }
+    .btn-start { padding: 6px 4px !important; font-size: 10px !important; }
+    .btn-ghost { padding: 5px 4px !important; font-size: 9px !important; }
+    .ctrl-row .lbl { font-size: 8px !important; flex-basis: 22px !important; }
+    .mini { padding: 3px 0 !important; font-size: 8.5px !important; }
+    .slider-name { font-size: 8.5px !important; }
+    .slider-val { font-size: 9px !important; }
+    .state-badge { font-size: 8.5px !important; padding: 4px 4px !important; }
+    .bottom-ctrl-bar { left: 50% !important; right: auto !important; bottom: 4px !important; transform: translateX(-50%) !important; width: auto !important; max-width: calc(100vw - 12px); border-radius: 14px !important; padding: 4px 8px !important; gap: 3px !important; }
+    .action-btn { padding: 5px 11px !important; font-size: 10px !important; }
+    .sub-panel { left: auto !important; right: 8px !important; top: 44px !important; bottom: auto !important; width: min(320px, calc(100vw - 220px)) !important; max-width: none !important; max-height: calc(100vh - 56px) !important; padding: 8px 10px !important; gap: 6px !important; }
+    .graph-canvas { height: 118px !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .center-tooltip { display: none !important; }
+html.pseudo-fs .top-right-bar { display: flex !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
+
+
+.hint-line { font-size: 9.5px; color: #64748b; text-align: center; letter-spacing: -0.2px; line-height: 1.4; }
+.geno-row { display: flex; align-items: center; gap: 4px; }
+.geno-row .lbl { flex: 0 0 34px; font-size: 9.5px; font-weight: 800; color: #64748b; white-space: nowrap; }
+#statsPanel { bottom: 76px; }
+.gen-tag { display: inline-block; font-size: 9.5px; font-weight: 900; color: #fff; background: #0ea5e9; border-radius: 6px; padding: 1px 6px; margin-right: 4px; vertical-align: middle; }
+.gen-tag.f2 { background: #f59e0b; }
+
+</style>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+</head>
+<body class="is-3d">
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>멘델의 완두 교배 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+        <div class="data-item"><span class="data-label">세대</span><span class="data-value" id="valGen">부모</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">자손</span><span class="data-value" id="valCount">0 개</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">표현형</span><span class="data-value" id="valRatio">—</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip glass-panel" id="centerTooltip">💡 부모의 유전자형을 고르고 부모 교배 → F1끼리 교배 순서로 진행해 보세요.</div>
+
+<div class="bottom-ctrl-bar glass-panel">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+    <div class="panel-title">⚙️ 교배 설정</div>
+    <div class="panel-body">
+        <div class="seg three">
+            <button class="seg-btn active" id="btnShape" type="button">씨 모양</button>
+            <button class="seg-btn" id="btnColor" type="button">씨 색</button>
+            <button class="seg-btn" id="btnBoth" type="button">두 형질</button>
+        </div>
+        <div class="geno-row" id="rowP1">
+            <span class="lbl">부모1</span>
+            <button class="mini active" data-p="1" data-g="RR" type="button">RR</button>
+            <button class="mini" data-p="1" data-g="Rr" type="button">Rr</button>
+            <button class="mini" data-p="1" data-g="rr" type="button">rr</button>
+        </div>
+        <div class="geno-row" id="rowP2">
+            <span class="lbl">부모2</span>
+            <button class="mini active" data-p="2" data-g="rr" type="button">rr</button>
+            <button class="mini" data-p="2" data-g="RR" type="button">RR</button>
+            <button class="mini" data-p="2" data-g="Rr" type="button">Rr</button>
+        </div>
+        <button class="btn-start" id="btnCrossP" type="button">🌾 부모 교배 (P → F1)</button>
+        <button class="btn-ghost" id="btnCrossF1" type="button" disabled style="opacity:0.5;">🌾 F1끼리 교배 (F1 → F2)</button>
+        <div class="state-badge" id="stateBadge">
+            <span id="sbName">부모 세대</span>
+            <span class="sb-note" id="sbNote">부모의 유전자형을 고르세요</span>
+        </div>
+        <button class="btn-ghost" id="btnStats" type="button">📊 자손 통계 보기</button>
+        <div class="hint-line">수분하면 밭에 자손 완두콩이 열립니다</div>
+    </div>
+</div>
+
+<div class="sub-panel glass-panel left show" id="statsPanel">
+    <div class="sub-head">
+        <span class="sub-panel-title">📊 자손 통계</span>
+        <button class="sub-close" id="closeStats" type="button" aria-label="닫기">✕</button>
+    </div>
+    <div id="statsBody">
+        <div class="note">아직 교배하지 않았습니다. 부모를 고르고 <b>부모 교배</b>를 눌러 보세요.</div>
+    </div>
+</div>
+
+
+<script>
+/* ============ 공통 3D 기반 (씬·카메라·조명·테마·반응형) ============ */
+window.SVL = (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var LIGHT_BG = 0xeef2f8, DARK_BG = 0x0b1220;
+
+    var container = $('canvas-container');
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(LIGHT_BG);
+
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / Math.max(1, window.innerHeight), 0.1, 400);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 3;
+    controls.maxDistance = 60;
+    controls.minPolarAngle = Math.PI * 0.06;
+    controls.maxPolarAngle = Math.PI * 0.55;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    if (THREE.TOUCH) { controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; }
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0xd7e2ee, 0.78);
+    scene.add(hemi);
+    var key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(6, 18, 9);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.left = -12;
+    key.shadow.camera.right = 12;
+    key.shadow.camera.top = 12;
+    key.shadow.camera.bottom = -12;
+    key.shadow.camera.near = 1;
+    key.shadow.camera.far = 50;
+    key.shadow.radius = 3;
+    scene.add(key);
+    var fill = new THREE.DirectionalLight(0xffffff, 0.34);
+    fill.position.set(-7, 6, -6);
+    scene.add(fill);
+
+    var benchMat = new THREE.MeshStandardMaterial({ color: 0xdfe8f3, roughness: 0.94, metalness: 0.02 });
+    var bench = new THREE.Mesh(new THREE.PlaneGeometry(90, 60), benchMat);
+    bench.rotation.x = -Math.PI / 2;
+    bench.receiveShadow = true;
+    scene.add(bench);
+
+    /* ---- 라벨 스프라이트 ---- */
+    function makeLabel(text, color, w) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 128;
+        var g = cv.getContext('2d');
+        g.clearRect(0, 0, 512, 128);
+        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        var tw = Math.min(470, g.measureText(text).width + 46);
+        var x0 = (512 - tw) / 2, r = 30;
+        g.fillStyle = 'rgba(255,255,255,0.93)';
+        g.beginPath();
+        g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
+        g.quadraticCurveTo(x0 + tw, 22, x0 + tw, 22 + r);
+        g.lineTo(x0 + tw, 106 - r);
+        g.quadraticCurveTo(x0 + tw, 106, x0 + tw - r, 106);
+        g.lineTo(x0 + r, 106);
+        g.quadraticCurveTo(x0, 106, x0, 106 - r);
+        g.lineTo(x0, 22 + r);
+        g.quadraticCurveTo(x0, 22, x0 + r, 22);
+        g.closePath();
+        g.fill();
+        g.fillStyle = color || '#124';
+        g.fillText(text, 256, 66);
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+        var ww = w || 1.9;
+        spr.scale.set(ww, ww * 0.25, 1);
+        return spr;
+    }
+
+    /* ---- 안내 문구 ---- */
+    var hintEl = $('centerTooltip');
+    var hintTimer = null;
+    function setHint(text, sticky) {
+        if (!hintEl) return;
+        hintEl.textContent = text;
+        hintEl.classList.remove('hidden');
+        if (hintTimer) clearTimeout(hintTimer);
+        if (!sticky) hintTimer = setTimeout(function () { hintEl.classList.add('hidden'); }, 5200);
+    }
+
+    /* ---- 테마 ---- */
+    var isDark = false;
+    var themeCbs = [];
+    function applyTheme() {
+        document.body.classList.toggle('dark-mode', isDark);
+        scene.background = new THREE.Color(isDark ? DARK_BG : LIGHT_BG);
+        benchMat.color.setHex(isDark ? 0x16203a : 0xdfe8f3);
+        hemi.intensity = isDark ? 0.42 : 0.78;
+        key.intensity = isDark ? 0.82 : 1.05;
+        fill.intensity = isDark ? 0.26 : 0.34;
+        $('themeBtn').textContent = isDark ? '☀️' : '🌙';
+        $('themeBtn').title = isDark ? '주간 모드로 전환' : '야간 모드로 전환';
+        for (var i = 0; i < themeCbs.length; i++) { try { themeCbs[i](isDark); } catch (e) {} }
+    }
+    $('themeBtn').addEventListener('click', function () { isDark = !isDark; applyTheme(); });
+
+    /* ---- 크기/시점 ---- */
+    function onResize() {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        camera.updateProjectionMatrix();
+        if (typeof svlFit === 'function') svlFit();
+    }
+    var svlFit = null;
+
+    window.addEventListener('resize', onResize);
+
+    /* ---- 실험 훅 ---- */
+    var hooks = { reset: null, align: null, fit: null };
+    $('btnReset').addEventListener('click', function () { if (hooks.reset) hooks.reset(); else { svlFit && svlFit(); } });
+    $('btnAlign').addEventListener('click', function () {
+        if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit();
+        setHint('🎥 정면 시점으로 정렬했습니다.', false);
+    });
+
+    function alignView() { if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit(); }
+
+    var frameCbs = [];
+    var clock = new THREE.Clock();
+    var last = performance.now();
+    function frame(now) {
+        requestAnimationFrame(frame);
+        var dt = Math.min(0.05, (now - last) / 1000);
+        last = now;
+        for (var i = 0; i < frameCbs.length; i++) { try { frameCbs[i](dt, now); } catch (e) {} }
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    requestAnimationFrame(frame);
+
+    return {
+        $: $, scene: scene, camera: camera, renderer: renderer, controls: controls,
+        hemi: hemi, key: key, fill: fill, benchMat: benchMat,
+        LIGHT_BG: LIGHT_BG, DARK_BG: DARK_BG,
+        makeLabel: makeLabel, setHint: setHint,
+        onTheme: function (fn) { themeCbs.push(fn); },
+        onFrame: function (fn) { frameCbs.push(fn); },
+        isDark: function () { return isDark; },
+        hooks: hooks,
+        setFit: function (fn) { hooks.fit = fn; svlFit = fn; window.svlFitCamera = fn; },
+        setReset: function (fn) { hooks.reset = fn; },
+        setAlign: function (fn) { hooks.align = fn; },
+        alignView: alignView
+    };
+})();
+</script>
+<script>
+
+(function () {
+    'use strict';
+    var S = window.SVL, $ = S.$, scene = S.scene, camera = S.camera, controls = S.controls;
+
+    var state = {
+        trait: 'shape',
+        p1: 'RR', p2: 'rr',
+        gen: 0,          /* 0: 아직 교배 안 함, 1: F1 있음, 2: F2 있음 */
+        f1: null, f2: null,
+        peas: [], peaIdx: 0,
+        pending: []
+    };
+
+    /* ============================================================
+       1. 밭과 식물
+       ============================================================ */
+    var soilMat = new THREE.MeshStandardMaterial({ color: 0x6b4b32, roughness: 0.95, metalness: 0.0 });
+    var field = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.34, 3.3), soilMat);
+    field.position.set(0, 0.17, 0.85);
+    field.receiveShadow = true;
+    field.castShadow = true;
+    scene.add(field);
+    var bedEdge = new THREE.Mesh(new THREE.BoxGeometry(9.3, 0.12, 3.6), new THREE.MeshStandardMaterial({ color: 0x8a6244, roughness: 0.9 }));
+    bedEdge.position.set(0, 0.06, 0.85);
+    scene.add(bedEdge);
+
+    var stemMat = new THREE.MeshStandardMaterial({ color: 0x5b9e4a, roughness: 0.75 });
+    var leafMat = new THREE.MeshStandardMaterial({ color: 0x6cae55, roughness: 0.7, side: THREE.DoubleSide });
+    var flowerMat = new THREE.MeshStandardMaterial({ color: 0xf7f2f8, roughness: 0.6 });
+    var petalMat = new THREE.MeshStandardMaterial({ color: 0xe9b7d6, roughness: 0.6 });
+
+    function makePlant(x, z, scale, tag) {
+        var g = new THREE.Group();
+        g.position.set(x, 0.34, z);
+        g.scale.setScalar(scale || 1);
+        scene.add(g);
+
+        var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 1.9, 10), stemMat);
+        stem.position.y = 0.95;
+        stem.castShadow = true;
+        g.add(stem);
+
+        for (var i = 0; i < 4; i++) {
+            var leaf = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), leafMat);
+            leaf.scale.set(0.34, 0.05, 0.2);
+            var side = i % 2 === 0 ? 1 : -1;
+            leaf.position.set(side * 0.26, 0.55 + i * 0.35, 0.02);
+            leaf.rotation.z = side * 0.35;
+            leaf.rotation.y = side * 0.5;
+            leaf.castShadow = true;
+            g.add(leaf);
+        }
+        for (var p = 0; p < 4; p++) {
+            var petal = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), p <= 2 ? flowerMat : petalMat);
+            petal.scale.set(1, 0.55, 1);
+            var a = p / 4 * Math.PI * 2;
+            petal.position.set(Math.cos(a) * 0.13, 1.95, Math.sin(a) * 0.13);
+            g.add(petal);
+        }
+        var center = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf0d27a, roughness: 0.6 }));
+        center.position.set(0, 1.93, 0);
+        g.add(center);
+
+        /* 꼬투리 두 개 */
+        for (var k = 0; k < 2; k++) {
+            var pod = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), new THREE.MeshStandardMaterial({ color: 0x7fb85f, roughness: 0.65 }));
+            pod.scale.set(0.55, 0.22, 1.35);
+            pod.position.set((k === 0 ? 1 : -1) * 0.24, 0.85 + k * 0.5, 0.12);
+            pod.rotation.z = (k === 0 ? -1 : 1) * 0.4;
+            g.add(pod);
+        }
+
+        var lab = S.makeLabel(tag, '#14532d', 1.45);
+        lab.position.set(0, 2.55, 0);
+        g.add(lab);
+        return g;
+    }
+
+    var plant1 = makePlant(-2.95, -0.35, 1.12, '부모1');
+    var plant2 = makePlant(2.95, -0.35, 1.12, '부모2');
+
+    /* 부모 완두콩 표시 */
+    var seedGeo = new THREE.SphereGeometry(0.22, 16, 12);
+    var seedWrinkle = (function () {
+        var g2 = new THREE.IcosahedronGeometry(0.22, 1);
+        var pos2 = g2.attributes.position;
+        for (var q = 0; q < pos2.count; q++) {
+            var f2 = 0.82 + Math.random() * 0.26;
+            pos2.setXYZ(q, pos2.getX(q) * f2, pos2.getY(q) * f2, pos2.getZ(q) * f2);
+        }
+        g2.computeVertexNormals();
+        return g2;
+    })();
+    function peaMaterial(color) { return new THREE.MeshStandardMaterial({ color: color, roughness: 0.55, metalness: 0.03 }); }
+    var p1Seed = new THREE.Mesh(seedGeo, peaMaterial(0xf2c14e));
+    p1Seed.position.set(-2.3, 0.58, 0.15);
+    p1Seed.castShadow = true;
+    scene.add(p1Seed);
+    var p2Seed = new THREE.Mesh(seedGeo, peaMaterial(0x7bb661));
+    p2Seed.position.set(2.3, 0.58, 0.15);
+    p2Seed.castShadow = true;
+    scene.add(p2Seed);
+    var p1SeedLabel = S.makeLabel('씨', '#92400e', 0.8);
+    p1SeedLabel.position.set(-2.3, 0.98, 0.15);
+    scene.add(p1SeedLabel);
+    var p2SeedLabel = S.makeLabel('씨', '#166534', 0.8);
+    p2SeedLabel.position.set(2.3, 0.98, 0.15);
+    scene.add(p2SeedLabel);
+
+    /* ============================================================
+       2. 유전 계산
+       ============================================================ */
+    function allelesOf(g) { return g.split(''); }
+
+    function pickAllele(g) { return g.charAt(Math.floor(Math.random() * 2)); }
+
+    function crossOne(p1, p2) {
+        return pickAllele(p1) + pickAllele(p2);
+    }
+
+    function sortGeno(g) {
+        if (g.length <= 2) return g.split('').sort().join('');
+        return g.slice(0, 2).split('').sort().join('') + g.slice(2, 4).split('').sort().join('');
+    }
+
+    function phenotype(geno) {
+        /* geno: 모양 유전자(2) + 색 유전자(2) */
+        var shape = geno.slice(0, 2), color = geno.slice(2, 4);
+        var round = shape.indexOf('R') >= 0;
+        var yellow = color.indexOf('Y') >= 0;
+        var shapeName = round ? '둥글' : '주름진';
+        var colorName = yellow ? '황색' : '초록';
+        return {
+            shape: shapeName, color: colorName,
+            key: shapeName + '·' + colorName,
+            colorHex: yellow ? 0xf2c14e : 0x7bb661,
+            round: round
+        };
+    }
+
+    function newStats() {
+        return { total: 0, pheno: {}, geno: {}, genotypeList: [] };
+    }
+
+    function addStat(st, geno) {
+        var ph = phenotype(geno);
+        st.total++;
+        var k = state.trait === 'both' ? ph.key : (state.trait === 'shape' ? ph.shape : ph.color);
+        st.pheno[k] = (st.pheno[k] || 0) + 1;
+        var gk = state.trait === 'both' ? sortGeno(geno) : sortGeno(geno.slice(0, 2));
+        st.geno[gk] = (st.geno[gk] || 0) + 1;
+    }
+
+    /* ============================================================
+       3. 완두콩 배치
+       ============================================================ */
+    var PEAS_MAX = 64;
+    var COLS = 10, ROWS = 6;
+    var cellW = 0.74, cellD = 0.56;
+
+    function slotPos(idx) {
+        var i = idx % (COLS * ROWS);
+        var c = i % COLS, r = Math.floor(i / COLS);
+        return new THREE.Vector3((c - (COLS - 1) / 2) * cellW, 0.4, -0.1 + r * cellD);
+    }
+
+    function makePeaMesh(ph) {
+        var geo;
+        if (ph.round) {
+            geo = new THREE.SphereGeometry(0.2, 16, 12);
+        } else {
+            geo = new THREE.IcosahedronGeometry(0.2, 1);
+            var pos = geo.attributes.position;
+            for (var i = 0; i < pos.count; i++) {
+                var f = 0.82 + Math.random() * 0.28;
+                pos.setXYZ(i, pos.getX(i) * f, pos.getY(i) * f, pos.getZ(i) * f);
+            }
+            geo.computeVertexNormals();
+        }
+        var m = new THREE.Mesh(geo, peaMaterial(ph.colorHex));
+        m.castShadow = true;
+        return m;
+    }
+
+    function spawnPeas(genotypes) {
+        for (var i = 0; i < genotypes.length; i++) {
+            var ph = phenotype(genotypes[i]);
+            var mesh = makePeaMesh(ph);
+            var idx = state.peaIdx++;
+            var pos = slotPos(idx);
+            mesh.position.copy(pos);
+            mesh.scale.setScalar(0.001);
+            mesh.userData.born = performance.now() + i * 55;
+            mesh.userData.target = 1;
+            scene.add(mesh);
+            state.peas.push(mesh);
+            if (state.peas.length > PEAS_MAX) {
+                var old = state.peas.shift();
+                scene.remove(old);
+            }
+        }
+    }
+
+    /* ============================================================
+       4. UI
+       ============================================================ */
+    function traitGeno(p, g) {
+        if (state.trait === 'both') return 'RrYy';
+        return g;
+    }
+
+    function genoButtons() {
+        var set = state.trait === 'shape' ? ['RR', 'Rr', 'rr'] : state.trait === 'color' ? ['YY', 'Yy', 'yy'] : null;
+        ['1', '2'].forEach(function (p) {
+            var row = $('rowP' + p);
+            if (!set) {
+                row.style.display = 'none';
+                return;
+            }
+            row.style.display = 'flex';
+            var btns = row.querySelectorAll('.mini');
+            for (var i = 0; i < btns.length; i++) {
+                btns[i].textContent = set[i];
+                btns[i].dataset.g = set[i];
+                btns[i].classList.toggle('active', btns[i].dataset.g === (p === '1' ? state.p1 : state.p2));
+            }
+        });
+    }
+
+    function setTrait(t) {
+        state.trait = t;
+        state.gen = 0; state.f1 = null; state.f2 = null;
+        state.peas.forEach(function (m) { scene.remove(m); });
+        state.peas = []; state.peaIdx = 0;
+        state.p1 = t === 'color' ? 'YY' : 'RR';
+        state.p2 = t === 'color' ? 'yy' : 'rr';
+        state.f1List = null;
+        $('btnShape').classList.toggle('active', t === 'shape');
+        $('btnColor').classList.toggle('active', t === 'color');
+        $('btnBoth').classList.toggle('active', t === 'both');
+        $('btnCrossP').disabled = false;
+        $('btnCrossP').style.opacity = 1;
+        $('btnCrossP').classList.remove('off');
+        $('btnCrossF1').disabled = true;
+        $('btnCrossF1').style.opacity = 0.5;
+        genoButtons();
+        updateParents();
+        renderStats();
+        updateHud();
+        $('sbName').textContent = '부모 세대';
+        $('sbNote').textContent = t === 'both' ? '순종 부모 RRYY × rryy' : '부모의 유전자형을 고르세요';
+        S.setHint(t === 'both' ? '🌾 순종 RRYY × rryy를 교배하면 F1은 모두 RrYy, F2에서 9:3:3:1이 나타납니다.' : '🌾 부모의 유전자형을 고르고 교배해 보세요.', false);
+    }
+
+    function updateParents() {
+        /* 부모 완두콩 색·모양 반영 */
+        var ph1 = phenotype(state.trait === 'both' ? 'RRYY' : (state.trait === 'shape' ? state.p1 + 'YY' : 'RR' + state.p1));
+        var ph2 = phenotype(state.trait === 'both' ? 'rryy' : (state.trait === 'shape' ? state.p2 + 'YY' : 'RR' + state.p2));
+        p1Seed.material.color.setHex(ph1.colorHex);
+        p2Seed.material.color.setHex(ph2.colorHex);
+        p1Seed.geometry = ph1.round ? seedGeo : seedWrinkle;
+        p2Seed.geometry = ph2.round ? seedGeo : seedWrinkle;
+        p1Seed.position.y = ph1.round ? 0.58 : 0.55;
+        p2Seed.position.y = ph2.round ? 0.58 : 0.55;
+    }
+
+    function renderStats() {
+        var html = '';
+        function block(st, label, cls) {
+            if (!st) return '<div class="stat-block"><div class="stat-title"><span><span class="gen-tag ' + cls + '">' + label + '</span>자손</span><b>0 개</b></div>' +
+                '<div class="note">' + label + ' 자손이 아직 없습니다.</div></div>';
+            var order = [];
+            if (state.trait === 'shape') order = ['둥글', '주름진'];
+            else if (state.trait === 'color') order = ['황색', '초록'];
+            else order = ['둥글·황색', '둥글·초록', '주름진·황색', '주름진·초록'];
+            var colors = ['#eab308', '#65a30d', '#f59e0b', '#16a34a'];
+            var s = '<div class="stat-block"><div class="stat-title"><span><span class="gen-tag ' + cls + '">' + label + '</span>표현형</span><b>총 ' + st.total + ' 개</b></div>';
+            for (var i = 0; i < order.length; i++) {
+                var n = st.pheno[order[i]] || 0;
+                var pct = st.total ? Math.round(n / st.total * 1000) / 10 : 0;
+                s += '<div class="stat-row"><span class="nm">' + order[i] + '</span><span class="bar"><i style="width:' + pct + '%;background:' + colors[i % 4] + '"></i></span><span class="vl">' + n + ' (' + pct + '%)</span></div>';
+            }
+            s += '<div class="hr"></div><div class="stat-title"><span>유전자형</span><b></b></div><div class="mini-table">';
+            var keys = Object.keys(st.geno).sort(function (a, b) {
+                var oa = levenshteinOrder(a), ob = levenshteinOrder(b);
+                return oa - ob;
+            });
+            for (var k = 0; k < keys.length; k++) {
+                s += '<div class="mini-row"><span>' + keys[k] + '</span><span class="vl">' + st.geno[keys[k]] + '</span></div>';
+            }
+            s += '</div></div>';
+            return s;
+        }
+        function levenshteinOrder(g) {
+            var w = 0;
+            for (var i = 0; i < g.length; i++) if (g.charAt(i) === 'R' || g.charAt(i) === 'Y') w += 1;
+            return 10 - w;
+        }
+        html += block(state.f1, 'F1', '');
+        html += '<div class="hr"></div>';
+        html += block(state.f2, 'F2', 'f2');
+        $('statsBody').innerHTML = html;
+    }
+
+    function updateHud() {
+        $('valGen').textContent = state.gen === 0 ? '부모' : (state.gen === 1 ? 'F1' : 'F2');
+        var n = state.peas.length;
+        $('valCount').textContent = n + ' 개';
+        var st = state.gen === 2 ? state.f2 : state.f1;
+        if (!st || !st.total) { $('valRatio').textContent = '—'; return; }
+        var order = state.trait === 'shape' ? ['둥글', '주름진'] : state.trait === 'color' ? ['황색', '초록'] : ['둥글·황색', '둥글·초록', '주름진·황색', '주름진·초록'];
+        var parts = [];
+        for (var i = 0; i < order.length; i++) parts.push(st.pheno[order[i]] || 0);
+        $('valRatio').textContent = parts.join(' : ');
+    }
+
+    /* 교배 실행 */
+    function doCross(which) {
+        var genotypes = [];
+        var n = 16;
+        if (which === 'P') {
+            if (state.gen >= 1) return;
+            for (var i = 0; i < n; i++) {
+                if (state.trait === 'both') {
+                    genotypes.push(crossOne('RR', 'rr') + crossOne('YY', 'yy'));
+                } else {
+                    genotypes.push(crossOne(state.p1, state.p2) + (state.trait === 'shape' ? 'YY' : 'RR'));
+                }
+            }
+            state.f1 = newStats();
+            state.f1List = genotypes.slice();
+            for (var j = 0; j < genotypes.length; j++) addStat(state.f1, genotypes[j]);
+            state.gen = 1;
+            $('btnCrossF1').disabled = false;
+            $('btnCrossF1').style.opacity = 1;
+            $('btnCrossP').classList.add('off');
+            $('btnCrossP').disabled = true;
+            $('btnCrossP').style.opacity = 0.55;
+            $('sbName').textContent = 'F1 자손이 열렸습니다';
+            $('sbNote').textContent = '이제 F1끼리 교배해 F2를 만들어 보세요';
+        } else {
+            if (state.gen < 1) return;
+            var fl = state.f1List || ['RrYY'];
+            for (var k = 0; k < n; k++) {
+                var g1 = fl[Math.floor(Math.random() * fl.length)];
+                var g2 = fl[Math.floor(Math.random() * fl.length)];
+                genotypes.push(crossOne(g1.slice(0, 2), g2.slice(0, 2)) + crossOne(g1.slice(2, 4), g2.slice(2, 4)));
+            }
+            if (!state.f2) state.f2 = newStats();
+            for (var m = 0; m < genotypes.length; m++) addStat(state.f2, genotypes[m]);
+            state.gen = 2;
+            var st = state.f2;
+            var order = state.trait === 'shape' ? ['둥글', '주름진'] : state.trait === 'color' ? ['황색', '초록'] : ['둥글·황색', '둥글·초록', '주름진·황색', '주름진·초록'];
+            var parts = [];
+            for (var q = 0; q < order.length; q++) parts.push(st.pheno[order[q]] || 0);
+            $('sbName').textContent = 'F2 표현형 ' + parts.join(' : ');
+            $('sbNote').textContent = state.trait === 'both' ? '이론값 9 : 3 : 3 : 1 에 가까워집니다' : '이론값 3 : 1 에 가까워집니다';
+            S.setHint('🌾 F2 자손이 열렸습니다. 왼쪽 통계에서 비율을 확인해 보세요.', false);
+        }
+        spawnPeas(genotypes);
+        renderStats();
+        updateHud();
+    }
+
+    /* 이벤트 */
+    $('btnShape').addEventListener('click', function () { setTrait('shape'); });
+    $('btnColor').addEventListener('click', function () { setTrait('color'); });
+    $('btnBoth').addEventListener('click', function () { setTrait('both'); });
+    $('btnCrossP').addEventListener('click', function () { doCross('P'); });
+    $('btnCrossF1').addEventListener('click', function () { doCross('F1'); });
+    document.querySelectorAll('.geno-row .mini').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var p = this.dataset.p, g = this.dataset.g;
+            if (p === '1') state.p1 = g; else state.p2 = g;
+            var row = $('rowP' + p);
+            row.querySelectorAll('.mini').forEach(function (x) { x.classList.toggle('active', x === b); });
+            updateParents();
+        });
+    });
+    $('closeStats').addEventListener('click', function () { $('statsPanel').classList.remove('show'); });
+    $('btnStats').addEventListener('click', function () { $('statsPanel').classList.toggle('show'); });
+
+    /* ============================================================
+       5. 프레임
+       ============================================================ */
+    S.onFrame(function (dt) {
+        var now = performance.now();
+        for (var i = 0; i < state.peas.length; i++) {
+            var m = state.peas[i], t = m.userData.born;
+            if (now > t && m.scale.x < 1) {
+                var k = Math.min(1, (now - t) / 320);
+                var e = 1 + 0.25 * Math.sin(Math.PI * k);
+                m.scale.setScalar(Math.max(0.001, k * e));
+            }
+        }
+    });
+
+    /* ============================================================
+       6. 카메라 / 초기화
+       ============================================================ */
+    function fitCamera() {
+        var aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        var portrait = aspect < 0.88;
+        var needW = portrait ? 7.6 : 9.4;
+        var needH = portrait ? 7.6 : 5.6;
+        var vfov = camera.fov * Math.PI / 180;
+        var distH = (needH / 2) / Math.tan(vfov / 2);
+        var distW = (needW / 2) / Math.tan(vfov / 2) / Math.max(0.2, aspect);
+        var dist = Math.max(distH, distW) * 1.02;
+        var target = new THREE.Vector3(0, portrait ? 1.7 : 1.65, portrait ? 0.5 : 0.55);
+        var dir = new THREE.Vector3(0, portrait ? 0.42 : 0.44, 1).normalize();
+        camera.position.copy(target).add(dir.multiplyScalar(dist));
+        controls.target.copy(target);
+        camera.lookAt(target);
+        camera.updateProjectionMatrix();
+        controls.update();
+    }
+    S.setFit(fitCamera);
+
+    S.setReset(function () {
+        state.gen = 0; state.f1 = null; state.f2 = null;
+        state.peas.forEach(function (m) { scene.remove(m); });
+        state.peas = []; state.peaIdx = 0;
+        $('btnCrossP').disabled = false;
+        $('btnCrossP').style.opacity = 1;
+        $('btnCrossP').classList.remove('off');
+        $('btnCrossF1').disabled = true;
+        $('btnCrossF1').style.opacity = 0.5;
+        setTrait('shape');
+        $('statsPanel').classList.add('show');
+        renderStats();
+        fitCamera();
+        S.setHint('🔄 처음 상태로 돌아왔습니다.', false);
+    });
+
+    setTrait('shape');
+    fitCamera();
+    renderStats();
+    updateHud();
+    if (window.innerWidth < 900) $('statsPanel').classList.remove('show');
+    S.setHint('🌾 부모의 유전자형을 고르고 교배해 보세요. 자손 완두콩이 밭에 열립니다.', false);
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { fitCamera(); });
+    }
+})();
+
+</script>
+
+<script>
+/* ============ 전체화면 / 창모드 + 모바일 화면 재조정 (공통) ============ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '\uD83D\uDDD7' : '\u26F6';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) {
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            btn.title = on ? '창모드로 전환' : '전체화면으로 전환';
+        }
+        document.body.classList.toggle('is-fullscreen', on);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (window.SVL && window.SVL.hooks && window.SVL.hooks.fit) window.SVL.hooks.fit();
+        }, 150);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+            if (window.SVL && window.SVL.hooks && window.SVL.hooks.fit) window.SVL.hooks.fit();
+        }, 440);
+    }
+
+    function onKey(e) {
+        if (e.key !== 'Escape' && e.key !== 'Esc') return;
+        if (pseudo() && !realFs()) { docEl.classList.remove('pseudo-fs'); setUI(); }
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+                return;
+            }
+            if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var r = req.call(docEl);
+                    if (r && typeof r.catch === 'function') r.catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                } catch (err) {
+                    docEl.classList.add('pseudo-fs');
+                }
+            } else {
+                docEl.classList.add('pseudo-fs');
+                try { window.scrollTo(0, 1); } catch (e) {}
+                toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+            }
+            setUI();
+        }, false);
+    }
+
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+    document.addEventListener('keydown', onKey);
+
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+
+    setUI();
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+</body>
+</html>

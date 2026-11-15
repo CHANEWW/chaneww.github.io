@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.95">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>분별 깔때기 & 증류 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+<style>
+
+    @font-face {
+        font-family: 'SeoulNamsan';
+        src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+             url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+        font-weight: 400; font-style: normal; font-display: swap;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(120% 100% at 50% 6%, #ffffff 0%, #eef3fa 48%, #e2eaf4 100%);
+        color: #1c1c1e; touch-action: none; user-select: none; -webkit-user-select: none;
+        transition: background .35s ease, color .35s ease;
+    }
+    body.dark-mode {
+        background: radial-gradient(120% 100% at 50% 6%, #1a2433 0%, #101725 55%, #080c14 100%);
+        color: #eef3fa;
+    }
+    #canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+    #canvas-container canvas { display: block; }
+
+    .glass-panel {
+        background: rgba(255, 255, 255, 0.76);
+        backdrop-filter: blur(22px) saturate(180%);
+        -webkit-backdrop-filter: blur(22px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 0 10px 30px rgba(16, 32, 64, 0.10);
+        z-index: 11;
+    }
+    body.dark-mode .glass-panel {
+        background: rgba(22, 29, 42, 0.78);
+        border-color: rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
+        color: #eaf1fb;
+    }
+
+    /* ---------- 좌상단 ---------- */
+    .top-left-bar { position: fixed; top: 18px; left: 20px; display: flex; align-items: center; gap: 9px; z-index: 12; }
+    .back-btn {
+        display: flex; align-items: center; gap: 6px; padding: 9px 16px;
+        font-family: inherit; font-size: 14px; font-weight: 700; color: #1c1c1e;
+        text-decoration: none; cursor: pointer; border-radius: 999px; border: none;
+        transition: transform .18s ease, background .18s ease;
+    }
+    .back-btn span:first-child { font-weight: 900; font-size: 15px; }
+    .back-btn:hover { transform: translateY(-1px); }
+    body.dark-mode .back-btn { color: #ecf2fd; }
+    .tag-badge {
+        display: flex; align-items: center; gap: 8px; padding: 9px 16px;
+        border-radius: 999px; font-size: 14px; font-weight: 800; color: #111;
+        white-space: nowrap;
+    }
+    body.dark-mode .tag-badge { color: #f2f7ff; }
+    .tag-pill { background: rgba(10, 132, 255, 0.16); color: #0a84ff; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 800; }
+    body.dark-mode .tag-pill { background: rgba(10, 132, 255, 0.26); color: #79bdff; }
+    .qr-btn { padding: 9px 14px; }
+
+    /* ---------- 우상단 ---------- */
+    .top-right-bar { position: fixed; top: 18px; right: 20px; display: flex; align-items: center; gap: 9px; z-index: 12; }
+    .tr-util { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+        width: 40px; height: 40px; min-width: 40px; border: none; border-radius: 999px;
+        font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center;
+        justify-content: center; font-family: inherit; color: #1c1c1e;
+    }
+    body.dark-mode .icon-btn { color: #eaf1fb; }
+    .data-card { display: flex; align-items: center; gap: 15px; padding: 9px 16px; border-radius: 999px; }
+    .data-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+    .data-label { font-size: 10.5px; font-weight: 700; color: #7b8794; white-space: nowrap; }
+    body.dark-mode .data-label { color: #93a3b8; }
+    .data-value { font-size: 13.5px; font-weight: 800; color: #1c1c1e; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    body.dark-mode .data-value { color: #f2f7ff; }
+    .data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+    body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.14); }
+
+    /* ---------- 중앙 안내 ---------- */
+    #guide-tooltip {
+        position: fixed; top: 92px; left: 50%; transform: translateX(-50%);
+        padding: 9px 18px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+        color: #fff; background: rgba(24, 30, 42, .82); border: none;
+        white-space: nowrap; pointer-events: none; z-index: 12;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+        transition: opacity .5s ease;
+    }
+    body.dark-mode #guide-tooltip { color: #eef4ff; background: rgba(8, 12, 20, .88); }
+    #guide-tooltip.fade { opacity: 0; }
+
+    /* ---------- 좌측 데이터 패널 ---------- */
+    .left-panel {
+        position: fixed; left: 20px; top: 132px; width: 236px;
+        max-height: calc(100vh - 210px); overflow-y: auto;
+        padding: 12px 13px; border-radius: 18px;
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .lp-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; font-weight: 800; color: #334155; padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, .07); }
+    body.dark-mode .lp-title { color: #dce7f7; border-bottom-color: rgba(255, 255, 255, .12); }
+    .lp-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+    .lp-k { color: #6b7684; font-weight: 700; white-space: nowrap; }
+    body.dark-mode .lp-k { color: #9db0c9; }
+    .lp-v { font-weight: 800; color: #1c1c1e; font-variant-numeric: tabular-nums; text-align: right; }
+    body.dark-mode .lp-v { color: #f2f7ff; }
+    .lp-note { font-size: 10.8px; line-height: 1.45; color: #7b8794; word-break: keep-all; }
+    body.dark-mode .lp-note { color: #93a3b8; }
+    .lp-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .lp-tbl th { font-size: 10.3px; color: #7b8794; font-weight: 800; text-align: left; padding: 3px 2px; border-bottom: 1px solid rgba(0, 0, 0, .08); }
+    .lp-tbl td { padding: 3px 2px; border-bottom: 1px dashed rgba(0, 0, 0, .07); font-weight: 700; color: #334155; font-variant-numeric: tabular-nums; }
+    body.dark-mode .lp-tbl th { color: #93a3b8; border-bottom-color: rgba(255, 255, 255, .16); }
+    body.dark-mode .lp-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255, 255, .09); }
+    canvas.lp-canvas { width: 100%; height: 104px; display: block; border-radius: 10px; background: rgba(248, 251, 255, .7); }
+    body.dark-mode canvas.lp-canvas { background: rgba(255, 255, 255, .06); }
+    .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10.4px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: #eaf2ff; color: #0a84ff; white-space: nowrap; }
+    body.dark-mode .chip { background: rgba(10, 132, 255, .22); color: #8cc7ff; }
+    .chip.ok { background: #e6f8ee; color: #1a9e54; }
+    body.dark-mode .chip.ok { background: rgba(26, 158, 84, .22); color: #6ddfa1; }
+    .chip.warn { background: #fff2e5; color: #d97706; }
+    body.dark-mode .chip.warn { background: rgba(217, 119, 6, .22); color: #ffc974; }
+    .lp-bar { height: 7px; border-radius: 999px; background: rgba(0, 0, 0, .08); overflow: hidden; }
+    body.dark-mode .lp-bar { background: rgba(255, 255, 255, .14); }
+    .lp-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #34c759, #0a84ff); transition: width .3s; }
+
+    /* ---------- 우측 조절 패널 ---------- */
+    .side-ctrl-panel {
+        position: fixed; right: 20px; bottom: 74px; width: 226px;
+        max-height: calc(100vh - 150px); overflow-y: auto;
+        padding: 12px; border-radius: 18px;
+        display: flex; flex-direction: column; gap: 9px;
+    }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; font-weight: 800; color: #334155; padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, .07); }
+    body.dark-mode .panel-title { color: #dce7f7; border-bottom-color: rgba(255, 255, 255, .12); }
+    .panel-sub { font-size: 10.6px; font-weight: 700; color: #7b8794; }
+    body.dark-mode .panel-sub { color: #93a3b8; }
+    .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .ctrl-grid.one { grid-template-columns: 1fr; }
+    .control-tab-btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+        border: none; border-radius: 13px; padding: 9px 8px;
+        background: rgba(255, 255, 255, .92); color: #1c1c1e;
+        font-family: inherit; font-size: 11.6px; font-weight: 800;
+        cursor: pointer; white-space: nowrap; line-height: 1.2;
+        box-shadow: 0 1px 4px rgba(16, 32, 64, .08);
+        transition: transform .14s ease, background .14s ease, color .14s ease;
+    }
+    .control-tab-btn:hover { transform: translateY(-1px); }
+    .control-tab-btn:active { transform: scale(.97); }
+    .control-tab-btn.on { background: #0a84ff; color: #fff; box-shadow: 0 4px 12px rgba(10, 132, 255, .34); }
+    body.dark-mode .control-tab-btn { background: rgba(70, 84, 106, .55); color: #edf3fd; }
+    body.dark-mode .control-tab-btn.on { background: #0a84ff; color: #fff; }
+    .control-tab-btn .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 0 1.5px rgba(255, 255, 255, .7) inset; }
+    .control-tab-btn.wide { width: 100%; }
+    .ctrl-row { display: flex; flex-direction: column; gap: 3px; }
+    .ctrl-row-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11.2px; font-weight: 700; color: #6b7684; }
+    body.dark-mode .ctrl-row-head { color: #9db0c9; }
+    .ctrl-val { font-weight: 800; color: #0a84ff; }
+    input[type=range].ctrl-slider { width: 100%; height: 22px; -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+    input[type=range].ctrl-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: #dbe4f0; }
+    input[type=range].ctrl-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 17px; height: 17px; border-radius: 50%; background: #0a84ff; margin-top: -5.5px; box-shadow: 0 2px 6px rgba(10, 132, 255, .4); }
+    input[type=range].ctrl-slider::-moz-range-track { height: 6px; border-radius: 999px; background: #dbe4f0; }
+    input[type=range].ctrl-slider::-moz-range-thumb { width: 17px; height: 17px; border: none; border-radius: 50%; background: #0a84ff; }
+    body.dark-mode input[type=range].ctrl-slider::-webkit-slider-runnable-track { background: #3b4b63; }
+    .panel-hr { height: 1px; background: rgba(0, 0, 0, .07); margin: 1px 0; }
+    body.dark-mode .panel-hr { background: rgba(255, 255, 255, .12); }
+    .seg-row { display: flex; gap: 6px; }
+    .seg-row .control-tab-btn { flex: 1; }
+
+    /* ---------- 하단 ---------- */
+    .bottom-control-bar {
+        position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 999px;
+        z-index: 12; white-space: nowrap;
+    }
+    .bottom-control-bar .control-tab-btn { padding: 8px 15px; border-radius: 999px; font-size: 12.5px; background: rgba(255, 255, 255, .6); box-shadow: none; }
+    body.dark-mode .bottom-control-bar .control-tab-btn { background: rgba(255, 255, 255, .1); }
+    .bottom-right-bar { position: fixed; right: 20px; bottom: 18px; display: flex; align-items: center; gap: 8px; z-index: 12; }
+    .bottom-right-bar .back-btn { padding: 9px 16px; border-radius: 999px; font-size: 12.5px; font-weight: 800; }
+
+    #svl-toast {
+        position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom));
+        transform: translateX(-50%) translateY(6px); opacity: 0; pointer-events: none;
+        background: rgba(24, 30, 42, .9); color: #fff; font-size: 12.5px; font-weight: 700;
+        padding: 10px 16px; border-radius: 14px; z-index: 9999; max-width: 82vw; text-align: center;
+        transition: opacity .25s ease, transform .25s ease; line-height: 1.4;
+    }
+    #svl-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* 실험별 추가 스타일 */
+    #lp-mode{font-size:9.6px}
+
+/* @@MOBILE-BASE v1@@ */
+/* ============================================================
+   모바일 반응형 보정 (세로/가로) — 자동 생성 블록
+   ============================================================ */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas { max-width: 100%; }
+
+/* ---------- 모바일 세로 (폭 900px 이하) ---------- */
+@media (max-width: 900px) {
+    /* 1행: [메인][제목]  ...  [전체화면 아이콘] */
+    .top-left-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        left: 8px !important;
+        right: 56px !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        overflow: hidden;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a {
+        flex: 0 0 auto;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 4px !important;
+        white-space: nowrap;
+    }
+    .top-left-bar .tag-badge {
+        flex: 0 1 auto;
+        min-width: 0;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        gap: 5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .top-left-bar .tag-badge > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .tag-pill { font-size: 9px !important; padding: 1px 6px !important; flex: 0 0 auto; }
+
+    /* 2행: [데이터 카드 .............][테마] */
+    .top-right-bar {
+        top: calc(max(8px, env(safe-area-inset-top)) + 40px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        gap: 6px !important;
+        justify-content: flex-end !important;
+        flex-wrap: nowrap !important;
+    }
+    .data-card {
+        flex: 1 1 0%;
+        min-width: 0;
+        gap: 4px !important;
+        padding: 6px 8px !important;
+        justify-content: space-around !important;
+        overflow: hidden;
+    }
+    .data-card { flex-direction: row !important; align-items: center !important; flex-wrap: nowrap !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .voltmeter-display { font-size: 24px !important; }
+    .data-label { font-size: 9px !important; white-space: nowrap; line-height: 1.2; }
+    .data-value { font-size: 12.5px !important; white-space: nowrap; line-height: 1.25; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+
+    /* 전체화면: 1행 우측 아이콘 버튼 (글자는 숨김) */
+    .bottom-right-bar {
+        top: max(8px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 8px !important;
+        left: auto !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn {
+        padding: 6px 9px !important;
+        font-size: 14px !important;
+        gap: 4px !important;
+        line-height: 1;
+    }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    /* 안내 문구 */
+    .center-tooltip, #guide-tooltip {
+        top: calc(max(8px, env(safe-area-inset-top)) + 88px) !important;
+        left: 8px !important;
+        right: 8px !important;
+        transform: none !important;
+        margin: 0 auto;
+        width: auto !important;
+        max-width: none !important;
+        font-size: 11.5px !important;
+        padding: 7px 12px !important;
+        white-space: normal !important;
+        line-height: 1.45;
+        text-align: center;
+        z-index: 15 !important;
+    }
+
+    /* 하단 컨트롤 바: 화면 폭 전체, 한 줄 유지 */
+    .bottom-control-bar {
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        transform: none !important;
+        width: 100% !important;
+        border-radius: 18px 18px 0 0 !important;
+        padding: 6px 6px calc(6px + env(safe-area-inset-bottom)) !important;
+        gap: 2px !important;
+        justify-content: space-around !important;
+        flex-wrap: nowrap !important;
+        overflow: visible;
+    }
+    .control-tab-btn {
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+        padding: 5px 2px !important;
+        font-size: 10.5px !important;
+        gap: 1px !important;
+        border-radius: 12px !important;
+        white-space: nowrap !important;
+        line-height: 1.15;
+    }
+    .control-tab-btn span { white-space: nowrap !important; }
+    .control-tab-btn span:first-child { font-size: 15px !important; line-height: 1.1; }
+
+    /* 슬라이더 등 서브 패널 */
+    .sub-panel {
+        left: 8px !important;
+        right: 8px !important;
+        bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+        transform: none !important;
+        width: auto !important;
+        max-width: none !important;
+        max-height: 46vh;
+        overflow-y: auto;
+        padding: 13px 14px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sub-panel-title { font-size: 11px !important; }
+    .slider-header { font-size: 11px !important; }
+    .control-row { gap: 5px !important; flex-wrap: wrap; }
+    .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
+    input[type="range"] { height: 22px; }
+
+    /* 팝업(모달)이 화면을 넘지 않도록 */
+    .modal-overlay { padding: 12px !important; align-items: center !important; }
+    .modal-card {
+        max-height: 88vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: 100% !important;
+        padding: 16px !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    .modal-title { font-size: 15px !important; }
+    .modal-body { font-size: 12px !important; }
+    .example-title { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.5 !important; }
+}
+
+@media (max-width: 430px) {
+    /* 아주 좁은 화면에서는 장식용 배지를 숨겨 제목 자리를 확보 */
+    .tag-pill { display: none !important; }
+}
+
+/* ---------- 모바일 가로 (높이 500px 이하) ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    .top-left-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        left: 6px !important;
+        right: auto !important;
+        max-width: 46vw;
+        gap: 5px !important;
+    }
+    .top-left-bar .back-btn,
+    .top-left-bar > a,
+    .top-left-bar .tag-badge {
+        padding: 4px 9px !important;
+        font-size: 11px !important;
+        height: 30px;
+    }
+    .tag-pill { display: none !important; }
+
+    .top-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        right: 88px !important;
+        left: auto !important;
+        gap: 5px !important;
+    }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+
+    .bottom-right-bar {
+        top: max(6px, env(safe-area-inset-top)) !important;
+        bottom: auto !important;
+        right: 6px !important;
+        z-index: 20;
+    }
+    .bottom-right-bar button,
+    .bottom-right-bar .back-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText,
+    .bottom-right-bar .fs-text { display: none !important; }
+
+    .center-tooltip, #guide-tooltip {
+        top: auto !important;
+        bottom: 56px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        width: max-content !important;
+        max-width: 44vw !important;
+        font-size: 10px !important;
+        padding: 4px 9px !important;
+        line-height: 1.3;
+    }
+
+    /* 가로 모드에서 각종 패널을 구석으로 모아 3D 화면을 가리지 않게 한다 */
+    .side-panel { top: 44px !important; right: 8px !important; left: auto !important; width: 214px !important; padding: 7px 9px !important; gap: 4px !important; }
+    .side-title { font-size: 10.5px !important; }
+    .side-scale { font-size: 8.5px !important; }
+    .meter-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 190px !important; padding: 6px 8px !important; gap: 3px !important; }
+    .meter-title { font-size: 9.5px !important; }
+    .action-panel { top: auto !important; bottom: 40px !important; right: 8px !important; left: auto !important; grid-template-columns: repeat(2, 44px) !important; gap: 4px !important; }
+    .side-btn { width: 44px !important; height: 44px !important; font-size: 8.5px !important; border-radius: 12px !important; gap: 1px !important; }
+    .energy-panel { left: 8px !important; bottom: 40px !important; top: auto !important; width: 176px !important; padding: 6px 8px !important; gap: 4px !important; }
+    .energy-title, .panel-note { font-size: 9px !important; line-height: 1.3 !important; }
+    .info-panel { right: 8px !important; bottom: 40px !important; top: auto !important; min-width: 128px !important; padding: 6px 8px !important; gap: 2px !important; }
+    .info-row { font-size: 9.5px !important; gap: 8px !important; }
+    .view-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .phase-panel { left: 8px !important; bottom: 40px !important; top: auto !important; padding: 6px 8px !important; }
+    .graph-panel { max-height: 40vh; width: 182px !important; }
+    .legend, .panel-note { font-size: 9px !important; }
+
+    .bottom-control-bar {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4px !important;
+        transform: translateX(-50%) !important;
+        width: auto !important;
+        max-width: calc(100vw - 12px);
+        border-radius: 14px !important;
+        padding: 4px 8px !important;
+        gap: 3px !important;
+    }
+    .control-tab-btn {
+        flex: 0 0 auto !important;
+        min-width: 46px !important;
+        padding: 3px 7px !important;
+        font-size: 10px !important;
+        gap: 0 !important;
+    }
+    .control-tab-btn span:first-child { font-size: 13px !important; }
+
+    .sub-panel {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 96px !important;
+        transform: translateX(-50%) !important;
+        width: min(400px, calc(100vw - 24px)) !important;
+        max-width: min(400px, calc(100vw - 24px)) !important;
+        max-height: 62vh;
+        overflow-y: auto;
+        padding: 9px 12px !important;
+        gap: 6px !important;
+    }
+    .sub-panel .slider-row { gap: 3px !important; }
+    .slider-header { font-size: 10.5px !important; }
+
+    .modal-overlay { padding: 8px !important; }
+    .modal-card {
+        max-height: 94vh !important;
+        overflow-y: auto !important;
+        width: auto !important;
+        max-width: min(460px, 96vw) !important;
+        padding: 12px 14px !important;
+    }
+    .modal-title { font-size: 14px !important; }
+    .modal-body { font-size: 11.5px !important; }
+    .example-desc { font-size: 11px !important; line-height: 1.45 !important; }
+}
+
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .top-right-bar,
+html.pseudo-fs .center-tooltip,
+html.pseudo-fs #guide-tooltip { display: none !important; }
+html.pseudo-fs .top-left-bar { right: 56px !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+
+/* ---------- 전체화면 시 캔버스 채움 ---------- */
+body.is-fullscreen #canvas-container,
+body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !important; }
+
+
+@media (max-width: 900px) and (min-height: 501px) {
+    #bTheme { top: max(8px, env(safe-area-inset-top)) !important; right: 46px !important; padding: 5px 9px !important; font-size: 11px !important; }
+    #top-left-wrap { left: 8px !important; top: max(8px, env(safe-area-inset-top)) !important; gap: 6px !important; height: 34px !important; }
+    #top-left-wrap .back-btn { padding: 0 10px !important; font-size: 12px !important; }
+    #hint { top: calc(max(8px, env(safe-area-inset-top)) + 46px) !important; font-size: 10.5px !important; padding: 6px 12px !important; white-space: normal !important; }
+    #boardHelp { display: none !important; }
+    #bar { left: 8px !important; right: 8px !important; bottom: calc(4px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; flex-wrap: wrap !important; justify-content: center !important; padding: 6px !important; gap: 5px !important; border-radius: 14px !important; }
+    .cbtn { font-size: 11px !important; padding: 6px 10px !important; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+    #bTheme { top: max(6px, env(safe-area-inset-top)) !important; right: 42px !important; padding: 3px 7px !important; font-size: 10px !important; }
+    #top-left-wrap { left: 6px !important; top: max(6px, env(safe-area-inset-top)) !important; gap: 5px !important; height: 28px !important; }
+    #top-left-wrap .back-btn { padding: 0 8px !important; font-size: 10.5px !important; }
+    #hint { top: calc(max(6px, env(safe-area-inset-top)) + 36px) !important; font-size: 10px !important; padding: 4px 10px !important; }
+    #boardHelp { display: none !important; }
+    #bar { left: 50% !important; right: auto !important; bottom: 3px !important; transform: translateX(-50%) !important; width: auto !important; flex-wrap: nowrap !important; padding: 3px 6px !important; gap: 4px !important; border-radius: 12px !important; }
+    .cbtn { font-size: 9.5px !important; padding: 3px 7px !important; }
+}
+
+/* @@/MOBILE-BASE@@ */
+
+    /* ---------- 신규 3D 공통: 모바일 패널 배치 ---------- */
+    @media (max-width: 900px) {
+        .left-panel {
+            left: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 76px);
+            width: min(43vw, 168px); max-height: 40vh;
+            padding: 8px 9px; gap: 5px; border-radius: 14px;
+        }
+        .lp-title { font-size: 10.4px; padding-bottom: 4px; }
+        .lp-row { font-size: 10px; gap: 4px; }
+        .lp-note { font-size: 9px; line-height: 1.35; }
+        .lp-tbl { font-size: 9.4px; }
+        .lp-tbl th { font-size: 8.6px; }
+        .lp-tbl td { padding: 2px 1px; }
+        canvas.lp-canvas { height: 68px; border-radius: 8px; }
+        .chip { font-size: 9px; padding: 1px 6px; }
+        .side-ctrl-panel {
+            right: 8px; bottom: calc(60px + env(safe-area-inset-bottom));
+            width: min(49vw, 210px); max-height: 52vh; padding: 8px; gap: 6px; border-radius: 14px;
+        }
+        .panel-title { font-size: 10.4px; padding-bottom: 4px; }
+        .panel-sub { font-size: 9px; }
+        .ctrl-grid { gap: 4px; }
+        .control-tab-btn { font-size: 9.8px; padding: 7px 3px; border-radius: 10px; gap: 3px; }
+        .ctrl-row-head { font-size: 9.6px; }
+        .bottom-control-bar { gap: 4px; padding: 5px 7px; }
+        .bottom-control-bar .control-tab-btn { padding: 7px 11px; font-size: 11px; }
+        .bottom-right-bar .back-btn { padding: 7px 10px; font-size: 12px; }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+        .left-panel {
+            left: 8px; top: calc(max(6px, env(safe-area-inset-top)) + 38px);
+            width: 178px; max-height: 62vh; padding: 7px 8px; gap: 4px; border-radius: 12px;
+        }
+        .lp-title { font-size: 9.6px; padding-bottom: 3px; }
+        .lp-row { font-size: 9.2px; }
+        .lp-note { font-size: 8.4px; }
+        canvas.lp-canvas { height: 54px; }
+        .side-ctrl-panel { right: 8px; bottom: calc(42px + env(safe-area-inset-bottom)); width: 186px; max-height: 64vh; padding: 7px; gap: 4px; border-radius: 12px; }
+        .control-tab-btn { font-size: 9.2px; padding: 5px 3px; }
+        .panel-title { font-size: 9.6px; }
+    }
+
+    /* ---------- 모바일: 좌측 데이터 패널 접기/펼치기 ---------- */
+    #lp-fab { display: none; }
+    .lp-close { display: none; }
+    @media (max-width: 768px) {
+        .left-panel {
+            display: none; left: 8px; right: 8px; width: auto;
+            top: calc(max(8px, env(safe-area-inset-top)) + 132px); bottom: auto;
+            max-height: calc(100vh - 300px); z-index: 140; padding: 10px 12px; gap: 6px;
+        }
+        .left-panel.open { display: flex; }
+        .lp-close {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 22px; height: 22px; border-radius: 50%; border: none;
+            background: rgba(120, 130, 148, .18); color: inherit;
+            font-family: inherit; font-size: 11px; font-weight: 800; cursor: pointer;
+            margin-left: 4px; flex: 0 0 auto;
+        }
+        #lp-fab {
+            display: inline-flex; align-items: center; gap: 5px;
+            position: fixed; left: 8px; bottom: calc(62px + env(safe-area-inset-bottom));
+            padding: 8px 13px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .8);
+            font-family: inherit; font-size: 11.5px; font-weight: 800; color: #1c1c1e;
+            z-index: 80; cursor: pointer; box-shadow: 0 6px 18px rgba(16, 32, 64, .14);
+        }
+        #lp-fab.on { background: #0a84ff; color: #fff; }
+        body.dark-mode #lp-fab { color: #eaf1fb; border-color: rgba(255, 255, 255, .14); }
+        body.dark-mode #lp-fab.on { background: #0a84ff; color: #fff; }
+        #guide-tooltip {
+            top: calc(max(8px, env(safe-area-inset-top)) + 150px) !important;
+            max-width: 88vw; white-space: normal; text-align: center;
+            font-size: 11px; padding: 7px 13px; line-height: 1.35;
+        }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+        .left-panel {
+            display: none; left: 8px; right: 8px; width: auto;
+            top: calc(max(6px, env(safe-area-inset-top)) + 36px); bottom: auto;
+            max-height: calc(100vh - 110px); z-index: 140; padding: 8px 10px;
+        }
+        .left-panel.open { display: flex; }
+        #lp-fab { bottom: calc(44px + env(safe-area-inset-bottom)); left: 8px; padding: 6px 11px; font-size: 10.5px; }
+        #guide-tooltip { display: none; }
+    }
+
+
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="/index.html" class="back-btn glass-panel" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>혼합물 분리 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span></button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel" id="theme-toggle" type="button" title="야간 모드" aria-label="야간 모드">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+<div class="data-item"><span class="data-label" id="val-temp-label">깔때기 물</span><span class="data-value" id="val-temp" style="color:#2b7dbb">60 mL</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">받은 양</span><span class="data-value" id="val-vol">0 mL</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">순도</span><span class="data-value" id="val-pure">—</span></div>
+    </div>
+</div>
+
+<div class="glass-panel" id="guide-tooltip">콕을 열어 물과 식용유를 나누거나, 가열해 에탄올을 증류해 보세요</div>
+
+<div class="left-panel glass-panel">
+<div class="lp-title"><span>⚗️ <span id="lp-title-text">분별 깔때기</span></span><span class="chip" id="lp-mode">분별 깔때기</span></div>
+        <div class="lp-row"><span class="lp-k" id="lp-a-k">깔때기 속 물</span><span class="lp-v" id="lp-a-v">60 mL</span></div>
+        <div class="lp-row"><span class="lp-k" id="lp-b-k">받은 액체</span><span class="lp-v" id="lp-b-v">0 mL</span></div>
+        <div class="lp-row"><span class="lp-k" id="lp-c-k">순도</span><span class="lp-v" id="lp-c-v">—</span></div>
+        <div id="canvas-wrap" style="display:none;flex-direction:column;gap:6px"><canvas class="lp-canvas" id="cv-distill"></canvas></div>
+        <div class="lp-note" id="lp-note">물(1.00)이 식용유(0.92)보다 밀도가 커서 아래층에 모여요. 콕을 열면 아래층 물부터 받을 수 있어요.</div>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+<div class="panel-title"><span>⚙️ 실험 조절</span><span class="panel-sub">분리 방법</span></div>
+        <div class="ctrl-grid">
+            <button class="control-tab-btn on" id="btn-mode-f" type="button">🫗 깔때기</button>
+            <button class="control-tab-btn" id="btn-mode-d" type="button">🔥 증류</button>
+        </div>
+        <div class="panel-hr"></div>
+        <div id="funnel-ctrls" style="display:flex;flex-direction:column;gap:8px">
+            <button class="control-tab-btn wide" id="btn-cock" type="button">🔒 콕 열기</button>
+            <button class="control-tab-btn wide" id="btn-funnel-reset" type="button">🔄 다시 채우기</button>
+        </div>
+        <div id="distill-ctrls" style="display:none;flex-direction:column;gap:8px">
+            <button class="control-tab-btn wide" id="btn-heat" type="button">🔥 가열 시작</button>
+            <div class="ctrl-row">
+                <div class="ctrl-row-head"><span>가열 세기</span><span class="ctrl-val" id="val-heat">80%</span></div>
+                <input type="range" class="ctrl-slider" id="heat-power" min="30" max="100" value="80">
+            </div>
+            <button class="control-tab-btn wide" id="btn-distill-reset" type="button">🔄 다시 채우기</button>
+        </div>
+</div>
+
+<div id="bar" class="glass-panel bottom-control-bar">
+    <button class="control-tab-btn" id="btn-reset" type="button">🔄 초기화</button>
+    <button class="control-tab-btn" id="btn-align" type="button">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" class="back-btn glass-panel" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<script>
+/* ============================================================
+   Science Virtual LAB — 3D 실험 공통 코어 (Batch 1)
+   renderer / camera / orbit / 조명 / 라벨 / 테마 / 전체화면 / 초기화
+   ============================================================ */
+(function () {
+    'use strict';
+
+    var $ = function (id) { return document.getElementById(String(id).replace(/^#/, '')); };
+    var FONT = "'SeoulNamsan', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    /* ---------- renderer ---------- */
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    $('canvas-container').appendChild(renderer.domElement);
+
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(38, 1, 0.1, 200);
+
+    var HOME = { x: 0, y: 9, z: 17, tx: 0, ty: 1.7, tz: 0, fov: 38 };
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.075;
+    controls.rotateSpeed = 0.85;
+    controls.zoomSpeed = 0.9;
+    controls.minDistance = 5;
+    controls.maxDistance = 34;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.minPolarAngle = 0.12;
+
+    function sizeRenderer() {
+        var w = window.innerWidth, h = window.innerHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+
+    /* ---------- 조명 ---------- */
+    var hemi = new THREE.HemisphereLight(0xffffff, 0xc9d6e6, 0.62);
+    scene.add(hemi);
+    var amb = new THREE.AmbientLight(0xffffff, 0.18);
+    scene.add(amb);
+    var key = new THREE.DirectionalLight(0xffffff, 1.05);
+    key.position.set(6, 14, 9);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 });
+    key.shadow.radius = 3;
+    key.shadow.bias = -0.0008;
+    scene.add(key);
+    var rim = new THREE.DirectionalLight(0xbfd8ff, 0.30);
+    rim.position.set(-8, 6, -7);
+    scene.add(rim);
+
+    /* ---------- 바닥 ---------- */
+    var boardMat = new THREE.MeshStandardMaterial({ color: 0xe9eff8, roughness: 0.94, metalness: 0.02 });
+    var board = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, 0.3, 64), boardMat);
+    board.position.y = -0.15;
+    board.receiveShadow = true;
+    scene.add(board);
+    var boardRimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+    var boardRim = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.035, 8, 80), boardRimMat);
+    boardRim.rotation.x = Math.PI / 2;
+    boardRim.position.y = 0.005;
+    scene.add(boardRim);
+
+    /* ---------- 재질 · 도형 도우미 ---------- */
+    function mat(color, opt) {
+        return new THREE.MeshStandardMaterial(Object.assign({
+            color: color, roughness: 0.48, metalness: 0.06
+        }, opt || {}));
+    }
+    function glassMat(color, opacity) {
+        return new THREE.MeshPhysicalMaterial({
+            color: color || 0xdff2ff, transparent: true, opacity: opacity || 0.24,
+            roughness: 0.08, metalness: 0.0, transmission: 0.0,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+    }
+    function shadow(mesh, cast, receive) {
+        mesh.castShadow = cast !== false;
+        mesh.receiveShadow = receive !== false;
+        return mesh;
+    }
+    function add(parent, geo, material, pos) {
+        var m = new THREE.Mesh(geo, material);
+        if (pos) m.position.set(pos[0], pos[1], pos[2]);
+        shadow(m);
+        (parent || scene).add(m);
+        return m;
+    }
+
+    /* ---------- 3D 텍스트 라벨 (서울남산체 캔버스) ---------- */
+    var labels = [];
+    function makeLabel(text, opts) {
+        var o = Object.assign({
+            size: 0.5, color: '#1c1c1e', lightColor: '#1c1c1e',
+            bg: 'rgba(255,255,255,0.80)', darkBg: 'rgba(22,28,40,0.82)',
+            darkColor: '#e9f0fb', pad: 0.36, weight: 700, align: 'center', border: false
+        }, opts || {});
+
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        var texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        var sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: texture, transparent: true, depthWrite: false, depthTest: false
+        }));
+        sprite.renderOrder = 20;
+        var current = text;
+
+        function draw() {
+            var dark = document.body.classList.contains('dark-mode');
+            var fs = 64;
+            ctx.font = o.weight + ' ' + fs + 'px ' + FONT;
+            var w = Math.ceil(ctx.measureText(current).width);
+            var pw = Math.max(64, w + fs * 1.1);
+            var ph = fs * 1.9;
+            if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
+            ctx.clearRect(0, 0, pw, ph);
+            ctx.font = o.weight + ' ' + fs + 'px ' + FONT;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            var bg = dark ? o.darkBg : o.bg;
+            if (bg) {
+                var r = ph * 0.36;
+                ctx.fillStyle = bg;
+                ctx.beginPath();
+                ctx.moveTo(r, ph * 0.08);
+                ctx.lineTo(pw - r, ph * 0.08);
+                ctx.quadraticCurveTo(pw, ph * 0.08, pw, ph * 0.08 + r);
+                ctx.lineTo(pw, ph * 0.92 - r);
+                ctx.quadraticCurveTo(pw, ph * 0.92, pw - r, ph * 0.92);
+                ctx.lineTo(r, ph * 0.92);
+                ctx.quadraticCurveTo(0, ph * 0.92, 0, ph * 0.92 - r);
+                ctx.lineTo(0, ph * 0.08 + r);
+                ctx.quadraticCurveTo(0, ph * 0.08, r, ph * 0.08);
+                ctx.fill();
+            }
+            ctx.fillStyle = dark ? o.darkColor : o.color;
+            ctx.fillText(current, pw / 2, ph / 2 + fs * 0.02);
+            texture.needsUpdate = true;
+            var s = (o.size * pw) / ph;
+            sprite.scale.set(s, o.size, 1);
+        }
+
+        draw();
+        sprite.userData.isLabel = true;
+        sprite.userData.draw = draw;
+        sprite.userData.setText = function (t) { current = String(t); draw(); };
+        sprite.userData.getText = function () { return current; };
+        labels.push(sprite);
+        return sprite;
+    }
+
+    function redrawLabels() { labels.forEach(function (s) { try { s.userData.draw(); } catch (e) {} }); }
+    var chartRedraws = [];
+    function registerChartRedraw(fn) { chartRedraws.push(fn); try { fn(); } catch (e) {} }
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { redrawLabels(); chartRedraws.forEach(function (f) { try { f(); } catch (e) {} }); }).catch(function () {});
+        if (document.fonts.addEventListener) {
+            try { document.fonts.addEventListener('loadingdone', function () { redrawLabels(); }); } catch (e) {}
+        }
+    }
+    setTimeout(function () { redrawLabels(); }, 1200);
+
+    /* ---------- 테마 ---------- */
+    var dark = false;
+    var themeHooks = [];
+    var boardBase = 0xe9eff8, boardDark = 0x1b2433;
+    function applyTheme(d) {
+        dark = !!d;
+        document.body.classList.toggle('dark-mode', dark);
+        document.body.classList.add(dark ? 'dark' : 'light');
+        document.body.classList.toggle('dark', dark);
+        var t = $('theme-toggle');
+        if (t) { t.textContent = dark ? '☀️' : '🌙'; t.title = dark ? '주간 모드' : '야간 모드'; }
+        boardMat.color.setHex(dark ? boardDark : boardBase);
+        boardRimMat.color.setHex(dark ? 0x2b3648 : 0xffffff);
+        hemi.intensity = dark ? 0.34 : 0.62;
+        amb.intensity = dark ? 0.14 : 0.18;
+        key.intensity = dark ? 0.62 : 1.05;
+        rim.intensity = dark ? 0.22 : 0.34;
+        redrawLabels();
+        themeHooks.forEach(function (f) { try { f(dark); } catch (e) {} });
+        chartRedraws.forEach(function (f) { try { f(); } catch (e) {} });
+    }
+
+    /* ---------- 토스트 ---------- */
+    var toastTimer = null;
+    function toast(msg, ms) {
+        var el = $('svl-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'svl-toast';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { el.classList.remove('show'); }, ms || 2200);
+    }
+
+    /* ---------- 레이캐스트 도우미 ---------- */
+    var raycaster = new THREE.Raycaster();
+    var ndc = new THREE.Vector2();
+    function pointerNDC(ev) {
+        var r = renderer.domElement.getBoundingClientRect();
+        ndc.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+        ndc.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+        return ndc;
+    }
+    function pick(objects, ev) {
+        pointerNDC(ev);
+        raycaster.setFromCamera(ndc, camera);
+        var hits = raycaster.intersectObjects(objects, true);
+        return hits;
+    }
+    /* 카메라를 향한 가상 평면에서의 드래그 좌표 */
+    function planePoint(ev, planeZ) {
+        pointerNDC(ev);
+        raycaster.setFromCamera(ndc, camera);
+        var plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(planeZ || 0));
+        var p = new THREE.Vector3();
+        raycaster.ray.intersectPlane(plane, p);
+        return p;
+    }
+
+    /* ---------- 차트 도우미 ---------- */
+    function setupCanvas(id) {
+        var cv = $(id);
+        if (!cv) return null;
+        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var w = cv.clientWidth || cv.parentNode.clientWidth || 200;
+        var h = cv.clientHeight || 120;
+        cv.width = Math.max(1, Math.round(w * dpr));
+        cv.height = Math.max(1, Math.round(h * dpr));
+        var ctx = cv.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { cv: cv, ctx: ctx, w: w, h: h };
+    }
+    function cssColor(name, darkVal) {
+        return document.body.classList.contains('dark-mode') ? (darkVal || '#cbd5e1') : name;
+    }
+
+    /* ---------- 전체화면 / 몰입 모드 ---------- */
+    function initFullscreen() {
+        var btn = $('fullscreenBtn'), icon = $('fullscreenIcon'), text = $('fullscreenText');
+        function realFs() {
+            return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                document.mozFullScreenElement || document.msFullscreenElement);
+        }
+        function pseudo() { return document.documentElement.classList.contains('pseudo-fs'); }
+        function setUI() {
+            var on = realFs() || pseudo();
+            if (icon) icon.textContent = on ? '🗗' : '⛶';
+            if (text) text.textContent = on ? '창모드' : '전체화면';
+            if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            document.body.classList.toggle('is-fullscreen', on);
+            sizeRenderer();
+        }
+        if (btn) {
+            btn.addEventListener('click', function () {
+                var wasReal = realFs(), wasPseudo = pseudo();
+                try {
+                    if (!wasReal && !wasPseudo) {
+                        var req = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+                        if (req) {
+                            var p = req.call(document.documentElement);
+                            if (p && p.catch) p.catch(function () {});
+                        } else {
+                            document.documentElement.classList.add('pseudo-fs');
+                        }
+                    } else if (wasReal) {
+                        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+                        if (exit) exit.call(document);
+                    } else {
+                        document.documentElement.classList.remove('pseudo-fs');
+                    }
+                } catch (err) {
+                    document.documentElement.classList.add('pseudo-fs');
+                }
+                setTimeout(setUI, 320);
+                setTimeout(setUI, 700);
+            });
+        }
+        ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+            document.addEventListener(ev, setUI);
+        });
+        setUI();
+        return setUI;
+    }
+
+    /* ---------- 모바일 시야각 보정 ---------- */
+    var baseFov = HOME.fov;
+    function mobileFit() {
+        var w = window.innerWidth, h = window.innerHeight, f = 1;
+        var attr = document.documentElement.getAttribute('data-mzoom');
+        var k = 0.62;
+        if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+        if (w < h) f = 1 + (1 - w / h) * k;
+        else if (h <= 500) f = 1 + k * 0.16;
+        camera.fov = Math.min(88, baseFov * f);
+        camera.updateProjectionMatrix();
+    }
+
+    /* ---------- 좌측 데이터 패널: 모바일 접기/펼치기 ---------- */
+    function initLeftPanel() {
+        var lp = document.querySelector('.left-panel');
+        if (!lp) return;
+        var fab = document.createElement('button');
+        fab.type = 'button';
+        fab.id = 'lp-fab';
+        fab.className = 'glass-panel';
+        fab.innerHTML = '<span>📊</span> 데이터';
+        document.body.appendChild(fab);
+        fab.addEventListener('click', function () {
+            lp.classList.toggle('open');
+            fab.classList.toggle('on', lp.classList.contains('open'));
+        });
+        var title = lp.querySelector('.lp-title');
+        if (title) {
+            var close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'lp-close';
+            close.setAttribute('aria-label', '데이터 패널 닫기');
+            close.innerHTML = '✕';
+            close.addEventListener('click', function () {
+                lp.classList.remove('open');
+                fab.classList.remove('on');
+            });
+            title.appendChild(close);
+        }
+    }
+
+    /* ---------- 실행 ---------- */
+    var updateHook = null, resetHook = null, built = false;
+    var clock = new THREE.Clock();
+
+    function alignCamera(animate) {
+        camera.position.set(HOME.x, HOME.y, HOME.z);
+        controls.target.set(HOME.tx, HOME.ty, HOME.tz);
+        controls.update();
+    }
+
+    function frame() {
+        requestAnimationFrame(frame);
+        var dt = Math.min(0.12, clock.getDelta() || 0.016);
+        if (controls) controls.update();
+        if (updateHook) { try { updateHook(dt, clock.elapsedTime); } catch (e) { console.error(e); } }
+        renderer.render(scene, camera);
+    }
+
+    function start(cfg) {
+        cfg = cfg || {};
+        HOME = Object.assign({ x: 0, y: 9, z: 17, tx: 0, ty: 1.7, tz: 0, fov: 38 }, cfg.home || {});
+        baseFov = HOME.fov;
+        camera.fov = baseFov;
+        camera.updateProjectionMatrix();
+        if (cfg.build) cfg.build();
+        initLeftPanel();
+        built = true;
+        updateHook = cfg.update || null;
+        resetHook = cfg.reset || null;
+        if (cfg.onDark) themeHooks.push(cfg.onDark);
+
+        var align = function () { alignCamera(true); };
+        if ($('btn-align')) $('btn-align').addEventListener('click', align);
+        if ($('btn-reset')) $('btn-reset').addEventListener('click', function () {
+            try { if (resetHook) resetHook(); } catch (e) { console.error(e); }
+            alignCamera(true);
+            toast('🔄 초기 상태로 되돌렸습니다');
+        });
+        if ($('theme-toggle')) $('theme-toggle').addEventListener('click', function () { applyTheme(!dark); });
+        initFullscreen();
+
+        var hint = $('guide-tooltip');
+        if (hint) {
+            setTimeout(function () { hint.classList.add('fade'); }, 6500);
+            renderer.domElement.addEventListener('pointerdown', function () { hint.classList.add('fade'); }, { once: true });
+        }
+
+        sizeRenderer();
+        mobileFit();
+        alignCamera(false);
+        window.addEventListener('resize', function () {
+            sizeRenderer();
+            mobileFit();
+            chartRedraws.forEach(function (f) { try { f(); } catch (e) {} });
+        });
+        window.addEventListener('orientationchange', function () { setTimeout(function () { sizeRenderer(); mobileFit(); }, 220); });
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { setTimeout(function () { sizeRenderer(); mobileFit(); }, 160); });
+
+        clock.start();
+        requestAnimationFrame(frame);
+
+        /* 야간 모드 기본값은 항상 낮 모드 */
+        applyTheme(false);
+    }
+
+    window.SVL = {
+        $: $, scene: scene, camera: camera, renderer: renderer, controls: controls,
+        mat: mat, glassMat: glassMat, add: add, shadow: shadow,
+        makeLabel: makeLabel, redrawLabels: redrawLabels, registerChartRedraw: registerChartRedraw,
+        toast: toast, pick: pick, planePoint: planePoint, pointerNDC: pointerNDC,
+        setupCanvas: setupCanvas, cssColor: cssColor,
+        start: start, applyTheme: applyTheme, alignCamera: alignCamera,
+        isDark: function () { return dark; },
+        HOME: function () { return HOME; }
+    };
+})();
+
+</script>
+<script>
+/* ============================================================
+   분별 깔때기 & 증류 3D — 혼합물 분리
+   모드 1: 물+식용유를 분별 깔때기로 분리
+   모드 2: 물+에탄올을 가열·증류로 분리
+   ============================================================ */
+(function () {
+    'use strict';
+    var S = window.SVL;
+    var $ = S.$;
+    var scene = S.scene;
+
+    var state = {
+        mode: 'funnel',
+        // 분별 깔때기
+        water: 60, oil: 60,          // 깔때기 안 (mL)
+        collected: 0,                // 받은 양 (mL)
+        collectedOil: 0,             // 섞여 들어간 식용유
+        cockOpen: false,             // 콕
+        // 증류
+        temp: 22, heat: 0.8, boiling: false,
+        ethanol: 40, waterD: 40,     // 플라스크 안
+        gotEthanol: 0, gotWater: 0,
+        heatOn: false,
+        time: 0,
+        graph: []
+    };
+
+    /* ---------- 공통 재질 ---------- */
+    var glassMat = new THREE.MeshPhysicalMaterial({ color: 0xd6ecfa, transparent: true, opacity: 0.34, roughness: 0.06, metalness: 0.0, side: THREE.DoubleSide, depthWrite: false });
+    var metal = new THREE.MeshStandardMaterial({ color: 0xa9b5c4, roughness: 0.35, metalness: 0.8 });
+    var stand = new THREE.MeshStandardMaterial({ color: 0x5b6674, roughness: 0.5, metalness: 0.45 });
+
+    function edgeBox(w, h, d, color, opacity) {
+        var e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)),
+            new THREE.LineBasicMaterial({ color: color || 0x9db4cb, transparent: true, opacity: opacity || 0.8 }));
+        return e;
+    }
+
+    /* ============================================================
+       모드 1 · 분별 깔때기
+       ============================================================ */
+    var funnelGroup = new THREE.Group();
+    funnelGroup.position.set(0, 0, 0);
+    scene.add(funnelGroup);
+
+    // 받는 비커
+    var beakerGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.58, 1.35, 40, 1, true), glassMat);
+    beakerGlass.position.set(0, 0.68, 0);
+    funnelGroup.add(beakerGlass);
+    var beakerBottom = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.55, 0.06, 40), glassMat);
+    beakerBottom.position.set(0, 0.03, 0);
+    funnelGroup.add(beakerBottom);
+    var beakerRim = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.018, 6, 50), new THREE.MeshBasicMaterial({ color: 0xa8bccf, transparent: true, opacity: 0.85 }));
+    beakerRim.rotation.x = Math.PI / 2;
+    beakerRim.position.y = 1.35;
+    funnelGroup.add(beakerRim);
+    var collectedMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.54, 1, 40),
+        new THREE.MeshPhysicalMaterial({ color: 0x3f9be0, transparent: true, opacity: 0.6, roughness: 0.2, depthWrite: false }));
+    collectedMesh.visible = false;
+    funnelGroup.add(collectedMesh);
+    var beakerLabel = S.makeLabel('받는 비커', { size: 0.24, color: '#334155', bg: 'rgba(255,255,255,0.84)', pad: 0.3 });
+    beakerLabel.position.set(-1.3, 0.45, 0.2);
+    funnelGroup.add(beakerLabel);
+
+    // 분별 깔때기
+    var funnel = new THREE.Group();
+    funnel.position.set(0, 3.15, 0);
+    funnelGroup.add(funnel);
+
+    var bulb = new THREE.Mesh(new THREE.SphereGeometry(0.78, 36, 26), glassMat);
+    bulb.scale.y = 1.18;
+    funnel.add(bulb);
+    var equator = new THREE.Mesh(new THREE.TorusGeometry(0.785, 0.012, 6, 48), new THREE.MeshBasicMaterial({ color: 0xa9c4d8, transparent: true, opacity: 0.55 }));
+    equator.rotation.x = Math.PI / 2;
+    bulb.add(equator);
+    var neck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.2, 0.55, 28, 1, true), glassMat);
+    neck.position.y = 0.95;
+    funnel.add(neck);
+    var stopper = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.17, 0.22, 24), new THREE.MeshStandardMaterial({ color: 0xd7e3ee, roughness: 0.6 }));
+    stopper.position.y = 1.25;
+    funnel.add(stopper);
+    var stem = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.06, 1.15, 20, 1, true), glassMat);
+    stem.position.y = -1.28;
+    funnel.add(stem);
+    var tip = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 20, 1, true), glassMat);
+    tip.position.y = -1.9;
+    tip.rotation.x = Math.PI;
+    funnel.add(tip);
+
+    // 콕
+    var cock = new THREE.Group();
+    cock.position.set(0, -1.42, 0);
+    funnel.add(cock);
+    var cockBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.3, 20), glassMat);
+    cockBarrel.rotation.z = Math.PI / 2;
+    cock.add(cockBarrel);
+    var cockHandle = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.5), new THREE.MeshStandardMaterial({ color: 0xd9e4ef, roughness: 0.45 }));
+    cockHandle.position.z = 0.0;
+    cockHandle.rotation.z = 0.0;
+    cock.add(cockHandle);
+    var cockKnob = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), new THREE.MeshStandardMaterial({ color: 0xbcd2e4, roughness: 0.4 }));
+    cockKnob.position.set(0, 0, 0.3);
+    cock.add(cockKnob);
+
+    // 깔때기 안 액체 (물 아래, 식용유 위)
+    var funnelWater = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.36, 0.62, 36),
+        new THREE.MeshPhysicalMaterial({ color: 0x3f9be0, transparent: true, opacity: 0.62, roughness: 0.18, depthWrite: false }));
+    funnelWater.position.y = -0.36;
+    funnel.add(funnelWater);
+    var funnelOil = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.6, 0.5, 36),
+        new THREE.MeshPhysicalMaterial({ color: 0xeec93a, transparent: true, opacity: 0.68, roughness: 0.18, depthWrite: false }));
+    funnelOil.position.y = 0.21;
+    funnel.add(funnelOil);
+    var waterLabel = S.makeLabel('물 1.00', { size: 0.24, color: '#2b7dbb', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    waterLabel.position.set(-1.45, 2.75, 0.1);
+    funnelGroup.add(waterLabel);
+    var oilLabel = S.makeLabel('식용유 0.92', { size: 0.24, color: '#a98a12', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    oilLabel.position.set(-1.5, 3.5, 0.1);
+    funnelGroup.add(oilLabel);
+
+    // 깔때기 걸이(링 스탠드)
+    var rod = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4.9, 12), metal);
+    rod.position.set(1.6, 2.35, 0);
+    funnelGroup.add(rod);
+    var rbase = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 0.8), stand);
+    rbase.position.set(1.6, 0.05, 0);
+    funnelGroup.add(rbase);
+    var ring = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 40), metal);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 2.02, 0);
+    funnelGroup.add(ring);
+    var ringArm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.07), metal);
+    ringArm.position.set(0.75, 2.02, 0);
+    funnelGroup.add(ringArm);
+
+    // 흘러내리는 물줄기
+    var flowMat = new THREE.MeshBasicMaterial({ color: 0x5fb4e8, transparent: true, opacity: 0.7 });
+    var flow = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.5, 10), flowMat);
+    flow.visible = false;
+    funnelGroup.add(flow);
+
+    /* ============================================================
+       모드 2 · 증류
+       ============================================================ */
+    var distillGroup = new THREE.Group();
+    distillGroup.visible = false;
+    scene.add(distillGroup);
+
+    function tubeBetween(a, b, r, material) {
+        var d = new THREE.Vector3().subVectors(b, a);
+        var len = d.length();
+        var m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 20, 1, true), material);
+        m.position.copy(a).add(b).multiplyScalar(0.5);
+        m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+        return m;
+    }
+
+    // 둥근 플라스크
+    var flaskC = new THREE.Vector3(-1.85, 1.35, 0);
+    var flask = new THREE.Mesh(new THREE.SphereGeometry(0.72, 36, 26), glassMat);
+    flask.position.copy(flaskC);
+    distillGroup.add(flask);
+    var flaskLiquid = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.5, 0.5, 32),
+        new THREE.MeshPhysicalMaterial({ color: 0x9d7ad8, transparent: true, opacity: 0.62, roughness: 0.2, depthWrite: false }));
+    flaskLiquid.position.set(flaskC.x, flaskC.y - 0.4, 0);
+    distillGroup.add(flaskLiquid);
+    var fneck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.75, 20, 1, true), glassMat);
+    fneck.position.set(flaskC.x, flaskC.y + 0.86, 0);
+    distillGroup.add(fneck);
+
+    // 가열기 + 불꽃
+    var mantle = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.7, 0.36, 32), new THREE.MeshStandardMaterial({ color: 0x6b7683, roughness: 0.6, metalness: 0.3 }));
+    mantle.position.set(flaskC.x, 0.28, 0);
+    mantle.castShadow = true;
+    distillGroup.add(mantle);
+    var flame = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.75, 20), new THREE.MeshBasicMaterial({ color: 0xffa02a, transparent: true, opacity: 0.7, depthWrite: false }));
+    flame.position.set(flaskC.x, 0.85, 0);
+    distillGroup.add(flame);
+    var flameLight = new THREE.PointLight(0xffa040, 0.7, 4, 2);
+    flameLight.position.set(flaskC.x, 1.0, 0);
+    distillGroup.add(flameLight);
+
+    // 온도계
+    var thermo = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.5, 12), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, roughness: 0.1 }));
+    thermo.position.set(flaskC.x, flaskC.y + 1.25, 0.0);
+    distillGroup.add(thermo);
+    var thermometerBulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), new THREE.MeshBasicMaterial({ color: 0xe23b2e }));
+    thermometerBulb.position.set(flaskC.x, flaskC.y + 0.58, 0);
+    distillGroup.add(thermometerBulb);
+    var mercury = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1, 10), new THREE.MeshBasicMaterial({ color: 0xe23b2e }));
+    mercury.position.set(flaskC.x, flaskC.y + 1.1, 0.0);
+    distillGroup.add(mercury);
+    var tempLabel = S.makeLabel('22 ℃', { size: 0.28, color: '#c2311f', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    tempLabel.position.set(flaskC.x - 0.9, flaskC.y + 1.65, 0);
+    distillGroup.add(tempLabel);
+
+    // 리비히 냉각기
+    var condA = new THREE.Vector3(flaskC.x + 0.05, flaskC.y + 1.25, 0);
+    var condB = new THREE.Vector3(1.55, 1.55, 0);
+    var connTube = tubeBetween(new THREE.Vector3(flaskC.x, flaskC.y + 1.1, 0), condA, 0.09, glassMat);
+    distillGroup.add(connTube);
+    var innerTube = tubeBetween(condA, condB, 0.085, glassMat);
+    distillGroup.add(innerTube);
+    var jacket = tubeBetween(condA.clone().lerp(condB, 0.05), condA.clone().lerp(condB, 0.95), 0.22,
+        new THREE.MeshPhysicalMaterial({ color: 0x9ad2ef, transparent: true, opacity: 0.62, roughness: 0.07, side: THREE.DoubleSide, depthWrite: false }));
+    distillGroup.add(jacket);
+    // 냉각수 연결관
+    var cw1 = tubeBetween(condA.clone().lerp(condB, 0.2).add(new THREE.Vector3(0, 0.28, 0)), condA.clone().lerp(condB, 0.2).add(new THREE.Vector3(0, 0.05, 0)), 0.045, new THREE.MeshStandardMaterial({ color: 0x7fc0e8, roughness: 0.4 }));
+    distillGroup.add(cw1);
+    var cw2 = tubeBetween(condA.clone().lerp(condB, 0.8).add(new THREE.Vector3(0, -0.05, 0)), condA.clone().lerp(condB, 0.8).add(new THREE.Vector3(0, -0.34, 0)), 0.045, new THREE.MeshStandardMaterial({ color: 0x7fc0e8, roughness: 0.4 }));
+    distillGroup.add(cw2);
+    var condLabel = S.makeLabel('리비히 냉각기', { size: 0.22, color: '#2b6ea8', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    condLabel.position.set(0.1, 2.5, 0.1);
+    distillGroup.add(condLabel);
+
+    // 받는 플라스크
+    var recC = new THREE.Vector3(1.95, 1.0, 0);
+    var receiver = new THREE.Mesh(new THREE.SphereGeometry(0.55, 30, 22), glassMat);
+    receiver.position.copy(recC);
+    distillGroup.add(receiver);
+    var recNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.5, 18, 1, true), glassMat);
+    recNeck.position.set(recC.x, recC.y + 0.5, 0);
+    distillGroup.add(recNeck);
+    var recRim = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.018, 6, 40), new THREE.MeshBasicMaterial({ color: 0xa9c4d8, transparent: true, opacity: 0.7 }));
+    recRim.rotation.x = Math.PI / 2;
+    recRim.position.copy(recC);
+    distillGroup.add(recRim);
+    var recLiquid = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.28, 0.4, 26),
+        new THREE.MeshPhysicalMaterial({ color: 0xb49bff, transparent: true, opacity: 0.65, roughness: 0.2, depthWrite: false }));
+    recLiquid.position.set(recC.x, recC.y - 0.28, 0);
+    recLiquid.scale.y = 0.001;
+    distillGroup.add(recLiquid);
+    var recLabel = S.makeLabel('받은 에탄올', { size: 0.22, color: '#5b3fa8', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    recLabel.position.set(recC.x + 0.1, recC.y + 1.1, 0.1);
+    distillGroup.add(recLabel);
+
+    // 떨어지는 방울
+    var drops = [];
+    for (var di = 0; di < 4; di++) {
+        var drop = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), new THREE.MeshBasicMaterial({ color: 0xb9a4ff, transparent: true, opacity: 0.9 }));
+        drop.visible = false;
+        drop.userData.t = di * 0.25;
+        distillGroup.add(drop);
+        drops.push(drop);
+    }
+    // 끓는 기포
+    var bubbles = [];
+    for (var bi = 0; bi < 8; bi++) {
+        var bub = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshBasicMaterial({ color: 0xe4d8ff, transparent: true, opacity: 0.7 }));
+        bub.userData.seed = Math.random() * 6;
+        bub.visible = false;
+        distillGroup.add(bub);
+        bubbles.push(bub);
+    }
+
+    /* ---------- 그래프 ---------- */
+    function drawGraph() {
+        var c = S.setupCanvas('cv-distill');
+        if (!c) return;
+        var ctx = c.ctx, w = c.w, h = c.h;
+        var dark = document.body.classList.contains('dark-mode');
+        ctx.clearRect(0, 0, w, h);
+        var padL = 24, padB = 14, padT = 8, padR = 6;
+        var gx = padL, gy = h - padB, gw = w - padL - padR, gh = h - padT - padB;
+        ctx.strokeStyle = dark ? 'rgba(255,255,255,.18)' : 'rgba(60,80,110,.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(gx, padT); ctx.lineTo(gx, gy); ctx.lineTo(gx + gw, gy); ctx.stroke();
+        ctx.font = "700 7.6px 'SeoulNamsan', sans-serif";
+        ctx.fillStyle = dark ? '#8fa3bd' : '#8296ad';
+        ctx.textAlign = 'right';
+        [0, 50, 78, 100].forEach(function (v) {
+            var y = gy - (v / 110) * gh;
+            ctx.fillText(v, padL - 3, y + 3);
+            ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx + gw, y); ctx.stroke();
+        });
+        // 78도 기준선
+        var y78 = gy - (78 / 110) * gh;
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = 'rgba(255,150,40,.7)';
+        ctx.beginPath(); ctx.moveTo(gx, y78); ctx.lineTo(gx + gw, y78); ctx.stroke();
+        ctx.restore();
+        if (!state.graph.length) return;
+        ctx.beginPath();
+        ctx.strokeStyle = '#e2452f';
+        ctx.lineWidth = 2;
+        state.graph.forEach(function (pt, i) {
+            var x = gx + Math.min(1, pt.t / 26) * gw;
+            var y = gy - (Math.min(108, pt.T) / 110) * gh;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    }
+    S.registerChartRedraw(drawGraph);
+
+    /* ---------- 패널 ---------- */
+    function updatePanel() {
+        var isF = state.mode === 'funnel';
+        var fc = $('#funnel-ctrls'), dc = $('#distill-ctrls');
+        if (fc) fc.style.display = isF ? 'flex' : 'none';
+        if (dc) dc.style.display = isF ? 'none' : 'flex';
+        var cw = $('#canvas-wrap');
+        if (cw) cw.style.display = isF ? 'none' : 'flex';
+
+        if (isF) {
+            $('#lp-title-text').textContent = '분별 깔때기';
+            $('#lp-note').textContent = '물(1.00)이 식용유(0.92)보다 밀도가 커서 아래층에 모여요. 콕을 열면 아래층 물부터 받을 수 있어요.';
+            $('#lp-mode').textContent = '분별 깔때기';
+            $('#lp-a-k').textContent = '깔때기 속 물';
+            $('#lp-a-v').textContent = state.water.toFixed(0) + ' mL';
+            $('#lp-b-k').textContent = '받은 액체';
+            $('#lp-b-v').textContent = state.collected.toFixed(0) + ' mL';
+            $('#lp-c-k').textContent = '순도';
+            $('#lp-c-v').textContent = state.collected > 0 ? (100 * (state.collected - state.collectedOil) / state.collected).toFixed(0) + ' %' : '—';
+            $('#lp-c-v').style.color = state.collectedOil > 1 ? '#d97706' : '#1a9e54';
+            $('#val-temp').textContent = state.water.toFixed(0) + ' mL';
+            $('#val-temp').style.color = '#2b7dbb';
+            $('#val-temp-label').textContent = '깔때기 물';
+            $('#val-vol').textContent = state.collected.toFixed(0) + ' mL';
+            $('#val-pure').textContent = state.collected > 0 ? (100 * (state.collected - state.collectedOil) / state.collected).toFixed(0) + '%' : '—';
+        } else {
+            $('#lp-title-text').textContent = '증류';
+            $('#lp-note').textContent = '에탄올은 78 ℃, 물은 100 ℃에서 끓어요. 78 ℃에서 먼저 나온 에탄올을 리비히 냉각기로 식혀 모아요.';
+            $('#lp-mode').textContent = '증류';
+            $('#lp-a-k').textContent = '플라스크 온도';
+            $('#lp-a-v').textContent = state.temp.toFixed(1) + ' ℃';
+            $('#lp-b-k').textContent = '받은 에탄올';
+            $('#lp-b-v').textContent = state.gotEthanol.toFixed(0) + ' mL';
+            $('#lp-c-k').textContent = '순도';
+            var tot = state.gotEthanol + state.gotWater;
+            $('#lp-c-v').textContent = tot > 0.5 ? (100 * state.gotEthanol / tot).toFixed(0) + ' %' : '—';
+            $('#val-temp').textContent = state.temp.toFixed(1) + ' ℃';
+            $('#val-temp').style.color = state.temp > 90 ? '#e2452f' : (state.temp > 75 ? '#d97706' : '#0a84ff');
+            $('#val-temp-label').textContent = '온도';
+            $('#val-vol').textContent = (state.gotEthanol + state.gotWater).toFixed(0) + ' mL';
+            $('#val-pure').textContent = tot > 0.5 ? (100 * state.gotEthanol / tot).toFixed(0) + '%' : '—';
+        }
+    }
+
+    /* ---------- 분별 깔때기 동작 ---------- */
+    function setCock(open) {
+        state.cockOpen = open;
+        $('#btn-cock').classList.toggle('on', open);
+        $('#btn-cock').innerHTML = open ? '🔓 콕 잠그기' : '🔒 콕 열기';
+        if (open) S.toast('콕을 열었어요 · 아래층 물부터 받아져요');
+    }
+
+    function resetFunnel() {
+        state.water = 60; state.oil = 60;
+        state.collected = 0; state.collectedOil = 0;
+        setCock(false);
+        applyFunnel();
+        updatePanel();
+    }
+
+    function applyFunnel() {
+        var wh = Math.max(0.001, (state.water / 60) * 0.62);
+        funnelWater.scale.y = wh / 0.62;
+        funnelWater.position.y = -0.68 + wh / 2;
+        funnelWater.visible = state.water > 0.4;
+        var oh = Math.max(0.001, (state.oil / 60) * 0.5);
+        funnelOil.scale.y = oh / 0.5;
+        funnelOil.position.y = -0.06 + oh / 2;
+        funnelOil.visible = state.oil > 0.4;
+        var ch = Math.min(1.1, (state.collected / 60) * 1.1);
+        collectedMesh.visible = state.collected > 0.5;
+        collectedMesh.scale.y = Math.max(0.001, ch);
+        collectedMesh.position.set(0, 0.06 + ch / 2, 0);
+        var oilShare = state.collected > 0 ? state.collectedOil / state.collected : 0;
+        collectedMesh.material.color.setHex(oilShare > 0.5 ? 0xeec93a : (oilShare > 0.05 ? 0xb5c463 : 0x3f9be0));
+        flow.visible = state.cockOpen && (state.water > 0.2 || state.oil > 0.2);
+        flow.position.set(0, 1.9, 0);
+        flow.scale.y = Math.max(0.2, (1.9 - state.collected * 0.0 - 1.2) / 0.5);
+    }
+
+    /* ---------- 증류 동작 ---------- */
+    function resetDistill() {
+        state.temp = 22; state.ethanol = 40; state.waterD = 40;
+        state.gotEthanol = 0; state.gotWater = 0;
+        state.time = 0; state.graph = [];
+        state.heatOn = false;
+        $('#btn-heat').classList.remove('on');
+        $('#btn-heat').innerHTML = '🔥 가열 시작';
+        recLiquid.scale.y = 0.001;
+        recLiquid.visible = false;
+        applyDistill();
+        updatePanel();
+        drawGraph();
+    }
+
+    function applyDistill() {
+        var fh = Math.max(0.001, ((state.ethanol + state.waterD) / 80) * 0.5);
+        flaskLiquid.scale.y = fh / 0.5;
+        flaskLiquid.position.set(flaskC.x, flaskC.y - 0.66 + fh / 2, 0);
+        flaskLiquid.visible = (state.ethanol + state.waterD) > 0.5;
+        var got = state.gotEthanol + state.gotWater;
+        var rh = Math.min(0.62, (got / 70) * 0.6);
+        recLiquid.visible = got > 0.3;
+        recLiquid.scale.y = Math.max(0.001, rh / 0.4);
+        recLiquid.position.set(recC.x, recC.y - 0.48 + rh / 2, 0);
+        recLiquid.material.color.setHex(state.gotWater > state.gotEthanol ? 0x6fb6e8 : 0xb49bff);
+        tempLabel.userData.setText(state.temp.toFixed(0) + ' ℃');
+        var mh = 0.1 + (state.temp - 20) / 100 * 1.1;
+        mercury.scale.y = mh;
+        mercury.position.set(flaskC.x, flaskC.y + 0.6 + mh / 2, 0);
+    }
+
+    /* ---------- 업데이트 ---------- */
+    function update(dt, t) {
+        if (state.mode === 'funnel') {
+            if (state.cockOpen) {
+                if (state.water > 0.1) {
+                    var d = Math.min(state.water, dt * 14);
+                    state.water -= d;
+                    state.collected += d;
+                    if (state.water <= 0.1 && state.oil > 0.1) {
+                        // 물이 다 빠지면 콕을 잠그라고 알려준다(자동 잠금 없음)
+                        if (!state._warned) {
+                            state._warned = true;
+                            S.toast('물이 다 빠졌어요! 콕을 잠그지 않으면 식용유도 섞여 나와요', 2800);
+                        }
+                    }
+                } else if (state.oil > 0.1) {
+                    var d2 = Math.min(state.oil, dt * 12);
+                    state.oil -= d2;
+                    state.collected += d2;
+                    state.collectedOil += d2;
+                } else {
+                    setCock(false);
+                }
+                applyFunnel();
+                updatePanel();
+            }
+            if (state.water > 0.2) state._warned = false;
+        } else {
+            // 가열
+            if (state.heatOn) {
+                state.time += dt;
+                var rate = state.heat;
+                if (state.ethanol > 0.05) {
+                    if (state.temp < 78) {
+                        state.temp = Math.min(78, state.temp + dt * rate * 42);
+                    } else {
+                        state.temp = 78;
+                        var de = Math.min(state.ethanol, dt * rate * 6.5);
+                        state.ethanol -= de;
+                        state.gotEthanol += de;
+                    }
+                } else if (state.waterD > 0.05) {
+                    if (state.temp < 100) {
+                        state.temp = Math.min(100, state.temp + dt * rate * 26);
+                    } else {
+                        state.temp = 100;
+                        var dw = Math.min(state.waterD, dt * rate * 5.2);
+                        state.waterD -= dw;
+                        state.gotWater += dw;
+                    }
+                } else {
+                    state.heatOn = false;
+                    $('#btn-heat').classList.remove('on');
+                    $('#btn-heat').innerHTML = '🔥 가열 시작';
+                    S.toast('분리가 끝났어요 · 에탄올 ' + state.gotEthanol.toFixed(0) + ' mL를 얻었어요');
+                }
+                var last = state.graph[state.graph.length - 1];
+                if (!last || state.time - last.t > 0.25) state.graph.push({ t: state.time, T: state.temp });
+                applyDistill();
+                updatePanel();
+                drawGraph();
+            }
+            // 불꽃 애니메이션
+            var on = state.heatOn && state.temp < 104;
+            flame.visible = on;
+            flameLight.visible = on;
+            if (on) {
+                flame.scale.set(0.85 + Math.sin(t * 13) * 0.08, 0.85 + Math.sin(t * 17) * 0.1, 0.85 + Math.sin(t * 11) * 0.08);
+                flameLight.intensity = 0.5 + Math.sin(t * 15) * 0.12;
+            }
+            // 기포
+            var boiling = state.heatOn && (state.temp > 76);
+            bubbles.forEach(function (b, i) {
+                b.visible = boiling;
+                if (!boiling) return;
+                var ph = ((t * 1.1 + b.userData.seed) % 1);
+                b.position.set(flaskC.x + Math.sin(t * 3 + i) * 0.25, flaskC.y - 0.5 + ph * 0.5, Math.cos(t * 2 + i) * 0.1);
+                b.scale.setScalar(0.6 + ph * 0.6);
+            });
+            // 방울
+            var dripping = state.heatOn && (state.gotEthanol + state.gotWater) > 0.2 && state.temp > 70;
+            drops.forEach(function (dr, i) {
+                dr.visible = dripping;
+                if (!dripping) return;
+                var ph = ((t * 0.9 + i * 0.25) % 1);
+                dr.position.set(recC.x - 0.05, condB.y - 0.15 - ph * 0.55, 0);
+                dr.material.opacity = 0.9 * (1 - Math.abs(ph - 0.5));
+            });
+        }
+    }
+
+    /* ---------- 빌드 ---------- */
+    S.start({
+        home: { x: 0.1, y: 3.5, z: 10.2, tx: 0.1, ty: 2.15, tz: 0.05, fov: 40 },
+        build: function () {
+            $('#btn-mode-f').addEventListener('click', function () {
+                state.mode = 'funnel';
+                funnelGroup.visible = true;
+                distillGroup.visible = false;
+                updateButtons();
+                updatePanel();
+                applyFunnel();
+                S.applyTheme(S.isDark());
+            });
+            $('#btn-mode-d').addEventListener('click', function () {
+                state.mode = 'distill';
+                funnelGroup.visible = false;
+                distillGroup.visible = true;
+                updateButtons();
+                updatePanel();
+                applyDistill();
+                drawGraph();
+            });
+            $('#btn-cock').addEventListener('click', function () { setCock(!state.cockOpen); });
+            $('#btn-funnel-reset').addEventListener('click', function () { resetFunnel(); S.toast('물과 식용유를 다시 채웠어요'); });
+            $('#btn-heat').addEventListener('click', function () {
+                if (state.ethanol + state.waterD <= 0.1) { resetDistill(); }
+                state.heatOn = !state.heatOn;
+                $('#btn-heat').classList.toggle('on', state.heatOn);
+                $('#btn-heat').innerHTML = state.heatOn ? '⏸ 가열 멈춤' : '🔥 가열 시작';
+                S.toast(state.heatOn ? '가열을 시작해요 · 78 ℃에서 에탄올이 먼저 끓어 나와요' : '가열을 멈췄어요');
+            });
+            $('#btn-distill-reset').addEventListener('click', function () { resetDistill(); S.toast('플라스크에 물과 에탄올을 다시 넣었어요'); });
+            var hs = $('#heat-power');
+            hs.addEventListener('input', function () {
+                state.heat = parseInt(hs.value, 10) / 100;
+                $('#val-heat').textContent = hs.value + '%';
+            });
+            updateButtons();
+            updatePanel();
+            applyFunnel();
+            applyDistill();
+            drawGraph();
+        },
+        update: update,
+        reset: function () {
+            state.mode = 'funnel';
+            funnelGroup.visible = true;
+            distillGroup.visible = false;
+            resetFunnel();
+            resetDistill();
+            updateButtons();
+            updatePanel();
+            S.applyTheme(S.isDark());
+        },
+        onDark: function () { drawGraph(); }
+    });
+
+    function updateButtons() {
+        $('#btn-mode-f').classList.toggle('on', state.mode === 'funnel');
+        $('#btn-mode-d').classList.toggle('on', state.mode === 'distill');
+    }
+})();
+
+</script>
+
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
