@@ -529,7 +529,7 @@
             <input type="range" class="range-slider" id="rng-spd" min="0.25" max="2" step="0.25" value="1">
         </div>
         <div class="sw-grid">
-            <button class="sw-row" id="tg-wall" aria-pressed="true"><span>쿠션 반사</span><span class="sw-track"><span class="sw-knob"></span></span></button>
+            <button class="sw-row" id="tg-wall" aria-pressed="true"><span>벽 반사</span><span class="sw-track"><span class="sw-knob"></span></span></button>
             <button class="sw-row" id="tg-trail" aria-pressed="true"><span>궤적</span><span class="sw-track"><span class="sw-knob"></span></span></button>
             <button class="sw-row" id="tg-arrow" aria-pressed="true"><span>속도 화살표</span><span class="sw-track"><span class="sw-knob"></span></span></button>
             <button class="sw-row" id="tg-label" aria-pressed="true"><span>공 라벨</span><span class="sw-track"><span class="sw-knob"></span></span></button>
@@ -594,9 +594,9 @@
        ============================================================ */
     var DEG = Math.PI / 180;
     var G = 9.8;
-    var TBL_L = 2.40;          // 당구대 길이 (m)
-    var TBL_W = 1.20;          // 당구대 폭 (m)
-    var CUSH = 0.075;          // 쿠션 깊이
+    var TBL_L = 2.40;          // 실험 영역 길이 (m)
+    var TBL_W = 1.20;          // 실험 영역 폭 (m)
+    var GRID_STEP = 0.40;      // 좌표 그리드 간격 (m)
     var R_BASE = 0.048;        // 질량 1kg 기준 공 반지름
     var MAX_BALLS = 6;
     var SIM_DT = 1 / 480;
@@ -661,92 +661,91 @@
     scene.add(fillLight);
 
     /* ============================================================
-       2. 당구대
+       2. 실험실 평면 (바닥 · 좌표 그리드 · 경계선)
        ============================================================ */
-    var tableGroup = new THREE.Group();
-    scene.add(tableGroup);
+    var labGroup = new THREE.Group();
+    scene.add(labGroup);
 
-    var feltMat = new THREE.MeshStandardMaterial({ color: 0x0b6b4c, roughness: 0.96, metalness: 0.0 });
-    var railMat = new THREE.MeshStandardMaterial({ color: 0x5a3418, roughness: 0.55, metalness: 0.18 });
-    var cushionMat = new THREE.MeshStandardMaterial({ color: 0x0a5740, roughness: 0.9, metalness: 0.0 });
-    var markMat = new THREE.MeshBasicMaterial({ color: 0xe8f4ee, transparent: true, opacity: 0.55 });
-    var markMatRail = new THREE.MeshBasicMaterial({ color: 0xf4e8d0, transparent: true, opacity: 0.8 });
+    var BORDER_HALF_X = TBL_L / 2;      // 실험 영역 경계 x (m)
+    var BORDER_HALF_Z = TBL_W / 2;      // 실험 영역 경계 z (m)
+    var GRID_HALF_X = 3.2;              // 그리드를 까는 범위 (경계보다 조금 넓게)
+    var GRID_HALF_Z = 2.4;
 
-    var bed = new THREE.Mesh(new THREE.BoxGeometry(TBL_L + 2 * CUSH, 0.09, TBL_W + 2 * CUSH), feltMat);
-    bed.position.y = -0.045;
-    bed.receiveShadow = true;
-    tableGroup.add(bed);
+    /* 실험실 바닥 평면 */
+    var floorMat = new THREE.MeshStandardMaterial({ color: 0x1a2029, roughness: 0.95, metalness: 0.0 });
+    var floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = 0;
+    floor.receiveShadow = true;
+    labGroup.add(floor);
 
-    function addBox(w, h, d, x, y, z, mat) {
-        var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-        m.position.set(x, y, z);
-        m.receiveShadow = true;
-        tableGroup.add(m);
-        return m;
-    }
-    // 쿠션 (안쪽)
-    addBox(TBL_L, 0.07, 0.045, 0, 0.035, TBL_W / 2 + 0.0225, cushionMat);
-    addBox(TBL_L, 0.07, 0.045, 0, 0.035, -TBL_W / 2 - 0.0225, cushionMat);
-    addBox(0.045, 0.07, TBL_W, TBL_L / 2 + 0.0225, 0.035, 0, cushionMat);
-    addBox(0.045, 0.07, TBL_W, -TBL_L / 2 - 0.0225, 0.035, 0, cushionMat);
-    // 레일 (바깥)
-    var RW = 0.09;
-    addBox(TBL_L + 2 * CUSH, 0.10, RW, 0, 0.05, TBL_W / 2 + CUSH + RW / 2, railMat);
-    addBox(TBL_L + 2 * CUSH, 0.10, RW, 0, 0.05, -TBL_W / 2 - CUSH - RW / 2, railMat);
-    addBox(RW, 0.10, TBL_W + 2 * CUSH + 2 * RW, TBL_L / 2 + CUSH + RW / 2, 0.05, 0, railMat);
-    addBox(RW, 0.10, TBL_W + 2 * CUSH + 2 * RW, -TBL_L / 2 - CUSH - RW / 2, 0.05, 0, railMat);
-
-    // 레일 다이아몬드 마커
-    var diaGeo = new THREE.PlaneGeometry(0.026, 0.026);
-    [-0.8, -0.4, 0, 0.4, 0.8].forEach(function (x) {
-        [1, -1].forEach(function (s) {
-            var d = new THREE.Mesh(diaGeo, markMatRail);
-            d.rotation.x = -Math.PI / 2;
-            d.rotation.z = Math.PI / 4;
-            d.position.set(x, 0.101, s * (TBL_W / 2 + CUSH + RW / 2));
-            tableGroup.add(d);
-        });
-    });
-    [-0.3, 0, 0.3].forEach(function (z) {
-        [1, -1].forEach(function (s) {
-            var d = new THREE.Mesh(diaGeo, markMatRail);
-            d.rotation.x = -Math.PI / 2;
-            d.rotation.z = Math.PI / 4;
-            d.position.set(s * (TBL_L / 2 + CUSH + RW / 2), 0.101, z);
-            tableGroup.add(d);
-        });
-    });
-
-    // 센터 스팟 · 헤드 라인
-    var centerSpot = new THREE.Mesh(new THREE.CircleGeometry(0.012, 20), markMat);
-    centerSpot.rotation.x = -Math.PI / 2;
-    centerSpot.position.set(0, 0.002, 0);
-    tableGroup.add(centerSpot);
-
-    var headLine = new THREE.Mesh(new THREE.PlaneGeometry(0.004, TBL_W - 0.02), markMat);
-    headLine.rotation.x = -Math.PI / 2;
-    headLine.position.set(-TBL_L / 4, 0.0015, 0);
-    tableGroup.add(headLine);
-
-    /* 펠트 가장자리 비네트 */
-    var vignetteTex = (function () {
-        var c = document.createElement('canvas');
-        c.width = 256; c.height = 128;
-        var g = c.getContext('2d');
-        var grd = g.createRadialGradient(128, 64, 20, 128, 64, 150);
-        grd.addColorStop(0, 'rgba(0,0,0,0)');
-        grd.addColorStop(0.62, 'rgba(0,0,0,0.03)');
-        grd.addColorStop(1, 'rgba(0,0,0,0.42)');
-        g.fillStyle = grd;
-        g.fillRect(0, 0, 256, 128);
-        return new THREE.CanvasTexture(c);
+    /* 좌표 그리드 (0.4 m 간격) */
+    var gridMat = new THREE.LineBasicMaterial({ color: 0x3c4a60, transparent: true, opacity: 0.5 });
+    (function buildGrid() {
+        var pts = [], i, v;
+        var nx = Math.round(GRID_HALF_X / GRID_STEP);
+        var nz = Math.round(GRID_HALF_Z / GRID_STEP);
+        for (i = -nx; i <= nx; i++) {
+            v = i * GRID_STEP;
+            pts.push(v, 0, -GRID_HALF_Z, v, 0, GRID_HALF_Z);
+        }
+        for (i = -nz; i <= nz; i++) {
+            v = i * GRID_STEP;
+            pts.push(-GRID_HALF_X, 0, v, GRID_HALF_X, 0, v);
+        }
+        var g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        var grid = new THREE.LineSegments(g, gridMat);
+        grid.position.y = 0.0012;
+        grid.renderOrder = 1;
+        labGroup.add(grid);
     })();
-    var vignette = new THREE.Mesh(new THREE.PlaneGeometry(TBL_L + 2 * CUSH, TBL_W + 2 * CUSH), new THREE.MeshBasicMaterial({
-        map: vignetteTex, transparent: true, opacity: 0.55, depthWrite: false
-    }));
-    vignette.rotation.x = -Math.PI / 2;
-    vignette.position.set(0, 0.0008, 0);
-    tableGroup.add(vignette);
+
+    /* 좌표축 (원점을 지나는 x · z 축) */
+    var axisMat = new THREE.LineBasicMaterial({ color: 0x4a5b74, transparent: true, opacity: 0.75 });
+    var axisGeo = new THREE.BufferGeometry();
+    axisGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        -GRID_HALF_X, 0, 0, GRID_HALF_X, 0, 0,
+        0, 0, -GRID_HALF_Z, 0, 0, GRID_HALF_Z
+    ], 3));
+    var axes = new THREE.LineSegments(axisGeo, axisMat);
+    axes.position.y = 0.0016;
+    axes.renderOrder = 2;
+    labGroup.add(axes);
+
+    /* 경계선: 벽 반사 ON = 선명한 실선, OFF = 흐린 점선 */
+    var BORDER_W = 0.012;
+    var borderMat = new THREE.MeshBasicMaterial({ color: 0x5aa0ff, transparent: true, opacity: 0.95, depthWrite: false });
+    var borderGroup = new THREE.Group();
+    function borderBar(w, d, x, z) {
+        var m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), borderMat);
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(x, 0.002, z);
+        borderGroup.add(m);
+    }
+    borderBar(TBL_L + BORDER_W, BORDER_W, 0, BORDER_HALF_Z);
+    borderBar(TBL_L + BORDER_W, BORDER_W, 0, -BORDER_HALF_Z);
+    borderBar(BORDER_W, TBL_W + BORDER_W, BORDER_HALF_X, 0);
+    borderBar(BORDER_W, TBL_W + BORDER_W, -BORDER_HALF_X, 0);
+    labGroup.add(borderGroup);
+
+    var borderDashMat = new THREE.LineDashedMaterial({
+        color: 0x8fa6c4, dashSize: 0.06, gapSize: 0.05, transparent: true, opacity: 0.85
+    });
+    var borderDash = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-BORDER_HALF_X, 0.0022, -BORDER_HALF_Z),
+        new THREE.Vector3(BORDER_HALF_X, 0.0022, -BORDER_HALF_Z),
+        new THREE.Vector3(BORDER_HALF_X, 0.0022, BORDER_HALF_Z),
+        new THREE.Vector3(-BORDER_HALF_X, 0.0022, BORDER_HALF_Z)
+    ]), borderDashMat);
+    borderDash.computeLineDistances();
+    borderDash.visible = false;
+    labGroup.add(borderDash);
+
+    function syncBorder() {
+        borderGroup.visible = state.wallBounce;
+        borderDash.visible = !state.wallBounce;
+    }
 
     /* ============================================================
        3. 공 만들기
@@ -1060,7 +1059,7 @@
             b.z += b.vz * dt;
         }
 
-        /* 5-2. 쿠션 */
+        /* 5-2. 벽(경계) 충돌 */
         for (i = 0; i < n; i++) {
             b = balls[i];
             var hx = TBL_L / 2 - b.r, hz = TBL_W / 2 - b.r;
@@ -1115,7 +1114,7 @@
             }
         }
 
-        /* 5-4. 쿠션 밖으로 벗어난 위치 보정 */
+        /* 5-4. 경계 밖으로 벗어난 위치 보정 */
         for (i = 0; i < n; i++) {
             b = balls[i];
             var bx = TBL_L / 2 - b.r, bz = TBL_W / 2 - b.r;
@@ -1500,6 +1499,7 @@
         $('rng-mu').value = state.mu;
         $('val-mu').textContent = state.mu.toFixed(2);
         $('tg-wall').setAttribute('aria-pressed', state.wallBounce ? 'true' : 'false');
+        syncBorder();
         $('tg-trail').setAttribute('aria-pressed', state.showTrail ? 'true' : 'false');
         $('tg-arrow').setAttribute('aria-pressed', state.showArrow ? 'true' : 'false');
         $('tg-label').setAttribute('aria-pressed', state.showLabel ? 'true' : 'false');
@@ -1601,8 +1601,8 @@
        11. 카메라 · 조작
        ============================================================ */
     var lastPortrait = null;
-    var outerHalfX = TBL_L / 2 + CUSH + RW + 0.02;
-    var outerHalfZ = TBL_W / 2 + CUSH + RW + 0.02;
+    var outerHalfX = TBL_L / 2 + 0.185;
+    var outerHalfZ = TBL_W / 2 + 0.185;
     var fitCorners = [
         new THREE.Vector3(-outerHalfX, 0.1, -outerHalfZ),
         new THREE.Vector3(outerHalfX, 0.1, -outerHalfZ),
@@ -1896,7 +1896,7 @@
             updateHUD(true);
         });
     }
-    toggleSwitch('tg-wall', function () { return state.wallBounce; }, function (v) { state.wallBounce = v; });
+    toggleSwitch('tg-wall', function () { return state.wallBounce; }, function (v) { state.wallBounce = v; syncBorder(); });
     toggleSwitch('tg-trail', function () { return state.showTrail; }, function (v) { state.showTrail = v; if (!v) clearTrails(); });
     toggleSwitch('tg-arrow', function () { return state.showArrow; }, function (v) { state.showArrow = v; });
     toggleSwitch('tg-label', function () { return state.showLabel; }, function (v) { state.showLabel = v; });
@@ -1978,12 +1978,16 @@
         themeBtn.setAttribute('title', dark ? '주간 모드로 전환' : '야간 모드로 전환');
         document.body.style.backgroundColor = dark ? '#050a14' : '#eef3f9';
         scene.background.setHex(dark ? 0x050a14 : 0xeef3f9);
-        feltMat.color.setHex(dark ? 0x0b6b4c : 0x0b6346);
-        cushionMat.color.setHex(dark ? 0x0a5740 : 0x095138);
-        railMat.color.setHex(dark ? 0x5a3418 : 0x8a5a33);
+        floorMat.color.setHex(dark ? 0x1a2029 : 0xe6eaf1);
+        gridMat.color.setHex(dark ? 0x3c4a60 : 0x9aa8bc);
+        gridMat.opacity = dark ? 0.52 : 0.6;
+        axisMat.color.setHex(dark ? 0x4e6180 : 0x8b9aae);
+        axisMat.opacity = dark ? 0.6 : 0.72;
+        borderMat.color.setHex(dark ? 0x5aa0ff : 0x2f6fd0);
+        borderMat.opacity = dark ? 0.9 : 0.95;
+        borderDashMat.color.setHex(dark ? 0x64789a : 0x7c8b9e);
         hemi.intensity = dark ? 0.62 : 0.72;
         keyLight.intensity = dark ? 0.85 : 0.62;
-        vignette.material.opacity = dark ? 0.55 : 0.3;
         if (save) { try { localStorage.setItem('svlLabTheme', dark ? 'dark' : 'light'); } catch (e) {} }
     }
 
@@ -2034,6 +2038,7 @@
        ============================================================ */
     buildPresetChips();
     applyTheme(true, false);
+    syncBorder();
     onResize();
     fitCamera();
     applySetup(PRESETS[0]);
