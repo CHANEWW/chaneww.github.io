@@ -225,6 +225,7 @@ body.dark-mode #chart{background:rgba(10,18,32,.55)}
 <div class="glass-panel bottom-control-bar">
   <button class="control-tab-btn" id="btn-reset" type="button"><span>🔄</span><span>초기화</span></button>
   <button class="control-tab-btn" id="btn-cam" type="button"><span>🎥</span><span>시점정렬</span></button>
+  <button class="control-tab-btn" id="btn-play" type="button" aria-pressed="false"><span>▶</span><span>기단 이동</span></button>
 </div>
 
 <div class="glass-panel side-left-panel" id="graph-panel">
@@ -235,10 +236,11 @@ body.dark-mode #chart{background:rgba(10,18,32,.55)}
 <div class="glass-panel side-ctrl-panel" id="side-ctrl">
   <div class="panel-header"><span class="panel-title">🌧️ 전선 조절</span></div>
   <div class="ctrl-block">
-    <div class="mode-grid" id="mode-grid" style="grid-template-columns:1fr 1fr 1fr;">
+    <div class="mode-grid" id="mode-grid" style="grid-template-columns:1fr 1fr;">
       <button class="mode-btn active" type="button" data-mode="cold"><span class="mb-icon">⚡</span><span>한랭전선</span></button>
       <button class="mode-btn" type="button" data-mode="warm"><span class="mb-icon">🌥️</span><span>온난전선</span></button>
       <button class="mode-btn" type="button" data-mode="stationary"><span class="mb-icon">☁️</span><span>정체전선</span></button>
+      <button class="mode-btn" type="button" data-mode="occlusion"><span class="mb-icon">🌀</span><span>폐색전선</span></button>
     </div>
     <div class="ctrl-row">
       <div class="ctrl-row-header"><span class="ctrl-label">전선 진행</span><span class="ctrl-val" id="txt-prog">통과 전</span></div>
@@ -282,6 +284,12 @@ var MODES = {
         note: '정체전선: 찬 공기와 따뜻한 공기의 세력이 비슷해 전선이 거의 움직이지 않습니다. 흐린 날씨와 비가 오래 이어집니다.',
         rain: '약한 비',
         clouds: '층운형 구름'
+    },
+    occlusion: {
+        slope: 0.16,
+        note: '폐색전선: 한랭전선이 온난전선을 따라잡아 두 전선이 만든 전선입니다.',
+        rain: '넓은 비',
+        clouds: '온난·한랭 구름'
     }
 };
 
@@ -372,6 +380,11 @@ var warmMat = new THREE.MeshPhysicalMaterial({
     color: 0xff7a55, transparent: true, opacity: 0.34, roughness: 0.6,
     metalness: 0.0, depthWrite: false, side: THREE.DoubleSide
 });
+/* 앞쪽(온난전선 아래) 찬 공기 : 살짝 밝은 푸른색으로 뒤쪽 찬 공기와 구분 */
+var coldAheadMat = new THREE.MeshPhysicalMaterial({
+    color: 0x7cb2f2, transparent: true, opacity: 0.42, roughness: 0.6,
+    metalness: 0.0, depthWrite: false, side: THREE.DoubleSide
+});
 
 var coldMesh = null, warmMesh = null;
 var edgeGroup = new THREE.Group();
@@ -391,9 +404,27 @@ function extrude(pts) {
     return g;
 }
 
+/* ---------------- 폐색전선(온대저기압) 기하 ---------------- */
+var OCC = { PM: 0.88, XC0: -12, XC_RUN: 20, XW0: -4, XW_RUN: 12, S_C: 0.62, S_W: 0.16 };
+
+function occPos(p) {
+    if (!(p >= 0)) p = 0;
+    if (p > 1) p = 1;
+    if (p <= OCC.PM) {
+        var k = p / OCC.PM;
+        return { xc: OCC.XC0 + OCC.XC_RUN * k, xw: OCC.XW0 + OCC.XW_RUN * k, merged: false };
+    }
+    var xo = OCC.XC0 + OCC.XC_RUN + 2.6 * (p - OCC.PM) / (1 - OCC.PM);
+    return { xc: xo, xw: xo, merged: true };
+}
+
 function frontX() {
     if (state.mode === 'stationary') {
         return Math.sin(state.prog / 100 * Math.PI * 2) * 1.1;
+    }
+    if (state.mode === 'occlusion') {
+        var o = occPos(state.prog / 100);
+        return (o.xc + o.xw) / 2;
     }
     return -9.6 + 19.2 * (state.prog / 100);
 }
@@ -401,55 +432,81 @@ function frontX() {
 function rebuildAir() {
     var xf = frontX();
     var s = MODES[state.mode].slope;
-    var xTop = xf - TOP / s;          // 전선면이 천장에 닿는 x
-    var yAtLeft = Math.min(TOP, s * (xf - X0));
-    var coldPts, warmPts, edgePts;
+    var polies = [], lines = [];
 
-    if (state.mode === 'warm') {
-        /* 온난전선: 따뜻한 공기가 왼쪽에서 오른쪽으로 올라탄다.
-           전선 앞쪽(오른쪽)은 찬 공기가 가득하고, 왼쪽은 전선면 위가 따뜻한 공기 */
-        coldPts = [[X0, 0], [X1, 0], [X1, TOP], [xf, TOP], [xf, 0], [X0, yAtLeft]];
-        warmPts = [[X0, yAtLeft], [xf, 0], [xf, TOP], [X0, TOP]];
-        if (yAtLeft >= TOP - 0.01) {
-            warmPts = [[X0, TOP], [xf, 0], [xf, TOP]];
+    if (state.mode === 'occlusion') {
+        /* 두 기단이 서로 다른 속도로 이동 → 한랭전선이 온난전선을 따라잡는다 */
+        var o = occPos(state.prog / 100);
+        var sC = OCC.S_C, sW = OCC.S_W;
+        var xL = Math.max(X0, o.xc - TOP / sC);
+        var yL = Math.min(TOP, sC * (o.xc - xL));
+        var yR = Math.min(TOP, sW * (X1 - o.xw));
+
+        /* 뒤쪽(한랭전선 배후) 찬 공기 */
+        if (o.xc - TOP / sC > X0) {
+            polies.push({ pts: [[X0, 0], [o.xc, 0], [xL, TOP], [X0, TOP]], mat: coldMat, z: 0.55, order: 4 });
+        } else {
+            polies.push({ pts: [[X0, 0], [o.xc, 0], [X0, sC * (o.xc - X0)]], mat: coldMat, z: 0.55, order: 4 });
         }
-        edgePts = [new THREE.Vector3(xf, 0, 0.6), new THREE.Vector3(X0, yAtLeft, 0.6)];
+        /* 앞쪽(온난전선 전면) 찬 공기 : 완만한 쐐기 */
+        polies.push({ pts: [[o.xw, 0], [X1, 0], [X1, yR]], mat: coldAheadMat, z: 0.5, order: 4 });
+        /* 따뜻한 공기 : 두 전선면 위쪽 (폐색 후에는 상층에만 남는다) */
+        polies.push({ pts: [[xL, yL], [xL, TOP], [X1, TOP], [X1, yR], [o.xw, 0], [o.xc, 0]], mat: warmMat, z: 0.2, order: 3 });
+
+        lines.push({ pts: [new THREE.Vector3(o.xc, 0, 0.62), new THREE.Vector3(xL, yL, 0.62)], color: 0x1e3a8a, op: 0.85 });
+        lines.push({ pts: [new THREE.Vector3(o.xw, 0, 0.62), new THREE.Vector3(X1, yR, 0.62)], color: 0xb45309, op: 0.85 });
     } else {
-        /* 한랭전선 · 정체전선: 찬 공기가 왼쪽에서 오른쪽으로 밀고 나간다 */
-        coldPts = [[X0, 0], [xf, 0]];
-        if (xTop > X0) {
-            coldPts.push([xTop, TOP]);
-            coldPts.push([X0, TOP]);
+        var xTop = xf - TOP / s;
+        var yAtLeft = Math.min(TOP, s * (xf - X0));
+        var coldPts, warmPts, edgePts;
+
+        if (state.mode === 'warm') {
+            coldPts = [[X0, 0], [X1, 0], [X1, TOP], [xf, TOP], [xf, 0], [X0, yAtLeft]];
+            warmPts = [[X0, yAtLeft], [xf, 0], [xf, TOP], [X0, TOP]];
+            if (yAtLeft >= TOP - 0.01) {
+                warmPts = [[X0, TOP], [xf, 0], [xf, TOP]];
+            }
+            edgePts = [new THREE.Vector3(xf, 0, 0.6), new THREE.Vector3(X0, yAtLeft, 0.6)];
         } else {
-            coldPts.push([X0, yAtLeft]);
+            coldPts = [[X0, 0], [xf, 0]];
+            if (xTop > X0) {
+                coldPts.push([xTop, TOP]);
+                coldPts.push([X0, TOP]);
+            } else {
+                coldPts.push([X0, yAtLeft]);
+            }
+            if (xTop > X0) {
+                warmPts = [[xf, 0], [xTop, TOP], [X1, TOP], [X1, 0]];
+            } else {
+                warmPts = [[xf, 0], [X0, yAtLeft], [X0, TOP], [X1, TOP], [X1, 0]];
+            }
+            edgePts = [new THREE.Vector3(xf, 0, 0.6), new THREE.Vector3(xf - yAtLeft / s, yAtLeft, 0.6)];
         }
-        if (xTop > X0) {
-            warmPts = [[xf, 0], [xTop, TOP], [X1, TOP], [X1, 0]];
-        } else {
-            warmPts = [[xf, 0], [X0, yAtLeft], [X0, TOP], [X1, TOP], [X1, 0]];
-        }
-        edgePts = [new THREE.Vector3(xf, 0, 0.6), new THREE.Vector3(xf - yAtLeft / s, yAtLeft, 0.6)];
+        polies.push({ pts: coldPts, mat: coldMat, z: 0.55, order: 4 });
+        polies.push({ pts: warmPts, mat: warmMat, z: 0.2, order: 3 });
+        lines.push({ pts: edgePts, color: 0x1e3a8a, op: 0.75 });
     }
 
-    if (coldMesh) { airGroup.remove(coldMesh); coldMesh.geometry.dispose(); }
-    if (warmMesh) { airGroup.remove(warmMesh); warmMesh.geometry.dispose(); }
-    coldMesh = new THREE.Mesh(new THREE.ShapeGeometry(toShape(coldPts)), coldMat);
-    coldMesh.position.z = 0.55;
-    coldMesh.renderOrder = 4;
-    warmMesh = new THREE.Mesh(new THREE.ShapeGeometry(toShape(warmPts)), warmMat);
-    warmMesh.position.z = 0.2;
-    warmMesh.renderOrder = 3;
-    airGroup.add(warmMesh, coldMesh);
+    while (airGroup.children.length) {
+        var oldMesh = airGroup.children.pop();
+        if (oldMesh.geometry) oldMesh.geometry.dispose();
+    }
+    polies.forEach(function (p) {
+        var mesh = new THREE.Mesh(new THREE.ShapeGeometry(toShape(p.pts)), p.mat);
+        mesh.position.z = p.z;
+        mesh.renderOrder = p.order;
+        airGroup.add(mesh);
+    });
 
-    /* 전선면 경계선 */
     while (edgeGroup.children.length) {
         var c = edgeGroup.children.pop();
         if (c.geometry) c.geometry.dispose();
         if (c.material) c.material.dispose();
     }
-    var edgeMat = new THREE.LineBasicMaterial({ color: 0x1e3a8a, transparent: true, opacity: 0.75 });
-    var g = new THREE.BufferGeometry().setFromPoints(edgePts);
-    edgeGroup.add(new THREE.Line(g, edgeMat));
+    lines.forEach(function (L) {
+        var g = new THREE.BufferGeometry().setFromPoints(L.pts);
+        edgeGroup.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: L.color, transparent: true, opacity: L.op })));
+    });
 }
 
 /* ---------------- 구름 ---------------- */
@@ -511,6 +568,36 @@ function buildClouds() {
                 cloudGroup.add(p2);
             }
         }
+    } else if (mode === 'occlusion') {
+        /* 한랭전선(왼쪽) 수직으로 발달한 적운형 구름 + 온난전선(오른쪽) 넓은 층운형 구름 */
+        var cDark = new THREE.MeshStandardMaterial({ color: 0x6b7688, roughness: 1.0 });
+        var cLight = new THREE.MeshStandardMaterial({ color: 0xf4f7fc, roughness: 1.0 });
+        for (var oi = 0; oi < 6; oi++) {
+            var oy = 3.2 + oi * 0.85;
+            var ow = 2.0 - oi * 0.22;
+            for (var ok = 0; ok < 3; ok++) {
+                cloudGroup.add(puff(oi < 2 ? cDark : cLight, -4.2 + (ok - 1) * (ow * 0.6), oy, (ok - 1) * 1.4, ow * (0.44 + Math.random() * 0.06)));
+            }
+        }
+        for (var oa = 0; oa < 3; oa++) {
+            var oan = puff(cLight, -5.4 - oa * 1.05, 8.2 + (oa % 2) * 0.24, (oa - 1) * 1.2, 1.1 - oa * 0.12);
+            oan.scale.y = 0.52;
+            cloudGroup.add(oan);
+        }
+        var sDark = new THREE.MeshStandardMaterial({ color: 0xa9b4c3, roughness: 1.0 });
+        var sLight = new THREE.MeshStandardMaterial({ color: 0xe9eef5, roughness: 1.0 });
+        for (var sj = 0; sj < 8; sj++) {
+            var sx = 5.4 + sj * 1.55;
+            var sr = 1.45 + Math.sin(sj * 0.9) * 0.3;
+            var sp = puff(sj % 2 ? sDark : sLight, sx, 4.5 + Math.sin(sj * 0.7) * 0.2, 0, sr);
+            sp.scale.set(1, 0.58, 1.4);
+            cloudGroup.add(sp);
+            if (sj % 2 === 0) {
+                var sp2 = puff(sLight, sx + 0.5, 5.05, 0.55, sr * 0.78);
+                sp2.scale.set(1, 0.56, 1.25);
+                cloudGroup.add(sp2);
+            }
+        }
     } else {
         var s1 = new THREE.MeshStandardMaterial({ color: 0x9fabb9, roughness: 1.0 });
         var s2 = new THREE.MeshStandardMaterial({ color: 0xe4eaf2, roughness: 1.0 });
@@ -544,9 +631,66 @@ var rainMat = new THREE.PointsMaterial({
 var rain = new THREE.Points(rainGeo, rainMat);
 scene.add(rain);
 
+/* ---------------- 기단 흐름 입자 (공기의 움직임) ---------------- */
+var DRIFT_N = 150;
+var driftPos = new Float32Array(DRIFT_N * 3);
+var driftCol = new Float32Array(DRIFT_N * 3);
+var driftSpeed = new Float32Array(DRIFT_N);
+for (var di = 0; di < DRIFT_N; di++) {
+    driftPos[di * 3] = X0 + Math.random() * (X1 - X0);
+    driftPos[di * 3 + 1] = 0.4 + Math.random() * (TOP - 1.4);
+    driftPos[di * 3 + 2] = (Math.random() - 0.5) * (ZD - 1.6);
+    driftSpeed[di] = 0.8 + Math.random() * 1.3;
+}
+var driftGeo = new THREE.BufferGeometry();
+driftGeo.setAttribute('position', new THREE.BufferAttribute(driftPos, 3));
+driftGeo.setAttribute('color', new THREE.BufferAttribute(driftCol, 3));
+var driftMat = new THREE.PointsMaterial({
+    size: 0.15, vertexColors: true, transparent: true, opacity: 0.72,
+    depthWrite: false, sizeAttenuation: true
+});
+var drift = new THREE.Points(driftGeo, driftMat);
+drift.renderOrder = 6;
+scene.add(drift);
+
+function isColdAt(x, y) {
+    if (state.mode === 'occlusion') {
+        var o = occPos(state.prog / 100);
+        if (x <= o.xc) return y < OCC.S_C * (o.xc - x);
+        if (x >= o.xw) return y < OCC.S_W * (x - o.xw);
+        return false;
+    }
+    var fx = frontX(), ss = MODES[state.mode].slope;
+    if (state.mode === 'warm') {
+        if (x >= fx) return true;
+        return y < ss * (fx - x);
+    }
+    if (x >= fx) return false;
+    return y < ss * (fx - x);
+}
+
+function updateDrift(dt) {
+    var flow = state.mode === 'stationary' ? 0.16 : (state.mode === 'occlusion' ? 1.35 : 1.0);
+    var a = driftGeo.attributes.position.array;
+    var ca = driftGeo.attributes.color.array;
+    for (var i = 0; i < DRIFT_N; i++) {
+        a[i * 3] += dt * driftSpeed[i] * flow;
+        if (a[i * 3] > X1) {
+            a[i * 3] = X0;
+            a[i * 3 + 1] = 0.4 + Math.random() * (TOP - 1.4);
+        }
+        var cold = isColdAt(a[i * 3], a[i * 3 + 1]);
+        if (cold) { ca[i * 3] = 0.26; ca[i * 3 + 1] = 0.52; ca[i * 3 + 2] = 0.96; }
+        else { ca[i * 3] = 0.98; ca[i * 3 + 1] = 0.45; ca[i * 3 + 2] = 0.31; }
+    }
+    driftGeo.attributes.position.needsUpdate = true;
+    driftGeo.attributes.color.needsUpdate = true;
+}
+
 function rainBand() {
     if (state.mode === 'cold') return [-3.4, 0.8];
     if (state.mode === 'warm') return [-0.6, 12.5];
+    if (state.mode === 'occlusion') return [-5.2, 9.5];
     return [-3.4, 4.4];
 }
 
@@ -650,9 +794,10 @@ function makeLabel(text, opts) {
 }
 
 var lblCold, lblWarm, lblFront, lblCloud, lblRain, lblObs, lblArrow;
+var lblFrontA, lblFrontB, lblOcc;
 
 function buildLabels() {
-    [lblCold, lblWarm, lblFront, lblCloud, lblRain, lblObs, lblArrow].forEach(function (sp) {
+    [lblCold, lblWarm, lblFront, lblCloud, lblRain, lblObs, lblArrow, lblFrontA, lblFrontB, lblOcc].forEach(function (sp) {
         if (sp) {
             scene.remove(sp);
             if (sp.material.map) sp.material.map.dispose();
@@ -660,14 +805,26 @@ function buildLabels() {
         }
     });
     var M = MODES[state.mode];
-    lblCold = makeLabel('차가운 공기', { color: '#dbeafe', bg: 'rgba(37,99,235,0.94)', border: 'rgba(255,255,255,0.4)', h: 0.72 });
+    var isOcc = state.mode === 'occlusion';
+    lblCold = makeLabel(isOcc ? '찬 공기(뒤)' : '차가운 공기', { color: '#dbeafe', bg: 'rgba(37,99,235,0.94)', border: 'rgba(255,255,255,0.4)', h: 0.72 });
     lblWarm = makeLabel('따뜻한 공기', { color: '#fff1ee', bg: 'rgba(239,68,68,0.92)', border: 'rgba(255,255,255,0.4)', h: 0.72 });
     lblFront = makeLabel('전선면', { color: '#1e3a8a', h: 0.46 });
     lblCloud = makeLabel(M.clouds, { color: '#334155', h: 0.5 });
     lblRain = makeLabel(M.rain, { color: '#0369a1', h: 0.5 });
     lblObs = makeLabel('관측 지점', { color: '#7c2d12', h: 0.46 });
-    lblArrow = makeLabel(state.mode === 'cold' ? '찬 공기 밀려옴' : (state.mode === 'warm' ? '따뜻한 공기 상승' : '세력 비슷'), { color: '#1e293b', h: 0.42 });
-    [lblCold, lblWarm, lblFront, lblCloud, lblRain, lblObs, lblArrow].forEach(function (s) { scene.add(s); });
+    lblArrow = makeLabel(state.mode === 'cold' ? '찬 공기 밀려옴'
+        : (state.mode === 'warm' ? '따뜻한 공기 상승'
+            : (isOcc ? '찬 공기가 빠르게 따라잡음' : '세력 비슷')), { color: '#1e293b', h: 0.42 });
+    if (isOcc) {
+        lblFrontA = makeLabel('한랭전선', { color: '#dbeafe', bg: 'rgba(29,78,216,0.95)', border: 'rgba(255,255,255,0.45)', h: 0.5 });
+        lblFrontB = makeLabel('온난전선', { color: '#fff7ed', bg: 'rgba(234,88,12,0.95)', border: 'rgba(255,255,255,0.45)', h: 0.5 });
+        lblOcc = makeLabel('폐색전선 (두 전선이 만남)', { color: '#f5f3ff', bg: 'rgba(109,40,217,0.96)', border: 'rgba(255,255,255,0.5)', h: 0.54 });
+    } else {
+        lblFrontA = lblFrontB = lblOcc = null;
+    }
+    var all = [lblCold, lblWarm, lblFront, lblCloud, lblRain, lblObs, lblArrow];
+    if (isOcc) all = all.concat([lblFrontA, lblFrontB, lblOcc]);
+    all.forEach(function (s) { scene.add(s); });
 }
 
 /* ---------------- 흐름 화살표 ---------------- */
@@ -718,6 +875,30 @@ function rebuildArrows() {
         d.rotation.z = Math.PI / 2;
         d.position.set(xf + 2.4, 0.9, ZD / 2 - 0.4);
         arrowGroup.add(d);
+    } else if (state.mode === 'occlusion') {
+        var oh = occPos(state.prog / 100);
+        for (var c1 = 0; c1 < 3; c1++) {
+            var ca = makeArrow(0x2563eb, 2.2, 0.09);
+            ca.rotation.z = -Math.PI / 2;
+            ca.position.set(oh.xc - 6.2 + c1 * 1.7, 1.05 + c1 * 0.55, ZD / 2 - 0.4);
+            arrowGroup.add(ca);
+        }
+        for (var c2 = 0; c2 < 3; c2++) {
+            var cb = makeArrow(0xdc2626, 2.0, 0.08);
+            var cpx = Math.max(X0 + 1.3, oh.xc - 1.1 - c2 * 1.7);
+            var cpy = Math.min(TOP - 0.9, OCC.S_C * (oh.xc - cpx) + 0.45);
+            cb.rotation.z = -Math.PI / 2 + Math.atan(OCC.S_C) * 0.95;
+            cb.position.set(cpx, cpy, ZD / 2 - 0.4);
+            arrowGroup.add(cb);
+        }
+        for (var c3 = 0; c3 < 3; c3++) {
+            var cc = makeArrow(0xdc2626, 1.9, 0.07);
+            var cwx = Math.min(X1 - 1.6, oh.xw + 1.5 + c3 * 2.4);
+            var cwy = OCC.S_W * (cwx - oh.xw) + 0.7;
+            cc.rotation.z = -Math.PI / 2 + Math.atan(OCC.S_W) * 0.9;
+            cc.position.set(cwx, cwy, ZD / 2 - 0.4);
+            arrowGroup.add(cc);
+        }
     } else {
         var e1 = makeArrow(0x2563eb, 2.0, 0.08);
         e1.rotation.z = -Math.PI / 2;
@@ -738,6 +919,7 @@ function timeHours() { return (state.prog - 50) / 50 * 6; }
 function tempAt(t) {
     if (state.mode === 'cold') return 23 - 11.5 * sig((t + 0.25) / 0.55);
     if (state.mode === 'warm') return 11 + 11.5 * sig((t - 0.9) / 2.0);
+    if (state.mode === 'occlusion') return 9 + 11.5 * sig((t + 2.4) / 0.9) - 12.5 * sig((t - 0.55) / 0.3);
     return 16.8 + 1.7 * Math.sin(t * 0.55);
 }
 
@@ -746,6 +928,9 @@ function pressAt(t) {
         return 1013.5 - 5.2 * Math.exp(-Math.pow((t - 0.1) / 1.15, 2)) + 4.4 * sig((t - 0.9) / 1.4);
     }
     if (state.mode === 'warm') return 1016.2 - 7.2 * sig((t - 1.0) / 2.3);
+    if (state.mode === 'occlusion') {
+        return 1018 - 7 * sig((t + 2.2) / 1.9) + 2.4 * sig((t - 1.6) / 1.0);
+    }
     return 1011.6 + 1.3 * Math.sin(t * 0.45 + 1.1);
 }
 
@@ -753,6 +938,12 @@ function rainAmount() {
     var t = timeHours();
     if (state.mode === 'cold') return Math.exp(-Math.pow(t / 1.6, 2));
     if (state.mode === 'warm') return 0.42 + 0.34 * sig(-(t - 2.2) / 3.0);
+    if (state.mode === 'occlusion') {
+        var a = 0.34 * Math.exp(-Math.pow((t + 2.6) / 1.2, 2)) +
+                0.5 * Math.exp(-Math.pow((t + 0.2) / 1.8, 2)) +
+                0.85 * Math.exp(-Math.pow((t - 0.75) / 0.55, 2));
+        return Math.min(1, Math.max(0.03, a));
+    }
     return 0.45;
 }
 
@@ -849,6 +1040,23 @@ function drawChart() {
 }
 
 /* ---------------- 상태 반영 ---------------- */
+function occPhase(p) {
+    var o = occPos(p);
+    if (o.merged) return 4;
+    if (p < 0.293) return 0;
+    if (p < 0.44) return 1;
+    if (p < 0.60) return 2;
+    return 3;
+}
+
+var OCC_TEXT = [
+    { note: '찬 공기가 뒤에서 빠르게 다가옵니다. 따뜻한 공기는 앞쪽 찬 공기 위로 완만하게 올라가 온난전선을 만듭니다. 온난전선 앞쪽에는 넓은 층운형 구름이 끼고 비가 오래 내립니다.', pos: '온난전선 접근' },
+    { note: '온난 구역(따뜻하고 습한 공기)으로 들어섰습니다. 기온이 올라가고 기압은 낮아집니다. 뒤쪽에서는 한랭전선이 온난전선을 빠르게 따라잡고 있습니다.', pos: '온난 구역' },
+    { note: '한랭전선이 뒤에서 빠르게 다가옵니다. 온난 구역이 점점 좁아지고, 지면 가까이의 따뜻한 공기가 위로 들려 올라가기 시작합니다.', pos: '한랭전선 접근' },
+    { note: '한랭전선이 온난전선을 바짝 따라잡는 중입니다. 두 전선 사이의 따뜻한 공기 구역이 거의 사라지고, 따뜻한 공기가 지면에서 들려 상층으로 올라갑니다.', pos: '따라잡는 중' },
+    { note: '한랭전선이 온난전선을 따라잡아 두 전선이 만났습니다(폐색전선). 지면에는 찬 공기만 남고 따뜻한 공기는 상층으로 완전히 들려 올라갑니다. 비는 넓게 이어지다가 차츰 그칩니다.', pos: '폐색전선' }
+];
+
 function applyState() {
     var xf = frontX();
     cloudGroup.position.x = xf;
@@ -856,9 +1064,40 @@ function applyState() {
     var M = MODES[state.mode];
     var t = timeHours();
     var T = tempAt(t), P = pressAt(t), amt = rainAmount();
+    var isOcc = state.mode === 'occlusion';
+    var phase = 0, op = { xc: xf, xw: xf, merged: false };
+    if (isOcc) {
+        op = occPos(state.prog / 100);
+        phase = occPhase(state.prog / 100);
+    }
 
     /* 라벨 위치 */
-    if (state.mode === 'warm') {
+    if (isOcc) {
+        lblCold.position.set(Math.max(X0 + 2.6, op.xc - 7.6), 1.9, ZD / 2 + 0.2);
+        if (op.merged) {
+            lblWarm.position.set(op.xc, 6.4, ZD / 2 + 0.2);
+            lblFront.visible = false;
+        } else {
+            lblWarm.position.set((op.xc + op.xw) / 2, 2.9, ZD / 2 + 0.2);
+            lblFront.visible = true;
+            lblFront.position.set(op.xc - 4.4, Math.min(TOP - 1.0, OCC.S_C * 4.4), ZD / 2 + 0.35);
+        }
+        lblCloud.position.set(op.xw + 7.0, 6.3, 0);
+        lblRain.position.set(op.xw + 5.6, 3.0, ZD / 2 + 0.4);
+        lblArrow.position.set(op.xc - 6.6, 2.9, ZD / 2 + 0.6);
+        if (lblFrontA) {
+            var showMerged = op.merged;
+            lblFrontA.visible = !showMerged;
+            lblFrontB.visible = !showMerged;
+            lblOcc.visible = showMerged;
+            if (!showMerged) {
+                lblFrontA.position.set(op.xc, 0.72, ZD / 2 + 0.3);
+                lblFrontB.position.set(op.xw, 0.72, ZD / 2 + 0.3);
+            } else {
+                lblOcc.position.set(op.xc, 0.78, ZD / 2 + 0.3);
+            }
+        }
+    } else if (state.mode === 'warm') {
         lblCold.position.set(Math.min(X1 - 3.6, xf + 8.4), 6.2, ZD / 2 + 0.2);
         lblWarm.position.set(Math.max(X0 + 3.4, xf - 7.2), 4.4, ZD / 2 + 0.2);
         lblFront.position.set(xf - 5.2, Math.min(TOP - 0.8, M.slope * 5.2), ZD / 2 + 0.35);
@@ -870,25 +1109,33 @@ function applyState() {
     if (state.mode === 'cold') {
         lblCloud.position.set(xf - 1.2, 8.9, 0);
         lblRain.position.set(xf - 2.0, 2.6, ZD / 2 + 0.4);
-    } else {
+    } else if (!isOcc) {
         lblCloud.position.set(xf + 6.5, 6.4, 0);
         lblRain.position.set(xf + 6.5, 3.0, ZD / 2 + 0.4);
     }
     lblCloud.visible = amt > 0.02;
     lblRain.visible = amt > 0.05;
     lblObs.position.set(0, 2.15, ZD / 2 + 1.5);
-    lblArrow.position.set(xf - 6.0, 2.0 + (state.mode === 'cold' ? 1.4 : 0.2), ZD / 2 + 0.6);
+    if (!isOcc) {
+        lblArrow.position.set(xf - 6.0, 2.0 + (state.mode === 'cold' ? 1.4 : 0.2), ZD / 2 + 0.6);
+    }
 
     /* HUD */
     $('#val-t').textContent = T.toFixed(1) + '℃';
     $('#val-p').textContent = P.toFixed(1) + ' hPa';
     var rainTxt = amt > 0.6 ? '강함' : (amt > 0.25 ? '보통' : (amt > 0.06 ? '약함' : '없음'));
     $('#val-rain').textContent = rainTxt;
-    var posTxt = state.mode === 'stationary' ? '머무름'
-        : (xf < -1.2 ? '통과 전' : (xf > 1.2 ? '통과 후' : '통과 중'));
+    var posTxt;
+    if (isOcc) {
+        posTxt = OCC_TEXT[phase].pos;
+        $('#note').textContent = OCC_TEXT[phase].note;
+    } else {
+        posTxt = state.mode === 'stationary' ? '머무름'
+            : (xf < -1.2 ? '통과 전' : (xf > 1.2 ? '통과 후' : '통과 중'));
+        $('#note').textContent = M.note;
+    }
     $('#val-pos').textContent = posTxt;
     $('#txt-prog').textContent = posTxt;
-    $('#note').textContent = M.note;
 
     rainMat.opacity = state.mode === 'cold' ? 0.85 : 0.7;
     rainMat.size = state.mode === 'cold' ? 0.22 : 0.17;
@@ -907,9 +1154,39 @@ function fullRebuild() {
 
 /* ---------------- 애니메이션 ---------------- */
 var clock = new THREE.Clock();
+var play = { on: false, acc: 0 };
+
+function softUpdate() {
+    $('#sld-prog').value = state.prog;
+    rebuildAir();
+    rebuildArrows();
+    applyState();
+    applyLabelScale();
+}
+
+function setPlay(on) {
+    play.on = on;
+    play.acc = 0;
+    var b = $('#btn-play');
+    if (!b) return;
+    b.querySelector('span').textContent = on ? '⏸' : '▶';
+    b.querySelectorAll('span')[1].textContent = on ? '멈춤' : '기단 이동';
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+
 function animate() {
     requestAnimationFrame(animate);
     var dt = Math.min(clock.getDelta(), 0.05);
+
+    if (play.on) {
+        state.prog += dt * 5.2;
+        if (state.prog > 100) state.prog -= 100;
+        play.acc += dt;
+        if (play.acc >= 0.06) { play.acc = 0; softUpdate(); }
+    }
+    updateDrift(dt);
+
     var xf = frontX();
     var band = rainBand();
     var arr = rainGeo.attributes.position.array;
@@ -953,6 +1230,7 @@ document.querySelectorAll('#mode-grid .mode-btn').forEach(function (b) {
         var mo = b.getAttribute('data-mode');
         if (!MODES[mo] || state.mode === mo) return;
         state.mode = mo;
+        if (mo === 'occlusion') { state.prog = 6; $('#sld-prog').value = 6; }
         document.querySelectorAll('#mode-grid .mode-btn').forEach(function (x) {
             x.classList.toggle('active', x === b);
         });
@@ -960,7 +1238,10 @@ document.querySelectorAll('#mode-grid .mode-btn').forEach(function (b) {
     });
 });
 
+$('#btn-play').addEventListener('click', function () { setPlay(!play.on); });
+
 $('#sld-prog').addEventListener('input', function (e) {
+    if (play.on) setPlay(false);
     state.prog = parseFloat(e.target.value);
     rebuildAir();
     rebuildArrows();
@@ -969,6 +1250,7 @@ $('#sld-prog').addEventListener('input', function (e) {
 });
 
 $('#btn-reset').addEventListener('click', function () {
+    setPlay(false);
     state.mode = 'cold';
     state.prog = 18;
     $('#sld-prog').value = 18;
