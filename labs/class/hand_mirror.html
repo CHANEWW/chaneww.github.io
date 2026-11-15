@@ -425,7 +425,8 @@
     <div class="block">
         <div class="block-head"><span>3D 손 스타일</span></div>
         <div class="chip-row" id="styleRow">
-            <button class="chip on" type="button" data-style="cyber">사이버</button>
+            <button class="chip on" type="button" data-style="anime">애니메이션</button>
+            <button class="chip" type="button" data-style="cyber">사이버</button>
             <button class="chip" type="button" data-style="skeleton">골격</button>
             <button class="chip" type="button" data-style="neon">네온</button>
         </div>
@@ -477,8 +478,45 @@
     ];
     var TIPS = [4, 8, 12, 16, 20];
     var PALM_OUTLINE = [0, 1, 5, 9, 13, 17];
-    var PALM_FAN = [[0, 1, 5], [0, 5, 9], [0, 9, 13], [0, 13, 17], [0, 17, 1],
-                    [5, 6, 9], [9, 10, 13], [13, 14, 17]];
+
+    /* 손바닥은 6개 고리를 둥글게 다듬어(Chaikin) 두께 있는 판으로 만든다.
+       12개 테두리 + 앞/뒤 가운데 = 26개 정점 (앞면 1 + 12, 뒷면 1 + 12) */
+    var PALM_EDGE = PALM_OUTLINE.length;          // 6
+    var PALM_VERTS = PALM_EDGE * 2;               // 12
+    var PALM_VCOUNT = PALM_VERTS * 2 + 2;         // 26
+    var PALM_INDEX = (function () {
+        var idx = [];
+        var n = PALM_VERTS, i;
+        for (i = 0; i < n; i++) idx.push(0, 1 + i, 1 + (i + 1) % n);                    // 앞면 부채
+        for (i = 0; i < n; i++) idx.push(n + 1, n + 2 + (i + 1) % n, n + 2 + i);        // 뒷면 부채
+        for (i = 0; i < n; i++) {                                                        // 테두리
+            var a = 1 + i, b = 1 + (i + 1) % n, c = n + 2 + i, d = n + 2 + (i + 1) % n;
+            idx.push(a, b, d, a, d, c);
+        }
+        return idx;
+    })();
+
+    /* 손가락별 굵기 (소지는 가늘게) — 애니메이션 손의 자연스러운 비례 */
+    var FINGER_GIRTH = { thumb: 1.10, index: 1.04, middle: 1.06, ring: 1.0, pinky: 0.88 };
+    var BONE_GIRTH = BONES.map(function (bn) {
+        for (var f = 0; f < FINGER_KEYS.length; f++) {
+            var ch = FINGER_CHAINS[FINGER_KEYS[f]];
+            var seg = ch.indexOf(bn[0]);
+            if (seg >= 0) {
+                var gf = FINGER_GIRTH[FINGER_KEYS[f]] || 1;
+                return gf * (seg === 0 ? 1.0 : (seg === 1 ? 0.94 : 0.88));
+            }
+        }
+        return 1;
+    });
+    var JOINT_GIRTH = (function () {
+        var map = [];
+        for (var i = 0; i < 21; i++) map[i] = 1;
+        FINGER_KEYS.forEach(function (k) {
+            FINGER_CHAINS[k].forEach(function (id) { map[id] = FINGER_GIRTH[k] || 1; });
+        });
+        return map;
+    })();
     var SKELETON_LINES = [
         [0, 1], [1, 2], [2, 3], [3, 4],
         [0, 5], [5, 6], [6, 7], [7, 8],
@@ -493,49 +531,113 @@
 
     /* 3D 손 스타일 프리셋 (주간/야간 각각 다른 명도) */
     var STYLES = {
-        cyber: {
+        /* 기본: 부드러운 애니메이션·피규어풍 손 (살구빛 피부, 매끈한 면, 은은한 림라이트) */
+        anime: {
             light: {
-                bone: 0x0685ae, boneEmissive: 0x05526b, boneIntensity: 0.30,
-                joint: 0x14b6de, jointEmissive: 0x0c7590, jointIntensity: 0.4,
-                palm: 0x0d455f, palmOpacity: 0.20,
-                line: 0x0b86ae, lineOpacity: 0.8, wire: false
+                bone: 0xf7c9a4, boneEmissive: 0x4a1f0d, boneIntensity: 0.16, boneOpacity: 1,
+                joint: 0xf0bb95, jointEmissive: 0x4a1f0d, jointIntensity: 0.12, jointOpacity: 1,
+                tip: 0xfad4b6,
+                palm: 0xf6c6a2, palmEmissive: 0x4a1f0d, palmIntensity: 0.10, palmOpacity: 1, palmDepth: true,
+                nail: 0xffeadb,
+                metalness: 0.04, roughness: 0.62,
+                line: 0xcf9b7a, lineOpacity: 0.30, wire: false, nails: true,
+                rim: 0xffe3c4, rimIntensity: 0.90,
+                gridOpacity: 0.16, ring: 0xe8b98d, ringOpacity: 0.20
             },
             dark: {
-                bone: 0x37e0ff, boneEmissive: 0x0d6f96, boneIntensity: 1.25,
-                joint: 0xa9f4ff, jointEmissive: 0x1f8fb8, jointIntensity: 1.1,
-                palm: 0x123f57, palmOpacity: 0.18,
-                line: 0x66e6ff, lineOpacity: 0.85, wire: false
+                bone: 0xdfa47c, boneEmissive: 0x2a1108, boneIntensity: 0.34, boneOpacity: 1,
+                joint: 0xd69972, jointEmissive: 0x2a1108, jointIntensity: 0.28, jointOpacity: 1,
+                tip: 0xe8b28b,
+                palm: 0xdb9f77, palmEmissive: 0x2a1108, palmIntensity: 0.28, palmOpacity: 1, palmDepth: true,
+                nail: 0xf6d6bf,
+                metalness: 0.04, roughness: 0.58,
+                line: 0xffcf9f, lineOpacity: 0.28, wire: false, nails: true,
+                rim: 0x9fd0ff, rimIntensity: 1.10,
+                gridOpacity: 0.14, ring: 0xf0c69a, ringOpacity: 0.26
+            }
+        },
+        cyber: {
+            light: {
+                bone: 0x0685ae, boneEmissive: 0x05526b, boneIntensity: 0.30, boneOpacity: 0.97,
+                joint: 0x14b6de, jointEmissive: 0x0c7590, jointIntensity: 0.4, jointOpacity: 0.98,
+                tip: 0x14b6de,
+                palm: 0x0d455f, palmEmissive: 0x0d455f, palmIntensity: 0.25, palmOpacity: 0.20, palmDepth: false,
+                nail: 0x9fe9ff,
+                metalness: 0.2, roughness: 0.5,
+                line: 0x0b86ae, lineOpacity: 0.8, wire: false, nails: false,
+                rim: 0x49c9ff, rimIntensity: 0.9,
+                gridOpacity: 0.42, ring: 0x4aa8ff, ringOpacity: 0.35
+            },
+            dark: {
+                bone: 0x37e0ff, boneEmissive: 0x0d6f96, boneIntensity: 1.25, boneOpacity: 0.97,
+                joint: 0xa9f4ff, jointEmissive: 0x1f8fb8, jointIntensity: 1.1, jointOpacity: 0.98,
+                tip: 0xa9f4ff,
+                palm: 0x123f57, palmEmissive: 0x123f57, palmIntensity: 0.35, palmOpacity: 0.18, palmDepth: false,
+                nail: 0xd8f8ff,
+                metalness: 0.2, roughness: 0.5,
+                line: 0x66e6ff, lineOpacity: 0.85, wire: false, nails: false,
+                rim: 0x49c9ff, rimIntensity: 1.25,
+                gridOpacity: 0.30, ring: 0x4aa8ff, ringOpacity: 0.50
             }
         },
         skeleton: {
             light: {
-                bone: 0xb28f5c, boneEmissive: 0x2a2318, boneIntensity: 0.18,
-                joint: 0x8a7048, jointEmissive: 0x2a2318, jointIntensity: 0.12,
-                palm: 0xc9b591, palmOpacity: 0.22,
-                line: 0xa08a63, lineOpacity: 0.7, wire: false
+                bone: 0xb28f5c, boneEmissive: 0x2a2318, boneIntensity: 0.18, boneOpacity: 0.97,
+                joint: 0x8a7048, jointEmissive: 0x2a2318, jointIntensity: 0.12, jointOpacity: 0.98,
+                tip: 0x8a7048,
+                palm: 0xc9b591, palmEmissive: 0xc9b591, palmIntensity: 0.12, palmOpacity: 0.34, palmDepth: true,
+                nail: 0xe8dcc4,
+                metalness: 0.12, roughness: 0.6,
+                line: 0xa08a63, lineOpacity: 0.7, wire: false, nails: false,
+                rim: 0xffe9c9, rimIntensity: 0.8,
+                gridOpacity: 0.42, ring: 0x4aa8ff, ringOpacity: 0.35
             },
             dark: {
-                bone: 0xf3e9d2, boneEmissive: 0x2a2318, boneIntensity: 0.25,
-                joint: 0xfffdf6, jointEmissive: 0x3a3226, jointIntensity: 0.2,
-                palm: 0xd8c7a4, palmOpacity: 0.14,
-                line: 0xbfae8c, lineOpacity: 0.55, wire: false
+                bone: 0xf3e9d2, boneEmissive: 0x2a2318, boneIntensity: 0.25, boneOpacity: 0.97,
+                joint: 0xfffdf6, jointEmissive: 0x3a3226, jointIntensity: 0.2, jointOpacity: 0.98,
+                tip: 0xfffdf6,
+                palm: 0xd8c7a4, palmEmissive: 0xd8c7a4, palmIntensity: 0.1, palmOpacity: 0.22, palmDepth: true,
+                nail: 0xfffdf6,
+                metalness: 0.12, roughness: 0.6,
+                line: 0xbfae8c, lineOpacity: 0.55, wire: false, nails: false,
+                rim: 0xffe9c9, rimIntensity: 1.1,
+                gridOpacity: 0.30, ring: 0x4aa8ff, ringOpacity: 0.50
             }
         },
         neon: {
             light: {
-                bone: 0xd21ba4, boneEmissive: 0x8e0f72, boneIntensity: 0.75,
-                joint: 0xf07ad9, jointEmissive: 0xb01a8d, jointIntensity: 0.65,
-                palm: 0x4a1040, palmOpacity: 0.18,
-                line: 0xc72fab, lineOpacity: 0.9, wire: true
+                bone: 0xd21ba4, boneEmissive: 0x8e0f72, boneIntensity: 0.75, boneOpacity: 0.97,
+                joint: 0xf07ad9, jointEmissive: 0xb01a8d, jointIntensity: 0.65, jointOpacity: 0.98,
+                tip: 0xf07ad9,
+                palm: 0x4a1040, palmEmissive: 0x4a1040, palmIntensity: 0.3, palmOpacity: 0.18, palmDepth: false,
+                nail: 0xffd1f7,
+                metalness: 0.15, roughness: 0.45,
+                line: 0xc72fab, lineOpacity: 0.9, wire: true, nails: false,
+                rim: 0xff8ae8, rimIntensity: 0.9,
+                gridOpacity: 0.42, ring: 0xff4fd8, ringOpacity: 0.35
             },
             dark: {
-                bone: 0xff4fd8, boneEmissive: 0xb0178f, boneIntensity: 1.6,
-                joint: 0xffd1f7, jointEmissive: 0xd42bb0, jointIntensity: 1.5,
-                palm: 0x2b0030, palmOpacity: 0.13,
-                line: 0xff8ae8, lineOpacity: 1.0, wire: true
+                bone: 0xff4fd8, boneEmissive: 0xb0178f, boneIntensity: 1.6, boneOpacity: 0.97,
+                joint: 0xffd1f7, jointEmissive: 0xd42bb0, jointIntensity: 1.5, jointOpacity: 0.98,
+                tip: 0xffd1f7,
+                palm: 0x2b0030, palmEmissive: 0x2b0030, palmIntensity: 0.4, palmOpacity: 0.13, palmDepth: false,
+                nail: 0xffd1f7,
+                metalness: 0.15, roughness: 0.45,
+                line: 0xff8ae8, lineOpacity: 1.0, wire: true, nails: false,
+                rim: 0xff8ae8, rimIntensity: 1.3,
+                gridOpacity: 0.30, ring: 0xff4fd8, ringOpacity: 0.50
             }
         }
     };
+
+    /* 스타일별 손 모델 비례 (굵기 · 두께) */
+    var STYLE_GEO = {
+        anime:    { boneR: 0.054, wristR: 0.080, jointR: 0.056, tipJointR: 0.052, tipR: 0.050, palmT: 0.105 },
+        cyber:    { boneR: 0.030, wristR: 0.046, jointR: 0.032, tipJointR: 0.038, tipR: 0.037, palmT: 0.024 },
+        skeleton: { boneR: 0.033, wristR: 0.049, jointR: 0.034, tipJointR: 0.040, tipR: 0.040, palmT: 0.050 },
+        neon:     { boneR: 0.030, wristR: 0.046, jointR: 0.032, tipJointR: 0.038, tipR: 0.037, palmT: 0.024 }
+    };
+    function styleGeo() { return STYLE_GEO[state.style] || STYLE_GEO.anime; }
 
     /* 상태 */
     var state = {
@@ -544,7 +646,7 @@
         twoHands: true,
         pip: true,
         skeleton: true,
-        style: 'cyber',
+        style: 'anime',
         smoothing: 65,
         demo: 'continuous',
         cameraOn: false,
@@ -619,47 +721,55 @@
         var group = new THREE.Group();
         group.visible = false;
 
-        var pal = STYLES.cyber.light;
+        var pal = STYLES.anime.light;
         var boneMat = new THREE.MeshStandardMaterial({
             color: pal.bone, emissive: pal.boneEmissive,
-            emissiveIntensity: pal.boneIntensity, metalness: 0.2, roughness: 0.5,
-            transparent: true, opacity: 0.97
+            emissiveIntensity: pal.boneIntensity, metalness: 0.05, roughness: 0.6,
+            transparent: true, opacity: 1
         });
         var jointMat = new THREE.MeshStandardMaterial({
             color: pal.joint, emissive: pal.jointEmissive,
-            emissiveIntensity: pal.jointIntensity, metalness: 0.15, roughness: 0.4,
-            transparent: true, opacity: 0.98
+            emissiveIntensity: pal.jointIntensity, metalness: 0.05, roughness: 0.58,
+            transparent: true, opacity: 1
         });
         var tipMat = jointMat.clone();
-        var palmMat = new THREE.MeshBasicMaterial({
-            color: pal.palm, transparent: true, opacity: pal.palmOpacity,
-            side: THREE.DoubleSide, depthWrite: false, vertexColors: true
+        var palmMat = new THREE.MeshStandardMaterial({
+            color: pal.palm, emissive: pal.palmEmissive,
+            emissiveIntensity: pal.palmIntensity, metalness: 0.05, roughness: 0.66,
+            side: THREE.DoubleSide, transparent: true, depthWrite: true, vertexColors: true,
+            opacity: pal.palmOpacity
         });
         var lineMat = new THREE.LineBasicMaterial({
             color: pal.line, transparent: true, opacity: pal.lineOpacity
         });
+        var nailMat = new THREE.MeshStandardMaterial({
+            color: pal.nail, emissive: 0x4a1f0d, emissiveIntensity: 0.05,
+            metalness: 0.02, roughness: 0.34, transparent: true, opacity: 1
+        });
 
-        /* 손바닥 판 (랜드마크 21개 중 손바닥 고리로 매 프레임 갱신) */
+        /* 손바닥: 둥글게 다듬은 테두리 + 앞뒤 두께 + 테두리 면 = 매끈한 입체 손바닥 */
         var palmGeo = new THREE.BufferGeometry();
-        var palmPos = new Float32Array(21 * 3);
+        var palmPos = new Float32Array(PALM_VCOUNT * 3);
         palmGeo.setAttribute('position', new THREE.BufferAttribute(palmPos, 3));
 
-        /* 손목은 살짝 어둡게, 손가락 뿌리는 밝게 → 평면이 아니라 둥근 손바닥처럼 보인다 */
-        var palmCol = new Float32Array(21 * 3);
-        var palmShade = { 0: 0.45, 1: 0.7, 5: 1.25, 9: 1.3, 13: 1.2, 17: 1.05, 2: 0.8, 6: 1.15, 10: 1.2, 14: 1.1, 18: 1.0 };
-        for (var pi = 0; pi < 21; pi++) {
-            var sh = palmShade[pi] === undefined ? 0.95 : palmShade[pi];
+        /* 앞면 가운데는 살짝 밝게, 뒷면은 그늘지게 → 평면이 아니라 둥근 손바닥으로 보인다 */
+        var palmCol = new Float32Array(PALM_VCOUNT * 3);
+        for (var pi = 0; pi < PALM_VCOUNT; pi++) {
+            var sh = (pi === 0) ? 1.08
+                   : (pi <= PALM_VERTS) ? 0.97
+                   : (pi === PALM_VERTS + 1) ? 0.66
+                   : 0.76;
             palmCol[pi * 3] = sh; palmCol[pi * 3 + 1] = sh; palmCol[pi * 3 + 2] = sh;
         }
         palmGeo.setAttribute('color', new THREE.BufferAttribute(palmCol, 3));
-        palmGeo.setIndex(PALM_FAN.reduce(function (a, t) { return a.concat(t); }, []));
+        palmGeo.setIndex(PALM_INDEX);
         var palm = new THREE.Mesh(palmGeo, palmMat);
         palm.frustumCulled = false;
         palm.renderOrder = -1;
         group.add(palm);
 
-        /* 마디 뼈대 실린더 15개 */
-        var boneGeo = new THREE.CylinderGeometry(0.72, 1, 1, 9, 1);
+        /* 마디 뼈대 15개 (끝으로 갈수록 가늘어지는 둥근 원통) */
+        var boneGeo = new THREE.CylinderGeometry(0.88, 1, 1, 20, 1);
         var bones = BONES.map(function () {
             var m = new THREE.Mesh(boneGeo, boneMat);
             m.frustumCulled = false;
@@ -669,7 +779,7 @@
         });
 
         /* 관절 구체 21개 */
-        var jointGeo = new THREE.SphereGeometry(1, 12, 10);
+        var jointGeo = new THREE.SphereGeometry(1, 18, 14);
         var joints = [];
         for (var i = 0; i < 21; i++) {
             var j = new THREE.Mesh(jointGeo, jointMat);
@@ -688,6 +798,16 @@
             return t;
         });
 
+        /* 손톱 5개 (애니메이션 스타일에서만 보이는 디테일) */
+        var nails = TIPS.map(function () {
+            var nl = new THREE.Mesh(jointGeo, nailMat);
+            nl.frustumCulled = false;
+            nl.renderOrder = 3;
+            nl.visible = false;
+            group.add(nl);
+            return nl;
+        });
+
         /* 스켈레톤 라인 (관절 표시 토글) */
         var lineGeo = new THREE.BufferGeometry();
         var linePos = new Float32Array(SKELETON_LINES.length * 2 * 3);
@@ -699,7 +819,7 @@
 
         /* 손바닥 외곽선 (손 모양이 또렷하게 보이도록) */
         var outlineGeo = new THREE.BufferGeometry();
-        var outlinePos = new Float32Array(PALM_OUTLINE.length * 3);
+        var outlinePos = new Float32Array(PALM_VERTS * 3);
         outlineGeo.setAttribute('position', new THREE.BufferAttribute(outlinePos, 3));
         var outline = new THREE.LineLoop(outlineGeo, lineMat);
         outline.frustumCulled = false;
@@ -709,9 +829,10 @@
         scene.add(group);
 
         return {
-            group: group, palm: palm, palmPos: palmPos, bones: bones, joints: joints, tips: tips,
+            group: group, palm: palm, palmPos: palmPos, bones: bones, joints: joints, tips: tips, nails: nails,
             linePos: linePos, lines: lines, outlinePos: outlinePos, outline: outline,
-            mats: { bone: boneMat, joint: jointMat, tip: tipMat, palm: palmMat, line: lineMat },
+            mats: { bone: boneMat, joint: jointMat, tip: tipMat, palm: palmMat, line: lineMat, nail: nailMat },
+            normal: new THREE.Vector3(0, 0, 1),
             points: new Array(21).fill(null).map(function () { return new THREE.Vector3(); }),
             hasData: false
         };
@@ -720,43 +841,146 @@
     var hands = { A: makeHand(), B: makeHand() };
 
     function applyStyle(h) {
-        var pal = STYLES[state.style] || STYLES.cyber;
+        var pal = STYLES[state.style] || STYLES.anime;
         var s = pal[state.dark ? 'dark' : 'light'] || pal.light;
         h.mats.bone.color.setHex(s.bone);
         h.mats.bone.emissive.setHex(s.boneEmissive);
         h.mats.bone.emissiveIntensity = s.boneIntensity;
+        h.mats.bone.metalness = s.metalness;
+        h.mats.bone.roughness = s.roughness;
+        h.mats.bone.opacity = s.boneOpacity;
         h.mats.joint.color.setHex(s.joint);
         h.mats.joint.emissive.setHex(s.jointEmissive);
         h.mats.joint.emissiveIntensity = s.jointIntensity;
+        h.mats.joint.metalness = s.metalness;
+        h.mats.joint.roughness = s.roughness;
+        h.mats.joint.opacity = s.jointOpacity;
         h.mats.joint.wireframe = s.wire;
-        h.mats.tip.color.setHex(s.joint);
+        h.mats.tip.color.setHex(s.tip || s.joint);
         h.mats.tip.emissive.setHex(s.jointEmissive);
         h.mats.tip.emissiveIntensity = s.jointIntensity;
+        h.mats.tip.opacity = s.jointOpacity;
         h.mats.tip.wireframe = s.wire;
         h.mats.palm.color.setHex(s.palm);
+        h.mats.palm.emissive.setHex(s.palmEmissive || 0x000000);
+        h.mats.palm.emissiveIntensity = s.palmIntensity || 0;
         h.mats.palm.opacity = s.palmOpacity;
+        h.mats.palm.metalness = s.metalness;
+        h.mats.palm.roughness = Math.min(1, s.roughness + 0.06);
+        h.mats.palm.depthWrite = s.palmDepth !== false;
         h.mats.palm.wireframe = s.wire;
+        h.mats.nail.color.setHex(s.nail || s.tip || s.joint);
+        h.mats.nail.emissive.setHex(s.boneEmissive);
+        h.mats.nail.emissiveIntensity = s.boneIntensity * 0.4;
         h.mats.line.color.setHex(s.line);
         h.mats.line.opacity = s.lineOpacity;
+
+        /* 손톱은 애니메이션 스타일에서만 */
+        for (var i = 0; i < h.nails.length; i++) h.nails[i].visible = !!s.nails;
+
+        /* 무대 조명 · 바닥 격자를 스타일 톤에 맞춘다 */
+        rimLight.color.setHex(s.rim);
+        rimLight.intensity = s.rimIntensity;
+        grid.material.opacity = s.gridOpacity;
+        ringMat.color.setHex(s.ring);
+        ringMat.opacity = s.ringOpacity;
     }
     applyStyle(hands.A);
     applyStyle(hands.B);
 
     /* 한 손의 21개 월드 좌표를 메시에 반영 */
-    function updateHandMesh(h) {
-        var pts = h.points;
-        var i;
+    var _ringPts = PALM_OUTLINE.map(function () { return new THREE.Vector3(); });
+    var _ringSmooth = [];
+    for (var _ri = 0; _ri < PALM_VERTS; _ri++) _ringSmooth.push(new THREE.Vector3());
+    var _pc0 = new THREE.Vector3(), _pc1 = new THREE.Vector3(), _pc2 = new THREE.Vector3();
+    var _pcen = new THREE.Vector3(), _pnrm = new THREE.Vector3();
+    var _pax = new THREE.Vector3(), _pby = new THREE.Vector3();
+    var _nx = new THREE.Vector3(), _ny = new THREE.Vector3(), _nz = new THREE.Vector3();
+    var _nmat = new THREE.Matrix4();
 
-        /* 손바닥 */
-        for (i = 0; i < 21; i++) {
-            h.palmPos[i * 3] = pts[i].x;
-            h.palmPos[i * 3 + 1] = pts[i].y;
-            h.palmPos[i * 3 + 2] = pts[i].z;
+    /* 손바닥을 둥근 실루엣 + 두께를 가진 판으로 만든다 */
+    function updatePalmShell(h, g) {
+        var pts = h.points, i, n = PALM_EDGE;
+        var ring = _ringPts, flat = _ringSmooth;
+        for (i = 0; i < n; i++) ring[i].copy(pts[PALM_OUTLINE[i]]);
+
+        _pcen.set(0, 0, 0);
+        for (i = 0; i < n; i++) _pcen.add(ring[i]);
+        _pcen.multiplyScalar(1 / n);
+
+        /* 손바닥 면의 법선 (손금 ↔ 손등) — 카메라 쪽(+z)을 앞면으로 둔다 */
+        _pax.subVectors(ring[2], ring[0]);
+        _pby.subVectors(ring[5], ring[0]);
+        _pnrm.crossVectors(_pax, _pby);
+        if (_pnrm.lengthSq() < 1e-9) _pnrm.set(0, 0, 1);
+        _pnrm.normalize();
+        if (_pnrm.z < 0) _pnrm.negate();
+        h.normal.copy(_pnrm);
+
+        /* 모서리를 다듬어(Chaikin) 둥근 손바닥 실루엣을 만든다 */
+        for (i = 0; i < n; i++) {
+            var a = ring[i], b = ring[(i + 1) % n];
+            flat[i * 2].copy(a).multiplyScalar(0.75).addScaledVector(b, 0.25);
+            flat[i * 2 + 1].copy(a).multiplyScalar(0.25).addScaledVector(b, 0.75);
         }
+        for (i = 0; i < PALM_VERTS; i++) {
+            flat[i].sub(_pcen).multiplyScalar(1.05).add(_pcen);
+        }
+
+        /* 테두리 감기 방향을 앞면(+법선) 기준으로 통일 */
+        var area = 0;
+        for (i = 0; i < PALM_VERTS; i++) {
+            _pc1.subVectors(flat[i], _pcen);
+            _pc2.subVectors(flat[(i + 1) % PALM_VERTS], _pcen);
+            area += _pc1.cross(_pc2).dot(_pnrm);
+        }
+        if (area < 0) {
+            for (i = 0; i < PALM_VERTS >> 1; i++) {
+                _pc0.copy(flat[i]);
+                flat[i].copy(flat[PALM_VERTS - 1 - i]);
+                flat[PALM_VERTS - 1 - i].copy(_pc0);
+            }
+        }
+
+        /* 앞·뒤 두 겹으로 띄우고 가운데를 볼록하게 */
+        var t = (g.palmT || 0.03) * 0.5;
+        var pos = h.palmPos;
+        var dome = t * 1.45;
+
+        pos[0] = _pcen.x + _pnrm.x * dome;
+        pos[1] = _pcen.y + _pnrm.y * dome;
+        pos[2] = _pcen.z + _pnrm.z * dome;
+
+        var backC = (PALM_VERTS + 1) * 3;
+        pos[backC] = _pcen.x - _pnrm.x * dome;
+        pos[backC + 1] = _pcen.y - _pnrm.y * dome;
+        pos[backC + 2] = _pcen.z - _pnrm.z * dome;
+
+        for (i = 0; i < PALM_VERTS; i++) {
+            var p = flat[i];
+            var f = 1 + i * 3;
+            var b = (PALM_VERTS + 2 + i) * 3;
+            pos[f] = p.x + _pnrm.x * t;
+            pos[f + 1] = p.y + _pnrm.y * t;
+            pos[f + 2] = p.z + _pnrm.z * t;
+            pos[b] = p.x - _pnrm.x * t;
+            pos[b + 1] = p.y - _pnrm.y * t;
+            pos[b + 2] = p.z - _pnrm.z * t;
+        }
+
         var pg = h.palm.geometry;
         pg.attributes.position.needsUpdate = true;
         pg.computeVertexNormals();
         pg.computeBoundingSphere();
+    }
+
+    function updateHandMesh(h) {
+        var pts = h.points;
+        var i;
+        var g = styleGeo();
+
+        /* 손바닥 (둥근 입체 판) */
+        updatePalmShell(h, g);
 
         /* 뼈대 */
         for (i = 0; i < BONES.length; i++) {
@@ -772,7 +996,7 @@
             m.position.copy(_va);
             _q.setFromUnitVectors(UP, _dir);
             m.quaternion.copy(_q);
-            var r = 0.030;
+            var r = g.boneR * (BONE_GIRTH[i] || 1);
             m.scale.set(r, len, r);
         }
 
@@ -780,15 +1004,36 @@
         for (i = 0; i < 21; i++) {
             var j = h.joints[i];
             j.position.copy(pts[i]);
-            var jr = (i === 0) ? 0.046 : (i % 4 === 0 ? 0.038 : 0.032);
-            j.scale.setScalar(jr);
+            var jr = (i === 0) ? g.wristR : (i % 4 === 0 ? g.tipJointR : g.jointR);
+            j.scale.setScalar(jr * (JOINT_GIRTH[i] || 1));
         }
 
         /* 손가락 끝 캡 */
         for (i = 0; i < TIPS.length; i++) {
             var t = h.tips[i];
             t.position.copy(pts[TIPS[i]]);
-            t.scale.setScalar(0.037);
+            var tr = g.tipR * (JOINT_GIRTH[TIPS[i]] || 1);
+            t.scale.setScalar(tr);
+        }
+
+        /* 손톱 (손등 쪽에 얇게) */
+        for (i = 0; i < TIPS.length; i++) {
+            var nail = h.nails[i];
+            var tp = pts[TIPS[i]];
+            var pp = pts[TIPS[i] - 1];
+            var trr = g.tipR * (JOINT_GIRTH[TIPS[i]] || 1);
+            _ny.subVectors(tp, pp);
+            if (_ny.lengthSq() < 1e-8) _ny.copy(UP);
+            _ny.normalize();
+            _nz.copy(h.normal).negate();
+            _nz.addScaledVector(_ny, -_nz.dot(_ny));
+            if (_nz.lengthSq() < 1e-6) _nz.set(0, 0, -1);
+            _nz.normalize();
+            _nx.crossVectors(_ny, _nz).normalize();
+            _nmat.makeBasis(_nx, _ny, _nz);
+            nail.quaternion.setFromRotationMatrix(_nmat);
+            nail.position.copy(tp).addScaledVector(_nz, trr * 0.76).addScaledVector(_ny, trr * 0.12);
+            nail.scale.set(trr * 0.62, trr * 0.74, trr * 0.26);
         }
 
         /* 스켈레톤 라인 */
@@ -806,8 +1051,8 @@
         h.lines.geometry.computeBoundingSphere();
         h.lines.visible = state.skeleton;
 
-        for (i = 0; i < PALM_OUTLINE.length; i++) {
-            var op = pts[PALM_OUTLINE[i]];
+        for (i = 0; i < PALM_VERTS; i++) {
+            var op = _ringSmooth[i];
             h.outlinePos[i * 3] = op.x;
             h.outlinePos[i * 3 + 1] = op.y;
             h.outlinePos[i * 3 + 2] = op.z;
@@ -1725,7 +1970,7 @@
 
     $('#btnReset').addEventListener('click', function () {
         state.twoHands = true; state.pip = true;
-        state.skeleton = true; state.smoothing = 65; state.style = 'cyber';
+        state.skeleton = true; state.smoothing = 65; state.style = 'anime';
         setMirror(state.facing !== 'environment');
         $('#tglTwo').classList.add('active');
         $('#tglPip').classList.add('active');
@@ -1734,7 +1979,7 @@
         $('#rngSmooth').value = 65;
         $('#smoothVal').textContent = '65%';
         Array.prototype.forEach.call(document.querySelectorAll('#styleRow .chip'), function (o) {
-            o.classList.toggle('on', o.dataset.style === 'cyber');
+            o.classList.toggle('on', o.dataset.style === 'anime');
         });
         applyStyle(hands.A); applyStyle(hands.B);
         resetFilters('A'); resetFilters('B');
