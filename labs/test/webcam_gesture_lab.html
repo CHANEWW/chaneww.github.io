@@ -212,6 +212,8 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
             <button type="button" data-mode="lens">🔎 볼록렌즈 초점</button>
         </div>
         <button class="btn" id="btnCam" type="button">🎥 웹캠 손 추적 켜기</button>
+        <button class="btn ghost" id="btnFacing" type="button" aria-pressed="false" title="후면 카메라로 전환">📷 전면</button>
+        <button class="btn ghost" id="btnSkeleton" type="button" aria-pressed="false" title="손 뼈대(21관절) 표시">🦴 손 뼈대</button>
         <button class="btn ghost" id="btnDrop" type="button">✋ 놓기</button>
         <button class="btn ghost" id="btnReset" type="button">🔄 처음부터</button>
         <span class="status" id="camStatus">터치·마우스로 조작 중 · 비커를 잡아 보세요</span>
@@ -294,6 +296,9 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
 
     var mode = 'pour';
     var camOn = false, camStream = null, camReady = false;
+    var camFacing = 'user';        // 'user' 전면(거울 모드) | 'environment' 후면(실제 방향)
+    var facingBusy = false;
+    var showSkeleton = false;      // 손 뼈대는 기본으로 숨기고 토글로만 표시
 
     /* ---------- 상태 ---------- */
     var cur = { x: 0, y: 0, tx: 0, ty: 0, live: false };
@@ -892,8 +897,10 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         if (!camOn || !vid.videoWidth) return false;
         var t = camTransform();
         ctx.save();
-        ctx.translate(W, 0);               // 좌우 반전(거울상)
-        ctx.scale(-1, 1);
+        if (isMirror()) {                  // 전면 카메라: 좌우 반전(거울상)
+            ctx.translate(W, 0);
+            ctx.scale(-1, 1);
+        }
         ctx.drawImage(vid, t.dx, t.dy, t.dw, t.dh);
         ctx.restore();
 
@@ -933,89 +940,95 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         ctx.textBaseline = 'alphabetic';
     }
 
-    /* ---------- 손 21관절 · 핀치 포인터 ---------- */
+    /* ---------- 손 21관절 · 핀치 포인터 ----------
+       뼈대는 기본으로 숨김(showSkeleton=false) · 아주 작은 포인터만 남긴다 */
     function drawHand() {
         if (!camOn || !hand.points || !hand.points.length) return;
         var pts = hand.points;
         var pinch = hand.pinching;
         var line = pinch ? 'rgba(5,150,105,.95)' : 'rgba(2,132,199,.88)';
         var joint = pinch ? '#059669' : '#0284c7';
+        var p = { x: (pts[4].x + pts[8].x) / 2, y: (pts[4].y + pts[8].y) / 2 };
 
         ctx.save();
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        // 손바닥 영역
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        ctx.lineTo(pts[5].x, pts[5].y);
-        ctx.lineTo(pts[9].x, pts[9].y);
-        ctx.lineTo(pts[13].x, pts[13].y);
-        ctx.lineTo(pts[17].x, pts[17].y);
-        ctx.closePath();
-        ctx.fillStyle = pinch ? 'rgba(16,185,129,.12)' : 'rgba(56,189,248,.10)';
-        ctx.fill();
-
-        // 뼈대 21관절
-        ctx.strokeStyle = line;
-        ctx.lineWidth = 3.4;
-        for (var i = 0; i < HAND_CONN.length; i++) {
-            var a = pts[HAND_CONN[i][0]], b = pts[HAND_CONN[i][1]];
-            if (!a || !b) continue;
+        if (showSkeleton) {
+            // 손바닥 영역
             ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-        }
-        for (var j = 0; j < pts.length; j++) {
-            var tip = FINGERTIPS.indexOf(j) >= 0;
-            ctx.beginPath();
-            ctx.arc(pts[j].x, pts[j].y, tip ? 5.2 : 3.4, 0, Math.PI * 2);
-            ctx.fillStyle = tip ? '#ffffff' : joint;
+            ctx.moveTo(pts[0].x, pts[0].y);
+            ctx.lineTo(pts[5].x, pts[5].y);
+            ctx.lineTo(pts[9].x, pts[9].y);
+            ctx.lineTo(pts[13].x, pts[13].y);
+            ctx.lineTo(pts[17].x, pts[17].y);
+            ctx.closePath();
+            ctx.fillStyle = pinch ? 'rgba(16,185,129,.12)' : 'rgba(56,189,248,.10)';
             ctx.fill();
-            if (tip) { ctx.strokeStyle = joint; ctx.lineWidth = 2; ctx.stroke(); }
+
+            // 뼈대 21관절
+            ctx.strokeStyle = line;
+            ctx.lineWidth = 3.4;
+            for (var i = 0; i < HAND_CONN.length; i++) {
+                var a = pts[HAND_CONN[i][0]], b = pts[HAND_CONN[i][1]];
+                if (!a || !b) continue;
+                ctx.beginPath();
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+                ctx.stroke();
+            }
+            for (var j = 0; j < pts.length; j++) {
+                var tip = FINGERTIPS.indexOf(j) >= 0;
+                ctx.beginPath();
+                ctx.arc(pts[j].x, pts[j].y, tip ? 5.2 : 3.4, 0, Math.PI * 2);
+                ctx.fillStyle = tip ? '#ffffff' : joint;
+                ctx.fill();
+                if (tip) { ctx.strokeStyle = joint; ctx.lineWidth = 2; ctx.stroke(); }
+            }
+
+            // 엄지(4) - 검지(8) 핀치 연결선
+            ctx.setLineDash([5, 4]);
+            ctx.strokeStyle = line;
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(pts[4].x, pts[4].y);
+            ctx.lineTo(pts[8].x, pts[8].y);
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
 
-        // 엄지(4) - 검지(8) 핀치 포인터
-        var p = { x: (pts[4].x + pts[8].x) / 2, y: (pts[4].y + pts[8].y) / 2 };
-        ctx.setLineDash([5, 4]);
-        ctx.strokeStyle = line;
-        ctx.lineWidth = 2.2;
+        // ---- 포인터(항상 표시, 작게) : 비커를 잡는 위치만 가볍게 알려 준다 ----
+        var pr = pinch ? 9 : 7.5;
         ctx.beginPath();
-        ctx.moveTo(pts[4].x, pts[4].y);
-        ctx.lineTo(pts[8].x, pts[8].y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        var r = pinch ? 15 : 19;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fillStyle = pinch ? 'rgba(16,185,129,.30)' : 'rgba(255,255,255,.22)';
+        ctx.arc(p.x, p.y, pr, 0, Math.PI * 2);
+        ctx.fillStyle = pinch ? 'rgba(16,185,129,.78)' : 'rgba(255,255,255,.66)';
         ctx.fill();
-        ctx.strokeStyle = pinch ? '#059669' : 'rgba(2,132,199,.92)';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = pinch ? '#059669' : 'rgba(2,132,199,.78)';
+        ctx.lineWidth = pinch ? 2.6 : 2;
         ctx.stroke();
         if (pinch) {
             ctx.beginPath();
-            ctx.arc(p.x, p.y, r + 7, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, pr + 6, 0, Math.PI * 2);
             ctx.strokeStyle = 'rgba(52,211,153,.55)';
             ctx.lineWidth = 2;
             ctx.stroke();
         }
 
-        // 포인터 옆 상태표시
-        var label = pinch ? '🤏 집기' : '🖐️ 열림';
-        ctx.font = '900 10.5px ' + FONT;
-        var lw = ctx.measureText(label).width + 14;
-        var lx = Math.min(W - lw - 6, p.x + r + 8);
-        var ly = Math.max(6, p.y - r - 24);
-        roundRectPath(lx, ly, lw, 19, 9.5);
-        ctx.fillStyle = pinch ? 'rgba(5,150,105,.92)' : 'rgba(15,23,42,.72)';
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, lx + 7, ly + 10);
+        if (showSkeleton) {
+            // 포인터 옆 상태표시 (뼈대를 켰을 때만)
+            var label = pinch ? '🤏 집기' : '🖐️ 열림';
+            ctx.font = '900 10.5px ' + FONT;
+            var lw = ctx.measureText(label).width + 14;
+            var lx = Math.min(W - lw - 6, p.x + pr + 8);
+            var ly = Math.max(6, p.y - pr - 24);
+            roundRectPath(lx, ly, lw, 19, 9.5);
+            ctx.fillStyle = pinch ? 'rgba(5,150,105,.92)' : 'rgba(15,23,42,.72)';
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, lx + 7, ly + 10);
+        }
         ctx.restore();
         ctx.textBaseline = 'alphabetic';
     }
@@ -1192,6 +1205,129 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         return '웹캠을 켜지 못했어요(' + (n || '알 수 없는 오류') + ')';
     }
 
+    /* ---------- 전면/후면 카메라 ---------- */
+    function isMirror() { return camFacing === 'user'; }     // 전면만 거울 모드
+    function facingLabel(f) { return f === 'environment' ? '후면' : '전면'; }
+
+    function syncFacingBtn() {
+        var b = $('#btnFacing');
+        if (!b) return;
+        var rear = camFacing === 'environment';
+        b.textContent = rear ? '📷 후면' : '📷 전면';
+        b.classList.toggle('on', rear);
+        b.setAttribute('aria-pressed', rear ? 'true' : 'false');
+        b.setAttribute('aria-label', '카메라 방향: ' + facingLabel(camFacing) + ' · 누르면 ' + (rear ? '전면' : '후면') + '으로 전환');
+        b.title = (rear ? '전면' : '후면') + ' 카메라로 전환';
+    }
+
+    function camCount() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return Promise.resolve(0);
+        return navigator.mediaDevices.enumerateDevices().then(function (list) {
+            return list.filter(function (d) { return d.kind === 'videoinput'; }).length;
+        }).catch(function () { return 0; });
+    }
+
+    /* 이 스트림이 실제로 어느 방향 카메라인지 (모르면 '') */
+    function detectFacing(stream) {
+        try {
+            var t = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+            var st = (t && t.getSettings) ? t.getSettings() : {};
+            if (st.facingMode === 'user' || st.facingMode === 'environment') return st.facingMode;
+            var lbl = ((t && t.label) || '').toLowerCase();
+            if (/back|rear|environment|후면/.test(lbl)) return 'environment';
+            if (/front|user|face|전면/.test(lbl)) return 'user';
+        } catch (e) { }
+        return '';
+    }
+
+    function openStream(facing) {
+        var plain = { width: { ideal: 640 }, height: { ideal: 480 } };
+        var want = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: { ideal: facing } };
+        return navigator.mediaDevices.getUserMedia({ video: want, audio: false })
+            .catch(function (err) {
+                // 후면 캠이 없는 노트북·데스크톱: 방향 조건을 빼고 다시 시도
+                if (err && (err.name === 'OverconstrainedError' || err.name === 'NotFoundError' || err.name === 'TypeError')) {
+                    return navigator.mediaDevices.getUserMedia({ video: plain, audio: false });
+                }
+                throw err;
+            });
+    }
+
+    function attachStream(stream) {
+        camStream = stream;
+        vid.srcObject = stream;
+        return vid.play().catch(function () { });
+    }
+
+    function detachStream() {
+        if (camStream) {
+            camStream.getTracks().forEach(function (t) { t.stop(); });
+            camStream = null;
+        }
+        try { vid.srcObject = null; } catch (e) { }
+    }
+
+    async function switchFacing(next) {
+        if (facingBusy || next === camFacing) return;
+
+        if (!camOn) {                       // 켜기 전에는 다음 시작에 쓸 방향만 정해 둔다
+            camFacing = next;
+            syncFacingBtn();
+            toast(facingLabel(next) + ' 카메라로 설정했어요 · 웹캠을 켜면 적용됩니다');
+            return;
+        }
+
+        facingBusy = true;
+        var prev = camFacing;
+        var b = $('#btnFacing');
+        if (b) b.disabled = true;
+        setStatus(facingLabel(next) + ' 카메라로 전환하는 중…');
+        setBadge('카메라 전환 중…', 'live');
+        hand.present = false; hand.points = null; hand.pinching = false; hand.ratio = 1;
+        if (beaker.held && beaker.byHand) releaseBeaker();
+        syncHandPanel();
+
+        var count = await camCount();
+        var stream = null;
+        detachStream();                     // 기존 트랙을 먼저 stop()
+        try {
+            stream = await openStream(next);
+        } catch (e) {
+            try { stream = await openStream(prev); } catch (e2) { stream = null; }   // 이전 카메라로 복구
+            if (stream) await attachStream(stream);
+            else { facingBusy = false; if (b) b.disabled = false; stopCam(); }
+            if (b) b.disabled = false;
+            facingBusy = false;
+            setStatus('카메라를 ' + facingLabel(next) + '(으)로 전환하지 못했어요 · ' + explainCamError(e), 'err');
+            toast('카메라 전환 실패 · ' + explainCamError(e));
+            syncFacingBtn();
+            return;
+        }
+
+        var actual = detectFacing(stream);
+        if (!actual) actual = count >= 2 ? next : prev;    // 판별 불가: 카메라가 2개 이상이면 전환 성공으로 본다
+        var switched = actual === next;
+
+        camFacing = actual;
+        await attachStream(stream);
+        if (b) b.disabled = false;
+        facingBusy = false;
+        syncFacingBtn();
+
+        if (switched) {
+            setStatus(camFacing === 'environment'
+                ? '후면 카메라 · 영상은 실제 방향 그대로 나와요'
+                : '전면 카메라 · 영상은 거울처럼 좌우 반전돼요', 'live');
+            toast(camFacing === 'environment'
+                ? '📷 후면 카메라로 전환했어요 · 손이 실제 방향대로 움직여요'
+                : '📷 전면 카메라로 전환했어요 · 거울 모드(좌우 반전)로 보여요');
+        } else {
+            setStatus('이 기기에는 ' + facingLabel(next) + ' 카메라가 없어 ' + facingLabel(camFacing) + ' 카메라로 계속해요', 'live');
+            toast('이 기기에는 ' + facingLabel(next) + ' 카메라가 없어요 · ' + facingLabel(camFacing) + ' 카메라로 계속해요');
+        }
+        syncHandPanel();
+    }
+
     function startCam() {
         if (camOn) return;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1200,11 +1336,15 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         }
         setStatus('웹캠 권한을 허용해 주세요');
         setBadge('연결 중…', 'live');
-        navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false })
+        openStream(camFacing)
             .then(function (stream) {
-                camStream = stream;
-                vid.srcObject = stream;
-                return vid.play().catch(function () { });
+                var actual = detectFacing(stream);
+                if (actual && actual !== camFacing && camFacing === 'environment') {
+                    camFacing = actual;                 // 후면 캠이 없어 전면으로 열린 경우
+                    syncFacingBtn();
+                    toast('이 기기에는 후면 카메라가 없어 전면 카메라로 시작해요');
+                }
+                return attachStream(stream);
             })
             .then(function () {
                 camOn = true; camReady = true;
@@ -1233,11 +1373,7 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         camOn = false; camReady = false;
         hand.present = false; hand.points = null; hand.pinching = false; hand.ratio = 1;
         if (beaker.held && beaker.byHand) releaseBeaker();
-        if (camStream) {
-            camStream.getTracks().forEach(function (t) { t.stop(); });
-            camStream = null;
-        }
-        try { vid.srcObject = null; } catch (e) { }
+        detachStream();
         var b = $('#btnCam');
         if (b) { b.classList.remove('on'); b.textContent = '🎥 웹캠 손 추적 켜기'; }
         if (!camOn) setBadge('카메라 OFF', '');
@@ -1255,7 +1391,9 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
 
     function toStage(lm) {
         var t = camTransform();
-        return { x: t.dx + (1 - lm.x) * t.dw, y: t.dy + lm.y * t.dh };
+        // 전면(거울 모드)은 X를 뒤집고, 후면은 카메라가 보는 방향 그대로 쓴다
+        var nx = isMirror() ? (1 - lm.x) : lm.x;
+        return { x: t.dx + nx * t.dw, y: t.dy + lm.y * t.dh };
     }
 
     function lmDist(a, b, ar) {
@@ -1529,6 +1667,15 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
     });
 
     $('#btnCam').addEventListener('click', function () { if (camOn) stopCam(); else startCam(); });
+    $('#btnFacing').addEventListener('click', function () {
+        switchFacing(camFacing === 'user' ? 'environment' : 'user');
+    });
+    $('#btnSkeleton').addEventListener('click', function () {
+        showSkeleton = !showSkeleton;
+        this.classList.toggle('on', showSkeleton);
+        this.setAttribute('aria-pressed', showSkeleton ? 'true' : 'false');
+        toast(showSkeleton ? '🦴 손 뼈대 표시 켜짐' : '손 뼈대 표시 꺼짐 · 작은 포인터만 보여요');
+    });
     $('#btnDrop').addEventListener('click', function () { manualBlock = true; releaseBeaker(); });
     $('#btnReset').addEventListener('click', function () {
         pour.vBase = 0; pour.pH = phOf(0); pour.drops = []; pour.acc = 0; pour.passed = false; pour.spill = 0;
@@ -1626,6 +1773,8 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
         get state() {
             return {
                 camOn: camOn, modelState: modelState, handPresent: hand.present,
+                facing: camFacing, mirrored: isMirror(), facingBusy: facingBusy, skeleton: showSkeleton,
+                facingLabel: ($('#btnFacing') || {}).textContent || '',
                 landmarkCount: hand.points ? hand.points.length : 0,
                 pinchRatio: Math.round(hand.ratio * 1000) / 1000, pinching: hand.pinching, metrics: hand.metrics,
                 held: beaker.held, byHand: beaker.byHand, tilt: Math.round(beaker.tilt),
@@ -1644,6 +1793,7 @@ body.pseudo-fullscreen #feedback-btn,body.pseudo-fullscreen .svl-fb-btn{display:
 
     /* ---------- 시작 ---------- */
     pour.pH = phOf(0);
+    syncFacingBtn();
     resize();
     window.addEventListener('resize', resize);
     if (window.ResizeObserver) { new ResizeObserver(resize).observe(cv.parentElement); }

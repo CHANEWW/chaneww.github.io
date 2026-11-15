@@ -414,6 +414,7 @@
         <button class="side-btn active" id="tglTwo" type="button"><span class="btn-icon">🙌</span><span class="btn-text">양손 추적</span></button>
         <button class="side-btn active" id="tglPip" type="button"><span class="btn-icon">📺</span><span class="btn-text">미리보기</span></button>
         <button class="side-btn active" id="tglSkeleton" type="button"><span class="btn-icon">🦴</span><span class="btn-text">관절 표시</span></button>
+        <button class="side-btn" id="btnFacing" type="button" title="후면 카메라로 전환"><span class="btn-icon">📷</span><span class="btn-text" id="facingText">전면 카메라</span></button>
     </div>
 
     <div class="block">
@@ -539,6 +540,7 @@
     /* 상태 */
     var state = {
         mirror: true,
+        facing: 'user',        // 'user' 전면(거울) | 'environment' 후면(실제 방향)
         twoHands: true,
         pip: true,
         skeleton: true,
@@ -1349,7 +1351,7 @@
             }
         });
 
-        pipTag.textContent = state.cameraOn ? 'LIVE' : 'DEMO';
+        pipTag.textContent = state.cameraOn ? 'LIVE · ' + facingLabel(state.facing) : 'DEMO';
     }
 
     /* =========================================================
@@ -1430,6 +1432,133 @@
         return landmarkLoading;
     }
 
+    /* ---------- 전면/후면 카메라 전환 ---------- */
+    var facingBusy = false;
+
+    function facingLabel(f) { return f === 'environment' ? '후면' : '전면'; }
+
+    function camCount() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return Promise.resolve(0);
+        return navigator.mediaDevices.enumerateDevices().then(function (list) {
+            return list.filter(function (d) { return d.kind === 'videoinput'; }).length;
+        }).catch(function () { return 0; });
+    }
+
+    /* 이 스트림이 실제로 어느 방향 카메라인지 (모르면 '') */
+    function detectFacing(s) {
+        try {
+            var t = s && s.getVideoTracks ? s.getVideoTracks()[0] : null;
+            var st = (t && t.getSettings) ? t.getSettings() : {};
+            if (st.facingMode === 'user' || st.facingMode === 'environment') return st.facingMode;
+            var lbl = ((t && t.label) || '').toLowerCase();
+            if (/back|rear|environment|후면/.test(lbl)) return 'environment';
+            if (/front|user|face|전면/.test(lbl)) return 'user';
+        } catch (e) { }
+        return '';
+    }
+
+    function openStream(facing) {
+        var plain = { width: { ideal: 640 }, height: { ideal: 480 } };
+        var want = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: { ideal: facing } };
+        return navigator.mediaDevices.getUserMedia({ video: want, audio: false })
+            .catch(function (err) {
+                /* 후면 캠이 없는 노트북·데스크톱: 방향 조건을 빼고 다시 시도 */
+                if (err && (err.name === 'OverconstrainedError' || err.name === 'NotFoundError' || err.name === 'TypeError')) {
+                    return navigator.mediaDevices.getUserMedia({ video: plain, audio: false });
+                }
+                throw err;
+            });
+    }
+
+    function setMirror(on) {
+        state.mirror = !!on;
+        var t = $('#tglMirror');
+        if (t) t.classList.toggle('active', state.mirror);
+        video.classList.toggle('mirror', state.mirror);
+    }
+
+    function syncFacingBtn() {
+        var rear = state.facing === 'environment';
+        var txt = $('#facingText');
+        if (txt) txt.textContent = rear ? '후면 카메라' : '전면 카메라';
+        var b = $('#btnFacing');
+        if (b) {
+            b.title = (rear ? '전면' : '후면') + ' 카메라로 전환';
+            b.setAttribute('aria-label', '카메라 방향: ' + facingLabel(state.facing) + ' · 누르면 ' + (rear ? '전면' : '후면') + '으로 전환');
+        }
+    }
+
+    async function switchFacing(next) {
+        if (facingBusy || next === state.facing) return;
+
+        /* 카메라를 켜기 전에는 다음 시작에 쓸 방향만 정해 둔다 */
+        if (!state.cameraOn) {
+            state.facing = next;
+            setMirror(next !== 'environment');
+            syncFacingBtn();
+            toast(facingLabel(next) + ' 카메라로 설정했어요 · 카메라를 켜면 적용됩니다');
+            return;
+        }
+
+        facingBusy = true;
+        var prev = state.facing;
+        var btn = $('#btnFacing');
+        if (btn) btn.disabled = true;
+        setCamStatus(facingLabel(next) + ' 카메라로 전환하는 중…', false);
+
+        var count = await camCount();
+        var nextStream = null;
+
+        /* 기존 트랙을 먼저 stop()하고 새 스트림을 연다 */
+        if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+        try { video.srcObject = null; } catch (e) { }
+
+        try {
+            nextStream = await openStream(next);
+        } catch (err) {
+            /* 전환 실패: 쓰던 카메라로 복구 */
+            try { nextStream = await openStream(prev); } catch (e2) { nextStream = null; }
+            if (nextStream) {
+                stream = nextStream;
+                video.srcObject = stream;
+                try { await video.play(); } catch (e3) { }
+            }
+            state.facing = prev;
+            setMirror(prev !== 'environment');
+            syncFacingBtn();
+            facingBusy = false;
+            if (btn) btn.disabled = false;
+            setCamStatus('카메라를 ' + facingLabel(next) + '(으)로 전환하지 못했어요 · ' + explainCameraError(err), true);
+            toast('카메라 전환 실패 · ' + explainCameraError(err));
+            return;
+        }
+
+        var actual = detectFacing(nextStream);
+        if (!actual) actual = count >= 2 ? next : prev;   /* 판별 불가: 카메라가 2개 이상이면 전환 성공으로 본다 */
+
+        stream = nextStream;
+        video.srcObject = stream;
+        try { await video.play(); } catch (e) { }
+
+        state.facing = actual;
+        setMirror(actual !== 'environment');   /* 전환 시 기본 반전 자동 맞춤 · 이후 수동 토글 유지 */
+        syncFacingBtn();
+        facingBusy = false;
+        if (btn) btn.disabled = false;
+
+        if (actual === next) {
+            setCamStatus(actual === 'environment'
+                ? '후면 카메라 실행 중 · 영상을 실제 방향 그대로 · 손을 보여 주세요'
+                : '전면 카메라 실행 중 · 거울 모드(좌우 반전) · 손을 보여 주세요', false);
+            toast(actual === 'environment'
+                ? '📷 후면 카메라로 전환했어요 · 3D 손도 실제 방향대로 바뀌어요'
+                : '📷 전면 카메라로 전환했어요 · 거울 모드(좌우 반전)로 맞췄어요');
+        } else {
+            setCamStatus('이 기기에는 ' + facingLabel(next) + ' 카메라가 없어 ' + facingLabel(actual) + ' 카메라로 계속합니다', true);
+            toast('이 기기에는 ' + facingLabel(next) + ' 카메라가 없어요 · ' + facingLabel(actual) + ' 카메라로 계속해요');
+        }
+    }
+
     async function startCamera() {
         if (state.cameraOn) return;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -1440,13 +1569,17 @@
         $('#camLabel').textContent = '연결 중…';
 
         try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-                audio: false
-            });
+            stream = await openStream(state.facing);
         } catch (err) {
             cameraFailed(explainCameraError(err));
             return;
+        }
+
+        var actual = detectFacing(stream);
+        if (actual && actual !== state.facing) {
+            state.facing = actual;          /* 후면 캠이 없어 전면으로 열린 경우 */
+            setMirror(actual !== 'environment');
+            syncFacingBtn();
         }
 
         video.srcObject = stream;
@@ -1540,10 +1673,12 @@
     });
 
     $('#tglMirror').addEventListener('click', function () {
-        state.mirror = !state.mirror;
-        this.classList.toggle('active', state.mirror);
-        video.classList.toggle('mirror', state.mirror);
+        setMirror(!state.mirror);
         toast(state.mirror ? '좌우 반전(거울 모드) 켜짐' : '좌우 반전 꺼짐 · 카메라 방향 그대로');
+    });
+
+    $('#btnFacing').addEventListener('click', function () {
+        switchFacing(state.facing === 'user' ? 'environment' : 'user');
     });
 
     $('#tglTwo').addEventListener('click', function () {
@@ -1589,10 +1724,9 @@
     });
 
     $('#btnReset').addEventListener('click', function () {
-        state.mirror = true; state.twoHands = true; state.pip = true;
+        state.twoHands = true; state.pip = true;
         state.skeleton = true; state.smoothing = 65; state.style = 'cyber';
-        video.classList.add('mirror');
-        $('#tglMirror').classList.add('active');
+        setMirror(state.facing !== 'environment');
         $('#tglTwo').classList.add('active');
         $('#tglPip').classList.add('active');
         $('#tglSkeleton').classList.add('active');
@@ -1757,7 +1891,26 @@
     }, 9000);
 
     syncDemoChips();
-    video.classList.add('mirror');
+    syncFacingBtn();
+    setMirror(state.mirror);
+
+    /* 실측·점검용 상태 노출(화면에는 보이지 않음) */
+    window.__handMirror = {
+        get state() {
+            return {
+                cameraOn: state.cameraOn, facing: state.facing, mirror: state.mirror,
+                facingBusy: facingBusy, modelState: state.modelState,
+                facingText: ($('#facingText') || {}).textContent || '',
+                pipTag: ($('#pipTag') || {}).textContent || '',
+                twoHands: state.twoHands, pip: state.pip, skeleton: state.skeleton,
+                video: { w: video.videoWidth, h: video.videoHeight },
+                handA: slots.A.active, handB: slots.B.active,
+                gestureA: slots.A.gesture ? slots.A.gesture.key : null,
+                nameA: slots.A.gesture ? slots.A.gesture.name : null,
+                camStatus: ($('#camStatus') || {}).textContent || ''
+            };
+        }
+    };
     renderHUD();
     requestAnimationFrame(loop);
 
