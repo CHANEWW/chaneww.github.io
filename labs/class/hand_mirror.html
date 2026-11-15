@@ -549,10 +549,10 @@
         /* 기본: 부드러운 애니메이션·피규어풍 손 (살구빛 피부, 매끈한 면, 은은한 림라이트) */
         anime: {
             light: {
-                bone: 0xf2b98d, boneEmissive: 0x4a1f0d, boneIntensity: 0.08, boneOpacity: 1,
-                joint: 0xeaae80, jointEmissive: 0x4a1f0d, jointIntensity: 0.06, jointOpacity: 1,
-                tip: 0xf7c9a2,
-                palm: 0xf0b48a, palmEmissive: 0x4a1f0d, palmIntensity: 0.05, palmOpacity: 1, palmDepth: true,
+                bone: 0xe4a87c, boneEmissive: 0x4a1f0d, boneIntensity: 0.06, boneOpacity: 1,
+                joint: 0xdb9d70, jointEmissive: 0x4a1f0d, jointIntensity: 0.05, jointOpacity: 1,
+                tip: 0xefb98f,
+                palm: 0xe2a57a, palmEmissive: 0x4a1f0d, palmIntensity: 0.04, palmOpacity: 1, palmDepth: true,
                 nail: 0xffe2ca,
                 metalness: 0.04, roughness: 0.62,
                 line: 0xcf9b7a, lineOpacity: 0.30, wire: false, nails: true,
@@ -561,15 +561,15 @@
                 gridOpacity: 0.16, ring: 0xe8b98d, ringOpacity: 0.20
             },
             dark: {
-                bone: 0xd99a6d, boneEmissive: 0x2a1108, boneIntensity: 0.18, boneOpacity: 1,
-                joint: 0xd0905f, jointEmissive: 0x2a1108, jointIntensity: 0.15, jointOpacity: 1,
-                tip: 0xe0a679,
-                palm: 0xd69466, palmEmissive: 0x2a1108, palmIntensity: 0.14, palmOpacity: 1, palmDepth: true,
-                nail: 0xf2cdb2,
+                bone: 0x9c6444, boneEmissive: 0x2a1108, boneIntensity: 0.08, boneOpacity: 1,
+                joint: 0x915c3c, jointEmissive: 0x2a1108, jointIntensity: 0.06, jointOpacity: 1,
+                tip: 0xa86c48,
+                palm: 0x955f42, palmEmissive: 0x2a1108, palmIntensity: 0.06, palmOpacity: 1, palmDepth: true,
+                nail: 0xd9b394,
                 metalness: 0.04, roughness: 0.58,
                 line: 0xffcf9f, lineOpacity: 0.28, wire: false, nails: true,
-                rim: 0x9fd0ff, rimIntensity: 1.00,
-                hemiI: 0.40, dir1I: 0.44, dir2I: 0.16,
+                rim: 0xffc79a, rimIntensity: 0.50,
+                hemiI: 0.34, dir1I: 0.36, dir2I: 0.12,
                 gridOpacity: 0.14, ring: 0xf0c69a, ringOpacity: 0.26
             }
         },
@@ -649,7 +649,7 @@
 
     /* 스타일별 손 모델 비례 (굵기 · 두께) */
     var STYLE_GEO = {
-        anime:    { boneR: 0.060, wristR: 0.085, jointR: 0.060, tipJointR: 0.060, tipR: 0.057, palmT: 0.105 },
+        anime:    { boneR: 0.060, wristR: 0.070, jointR: 0.060, tipJointR: 0.060, tipR: 0.057, palmT: 0.105 },
         cyber:    { boneR: 0.030, wristR: 0.046, jointR: 0.032, tipJointR: 0.038, tipR: 0.037, palmT: 0.024 },
         skeleton: { boneR: 0.033, wristR: 0.049, jointR: 0.034, tipJointR: 0.040, tipR: 0.040, palmT: 0.050 },
         neon:     { boneR: 0.030, wristR: 0.046, jointR: 0.032, tipJointR: 0.038, tipR: 0.037, palmT: 0.024 }
@@ -951,10 +951,18 @@
         return geo;
     }
 
-    function updateFingerTube(tube, pts, chain, baseR) {
+    function updateFingerTube(tube, pts, chain, baseR, rootExt) {
         var arr = tube.geometry.attributes.position.array;
         for (var i = 0; i < 4; i++) {
             var p = pts[chain[i]];
+            /* 엄지는 뿌리를 손바닥 안쪽으로 밀어 넣어 판과 이어져 보이게 한다 */
+            if (i === 0 && rootExt) {
+                _t1.subVectors(pts[chain[1]], pts[chain[0]]);
+                if (_t1.lengthSq() > 1e-10) {
+                    _pc4.copy(p).addScaledVector(_t1.normalize(), -rootExt);
+                    p = _pc4;
+                }
+            }
             if (i === 0) _t1.subVectors(pts[chain[1]], pts[chain[0]]);
             else if (i === 3) _t1.subVectors(pts[chain[3]], pts[chain[2]]);
             else _t1.subVectors(pts[chain[i + 1]], pts[chain[i - 1]]);
@@ -1025,16 +1033,20 @@
         _pby.crossVectors(_pnrm, _pax).normalize();   /* v: 손바닥 폭 방향 */
 
         _pc1.subVectors(pts[5], pts[17]);
-        var halfW = Math.abs(_pc1.dot(_pby)) * 0.5 * 1.04;
+        var halfW = Math.abs(_pc1.dot(_pby)) * 0.5 * 1.12;
         if (halfW < L * 0.34) halfW = L * 0.34;
-        if (halfW > L * 0.62) halfW = L * 0.62;
+        if (halfW > L * 0.66) halfW = L * 0.66;
         var len = L * 1.04;
+
+        /* 손바닥 폭의 중심은 검지뿌리~소지뿌리 중간 (엄지 쪽으로 치우치지 않게) */
+        _pc1.subVectors(pts[5], pts[0]).add(_pc3.subVectors(pts[17], pts[0])).multiplyScalar(0.5);
+        var lateral = _pc1.dot(_pby);
 
         for (i = 0; i < PALM_EDGE; i++) {
             var sp = PALM_SHAPE[i];
             ring[i].copy(pts[0])
                 .addScaledVector(_pax, sp[0] * len)
-                .addScaledVector(_pby, sp[1] * halfW);
+                .addScaledVector(_pby, sp[1] * halfW + lateral);
         }
 
         /* 기준점을 지나는 부드러운 닫힘 곡선으로 둥근 손바닥 실루엣 */
@@ -1122,7 +1134,9 @@
         /* 매끈한 손가락 튜브 */
         for (i = 0; i < FINGER_KEYS.length; i++) {
             var fk = FINGER_KEYS[i];
-            updateFingerTube(h.tubes[i], pts, FINGER_CHAINS[fk], g.boneR * (FINGER_GIRTH[fk] || 1));
+            updateFingerTube(h.tubes[i], pts, FINGER_CHAINS[fk],
+                g.boneR * (FINGER_GIRTH[fk] || 1),
+                fk === 'thumb' ? g.boneR * 2.4 : 0);
         }
 
         /* 관절 */
