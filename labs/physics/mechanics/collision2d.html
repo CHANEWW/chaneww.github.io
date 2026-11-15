@@ -800,6 +800,19 @@
         return tex;
     }
 
+    var dotTex = (function () {
+        var c = document.createElement('canvas');
+        c.width = 64; c.height = 64;
+        var g = c.getContext('2d');
+        var grd = g.createRadialGradient(32, 32, 0, 32, 32, 30);
+        grd.addColorStop(0, 'rgba(255,255,255,1)');
+        grd.addColorStop(0.55, 'rgba(255,255,255,0.85)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grd;
+        g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
+        return new THREE.CanvasTexture(c);
+    })();
+
     var contactTex = (function () {
         var c = document.createElement('canvas');
         c.width = 128; c.height = 128;
@@ -895,11 +908,19 @@
         geo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
         geo.setDrawRange(0, 0);
         var line = new THREE.Line(geo, new THREE.LineBasicMaterial({
-            color: new THREE.Color(b.color).getHex(), transparent: true, opacity: 0.6
+            color: new THREE.Color(b.color).getHex(), transparent: true, opacity: 0.35
         }));
         line.frustumCulled = false;
         scene.add(line);
         b.trailLine = line;
+
+        var dots = new THREE.Points(geo, new THREE.PointsMaterial({
+            color: new THREE.Color(b.color).getHex(), size: 0.028, map: dotTex,
+            transparent: true, opacity: 0.8, depthWrite: false, alphaTest: 0.02
+        }));
+        dots.frustumCulled = false;
+        scene.add(dots);
+        b.trailDots = dots;
 
         return b;
     }
@@ -924,6 +945,8 @@
         scene.remove(b.trailLine);
         b.trailLine.geometry.dispose();
         b.trailLine.material.dispose();
+        scene.remove(b.trailDots);
+        b.trailDots.material.dispose();
     }
 
     function clearBalls() {
@@ -1128,7 +1151,7 @@
             b.ring.scale.setScalar(b.r + 0.018);
             b.ring.visible = (b === sel);
             b.trailLine.visible = state.showTrail;
-            b.trailLine.material.opacity = 0.6;
+            b.trailDots.visible = state.showTrail;
 
             var sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
             if (state.showArrow && sp > 0.06 && state.t > 0) {
@@ -1495,6 +1518,7 @@
             b.color = COLORS[i % COLORS.length];
             b.mesh.material.color.set(b.color);
             b.trailLine.material.color.set(b.color);
+            b.trailDots.material.color.set(b.color);
             b.arrow.setColor(new THREE.Color(b.color));
             if (b.decal.material.map) b.decal.material.map.dispose();
             b.decal.material.map = makeDecalTexture(b);
@@ -1932,11 +1956,11 @@
         themeBtn.setAttribute('title', dark ? '주간 모드로 전환' : '야간 모드로 전환');
         document.body.style.backgroundColor = dark ? '#050a14' : '#eef3f9';
         scene.background.setHex(dark ? 0x050a14 : 0xeef3f9);
-        feltMat.color.setHex(dark ? 0x0b6b4c : 0x118a60);
-        cushionMat.color.setHex(dark ? 0x0a5740 : 0x0d7a55);
+        feltMat.color.setHex(dark ? 0x0b6b4c : 0x0b6346);
+        cushionMat.color.setHex(dark ? 0x0a5740 : 0x095138);
         railMat.color.setHex(dark ? 0x5a3418 : 0x8a5a33);
-        hemi.intensity = dark ? 0.62 : 0.9;
-        keyLight.intensity = dark ? 0.85 : 0.8;
+        hemi.intensity = dark ? 0.62 : 0.72;
+        keyLight.intensity = dark ? 0.85 : 0.62;
         vignette.material.opacity = dark ? 0.55 : 0.3;
         if (save) { try { localStorage.setItem('svlLabTheme', dark ? 'dark' : 'light'); } catch (e) {} }
     }
