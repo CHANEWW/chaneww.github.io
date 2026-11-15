@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>손 미러링·묵찌빠 제스처 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../common/lib/three.min.js"></script>
+<script src="../common/lib/OrbitControls.js"></script>
+<link rel="stylesheet" href="../common/qr-modal.css">
+<link rel="stylesheet" href="../common/ui-layout.css">
+<style>
+    @font-face {
+        font-family: 'SeoulNamsan';
+        src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+             url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+        font-weight: 400; font-style: normal; font-display: swap;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+        width: 100%; height: 100%; overflow: hidden;
+        font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+        color: #1c1c1e; touch-action: none;
+        background: radial-gradient(circle at 50% 26%, #ffffff 0%, #eef4fb 52%, #dbe6f3 100%);
+        transition: background .45s ease, color .3s ease;
+    }
+    body.dark {
+        color: #f2f2f7;
+        background: radial-gradient(circle at 50% 26%, #2b3743 0%, #18202a 55%, #0d131a 100%);
+    }
+    #canvas-container { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+    #canvas-container canvas { display: block; touch-action: none; }
+
+    /* ---------- 유리 카드 (visionOS) ---------- */
+    .glass {
+        background: rgba(255,255,255,.76);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(255,255,255,.6);
+        border-radius: 18px;
+        box-shadow: 0 8px 28px rgba(15,23,42,.10);
+    }
+    body.dark .glass {
+        background: rgba(38,44,54,.80);
+        border-color: rgba(255,255,255,.12);
+        box-shadow: 0 8px 28px rgba(0,0,0,.45);
+    }
+
+    /* ---------- 좌측 상단 헤더 ---------- */
+    .top-left-bar {
+        position: fixed; top: max(12px, env(safe-area-inset-top)); left: 16px;
+        display: flex; align-items: center; gap: 8px; z-index: 60;
+    }
+    .back-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 8px 14px; font-family: inherit; font-size: 13px; font-weight: 700;
+        color: inherit; text-decoration: none; cursor: pointer; border: none;
+        white-space: nowrap; transition: transform .18s ease, background .18s ease;
+    }
+    .back-btn:hover { transform: translateY(-1px); }
+    .tag-badge { display: flex; align-items: center; gap: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .tag-pill {
+        background: rgba(0,122,255,.14); color: #007aff;
+        padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: .2px;
+    }
+    body.dark .tag-pill { background: rgba(90,170,255,.22); color: #8bc4ff; }
+    .qr-btn { padding: 8px 12px; }
+
+    /* ---------- 우측 상단 유틸 ---------- */
+    .top-right-bar {
+        position: fixed; top: max(12px, env(safe-area-inset-top)); right: 16px;
+        display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 55;
+        max-width: calc(100vw - 32px);
+    }
+    .tr-util { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+        width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; border: none; background: transparent; font-size: 16px;
+        font-family: inherit; color: inherit; cursor: pointer; transition: transform .18s ease;
+    }
+    .icon-btn:hover { transform: translateY(-1px); }
+
+    /* ---------- 중앙 안내 툴팁 ---------- */
+    .center-tooltip {
+        position: fixed; left: 50%; transform: translateX(-50%);
+        padding: 7px 16px; border-radius: 999px; font-size: 12px; font-weight: 700;
+        color: #64748b; pointer-events: none; z-index: 30; white-space: nowrap;
+        transition: opacity .4s ease;
+    }
+    body.dark .center-tooltip { color: #b6c2d0; }
+    #guide-tooltip { top: auto !important; bottom: 92px !important; height: auto !important; }
+
+    /* ---------- 좌측 제스처 HUD ---------- */
+    .gesture-hud {
+        position: fixed; left: 16px; top: 74px; width: 214px;
+        padding: 11px 12px 12px; z-index: 50;
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .hud-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 6px;
+        font-size: 11px; font-weight: 800; color: #64748b;
+        padding-bottom: 5px; border-bottom: 1px solid rgba(0,0,0,.06);
+    }
+    body.dark .hud-head { color: #a9b5c3; border-bottom-color: rgba(255,255,255,.1); }
+    .hud-mode {
+        font-size: 9.5px; font-weight: 800; padding: 2px 7px; border-radius: 999px;
+        background: rgba(52,199,89,.16); color: #1a8b3d; white-space: nowrap;
+    }
+    body.dark .hud-mode { background: rgba(52,199,89,.22); color: #7ee2a1; }
+    .hud-mode.cam { background: rgba(0,122,255,.16); color: #0a72f0; }
+    body.dark .hud-mode.cam { background: rgba(90,170,255,.22); color: #8bc4ff; }
+    .hand-card {
+        display: flex; align-items: center; gap: 9px;
+        padding: 7px 8px; border-radius: 14px;
+        background: rgba(255,255,255,.62);
+        border: 1px solid rgba(0,0,0,.05);
+        transition: background .2s ease, transform .2s ease;
+    }
+    body.dark .hand-card { background: rgba(58,64,74,.55); border-color: rgba(255,255,255,.08); }
+    .hand-card.empty { opacity: .5; }
+    .hand-card.mini { padding: 4px 7px; gap: 6px; }
+    .hc-emoji {
+        flex: 0 0 auto; width: 44px; height: 44px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center; font-size: 26px;
+        background: rgba(10,132,255,.10);
+    }
+    body.dark .hc-emoji { background: rgba(90,170,255,.16); }
+    .hand-card.mini .hc-emoji { width: 30px; height: 30px; font-size: 18px; border-radius: 9px; }
+    .hc-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .hc-text b { font-size: 16px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hand-card.mini .hc-text b { font-size: 12px; }
+    .hc-text span { font-size: 10px; font-weight: 700; color: #8e8e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    body.dark .hc-text span { color: #9aa3ad; }
+    .hand-card.mini .hc-text span { font-size: 9px; }
+    .hc-tag {
+        font-size: 9px; font-weight: 800; color: #007aff; background: rgba(0,122,255,.12);
+        border-radius: 999px; padding: 1px 5px; flex: 0 0 auto;
+    }
+    body.dark .hc-tag { color: #8bc4ff; background: rgba(90,170,255,.18); }
+    .vs-line {
+        display: none; font-size: 11px; font-weight: 800; text-align: center;
+        padding: 6px 8px; border-radius: 12px; color: #7a4b00;
+        background: linear-gradient(180deg, rgba(255,214,102,.55), rgba(255,183,63,.42));
+        border: 1px solid rgba(240,160,0,.28);
+    }
+    body.dark .vs-line { color: #ffe0a3; background: linear-gradient(180deg, rgba(120,86,20,.55), rgba(96,68,14,.45)); border-color: rgba(255,196,84,.25); }
+    .vs-line.show { display: block; }
+
+    .finger-list { display: flex; flex-direction: column; gap: 4px; }
+    .finger-row { display: flex; align-items: center; gap: 6px; }
+    .fl-name { flex: 0 0 26px; font-size: 10px; font-weight: 800; color: #64748b; white-space: nowrap; }
+    body.dark .fl-name { color: #a9b5c3; }
+    .fl-bar { flex: 1 1 auto; height: 7px; border-radius: 999px; background: rgba(0,0,0,.07); overflow: hidden; }
+    body.dark .fl-bar { background: rgba(255,255,255,.12); }
+    .fl-fill {
+        display: block; height: 100%; width: 0%; border-radius: 999px;
+        background: linear-gradient(90deg, #34c759, #ffcc00 55%, #ff3b30);
+        transition: width .12s linear;
+    }
+    .fl-pct { flex: 0 0 30px; text-align: right; font-size: 9.5px; font-weight: 800; color: #8e8e93; font-variant-numeric: tabular-nums; }
+    body.dark .fl-pct { color: #9aa3ad; }
+
+    /* ---------- 웹캠 PiP ---------- */
+    .pip-wrap {
+        position: fixed; left: 16px; bottom: 84px; width: 232px; padding: 6px;
+        z-index: 48; overflow: hidden; transition: opacity .25s ease, transform .25s ease;
+    }
+    .pip-wrap.hide { opacity: 0; transform: translateY(10px); pointer-events: none; }
+    .pip-wrap video {
+        position: absolute; inset: 6px; width: 1px; height: 1px;
+        opacity: 0; pointer-events: none;
+    }
+    .pip-wrap canvas {
+        display: block; width: 100%; height: auto; border-radius: 12px; background: #0b1016;
+    }
+    .pip-tag {
+        position: absolute; right: 12px; top: 12px; font-size: 9px; font-weight: 800;
+        padding: 2px 7px; border-radius: 999px; color: #fff; background: rgba(0,0,0,.45);
+        letter-spacing: .2px;
+    }
+
+    /* ---------- 우측 조절 패널 ---------- */
+    .panel-title {
+        font-size: 12px; font-weight: 800; color: #475569; letter-spacing: -.2px;
+        text-align: center; padding-bottom: 5px; border-bottom: 1px solid rgba(0,0,0,.06);
+    }
+    body.dark .panel-title { color: #c8d3e0; border-bottom-color: rgba(255,255,255,.1); }
+
+    body .side-ctrl-panel .side-btn.primary {
+        flex-direction: row !important; min-height: 42px !important; gap: 7px !important;
+        background: linear-gradient(180deg, #2f9bff, #0a72f0) !important;
+        border: none !important; color: #fff !important;
+        box-shadow: 0 6px 16px rgba(10,114,240,.30) !important;
+    }
+    body .side-ctrl-panel .side-btn.primary:hover { filter: brightness(1.04); }
+    body .side-ctrl-panel .side-btn.primary.active {
+        background: linear-gradient(180deg, #ffb340, #f08a00) !important;
+        box-shadow: 0 6px 16px rgba(240,138,0,.30) !important;
+        color: #fff !important;
+    }
+    body .side-ctrl-panel .side-btn.primary .btn-icon { font-size: 16px !important; }
+    body .side-ctrl-panel .side-btn.primary .btn-text { font-size: 12.5px !important; }
+
+    /* 켜짐 상태 타일 (공통 규격의 파란 활성색을 다크 모드에서도 유지) */
+    body .side-ctrl-panel .side-btn.active {
+        background: #007aff !important; color: #fff !important;
+        border-color: #007aff !important;
+        box-shadow: 0 4px 14px rgba(0,122,255,.30) !important;
+    }
+    body .side-ctrl-panel .side-btn.active .btn-text { color: #fff !important; }
+
+    .block { display: flex; flex-direction: column; gap: 6px; }
+    .block-head {
+        display: flex; align-items: center; justify-content: space-between;
+        font-size: 11px; font-weight: 800; color: #64748b;
+    }
+    body.dark .block-head { color: #a9b5c3; }
+    .block-head .set-val { font-size: 11.5px; font-weight: 800; color: #0a84ff; font-variant-numeric: tabular-nums; }
+
+    .chip-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .chip {
+        padding: 6px 1px; border-radius: 10px; cursor: pointer;
+        border: 1px solid rgba(0,0,0,.08); background: rgba(255,255,255,.9);
+        font-family: inherit; font-size: 10px; font-weight: 800; color: #1c1c1e;
+        white-space: nowrap; transition: all .16s ease; line-height: 1.15;
+        overflow: hidden; text-overflow: ellipsis;
+    }
+    body.dark .chip { background: rgba(58,64,74,.9); border-color: rgba(255,255,255,.12); color: #eef2f7; }
+    .chip:hover { transform: translateY(-1px); }
+    .chip.on { background: #0a84ff; border-color: #0a84ff; color: #fff; box-shadow: 0 3px 10px rgba(10,132,255,.32); }
+
+    input[type="range"] {
+        -webkit-appearance: none; appearance: none; width: 100%; height: 18px;
+        background: transparent; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-runnable-track { height: 5px; border-radius: 999px; background: #dbe3ec; }
+    body.dark input[type="range"]::-webkit-slider-runnable-track { background: #3b4552; }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -5.5px;
+        border-radius: 50%; background: #0a84ff; border: 2px solid #fff;
+        box-shadow: 0 2px 6px rgba(10,132,255,.4);
+    }
+    input[type="range"]::-moz-range-track { height: 5px; border-radius: 999px; background: #dbe3ec; }
+    input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid #fff; border-radius: 50%; background: #0a84ff; }
+
+    .cam-status {
+        font-size: 10px; font-weight: 700; color: #8e8e93; text-align: center;
+        padding: 5px 6px; border-radius: 10px; background: rgba(0,0,0,.04); line-height: 1.3;
+    }
+    body.dark .cam-status { color: #9aa3ad; background: rgba(255,255,255,.06); }
+    .cam-status.warn { color: #b45309; background: rgba(255,196,84,.22); }
+    body.dark .cam-status.warn { color: #ffd28a; background: rgba(255,196,84,.16); }
+
+    /* ---------- 하단 바 / 전체화면 ---------- */
+    .cbtn {
+        display: inline-flex; align-items: center; gap: 5px;
+        border: none; background: transparent; font-family: inherit;
+        font-size: 12.5px; font-weight: 800; color: inherit; cursor: pointer; white-space: nowrap;
+    }
+    .pseudo-fs .top-left-bar, .pseudo-fs .top-right-bar { opacity: 0; pointer-events: none; }
+
+    /* ---------- 토스트 ---------- */
+    #toast {
+        position: fixed; left: 50%; top: auto; bottom: 148px; transform: translate(-50%, 8px);
+        padding: 10px 18px; border-radius: 14px; z-index: 2000;
+        background: rgba(28,28,30,.9); color: #fff; font-size: 12.5px; font-weight: 700;
+        box-shadow: 0 10px 26px rgba(0,0,0,.28); pointer-events: none;
+        opacity: 0; transition: opacity .28s ease, transform .28s ease; max-width: 84vw; text-align: center;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ---------- 반응형 ---------- */
+    @media (max-width: 768px) {
+        .top-left-bar { top: max(8px, env(safe-area-inset-top)); left: 8px; right: 58px; gap: 6px; }
+        .bottom-right-bar { top: max(8px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 8px !important; }
+        .bottom-right-bar button { padding: 6px 9px !important; font-size: 14px !important; }
+        .bottom-right-bar #fullscreenText { display: none !important; }
+        .top-left-bar .back-btn { padding: 6px 10px; font-size: 12px; }
+        .tag-badge { padding: 6px 10px; font-size: 12px; min-width: 0; overflow: hidden; }
+        .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .tag-pill { font-size: 9px; padding: 1px 6px; }
+        .top-right-bar { top: calc(max(8px, env(safe-area-inset-top)) + 40px); right: 8px; }
+        .icon-btn { width: 34px; height: 34px; font-size: 15px; }
+        .center-tooltip { display: none; }
+        .side-ctrl-panel { max-height: 42vh; }
+        .gesture-hud { left: 8px; top: calc(max(8px, env(safe-area-inset-top)) + 44px); width: 170px; padding: 8px 9px 9px; gap: 6px; }
+        .gesture-hud .hc-tag { display: none; }
+        .hud-head { font-size: 10px; }
+        .hud-mode { font-size: 8.5px; padding: 1px 5px; }
+        .hc-emoji { width: 34px; height: 34px; font-size: 20px; border-radius: 10px; }
+        .hc-text b { font-size: 13px; }
+        .hc-text span { font-size: 9px; }
+        .fl-name { flex: 0 0 22px; font-size: 9px; }
+        .fl-pct { flex: 0 0 26px; font-size: 8.5px; }
+        .fl-bar { height: 6px; }
+        .vs-line { font-size: 9.5px; padding: 5px 6px; }
+        .pip-wrap { left: 8px; bottom: calc(58px + env(safe-area-inset-bottom)); width: 146px; padding: 5px; }
+        .chip-row { gap: 3px; }
+        .chip { font-size: 9px; padding: 5px 1px; }
+        #toast { top: auto; bottom: calc(96px + env(safe-area-inset-bottom)); }
+    }
+    @media (max-width: 430px) {
+        .tag-pill { display: none; }
+        .qr-btn-label { display: none; }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+        .top-left-bar { top: max(6px, env(safe-area-inset-top)); left: 6px; gap: 5px; }
+        .top-left-bar .back-btn, .tag-badge { padding: 4px 9px; font-size: 11px; }
+        .tag-pill { display: none; }
+        .bottom-right-bar { top: max(6px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 6px !important; }
+        .bottom-right-bar button { padding: 5px 8px !important; font-size: 13px !important; }
+        .bottom-right-bar #fullscreenText { display: none !important; }
+        .top-right-bar { top: calc(max(6px, env(safe-area-inset-top)) + 34px); right: 6px; gap: 5px; }
+        .center-tooltip { display: none; }
+        .side-ctrl-panel { max-height: calc(100vh - 110px); width: 190px !important; padding: 7px !important; }
+        .gesture-hud { left: 6px; top: calc(max(6px, env(safe-area-inset-top)) + 32px); width: 150px; padding: 6px 8px 7px; gap: 5px; }
+        .pip-wrap { left: 6px; bottom: 48px; width: 130px; }
+        #toast { top: auto; bottom: 52px; font-size: 11.5px; }
+    }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<!-- 좌측 상단 헤더 -->
+<div class="top-left-bar">
+    <a href="/index.html" class="glass back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}">
+        <span>⬅</span> 메인
+    </a>
+    <div class="glass tag-badge">
+        <span>✋ 3D 손 미러링·제스처</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="glass back-btn qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span> <span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+
+<!-- 우측 상단 유틸 -->
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="glass icon-btn" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">🌙</button>
+    </div>
+</div>
+
+<div class="glass center-tooltip" id="guide-tooltip">💡 카메라를 켜고 손을 보여 주세요 · 드래그: 회전 / 휠: 확대</div>
+
+<!-- 좌측 제스처 HUD -->
+<div class="glass gesture-hud" id="hud">
+    <div class="hud-head"><span>👁️ 인식 결과</span><span class="hud-mode" id="hudMode">데모 모션</span></div>
+
+    <div class="hand-card empty" id="cardA">
+        <div class="hc-emoji" id="gEmojiA">👋</div>
+        <div class="hc-text" style="flex:1 1 auto;">
+            <b id="gNameA">손을 보여 주세요</b>
+            <span id="gSubA">카메라 대기 중</span>
+        </div>
+        <span class="hc-tag" id="gTagA">①</span>
+    </div>
+
+    <div class="hand-card mini empty" id="cardB" style="display:none;">
+        <div class="hc-emoji" id="gEmojiB">✋</div>
+        <div class="hc-text" style="flex:1 1 auto;">
+            <b id="gNameB">—</b>
+            <span id="gSubB">—</span>
+        </div>
+        <span class="hc-tag">②</span>
+    </div>
+
+    <div class="vs-line" id="vsLine">묵찌빠</div>
+
+    <div class="finger-list" id="fingerList">
+        <div class="finger-row" data-f="0"><span class="fl-name">엄지</span><span class="fl-bar"><i class="fl-fill"></i></span><span class="fl-pct">0%</span></div>
+        <div class="finger-row" data-f="1"><span class="fl-name">검지</span><span class="fl-bar"><i class="fl-fill"></i></span><span class="fl-pct">0%</span></div>
+        <div class="finger-row" data-f="2"><span class="fl-name">중지</span><span class="fl-bar"><i class="fl-fill"></i></span><span class="fl-pct">0%</span></div>
+        <div class="finger-row" data-f="3"><span class="fl-name">약지</span><span class="fl-bar"><i class="fl-fill"></i></span><span class="fl-pct">0%</span></div>
+        <div class="finger-row" data-f="4"><span class="fl-name">소지</span><span class="fl-bar"><i class="fl-fill"></i></span><span class="fl-pct">0%</span></div>
+    </div>
+</div>
+
+<!-- 웹캠 PiP 미리보기 -->
+<div class="glass pip-wrap" id="pipWrap">
+    <video id="cam" playsinline muted autoplay></video>
+    <canvas id="pipCanvas" width="320" height="240"></canvas>
+    <span class="pip-tag" id="pipTag">웹캠</span>
+</div>
+
+<!-- 우측 조절 패널 -->
+<div class="glass side-ctrl-panel" id="sideCtrl">
+    <div class="panel-title">✋ 손 미러링 조절</div>
+
+    <button class="side-btn primary" id="btnCam" type="button">
+        <span class="btn-icon">📷</span><span class="btn-text" id="camLabel">카메라 시작</span>
+    </button>
+
+    <div class="block">
+        <div class="block-head"><span>데모 모션</span><span class="set-val" id="demoLabel">연속</span></div>
+        <div class="chip-row" id="demoRow">
+            <button class="chip on" type="button" data-demo="continuous">🔁 연속</button>
+            <button class="chip" type="button" data-demo="fist">✊ 묵</button>
+            <button class="chip" type="button" data-demo="scissors">✌️ 찌</button>
+            <button class="chip" type="button" data-demo="paper">🖐️ 빠</button>
+            <button class="chip" type="button" data-demo="wave">👋 흔들기</button>
+        </div>
+    </div>
+
+    <div class="ctrl-grid">
+        <button class="side-btn active" id="tglMirror" type="button"><span class="btn-icon">🪞</span><span class="btn-text">좌우반전</span></button>
+        <button class="side-btn active" id="tglTwo" type="button"><span class="btn-icon">🙌</span><span class="btn-text">양손 추적</span></button>
+        <button class="side-btn active" id="tglPip" type="button"><span class="btn-icon">📺</span><span class="btn-text">미리보기</span></button>
+        <button class="side-btn active" id="tglSkeleton" type="button"><span class="btn-icon">🦴</span><span class="btn-text">관절 표시</span></button>
+    </div>
+
+    <div class="block">
+        <div class="block-head"><span>스무딩 강도</span><span class="set-val" id="smoothVal">65%</span></div>
+        <input type="range" id="rngSmooth" min="0" max="100" step="1" value="65" aria-label="스무딩 강도">
+    </div>
+
+    <div class="block">
+        <div class="block-head"><span>3D 손 스타일</span></div>
+        <div class="chip-row" id="styleRow">
+            <button class="chip on" type="button" data-style="cyber">사이버</button>
+            <button class="chip" type="button" data-style="skeleton">골격</button>
+            <button class="chip" type="button" data-style="neon">네온</button>
+        </div>
+    </div>
+
+    <div class="cam-status" id="camStatus">데모 모션 재생 중 · 카메라를 켜면 실제 손을 따라갑니다</div>
+</div>
+
+<!-- 하단 중앙 바 -->
+<div class="bottom-control-bar" id="bar">
+    <button class="cbtn" id="btnReset" type="button">🔄 초기화</button>
+    <button class="cbtn" id="btnAlign" type="button">🎥 시점정렬</button>
+</div>
+
+<!-- 우측 하단 전체화면 -->
+<div class="bottom-right-bar">
+    <button id="fullscreenBtn" class="glass back-btn" type="button">
+        <span id="fullscreenIcon">⛶</span>
+        <span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+    'use strict';
+
+    var $ = function (s) { return document.querySelector(s); };
+
+    /* =========================================================
+       0. 상수 · 랜드마크 구조
+       ========================================================= */
+    var FINGER_CHAINS = {
+        thumb:  [1, 2, 3, 4],
+        index:  [5, 6, 7, 8],
+        middle: [9, 10, 11, 12],
+        ring:   [13, 14, 15, 16],
+        pinky:  [17, 18, 19, 20]
+    };
+    var FINGER_KEYS = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+
+    var BONES = [
+        [1, 2], [2, 3], [3, 4],
+        [5, 6], [6, 7], [7, 8],
+        [9, 10], [10, 11], [11, 12],
+        [13, 14], [14, 15], [15, 16],
+        [17, 18], [18, 19], [19, 20]
+    ];
+    var TIPS = [4, 8, 12, 16, 20];
+    var PALM_OUTLINE = [0, 1, 5, 9, 13, 17];
+    var PALM_FAN = [[0, 1, 5], [0, 5, 9], [0, 9, 13], [0, 13, 17], [0, 17, 1]];
+    var SKELETON_LINES = [
+        [0, 1], [1, 2], [2, 3], [3, 4],
+        [0, 5], [5, 6], [6, 7], [7, 8],
+        [5, 9], [9, 10], [10, 11], [11, 12],
+        [9, 13], [13, 14], [14, 15], [15, 16],
+        [13, 17], [17, 18], [18, 19], [19, 20],
+        [0, 17]
+    ];
+
+    var SCALE = 1.95;            // 정규화 좌표 → 월드 좌표 배율
+    var HAND_TARGET_LEN = 0.86;  // 손바닥(손목→중지 MCP) 월드 길이 (크기 자동 정규화)
+
+    /* 3D 손 스타일 프리셋 (주간/야간 각각 다른 명도) */
+    var STYLES = {
+        cyber: {
+            light: {
+                bone: 0x0685ae, boneEmissive: 0x05526b, boneIntensity: 0.30,
+                joint: 0x14b6de, jointEmissive: 0x0c7590, jointIntensity: 0.4,
+                palm: 0x0d455f, palmOpacity: 0.30,
+                line: 0x0b86ae, lineOpacity: 0.8, wire: false
+            },
+            dark: {
+                bone: 0x37e0ff, boneEmissive: 0x0d6f96, boneIntensity: 1.25,
+                joint: 0xa9f4ff, jointEmissive: 0x1f8fb8, jointIntensity: 1.1,
+                palm: 0x123f57, palmOpacity: 0.22,
+                line: 0x66e6ff, lineOpacity: 0.85, wire: false
+            }
+        },
+        skeleton: {
+            light: {
+                bone: 0xb28f5c, boneEmissive: 0x2a2318, boneIntensity: 0.18,
+                joint: 0x8a7048, jointEmissive: 0x2a2318, jointIntensity: 0.12,
+                palm: 0xc9b591, palmOpacity: 0.22,
+                line: 0xa08a63, lineOpacity: 0.7, wire: false
+            },
+            dark: {
+                bone: 0xf3e9d2, boneEmissive: 0x2a2318, boneIntensity: 0.25,
+                joint: 0xfffdf6, jointEmissive: 0x3a3226, jointIntensity: 0.2,
+                palm: 0xd8c7a4, palmOpacity: 0.14,
+                line: 0xbfae8c, lineOpacity: 0.55, wire: false
+            }
+        },
+        neon: {
+            light: {
+                bone: 0xd21ba4, boneEmissive: 0x8e0f72, boneIntensity: 0.75,
+                joint: 0xf07ad9, jointEmissive: 0xb01a8d, jointIntensity: 0.65,
+                palm: 0x4a1040, palmOpacity: 0.18,
+                line: 0xc72fab, lineOpacity: 0.9, wire: true
+            },
+            dark: {
+                bone: 0xff4fd8, boneEmissive: 0xb0178f, boneIntensity: 1.6,
+                joint: 0xffd1f7, jointEmissive: 0xd42bb0, jointIntensity: 1.5,
+                palm: 0x2b0030, palmOpacity: 0.13,
+                line: 0xff8ae8, lineOpacity: 1.0, wire: true
+            }
+        }
+    };
+
+    /* 상태 */
+    var state = {
+        mirror: true,
+        twoHands: true,
+        pip: true,
+        skeleton: true,
+        style: 'cyber',
+        smoothing: 65,
+        demo: 'continuous',
+        cameraOn: false,
+        dark: false,
+        modelState: 'idle'   // idle | loading | ready | error
+    };
+
+    /* =========================================================
+       1. 씬 · 카메라 · 조명 · 바닥
+       ========================================================= */
+    var container = $('#canvas-container');
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+    var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if ('outputEncoding' in renderer) renderer.outputEncoding = THREE.sRGBEncoding;
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 2.6;
+    controls.maxDistance = 11;
+    controls.maxPolarAngle = Math.PI * 0.86;
+    controls.target.set(0, 0, 0);
+
+    var DEFAULT_CAM = new THREE.Vector3(0, 0.1, 5.4);
+    function setDefaultView() {
+        camera.position.copy(DEFAULT_CAM);
+        controls.target.set(0, 0, 0);
+        controls.update();
+    }
+    setDefaultView();
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0x2a3542, 0.72);
+    scene.add(hemi);
+    var dir1 = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir1.position.set(2.4, 3.2, 3.6);
+    scene.add(dir1);
+    var dir2 = new THREE.DirectionalLight(0x88bbff, 0.45);
+    dir2.position.set(-3, -1.4, 2);
+    scene.add(dir2);
+    var rimLight = new THREE.PointLight(0x49c9ff, 0.9, 14);
+    rimLight.position.set(0, 0.4, 3.2);
+    scene.add(rimLight);
+
+    /* 홀로그램 바닥 격자 */
+    var grid = new THREE.GridHelper(7, 14, 0x8fb6d6, 0xc7d8e8);
+    grid.position.y = -1.5;
+    grid.material.transparent = true;
+    grid.material.opacity = 0.42;
+    scene.add(grid);
+
+    var ringGeo = new THREE.RingGeometry(1.05, 1.09, 72);
+    var ringMat = new THREE.MeshBasicMaterial({ color: 0x4aa8ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    var stageRing = new THREE.Mesh(ringGeo, ringMat);
+    stageRing.rotation.x = Math.PI / 2;
+    stageRing.position.y = -1.48;
+    scene.add(stageRing);
+
+    /* =========================================================
+       2. 3D 손 모델 (손바닥 + 관절 + 뼈대 + 손가락 끝 캡)
+       ========================================================= */
+    var UP = new THREE.Vector3(0, 1, 0);
+    var _va = new THREE.Vector3();
+    var _vb = new THREE.Vector3();
+    var _dir = new THREE.Vector3();
+    var _q = new THREE.Quaternion();
+
+    function makeHand() {
+        var group = new THREE.Group();
+        group.visible = false;
+
+        var pal = STYLES.cyber.light;
+        var boneMat = new THREE.MeshStandardMaterial({
+            color: pal.bone, emissive: pal.boneEmissive,
+            emissiveIntensity: pal.boneIntensity, metalness: 0.2, roughness: 0.5,
+            transparent: true, opacity: 0.97
+        });
+        var jointMat = new THREE.MeshStandardMaterial({
+            color: pal.joint, emissive: pal.jointEmissive,
+            emissiveIntensity: pal.jointIntensity, metalness: 0.15, roughness: 0.4,
+            transparent: true, opacity: 0.98
+        });
+        var tipMat = jointMat.clone();
+        var palmMat = new THREE.MeshBasicMaterial({
+            color: pal.palm, transparent: true, opacity: pal.palmOpacity,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+        var lineMat = new THREE.LineBasicMaterial({
+            color: pal.line, transparent: true, opacity: pal.lineOpacity
+        });
+
+        /* 손바닥 판 (랜드마크 21개 중 손바닥 고리로 매 프레임 갱신) */
+        var palmGeo = new THREE.BufferGeometry();
+        var palmPos = new Float32Array(21 * 3);
+        palmGeo.setAttribute('position', new THREE.BufferAttribute(palmPos, 3));
+        palmGeo.setIndex(PALM_FAN.reduce(function (a, t) { return a.concat(t); }, []));
+        var palm = new THREE.Mesh(palmGeo, palmMat);
+        palm.frustumCulled = false;
+        palm.renderOrder = -1;
+        group.add(palm);
+
+        /* 마디 뼈대 실린더 15개 */
+        var boneGeo = new THREE.CylinderGeometry(0.72, 1, 1, 9, 1);
+        var bones = BONES.map(function () {
+            var m = new THREE.Mesh(boneGeo, boneMat);
+            m.frustumCulled = false;
+            m.renderOrder = 1;
+            group.add(m);
+            return m;
+        });
+
+        /* 관절 구체 21개 */
+        var jointGeo = new THREE.SphereGeometry(1, 12, 10);
+        var joints = [];
+        for (var i = 0; i < 21; i++) {
+            var j = new THREE.Mesh(jointGeo, jointMat);
+            j.frustumCulled = false;
+            j.renderOrder = 1;
+            group.add(j);
+            joints.push(j);
+        }
+
+        /* 손가락 끝 캡 5개 */
+        var tips = TIPS.map(function () {
+            var t = new THREE.Mesh(jointGeo, tipMat);
+            t.frustumCulled = false;
+            t.renderOrder = 2;
+            group.add(t);
+            return t;
+        });
+
+        /* 스켈레톤 라인 (관절 표시 토글) */
+        var lineGeo = new THREE.BufferGeometry();
+        var linePos = new Float32Array(SKELETON_LINES.length * 2 * 3);
+        lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+        var lines = new THREE.LineSegments(lineGeo, lineMat);
+        lines.frustumCulled = false;
+        lines.renderOrder = 3;
+        group.add(lines);
+
+        /* 손바닥 외곽선 (손 모양이 또렷하게 보이도록) */
+        var outlineGeo = new THREE.BufferGeometry();
+        var outlinePos = new Float32Array(PALM_OUTLINE.length * 3);
+        outlineGeo.setAttribute('position', new THREE.BufferAttribute(outlinePos, 3));
+        var outline = new THREE.LineLoop(outlineGeo, lineMat);
+        outline.frustumCulled = false;
+        outline.renderOrder = 3;
+        group.add(outline);
+
+        scene.add(group);
+
+        return {
+            group: group, palm: palm, palmPos: palmPos, bones: bones, joints: joints, tips: tips,
+            linePos: linePos, lines: lines, outlinePos: outlinePos, outline: outline,
+            mats: { bone: boneMat, joint: jointMat, tip: tipMat, palm: palmMat, line: lineMat },
+            points: new Array(21).fill(null).map(function () { return new THREE.Vector3(); }),
+            hasData: false
+        };
+    }
+
+    var hands = { A: makeHand(), B: makeHand() };
+
+    function applyStyle(h) {
+        var pal = STYLES[state.style] || STYLES.cyber;
+        var s = pal[state.dark ? 'dark' : 'light'] || pal.light;
+        h.mats.bone.color.setHex(s.bone);
+        h.mats.bone.emissive.setHex(s.boneEmissive);
+        h.mats.bone.emissiveIntensity = s.boneIntensity;
+        h.mats.joint.color.setHex(s.joint);
+        h.mats.joint.emissive.setHex(s.jointEmissive);
+        h.mats.joint.emissiveIntensity = s.jointIntensity;
+        h.mats.joint.wireframe = s.wire;
+        h.mats.tip.color.setHex(s.joint);
+        h.mats.tip.emissive.setHex(s.jointEmissive);
+        h.mats.tip.emissiveIntensity = s.jointIntensity;
+        h.mats.tip.wireframe = s.wire;
+        h.mats.palm.color.setHex(s.palm);
+        h.mats.palm.opacity = s.palmOpacity;
+        h.mats.palm.wireframe = s.wire;
+        h.mats.line.color.setHex(s.line);
+        h.mats.line.opacity = s.lineOpacity;
+    }
+    applyStyle(hands.A);
+    applyStyle(hands.B);
+
+    /* 한 손의 21개 월드 좌표를 메시에 반영 */
+    function updateHandMesh(h) {
+        var pts = h.points;
+        var i;
+
+        /* 손바닥 */
+        for (i = 0; i < 21; i++) {
+            h.palmPos[i * 3] = pts[i].x;
+            h.palmPos[i * 3 + 1] = pts[i].y;
+            h.palmPos[i * 3 + 2] = pts[i].z;
+        }
+        var pg = h.palm.geometry;
+        pg.attributes.position.needsUpdate = true;
+        pg.computeVertexNormals();
+        pg.computeBoundingSphere();
+
+        /* 뼈대 */
+        for (i = 0; i < BONES.length; i++) {
+            var a = pts[BONES[i][0]];
+            var b = pts[BONES[i][1]];
+            var m = h.bones[i];
+            _dir.subVectors(b, a);
+            var len = _dir.length();
+            if (len < 1e-5) { m.visible = false; continue; }
+            m.visible = true;
+            _dir.divideScalar(len);
+            _va.addVectors(a, b).multiplyScalar(0.5);
+            m.position.copy(_va);
+            _q.setFromUnitVectors(UP, _dir);
+            m.quaternion.copy(_q);
+            var r = 0.030;
+            m.scale.set(r, len, r);
+        }
+
+        /* 관절 */
+        for (i = 0; i < 21; i++) {
+            var j = h.joints[i];
+            j.position.copy(pts[i]);
+            var jr = (i === 0) ? 0.046 : (i % 4 === 0 ? 0.038 : 0.032);
+            j.scale.setScalar(jr);
+        }
+
+        /* 손가락 끝 캡 */
+        for (i = 0; i < TIPS.length; i++) {
+            var t = h.tips[i];
+            t.position.copy(pts[TIPS[i]]);
+            t.scale.setScalar(0.037);
+        }
+
+        /* 스켈레톤 라인 */
+        for (i = 0; i < SKELETON_LINES.length; i++) {
+            var p1 = pts[SKELETON_LINES[i][0]];
+            var p2 = pts[SKELETON_LINES[i][1]];
+            h.linePos[i * 6] = p1.x;
+            h.linePos[i * 6 + 1] = p1.y;
+            h.linePos[i * 6 + 2] = p1.z;
+            h.linePos[i * 6 + 3] = p2.x;
+            h.linePos[i * 6 + 4] = p2.y;
+            h.linePos[i * 6 + 5] = p2.z;
+        }
+        h.lines.geometry.attributes.position.needsUpdate = true;
+        h.lines.geometry.computeBoundingSphere();
+        h.lines.visible = state.skeleton;
+
+        for (i = 0; i < PALM_OUTLINE.length; i++) {
+            var op = pts[PALM_OUTLINE[i]];
+            h.outlinePos[i * 3] = op.x;
+            h.outlinePos[i * 3 + 1] = op.y;
+            h.outlinePos[i * 3 + 2] = op.z;
+        }
+        h.outline.geometry.attributes.position.needsUpdate = true;
+        h.outline.geometry.computeBoundingSphere();
+        h.outline.visible = state.skeleton;
+        h.group.visible = true;
+        h.hasData = true;
+    }
+
+    /* =========================================================
+       3. One-Euro 스무딩 필터
+       ========================================================= */
+    function OneEuro() { this.reset(); }
+    OneEuro.prototype.reset = function () {
+        this.init = false; this.t = 0; this.sx = 0; this.dx = 0;
+    };
+    OneEuro.prototype.filter = function (x, t, minCutoff, beta, dCutoff) {
+        if (!this.init) {
+            this.init = true; this.t = t; this.sx = x; this.dx = 0;
+            return x;
+        }
+        var dt = (t - this.t) / 1000;
+        if (!(dt > 0)) dt = 1 / 60;
+        if (dt > 0.2) dt = 0.2;
+        this.t = t;
+
+        var dxRaw = (x - this.sx) / dt;
+        var aD = alphaOf(dCutoff, dt);
+        this.dx = aD * dxRaw + (1 - aD) * this.dx;
+
+        var cutoff = minCutoff + beta * Math.abs(this.dx);
+        var a = alphaOf(cutoff, dt);
+        this.sx = a * x + (1 - a) * this.sx;
+        return this.sx;
+    };
+    function alphaOf(cutoff, dt) {
+        var tau = 1 / (2 * Math.PI * Math.max(cutoff, 0.0001));
+        return 1 / (1 + tau / dt);
+    }
+
+    /* 손 슬롯별 필터 묶음 */
+    function makeFilterBank() {
+        var bank = [];
+        for (var i = 0; i < 63; i++) bank.push(new OneEuro());
+        return bank;
+    }
+    var filters = { A: makeFilterBank(), B: makeFilterBank() };
+    function resetFilters(slot) {
+        filters[slot].forEach(function (f) { f.reset(); });
+    }
+
+    function smoothParams() {
+        var s = Math.max(0, Math.min(1, state.smoothing / 100));
+        return {
+            minCutoff: 0.55 + 4.2 * (1 - s),
+            beta: 0.06 + 0.55 * (1 - s),
+            dCutoff: 1.0
+        };
+    }
+
+    /* =========================================================
+       4. 좌표 변환 (정규화 → 월드) · 크기/위치 정규화
+       ========================================================= */
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+    function projectLandmarks(lm, slot) {
+        var h = hands[slot];
+        var norm = new Array(21);
+        var sp = smoothParams();
+        var bank = filters[slot];
+        var now = performance.now();
+
+        var aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        var kx = 2 * SCALE * aspect;
+        var ky = 2 * SCALE;
+
+        var raw = [];
+        var i;
+        for (i = 0; i < 21; i++) {
+            var src = lm[i];
+            var fx = bank[i * 3].filter(src.x, now, sp.minCutoff, sp.beta, sp.dCutoff);
+            var fy = bank[i * 3 + 1].filter(src.y, now, sp.minCutoff, sp.beta, sp.dCutoff);
+            var fz = bank[i * 3 + 2].filter(src.z || 0, now, sp.minCutoff, sp.beta, sp.dCutoff);
+            var wx = (state.mirror ? (0.5 - fx) : (fx - 0.5)) * kx;
+            var wy = (0.5 - fy) * ky;
+            var wz = -fz * ky;
+            raw.push(new THREE.Vector3(wx, wy, wz));
+            norm[i] = { x: fx, y: fy, z: fz };
+        }
+
+        /* 세로로 긴 휴대폰 화면에서는 손이 화면을 덮지 않도록 전체 크기를 줄인다 */
+        var vf = clamp(aspect / 1.35, 0.50, 1.0);
+
+        /* 손 크기 자동 정규화 (먼 곳에서도 같은 크기로)
+           손바닥 길이는 세 손가락 뿌리 거리의 평균을 써서 손이 기울어도 덜 흔들린다 */
+        var palmLen = (raw[0].distanceTo(raw[5]) + raw[0].distanceTo(raw[9]) + raw[0].distanceTo(raw[13])) / 3;
+        var s = palmLen > 1e-4 ? clamp(HAND_TARGET_LEN * vf / palmLen, 0.4 * vf, 1.7) : 1;
+
+        /* 손끝이 화면을 넘지 않도록 전체 크기에 상한을 둔다 */
+        var extent = 1e-4;
+        for (i = 1; i < 21; i++) {
+            var d = raw[i].distanceTo(raw[0]);
+            if (d > extent) extent = d;
+        }
+        if (extent * s > 2.0 * vf) s = 2.0 * vf / extent;
+
+        /* 손목 위치: 화면 밖으로 나가지 않게 부드럽게 따라감
+           세로 화면에서는 오른쪽 조절 패널을 피해 손을 왼쪽 위로 살짝 비켜 둔다 */
+        var portrait = aspect < 0.95;
+        var cx = clamp(raw[0].x * 0.9 - (portrait ? 0.44 : 0), -0.85, 0.85);
+        var cy = clamp(raw[0].y * 0.5 - 0.62 + (portrait ? 0.50 : 0), -0.95, 0.30);
+        var cz = clamp(raw[0].z * 0.35, -0.45, 0.45);
+
+        for (i = 0; i < 21; i++) {
+            h.points[i].set(
+                (raw[i].x - raw[0].x) * s + cx,
+                (raw[i].y - raw[0].y) * s + cy,
+                (raw[i].z - raw[0].z) * s + cz
+            );
+        }
+        return norm;
+    }
+
+    /* =========================================================
+       5. 제스처 판별 (굽힘 정도 · 손가락 개수 · 묵찌빠)
+       ========================================================= */
+    function angleAt(a, b, c) {
+        var v1x = a.x - b.x, v1y = a.y - b.y, v1z = a.z - b.z;
+        var v2x = c.x - b.x, v2y = c.y - b.y, v2z = c.z - b.z;
+        var d1 = Math.sqrt(v1x * v1x + v1y * v1y + v1z * v1z);
+        var d2 = Math.sqrt(v2x * v2x + v2y * v2y + v2z * v2z);
+        if (d1 < 1e-6 || d2 < 1e-6) return 180;
+        var dot = (v1x * v2x + v1y * v2y + v1z * v2z) / (d1 * d2);
+        dot = Math.max(-1, Math.min(1, dot));
+        return Math.acos(dot) * 180 / Math.PI;
+    }
+
+    function analyzeGesture(lm) {
+        var bends = [];
+        var ext = [];
+        var i;
+        var thumbAngleBend = 100;
+
+        for (i = 0; i < FINGER_KEYS.length; i++) {
+            var ch = FINGER_CHAINS[FINGER_KEYS[i]];
+            var a1 = angleAt(lm[ch[0]], lm[ch[1]], lm[ch[2]]);
+            var a2 = angleAt(lm[ch[1]], lm[ch[2]], lm[ch[3]]);
+            var dev = (180 - a1) + (180 - a2);   // 0 = 완전히 편 상태
+            var bend = clamp(Math.round(dev / 150 * 100), 0, 100);
+
+            if (i === 0) {
+                /* 엄지는 접히는 방향이 달라 관절 각도와 손바닥 거리를 함께 본다 */
+                var palm = dist3(lm[0], lm[9]) || 1;
+                var toIndex = dist3(lm[4], lm[5]) / palm;
+                thumbAngleBend = bend;
+                var dBend = toIndex > 0.95 ? 0 : (toIndex < 0.55 ? 100 : 50);
+                bend = Math.round(bend * 0.55 + dBend * 0.45);
+            }
+            bends.push(bend);
+            ext.push(bend < (i === 0 ? 45 : 42));
+        }
+
+        var t = ext[0] ? 1 : 0;
+        var idx = ext[1] ? 1 : 0;
+        var mid = ext[2] ? 1 : 0;
+        var rng = ext[3] ? 1 : 0;
+        var pnk = ext[4] ? 1 : 0;
+        var count = t + idx + mid + rng + pnk;
+
+        var palmLen = dist3(lm[0], lm[9]) || 1;
+        var pinch = dist3(lm[4], lm[8]) / palmLen < 0.32;
+
+        var key, emoji, name, sub;
+
+        if (idx && mid && !rng && !pnk) {
+            key = 'scissors'; emoji = '✌️'; name = '찌(가위)'; sub = '검지·중지 2개';
+        } else if (!idx && !mid && !rng && !pnk) {
+            var thumbOut = t && thumbAngleBend < 45;
+            if (thumbOut) {
+                key = 'thumbsup'; emoji = '👍'; name = '최고(엄지)'; sub = '엄지만 편 손';
+            } else {
+                key = 'rock'; emoji = '✊'; name = '묵(바위)'; sub = '주먹 (0개)';
+            }
+        } else if (count >= 5) {
+            key = 'paper'; emoji = '🖐️'; name = '빠(보)'; sub = '손바닥 (5개)';
+        } else if (idx && !mid && !rng && !pnk) {
+            key = 'one'; emoji = '☝️'; name = '하나'; sub = '검지 (1개)';
+        } else if (pinch && mid && rng && pnk) {
+            key = 'ok'; emoji = '👌'; name = '오케이'; sub = '엄지+검지';
+        } else if (count === 0) {
+            key = 'rock'; emoji = '✊'; name = '묵(바위)'; sub = '주먹 (0개)';
+        } else {
+            var e = ['✊', '☝️', '✌️', '🤟', '🖖', '🖐️'];
+            key = 'count' + count;
+            emoji = e[Math.min(5, Math.max(0, count))];
+            name = '손가락 ' + count + '개';
+            sub = '편 손가락 ' + count + '개';
+        }
+
+        return { key: key, emoji: emoji, name: name, sub: sub, bends: bends, ext: ext, count: count };
+    }
+
+    function dist3(a, b) {
+        var dx = a.x - b.x, dy = a.y - b.y, dz = (a.z || 0) - (b.z || 0);
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /* =========================================================
+       6. 손 인식 데이터 반영 (카메라 · 데모 공통 파이프라인)
+       ========================================================= */
+    var slots = {
+        A: { active: false, label: '', gesture: null, name: '', lastSeen: 0, raw: null },
+        B: { active: false, label: '', gesture: null, name: '', lastSeen: 0, raw: null }
+    };
+    var gestureHistory = { A: [], B: [] };
+
+    function ingest(detections) {
+        var now = performance.now();
+        var want2 = state.twoHands;
+        var assign = { A: null, B: null };
+        var list = detections.slice(0, want2 ? 2 : 1);
+
+        for (var i = 0; i < list.length; i++) {
+            var d = list[i];
+            var slot;
+            if (want2) {
+                if (d.label === 'Left') slot = 'A';
+                else if (d.label === 'Right') slot = 'B';
+                else slot = (i === 0) ? 'A' : 'B';
+                if (assign[slot]) slot = (slot === 'A') ? 'B' : 'A';
+            } else {
+                slot = 'A';
+            }
+            assign[slot] = d;
+        }
+
+        ['A', 'B'].forEach(function (slot) {
+            var h = hands[slot];
+            var d = assign[slot];
+            if (!d) {
+                h.hasData = false;
+                h.group.visible = false;
+                if (slots[slot].active) {
+                    slots[slot].active = false;
+                    slots[slot].gesture = null;
+                    slots[slot].name = '';
+                    resetFilters(slot);
+                    gestureHistory[slot] = [];
+                }
+                return;
+            }
+            if (slots[slot].label !== d.label) {
+                resetFilters(slot);
+                slots[slot].label = d.label;
+                gestureHistory[slot] = [];
+            }
+            var auto = d.auto || '';
+            slots[slot].name = auto;
+            slots[slot].active = true;
+            slots[slot].lastSeen = now;
+            slots[slot].norm = projectLandmarks(d.landmarks, slot);
+            updateHandMesh(h);
+
+            /* 제스처 안정화: 3프레임 연속 같은 값일 때만 갱신 */
+            var g = analyzeGesture(slots[slot].norm);
+            var hist = gestureHistory[slot];
+            hist.push(g.key);
+            if (hist.length > 3) hist.shift();
+            if (hist.length === 3 && hist[0] === hist[1] && hist[1] === hist[2]) {
+                slots[slot].gesture = g;
+            } else if (!slots[slot].gesture) {
+                slots[slot].gesture = g;
+            }
+        });
+    }
+
+    /* =========================================================
+       7. 데모 모션 (카메라 없이 관절·제스처 재현)
+       ========================================================= */
+    function baseAngles(mult) {
+        var m = mult === undefined ? 1 : mult;
+        return {
+            thumb:  [3 * m, 12 * m, 8 * m],
+            index:  [5 * m, 7 * m, 5 * m],
+            middle: [5 * m, 7 * m, 5 * m],
+            ring:   [7 * m, 9 * m, 6 * m],
+            pinky:  [9 * m, 11 * m, 7 * m]
+        };
+    }
+
+    function demoPose(pose, t) {
+        var a, roll = 0, yaw = 0, pitch = 0, ox = 0, oy = 0;
+
+        if (pose === 'fist') {
+            a = { thumb: [42, 60, 45], index: [80, 95, 55], middle: [84, 98, 58], ring: [86, 96, 55], pinky: [88, 92, 50] };
+            roll = 0.04 * Math.sin(t * 1.2); yaw = 0.10 * Math.sin(t * 0.9);
+        } else if (pose === 'scissors') {
+            a = { thumb: [42, 62, 42], index: [3, 5, 3], middle: [3, 5, 3], ring: [84, 95, 55], pinky: [86, 92, 50] };
+            roll = 0.06 * Math.sin(t * 1.5); yaw = 0.14 * Math.sin(t * 1.0);
+        } else if (pose === 'paper') {
+            a = baseAngles(1);
+            roll = 0.05 * Math.sin(t * 1.3); yaw = 0.12 * Math.sin(t * 0.8);
+        } else if (pose === 'wave') {
+            a = baseAngles(1.2);
+            roll = 0.34 * Math.sin(t * 5.2);
+            yaw = 0.10 * Math.sin(t * 2.6);
+            ox = 0.035 * Math.sin(t * 5.2);
+        } else {
+            /* 연속 움직임: 손가락이 차례로 굽혔다 펴지고 손목이 천천히 돈다 */
+            var f = function (ph) { return 8 + 62 * (0.5 + 0.5 * Math.sin(t * 1.45 + ph)); };
+            a = {
+                thumb:  [f(0.4) * 0.6, f(1.0) * 0.5, f(1.6) * 0.4],
+                index:  [f(0.0), f(0.25), f(0.45)],
+                middle: [f(0.7), f(0.95), f(1.15)],
+                ring:   [f(1.4), f(1.65), f(1.85)],
+                pinky:  [f(2.1), f(2.35), f(2.55)]
+            };
+            roll = 0.13 * Math.sin(t * 0.7);
+            yaw = 0.22 * Math.sin(t * 0.52);
+            pitch = 0.06 * Math.sin(t * 0.9);
+            ox = 0.02 * Math.sin(t * 0.7);
+            oy = 0.012 * Math.sin(t * 0.9);
+        }
+        return { angles: a, roll: roll, yaw: yaw, pitch: pitch, ox: ox, oy: oy };
+    }
+
+    function rotLocal(p, roll, yaw, pitch) {
+        var x = p.x * Math.cos(roll) - p.y * Math.sin(roll);
+        var y = p.x * Math.sin(roll) + p.y * Math.cos(roll);
+        var z = p.z;
+        var x2 = x * Math.cos(yaw) + z * Math.sin(yaw);
+        var z2 = -x * Math.sin(yaw) + z * Math.cos(yaw);
+        var y2 = y * Math.cos(pitch) - z2 * Math.sin(pitch);
+        var z3 = y * Math.sin(pitch) + z2 * Math.cos(pitch);
+        return { x: x2, y: y2, z: z3 };
+    }
+
+    var DEMO_BASE = {
+        thumb:  { pos: [-0.052, 0.016], dir: -1.32, len: [0.040, 0.030, 0.024] },
+        index:  { pos: [-0.052, 0.090], dir: -0.10, len: [0.046, 0.028, 0.021] },
+        middle: { pos: [-0.016, 0.098], dir: -0.01, len: [0.050, 0.031, 0.023] },
+        ring:   { pos: [0.020, 0.090], dir: 0.07, len: [0.046, 0.029, 0.021] },
+        pinky:  { pos: [0.055, 0.072], dir: 0.14, len: [0.036, 0.023, 0.017] }
+    };
+
+    function chainPoints(startX, startY, baseAngle, lens, angles, out) {
+        var px = startX, py = startY, pz = 0, cum = 0;
+        var sa = Math.sin(baseAngle), ca = Math.cos(baseAngle);
+        for (var s = 0; s < lens.length; s++) {
+            cum += (angles[s] || 0) * Math.PI / 180;
+            px += sa * Math.cos(cum) * lens[s];
+            py += ca * Math.cos(cum) * lens[s];
+            pz += Math.sin(cum) * lens[s];
+            out[s] = { x: px, y: py, z: pz };
+        }
+    }
+
+    function buildDemoLandmarks(pose, seconds) {
+        var p = demoPose(pose, seconds);
+        var local = new Array(21);
+        local[0] = { x: 0, y: 0, z: 0 };
+
+        ['thumb', 'index', 'middle', 'ring', 'pinky'].forEach(function (k) {
+            var cfg = DEMO_BASE[k];
+            var ch = FINGER_CHAINS[k];
+            local[ch[0]] = { x: cfg.pos[0], y: cfg.pos[1], z: 0 };
+            var pts = [];
+            chainPoints(cfg.pos[0], cfg.pos[1], cfg.dir, cfg.len, p.angles[k], pts);
+            for (var s = 0; s < cfg.len.length; s++) local[ch[s + 1]] = pts[s];
+        });
+
+        var out = new Array(21);
+        var aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        for (var i = 0; i < 21; i++) {
+            var q = rotLocal(local[i], p.roll, p.yaw, p.pitch);
+            /* 데모 좌표는 '화면 높이' 기준이므로 영상 정규화 좌표로 바꿀 때 가로 비율을 나눈다 */
+            out[i] = {
+                x: 0.5 - (q.x + p.ox) / aspect,
+                y: 0.5 - (q.y + p.oy + 0.02),
+                z: -(q.z)
+            };
+        }
+        return out;
+    }
+
+    /* =========================================================
+       8. HUD 렌더링
+       ========================================================= */
+    var hudMode = $('#hudMode');
+    var cardA = $('#cardA'), cardB = $('#cardB');
+    var gEmojiA = $('#gEmojiA'), gNameA = $('#gNameA'), gSubA = $('#gSubA');
+    var gEmojiB = $('#gEmojiB'), gNameB = $('#gNameB'), gSubB = $('#gSubB');
+    var vsLine = $('#vsLine');
+    var fingerRows = Array.prototype.slice.call(document.querySelectorAll('.finger-row'));
+
+    var MAIN = { rock: '묵', scissors: '찌', paper: '빠' };
+    var BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
+
+    function renderHUD() {
+        var a = slots.A, b = slots.B;
+
+        hudMode.textContent = state.cameraOn ? '카메라' : '데모 모션';
+        hudMode.classList.toggle('cam', state.cameraOn);
+
+        if (a.active && a.gesture) {
+            cardA.classList.remove('empty');
+            gEmojiA.textContent = a.gesture.emoji;
+            gNameA.textContent = a.gesture.name;
+            gSubA.textContent = a.gesture.sub;
+        } else {
+            cardA.classList.add('empty');
+            gEmojiA.textContent = '👋';
+            gNameA.textContent = state.cameraOn ? '손을 찾는 중' : '손을 보여 주세요';
+            gSubA.textContent = state.cameraOn ? '카메라 앞에 손을 내밀어 보세요' : '데모 모션을 재생하고 있어요';
+        }
+
+        if (b.active && b.gesture) {
+            cardB.style.display = 'flex';
+            cardB.classList.remove('empty');
+            gEmojiB.textContent = b.gesture.emoji;
+            gNameB.textContent = b.gesture.name;
+            gSubB.textContent = b.gesture.sub;
+        } else {
+            cardB.style.display = 'none';
+        }
+
+        /* 두 손 묵찌빠 판정 */
+        if (a.active && a.gesture && b.active && b.gesture &&
+            MAIN[a.gesture.key] && MAIN[b.gesture.key]) {
+            var ga = MAIN[a.gesture.key];
+            var gb = MAIN[b.gesture.key];
+            var txt;
+            if (ga === gb) {
+                txt = '① ' + ga + ' vs ② ' + gb + ' → 무승부 🤝';
+            } else if (BEATS[a.gesture.key] === b.gesture.key) {
+                txt = '① ' + ga + ' vs ② ' + gb + ' → ① ' + ga + ' 승! 🎉';
+            } else {
+                txt = '① ' + ga + ' vs ② ' + gb + ' → ② ' + gb + ' 승! 🎉';
+            }
+            vsLine.textContent = txt;
+            vsLine.classList.add('show');
+        } else {
+            vsLine.classList.remove('show');
+        }
+
+        /* 손가락 굽힘 막대 (① 손 기준) */
+        var bends = (a.active && a.gesture) ? a.gesture.bends : [0, 0, 0, 0, 0];
+        for (var i = 0; i < fingerRows.length; i++) {
+            var fill = fingerRows[i].querySelector('.fl-fill');
+            var pct = fingerRows[i].querySelector('.fl-pct');
+            var v = bends[i] || 0;
+            fill.style.width = v + '%';
+            pct.textContent = v + '%';
+        }
+    }
+
+    /* =========================================================
+       9. PiP 미리보기 + 21관절 스켈레톤 오버레이
+       ========================================================= */
+    var video = $('#cam');
+    var pipCanvas = $('#pipCanvas');
+    var pipCtx = pipCanvas.getContext('2d');
+    var pipWrap = $('#pipWrap');
+    var pipTag = $('#pipTag');
+
+    function drawPip() {
+        if (!state.pip) return;
+
+        var hasVideo = state.cameraOn && video.videoWidth > 0;
+        /* 캔버스 비율을 카메라 영상 비율에 맞춰 관절 좌표가 어긋나지 않게 한다 */
+        if (hasVideo) {
+            var targetW = 320;
+            var targetH = Math.round(320 * video.videoHeight / video.videoWidth);
+            if (pipCanvas.width !== targetW || pipCanvas.height !== targetH) {
+                pipCanvas.width = targetW;
+                pipCanvas.height = targetH;
+            }
+        }
+        var w = pipCanvas.width, h = pipCanvas.height;
+        pipCtx.clearRect(0, 0, w, h);
+
+        if (hasVideo) {
+            pipCtx.save();
+            if (state.mirror) {
+                pipCtx.translate(w, 0);
+                pipCtx.scale(-1, 1);
+            }
+            pipCtx.drawImage(video, 0, 0, w, h);
+            pipCtx.restore();
+        } else {
+            pipCtx.fillStyle = 'rgba(12,20,30,0.92)';
+            pipCtx.fillRect(0, 0, w, h);
+        }
+
+        /* 21관절 스켈레톤 오버레이 */
+        ['A', 'B'].forEach(function (slot) {
+            var s = slots[slot];
+            if (!s.active || !s.norm) return;
+            var pts = s.norm;
+            var main = slot === 'A';
+
+            /* 데모 모션은 화면 속 손 크기가 임의이므로 미리보기 안에 꽉 차게 맞춘다 */
+            var ms = 1, mcx = 0.5, mcy = 0.5;
+            if (state.demo) {
+                var minX = 1, maxX = 0, minY = 1, maxY = 0;
+                for (var k = 0; k < 21; k++) {
+                    if (pts[k].x < minX) minX = pts[k].x;
+                    if (pts[k].x > maxX) maxX = pts[k].x;
+                    if (pts[k].y < minY) minY = pts[k].y;
+                    if (pts[k].y > maxY) maxY = pts[k].y;
+                }
+                var bw = Math.max(0.02, maxX - minX);
+                var bh = Math.max(0.02, maxY - minY);
+                ms = Math.min(0.74 / bw, 0.74 / bh);
+                mcx = (minX + maxX) / 2;
+                mcy = (minY + maxY) / 2;
+            }
+            var px = function (p) { return ((p.x - mcx) * ms + 0.5) * w; };
+            var py = function (p) { return ((p.y - mcy) * ms + 0.5) * h; };
+
+            pipCtx.strokeStyle = main ? 'rgba(0,224,255,0.95)' : 'rgba(255,120,220,0.95)';
+            pipCtx.lineWidth = 2;
+            for (var i = 0; i < SKELETON_LINES.length; i++) {
+                var p1 = pts[SKELETON_LINES[i][0]];
+                var p2 = pts[SKELETON_LINES[i][1]];
+                if (!p1 || !p2) continue;
+                pipCtx.beginPath();
+                pipCtx.moveTo(px(p1), py(p1));
+                pipCtx.lineTo(px(p2), py(p2));
+                pipCtx.stroke();
+            }
+            for (var j = 0; j < 21; j++) {
+                if (!pts[j]) continue;
+                var isTip = TIPS.indexOf(j) >= 0;
+                pipCtx.fillStyle = isTip ? '#ffffff' : (main ? 'rgba(0,224,255,0.95)' : 'rgba(255,120,220,0.95)');
+                pipCtx.beginPath();
+                pipCtx.arc(px(pts[j]), py(pts[j]), isTip ? 3.4 : 2.2, 0, Math.PI * 2);
+                pipCtx.fill();
+            }
+        });
+
+        pipTag.textContent = state.cameraOn ? 'LIVE' : 'DEMO';
+    }
+
+    /* =========================================================
+       10. 카메라 · MediaPipe HandLandmarker
+       ========================================================= */
+    var landmarker = null;
+    var landmarkLoading = null;
+    var mediaFailed = false;
+    var lastDetect = 0;
+    var stream = null;
+
+    var CDN = [
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs',
+        'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
+    ];
+    var WASM = [
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
+        'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm'
+    ];
+    var MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+
+    function setCamStatus(text, warn) {
+        var el = $('#camStatus');
+        el.textContent = text;
+        el.classList.toggle('warn', !!warn);
+    }
+
+    async function getLandmarker() {
+        if (landmarker) return landmarker;
+        if (landmarkLoading) return landmarkLoading;
+        state.modelState = 'loading';
+        landmarkLoading = (async function () {
+            var mod = null, lastErr = null;
+            for (var i = 0; i < CDN.length; i++) {
+                try {
+                    mod = await import(CDN[i]);
+                    break;
+                } catch (e) {
+                    lastErr = e;
+                }
+            }
+            if (!mod) throw (lastErr || new Error('mediapipe load failed'));
+
+            var fileset = null;
+            for (var j = 0; j < WASM.length; j++) {
+                try {
+                    fileset = await mod.FilesetResolver.forVisionTasks(WASM[j]);
+                    break;
+                } catch (e2) {
+                    lastErr = e2;
+                }
+            }
+            if (!fileset) throw (lastErr || new Error('wasm load failed'));
+
+            var options = {
+                baseOptions: { modelAssetPath: MODEL, delegate: 'GPU' },
+                runningMode: 'VIDEO',
+                numHands: 2,
+                /* 주먹(묵)은 기본 임계값에서 놓치기 쉬워 조금 낮춘다 */
+                minHandDetectionConfidence: 0.3,
+                minHandPresenceConfidence: 0.3,
+                minTrackingConfidence: 0.35
+            };
+            try {
+                landmarker = await mod.HandLandmarker.createFromOptions(fileset, options);
+            } catch (e3) {
+                options.baseOptions.delegate = 'CPU';
+                landmarker = await mod.HandLandmarker.createFromOptions(fileset, options);
+            }
+            state.modelState = 'ready';
+            return landmarker;
+        })().catch(function (err) {
+            state.modelState = 'error';
+            landmarkLoading = null;
+            mediaFailed = true;
+            throw err;
+        });
+        return landmarkLoading;
+    }
+
+    async function startCamera() {
+        if (state.cameraOn) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            cameraFailed('이 브라우저에서는 카메라를 쓸 수 없어요. 데모 모션으로 확인해 주세요.');
+            return;
+        }
+        setCamStatus('카메라 권한을 확인하는 중…', false);
+        $('#camLabel').textContent = '연결 중…';
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+                audio: false
+            });
+        } catch (err) {
+            cameraFailed(explainCameraError(err));
+            return;
+        }
+
+        video.srcObject = stream;
+        try { await video.play(); } catch (e) { /* autoplay muted는 대개 허용 */ }
+
+        state.cameraOn = true;
+        state.demo = null;
+        syncDemoChips();
+        $('#btnCam').classList.add('active');
+        $('#camLabel').textContent = '카메라 정지';
+        setCamStatus('손 모델을 불러오는 중… (처음 한 번만)', false);
+
+        try {
+            await getLandmarker();
+        } catch (err) {
+            setCamStatus('손 인식 모델을 불러오지 못했어요. 데모 모션은 그대로 쓸 수 있습니다.', true);
+            toast('손 인식 모델 로드 실패 · 데모 모션으로도 모든 기능을 확인할 수 있어요');
+            return;
+        }
+
+        setCamStatus('카메라 실행 중 · 손을 보여 주세요', false);
+        toast('카메라 준비 완료! 손을 보여 주세요 ✋');
+    }
+
+    function explainCameraError(err) {
+        var n = (err && err.name) || '';
+        if (n === 'NotAllowedError' || n === 'SecurityError') return '카메라 권한이 거부되었어요. 주소창의 카메라 아이콘에서 허용해 주세요.';
+        if (n === 'NotFoundError' || n === 'OverconstrainedError') return '카메라를 찾지 못했어요. 연결을 확인해 주세요.';
+        if (n === 'NotReadableError') return '다른 앱이 카메라를 쓰고 있어요. 그 앱을 닫고 다시 시도해 주세요.';
+        return '카메라를 시작하지 못했어요 (' + (n || '알 수 없는 오류') + ').';
+    }
+
+    function cameraFailed(msg) {
+        $('#camLabel').textContent = '카메라 시작';
+        $('#btnCam').classList.remove('active');
+        state.cameraOn = false;
+        startDemo('continuous');
+        setCamStatus(msg + ' 데모 모션으로 계속합니다.', true);
+        toast(msg);
+    }
+
+    function stopCamera() {
+        if (stream) {
+            stream.getTracks().forEach(function (t) { t.stop(); });
+            stream = null;
+        }
+        try { video.srcObject = null; } catch (e) { }
+        state.cameraOn = false;
+        slots.A.active = false; slots.B.active = false;
+        slots.A.gesture = null; slots.B.gesture = null;
+        hands.A.group.visible = false; hands.B.group.visible = false;
+        $('#btnCam').classList.remove('active');
+        $('#camLabel').textContent = '카메라 시작';
+        startDemo(state.demo || 'continuous');
+        setCamStatus('카메라를 껐어요 · 데모 모션 재생 중', false);
+    }
+
+    /* =========================================================
+       11. 데모 모드 · 컨트롤
+       ========================================================= */
+    function startDemo(key) {
+        state.demo = key || 'continuous';
+        syncDemoChips();
+        setCamStatus(
+            state.cameraOn ? '카메라 실행 중 · 손을 보여 주세요'
+                           : '데모 모션 재생 중 · 카메라를 켜면 실제 손을 따라갑니다',
+            false
+        );
+    }
+
+    function syncDemoChips() {
+        Array.prototype.forEach.call(document.querySelectorAll('#demoRow .chip'), function (c) {
+            c.classList.toggle('on', c.dataset.demo === state.demo);
+        });
+        var labels = { continuous: '연속', fist: '묵', scissors: '찌', paper: '빠', wave: '흔들기' };
+        $('#demoLabel').textContent = state.demo ? (labels[state.demo] || '연속') : '꺼짐';
+    }
+
+    $('#btnCam').addEventListener('click', function () {
+        if (state.cameraOn) stopCamera();
+        else startCamera();
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('#demoRow .chip'), function (c) {
+        c.addEventListener('click', function () {
+            if (state.cameraOn) stopCamera();
+            var k = c.dataset.demo;
+            startDemo(state.demo === k && k !== 'continuous' ? 'continuous' : k);
+        });
+    });
+
+    $('#tglMirror').addEventListener('click', function () {
+        state.mirror = !state.mirror;
+        this.classList.toggle('active', state.mirror);
+        video.classList.toggle('mirror', state.mirror);
+        toast(state.mirror ? '좌우 반전(거울 모드) 켜짐' : '좌우 반전 꺼짐 · 카메라 방향 그대로');
+    });
+
+    $('#tglTwo').addEventListener('click', function () {
+        state.twoHands = !state.twoHands;
+        this.classList.toggle('active', state.twoHands);
+        if (!state.twoHands) {
+            hands.B.group.visible = false;
+            slots.B.active = false;
+            slots.B.gesture = null;
+        }
+        toast(state.twoHands ? '양손 추적 켜짐 (최대 2손)' : '한 손만 추적합니다');
+    });
+
+    $('#tglPip').addEventListener('click', function () {
+        state.pip = !state.pip;
+        this.classList.toggle('active', state.pip);
+        pipWrap.classList.toggle('hide', !state.pip);
+    });
+
+    $('#tglSkeleton').addEventListener('click', function () {
+        state.skeleton = !state.skeleton;
+        this.classList.toggle('active', state.skeleton);
+        hands.A.lines.visible = state.skeleton && hands.A.hasData;
+        hands.B.lines.visible = state.skeleton && hands.B.hasData;
+        hands.A.outline.visible = state.skeleton && hands.A.hasData;
+        hands.B.outline.visible = state.skeleton && hands.B.hasData;
+    });
+
+    $('#rngSmooth').addEventListener('input', function () {
+        state.smoothing = Number(this.value);
+        $('#smoothVal').textContent = state.smoothing + '%';
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('#styleRow .chip'), function (c) {
+        c.addEventListener('click', function () {
+            state.style = c.dataset.style;
+            Array.prototype.forEach.call(document.querySelectorAll('#styleRow .chip'), function (o) {
+                o.classList.toggle('on', o === c);
+            });
+            applyStyle(hands.A);
+            applyStyle(hands.B);
+        });
+    });
+
+    $('#btnReset').addEventListener('click', function () {
+        state.mirror = true; state.twoHands = true; state.pip = true;
+        state.skeleton = true; state.smoothing = 65; state.style = 'cyber';
+        video.classList.add('mirror');
+        $('#tglMirror').classList.add('active');
+        $('#tglTwo').classList.add('active');
+        $('#tglPip').classList.add('active');
+        $('#tglSkeleton').classList.add('active');
+        pipWrap.classList.remove('hide');
+        $('#rngSmooth').value = 65;
+        $('#smoothVal').textContent = '65%';
+        Array.prototype.forEach.call(document.querySelectorAll('#styleRow .chip'), function (o) {
+            o.classList.toggle('on', o.dataset.style === 'cyber');
+        });
+        applyStyle(hands.A); applyStyle(hands.B);
+        resetFilters('A'); resetFilters('B');
+        if (!state.cameraOn) startDemo('continuous');
+        setDefaultView();
+        toast('설정을 처음 상태로 되돌렸어요');
+    });
+
+    $('#btnAlign').addEventListener('click', function () {
+        setDefaultView();
+        toast('시점을 정면으로 맞췄어요');
+    });
+
+    /* =========================================================
+       12. 야간 모드
+       ========================================================= */
+    $('#theme-toggle').addEventListener('click', function () {
+        var isDark = !state.dark;
+        state.dark = isDark;
+        document.body.classList.toggle('dark', isDark);
+        document.body.classList.toggle('dark-mode', isDark);
+        this.textContent = isDark ? '☀️' : '🌙';
+        grid.material.opacity = isDark ? 0.30 : 0.42;
+        ringMat.opacity = isDark ? 0.5 : 0.35;
+        hemi.intensity = isDark ? 0.7 : 0.95;
+        dir1.intensity = isDark ? 0.55 : 0.9;
+        rimLight.intensity = isDark ? 1.25 : 0.9;
+        applyStyle(hands.A);
+        applyStyle(hands.B);
+    });
+
+    /* =========================================================
+       13. 리사이즈 · 전체화면
+       ========================================================= */
+    function onResize() {
+        var w = window.innerWidth, h = window.innerHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', function () { setTimeout(onResize, 220); });
+
+    var fullscreenBtn = document.getElementById('fullscreenBtn');
+    var fullscreenIcon = document.getElementById('fullscreenIcon');
+    var fullscreenText = document.getElementById('fullscreenText');
+    var docEl = document.documentElement;
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setFsUI() {
+        var on = realFs() || pseudo();
+        if (fullscreenIcon) fullscreenIcon.textContent = on ? '🗗' : '⛶';
+        if (fullscreenText) fullscreenText.textContent = on ? '창모드' : '전체화면';
+        if (fullscreenBtn) fullscreenBtn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            setTimeout(function () {
+                if (wasReal) { setFsUI(); return; }
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setFsUI(); return; }
+                if (!realFs()) {
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) { }
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setFsUI();
+            }, 380);
+            try {
+                if (!realFs()) {
+                    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+                    if (req) req.call(docEl);
+                } else {
+                    var exit = document.exitFullscreen || document.webkitExitFullscreen;
+                    if (exit) exit.call(document);
+                }
+            } catch (err) { }
+        });
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setFsUI);
+    });
+    setFsUI();
+
+    /* =========================================================
+       14. 메인 루프
+       ========================================================= */
+    var lastHud = 0;
+    var demoStart = performance.now();
+
+    function loop(now) {
+        requestAnimationFrame(loop);
+
+        /* 1) 입력: 데모 or 카메라 */
+        if (state.demo) {
+            var lm = buildDemoLandmarks(state.demo, (now - demoStart) / 1000);
+            ingest([{ landmarks: lm, label: 'Left', auto: '데모 손' }]);
+        } else if (state.cameraOn && landmarker && video.readyState >= 2) {
+            if (now - lastDetect > 33) {
+                lastDetect = now;
+                var res = null;
+                try {
+                    res = landmarker.detectForVideo(video, now);
+                } catch (e) { res = null; }
+                if (res && res.landmarks && res.landmarks.length) {
+                    var dets = res.landmarks.map(function (lms, idx) {
+                        var label = '';
+                        try {
+                            label = res.handednesses[idx][0].categoryName || '';
+                        } catch (e2) { label = ''; }
+                        return { landmarks: lms, label: label };
+                    });
+                    ingest(dets);
+                } else {
+                    ingest([]);
+                }
+            }
+        } else if (state.cameraOn) {
+            ingest([]);
+        }
+
+        /* 2) HUD · PiP (약 10fps) */
+        if (now - lastHud > 100) {
+            lastHud = now;
+            renderHUD();
+            drawPip();
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+    }
+
+    /* =========================================================
+       15. 토스트 · 시작
+       ========================================================= */
+    var toastTimer = null;
+    function toast(msg) {
+        var el = $('#toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2600);
+    }
+
+    setTimeout(function () {
+        var tip = document.getElementById('guide-tooltip');
+        if (tip) tip.style.opacity = '0';
+    }, 9000);
+
+    syncDemoChips();
+    video.classList.add('mirror');
+    renderHUD();
+    requestAnimationFrame(loop);
+
+})();
+</script>
+
+<script src="../common/feedback.js" defer></script>
+<script src="../common/lib/qrcode.min.js" defer></script>
+<script src="../common/qr-modal.js" defer></script>
+<script src="../common/ui-layout.js" defer></script>
+</body>
+</html>
