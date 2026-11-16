@@ -1703,12 +1703,31 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     }
 
     // 관측자 좌표계 (매 프레임 갱신)
+    // uVec/eVec/nVec: 지평선 뷰(2D)용 — 언제나 실제 시각(state.hour)의 관측자 좌표계
     const uVec = new THREE.Vector3();
     const eVec = new THREE.Vector3();
     const nVec = new THREE.Vector3();
+    // bU/bE/bN: 3D 장면(지구·관측자·지평선·카메라)용 — 천구 회전 모드에서는 refHour에 고정
+    const bU = new THREE.Vector3();
+    const bE = new THREE.Vector3();
+    const bN = new THREE.Vector3();
 
     function hourToTheta(h) {
         return (h / 24) * Math.PI * 2 + (2.5 / 24) * Math.PI * 2;
+    }
+
+    // 3D 장면의 지구·관측자·카메라가 기준으로 삼는 시각.
+    // '천구 회전 (관측자)' 모드에서는 관측자가 서 있는 지구가 멈춰 있어야 하므로 refHour를 쓴다.
+    function frameHour() {
+        return state.rotateMode === 'sky' ? state.refHour : state.hour;
+    }
+
+    function setObsBasis(th, u, e, n) {
+        u.copy(P).multiplyScalar(Math.cos(LAT) * Math.cos(th))
+            .addScaledVector(Q, Math.cos(LAT) * Math.sin(th))
+            .addScaledVector(AXIS, Math.sin(LAT)).normalize();
+        e.crossVectors(AXIS, u).normalize();
+        n.crossVectors(u, e).normalize();
     }
 
     function updateFrame() {
@@ -1729,12 +1748,10 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             }
         }
 
-        const th = hourToTheta(state.hour);
-        uVec.copy(P).multiplyScalar(Math.cos(LAT) * Math.cos(th))
-            .addScaledVector(Q, Math.cos(LAT) * Math.sin(th))
-            .addScaledVector(AXIS, Math.sin(LAT)).normalize();
-        eVec.crossVectors(AXIS, uVec).normalize();
-        nVec.crossVectors(uVec, eVec).normalize();
+        // 3D: 천구 회전 모드에서는 지구·관측자·지평선이 refHour 자리에 멈춘다
+        setObsBasis(hourToTheta(frameHour()), bU, bE, bN);
+        // 지평선 뷰(2D): 두 모드 모두 실제 시각의 관측자 좌표계를 쓴다(별이 계속 움직여 보임)
+        setObsBasis(hourToTheta(state.hour), uVec, eVec, nVec);
     }
 
     // 별의 길(관측자 기준 하루 경로) 미리 계산
@@ -2263,10 +2280,10 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             skyGroup.visible = true;
             horizonGroup.visible = false;
             horizonRing.visible = false;
-            const fh = new THREE.Vector3().addScaledVector(nVec, Math.cos(az0)).addScaledVector(eVec, Math.sin(az0));
-            const dir = new THREE.Vector3().addScaledVector(fh, Math.cos(1.5 * DEG)).addScaledVector(uVec, Math.sin(1.5 * DEG)).normalize();
-            const eye = uVec.clone().multiplyScalar(R_E + 0.055);
-            camera.up.copy(uVec);
+            const fh = new THREE.Vector3().addScaledVector(bN, Math.cos(az0)).addScaledVector(bE, Math.sin(az0));
+            const dir = new THREE.Vector3().addScaledVector(fh, Math.cos(1.5 * DEG)).addScaledVector(bU, Math.sin(1.5 * DEG)).normalize();
+            const eye = bU.clone().multiplyScalar(R_E + 0.055);
+            camera.up.copy(bU);
             camera.position.copy(eye);
             camera.lookAt(eye.clone().addScaledVector(dir, 20));
         }
@@ -2285,6 +2302,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     document.getElementById('btn-view-earth').addEventListener('click', () => applyPreset('earth'));
 
     function updateRotateMode(mode) {
+        const prevMode = state.rotateMode;
         state.rotateMode = mode;
         const isSky = (mode === 'sky');
         if (isSky) {
@@ -2306,6 +2324,18 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             }
         }
         updateFrame();
+        // '천구 회전 (관측자)' → '지구 자전 (우주)'로 되돌리면 장면 전체(지구·지평선·천구)가
+        // 한꺼번에 회전해 화면이 튈 수 있다. 카메라도 같은 각도로 돌려 상대 배치를 그대로 이어 준다.
+        if (!isSky && prevMode === 'sky') {
+            const dTheta = hourToTheta(state.hour) - hourToTheta(state.refHour);
+            if (Math.abs(dTheta) > 1e-6) {
+                const q = new THREE.Quaternion().setFromAxisAngle(AXIS, dTheta);
+                camera.position.applyQuaternion(q);
+                camera.up.applyQuaternion(q);
+                controls.target.applyQuaternion(q);
+                if (state.preset !== 'earth') controls.update();
+            }
+        }
         if (state.showObs) drawObservation();
     }
 
@@ -2370,10 +2400,10 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         }
         if (state.preset === 'earth') {
             const az0 = DIRS[state.dir].az * DEG;
-            const fh = new THREE.Vector3().addScaledVector(nVec, Math.cos(az0)).addScaledVector(eVec, Math.sin(az0));
-            const dir = new THREE.Vector3().addScaledVector(fh, Math.cos(1.5 * DEG)).addScaledVector(uVec, Math.sin(1.5 * DEG)).normalize();
-            const eyePos = uVec.clone().multiplyScalar(R_E + 0.055);
-            camera.up.copy(uVec);
+            const fh = new THREE.Vector3().addScaledVector(bN, Math.cos(az0)).addScaledVector(bE, Math.sin(az0));
+            const dir = new THREE.Vector3().addScaledVector(fh, Math.cos(1.5 * DEG)).addScaledVector(bU, Math.sin(1.5 * DEG)).normalize();
+            const eyePos = bU.clone().multiplyScalar(R_E + 0.055);
+            camera.up.copy(bU);
             camera.position.copy(eyePos);
             camera.lookAt(eyePos.clone().addScaledVector(dir, 20));
         } else {
@@ -2411,6 +2441,60 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         applyPreset('oblique');
         animate();
     }
+
+    /* ---------- 실측 검증용 훅 (화면 표시·조작에는 관여하지 않음) ---------- */
+    window.__diurnalDebug = {
+        set(o) {
+            o = o || {};
+            if (o.mode) updateRotateMode(o.mode);
+            if (o.preset) applyPreset(o.preset);
+            if (o.hour !== undefined) {
+                state.hour = ((o.hour % 24) + 24) % 24;
+                const rng = document.getElementById('rng-hour');
+                if (rng) rng.value = state.hour;
+                updateFrame();
+                updateHUD();
+                drawObservation();
+            }
+            return this.frame();
+        },
+        frame() {
+            const q = skyGroup.quaternion;
+            const v = new THREE.Vector3(q.x, q.y, q.z);
+            let skyDeg = 2 * Math.atan2(v.length(), q.w) / DEG;
+            if (v.dot(AXIS) < 0) skyDeg = -skyDeg;
+            const f4 = n => +n.toFixed(4);
+            const starWorld = starDir[DIPPER[0]].clone().applyQuaternion(q);
+            const sRaw = starDir[DIPPER[0]];
+            const rel3 = [starWorld.dot(bU), starWorld.dot(bE), starWorld.dot(bN)].map(f4);
+            const rel2 = [sRaw.dot(uVec), sRaw.dot(eVec), sRaw.dot(nVec)].map(f4);
+            const obsWorld = obsGroup.getWorldPosition(new THREE.Vector3());
+            const horWorld = horizonGroup.getWorldPosition(new THREE.Vector3());
+            const di = diurnalGroup.quaternion;
+            const dv = new THREE.Vector3(di.x, di.y, di.z);
+            let diDeg = 2 * Math.atan2(dv.length(), di.w) / DEG;
+            if (dv.dot(AXIS) < 0) diDeg = -diDeg;
+            return {
+                rotateMode: state.rotateMode,
+                preset: state.preset,
+                hour: +state.hour.toFixed(3),
+                refHour: state.refHour,
+                earthSpinDeg: +(earthSpin.rotation.y / DEG).toFixed(3),
+                skyRotDeg: +skyDeg.toFixed(3),
+                diurnalRotDeg: +diDeg.toFixed(3),
+                starWorld: starWorld.toArray().map(f4),
+                starRel3D: rel3,
+                starRel2D: rel2,
+                obsWorld: obsWorld.toArray().map(f4),
+                horizonWorld: horWorld.toArray().map(f4),
+                bU: bU.toArray().map(f4),
+                u2D: uVec.toArray().map(f4),
+                camPos: camera.position.toArray().map(f4),
+                camDir: camera.getWorldDirection(new THREE.Vector3()).toArray().map(f4),
+                controlsTarget: controls.target.toArray().map(f4)
+            };
+        }
+    };
 
     if (document.fonts && document.fonts.load) {
         Promise.race([
