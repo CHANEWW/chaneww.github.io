@@ -642,6 +642,7 @@ body.dark-mode .ion-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255,
 .cock-grid { grid-template-columns: 1fr 1fr 1fr; }
 .cock-grid .control-tab-btn { font-size: 10.4px; padding: 9px 2px; }
 @media (max-width: 900px) {
+    .side-ctrl-panel .lp-row, .side-ctrl-panel .lp-note { display: none; }
     .ion-tbl { font-size: 9.6px; }
     .ion-tbl td { padding: 1.6px 1px; }
     .cock-grid .control-tab-btn { font-size: 9px; padding: 7px 1px; }
@@ -1179,7 +1180,7 @@ body.dark-mode .ion-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255,
 
     function buildGlass() {
         var glass = new THREE.MeshPhysicalMaterial({
-            color: 0xdcefff, transparent: true, opacity: 0.24, roughness: 0.06,
+            color: 0xcbdcf0, transparent: true, opacity: 0.42, roughness: 0.06,
             metalness: 0.0, side: THREE.DoubleSide, depthWrite: false,
             clearcoat: 1.0, clearcoatRoughness: 0.1
         });
@@ -1217,7 +1218,7 @@ body.dark-mode .ion-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255,
         var bg = new THREE.CylinderGeometry(0.2, 0.2, 1, 24, 1, false);
         bg.translate(0, 0.5, 0);
         buretteLiq = new THREE.Mesh(bg, new THREE.MeshPhysicalMaterial({
-            color: 0xcfe8ff, transparent: true, opacity: 0.55, roughness: 0.2, depthWrite: false
+            color: 0xa9d3ff, transparent: true, opacity: 0.95, roughness: 0.2, depthWrite: false
         }));
         buretteLiq.position.set(BASE_X, 3.55, 0);
         scene.add(buretteLiq);
@@ -1294,13 +1295,14 @@ body.dark-mode .ion-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255,
         makeIonPool('cl', 0x34c759, 22);
 
         /* 라벨 */
-        lbBurette = S.makeLabel('NaOH 0.5 M', { size: 0.42, color: '#0a84ff', weight: 800 });
-        lbBurette.position.set(BASE_X, 9.65, 0);
+        var LS = window.innerWidth <= 600 ? 0.78 : 0.42;
+        lbBurette = S.makeLabel('NaOH 0.5 M', { size: LS, color: '#0a84ff', weight: 800 });
+        lbBurette.position.set(BASE_X - 0.95, 9.35, 0);
         scene.add(lbBurette);
-        lbFlask = S.makeLabel('묽은 염산 10 mL', { size: 0.42, color: '#d97706', weight: 800 });
+        lbFlask = S.makeLabel('묽은 염산 10 mL', { size: LS, color: '#d97706', weight: 800 });
         lbFlask.position.set(BASE_X + 1.65, 1.15, 0);
         scene.add(lbFlask);
-        lbTemp = S.makeLabel('25.00 °C', { size: 0.4, color: '#1a9e54', weight: 800 });
+        lbTemp = S.makeLabel('25.00 °C', { size: LS * 0.95, color: '#1a9e54', weight: 800 });
         lbTemp.position.set(BASE_X + 1.55, 0.35, 0);
         scene.add(lbTemp);
     }
@@ -1540,8 +1542,30 @@ body.dark-mode .ion-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255,
             : '페놀프탈레인은 산성에서 무색, 염기성에서 붉은색이에요.';
     }
 
+    /* 화면 크기에 맞춘 시점 (세로 화면은 아래 패널을 피해 위로 올린다) */
+    var TARGET = new THREE.Vector3(-0.35, 4.55, 0);
+
+    function fitView() {
+        var W = window.innerWidth, H = Math.max(1, window.innerHeight);
+        var portrait = (W < H && W <= 900);
+        camera.aspect = W / H;
+        if (portrait) camera.setViewOffset(W, H, 0, Math.round(H * 0.16), W, H);
+        else camera.clearViewOffset();
+        camera.updateProjectionMatrix();
+        var vFov = camera.fov * Math.PI / 180;
+        var halfH = portrait ? 11.2 : 5.9;
+        var d = halfH / Math.tan(vFov / 2) + 1.0;
+        controls.target.copy(TARGET);
+        camera.position.set(TARGET.x, TARGET.y + 0.5, d);
+        controls.maxDistance = Math.max(26, d * 1.9);
+        controls.update();
+        var Hm = S.HOME();
+        Hm.x = camera.position.x; Hm.y = camera.position.y; Hm.z = camera.position.z;
+        Hm.tx = TARGET.x; Hm.ty = TARGET.y; Hm.tz = 0;
+    }
+
     S.start({
-        home: { x: BASE_X + 0.6, y: 5.3, z: 14.2, tx: BASE_X, ty: 4.5, tz: 0, fov: 38 },
+        home: { x: -0.35, y: 5.05, z: 16.5, tx: -0.35, ty: 4.55, tz: 0, fov: 38 },
         build: function () {
             buildGlass();
 
@@ -1580,6 +1604,12 @@ body.dark-mode .ion-tbl td { color: #dbe6f6; border-bottom-color: rgba(255, 255,
             });
 
             resetAll();
+            setTimeout(fitView, 380);
+            window.addEventListener('resize', function () { setTimeout(fitView, 90); });
+            window.addEventListener('orientationchange', function () { setTimeout(fitView, 280); });
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { setTimeout(fitView, 190); });
+            var al2 = $('btn-align');
+            if (al2) al2.addEventListener('click', function () { setTimeout(fitView, 0); });
         },
         update: update,
         reset: function () { resetAll(); }

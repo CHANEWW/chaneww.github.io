@@ -1552,23 +1552,53 @@ body.dark-mode .ebar .lp-bar::after { background: rgba(255, 255, 255, .34); }
 
     /* ---------- 5. 카메라 ---------- */
     var CAM_DIR = new THREE.Vector3(0.06, 0.29, 1).normalize();
-    var BOX = { cx: 17.2, cy: 9.6, hx: 18.6, hy: 11.5 };
+    var BOX = { cx: 16.0, cy: 9.0, hx: 16.6, hy: 10.6 };
+
+    function updateBox() {
+        var xs = PATH.x, n = xs.length, mx = 0, my = 0;
+        for (var i = 0; i < n; i++) { if (xs[i] > mx) mx = xs[i]; if (PATH.y[i] > my) my = PATH.y[i]; }
+        BOX.cx = (mx + 1.2) / 2;
+        BOX.hx = (mx + 1.2) / 2 + 1.0;
+        BOX.cy = my / 2 + 0.6;
+        BOX.hy = my / 2 + 1.9;
+    }
 
     function fitCamera() {
-        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        var W = window.innerWidth, H = Math.max(1, window.innerHeight);
+        var portrait = (W < H && W <= 900);
+        camera.aspect = W / H;
+        if (portrait) camera.setViewOffset(W, H, 0, Math.round(H * 0.14), W, H);
+        else camera.clearViewOffset();
         camera.updateProjectionMatrix();
-        var vFov = camera.fov * Math.PI / 180;
-        var hFov = 2 * Math.atan(Math.tan(vFov / 2) * Math.max(0.2, camera.aspect));
-        var d = Math.max((BOX.hx + 1.4) / Math.tan(hFov / 2), BOX.hy * 0.95 / Math.tan(vFov / 2)) * 1.13 + 5;
+
+        var fx = portrait ? 0.94 : 0.70;
+        var fy = portrait ? 0.42 : 0.66;
         var t = new THREE.Vector3(BOX.cx, BOX.cy, 0);
         controls.target.copy(t);
+        var d = 40, i, it, v = new THREE.Vector3();
+        for (it = 0; it < 8; it++) {
+            camera.position.copy(t).addScaledVector(CAM_DIR, d);
+            camera.lookAt(t);
+            camera.updateMatrixWorld(true);
+            var mx = 0, my = 0;
+            for (i = 0; i < PATH.x.length; i += 5) {
+                v.set(PATH.x[i], PATH.y[i], 0).project(camera);
+                if (Math.abs(v.x) > mx) mx = Math.abs(v.x);
+                if (Math.abs(v.y) > my) my = Math.abs(v.y);
+            }
+            var k = Math.max(mx / fx, my / fy);
+            if (Math.abs(k - 1) < 0.015) break;
+            d = d * Math.max(0.5, Math.min(2.5, k));
+        }
+        d = Math.max(12, d);
+        controls.target.copy(t);
         camera.position.copy(t).addScaledVector(CAM_DIR, d);
-        controls.maxDistance = d * 1.9;
+        controls.maxDistance = d * 2.0;
         camera.updateProjectionMatrix();
         controls.update();
-        var H = S.HOME();
-        H.x = camera.position.x; H.y = camera.position.y; H.z = camera.position.z;
-        H.tx = t.x; H.ty = t.y; H.tz = t.z;
+        var Hm = S.HOME();
+        Hm.x = camera.position.x; Hm.y = camera.position.y; Hm.z = camera.position.z;
+        Hm.tx = t.x; Hm.ty = t.y; Hm.tz = t.z;
     }
 
     /* ---------- 6. 리빌드 · 입력 ---------- */
@@ -1577,8 +1607,10 @@ body.dark-mode .ebar .lp-bar::after { background: rgba(255, 255, 255, .34); }
 
     function rebuild() {
         buildPath();
+        updateBox();
         buildTrackMesh();
         resetCart();
+        fitCamera();
     }
 
     function readSliders() {
@@ -1629,11 +1661,13 @@ body.dark-mode .ebar .lp-bar::after { background: rgba(255, 255, 255, .34); }
         home: { x: -6, y: 22, z: 60, tx: 15.6, ty: 10.2, tz: 0, fov: 40 },
         build: function () {
             readSliders();
-            lbH0 = S.makeLabel('출발 h₀', { size: 1.25, color: '#0a84ff', weight: 800 });
-            lbR = S.makeLabel('루프 R', { size: 1.25, color: '#ff375f', weight: 800 });
-            lbH1 = S.makeLabel('언덕 h₁', { size: 1.25, color: '#1a9e54', weight: 800 });
+            var LS = window.innerWidth <= 600 ? 1.9 : 1.25;
+            lbH0 = S.makeLabel('출발 h₀', { size: LS, color: '#0a84ff', weight: 800 });
+            lbR = S.makeLabel('루프 R', { size: LS, color: '#ff375f', weight: 800 });
+            lbH1 = S.makeLabel('언덕 h₁', { size: LS, color: '#1a9e54', weight: 800 });
             scene.add(lbH0); scene.add(lbR); scene.add(lbH1);
             buildPath();
+            updateBox();
             buildTrackMesh();
             buildCart();
             resetCart();
@@ -1649,8 +1683,8 @@ body.dark-mode .ebar .lp-bar::after { background: rgba(255, 255, 255, .34); }
             $('btn-fric').addEventListener('click', function () { setFriction(true); });
             $('btn-run').addEventListener('click', startRun);
 
-            fitCamera();
-            window.addEventListener('resize', function () { setTimeout(fitCamera, 60); });
+            setTimeout(fitCamera, 380);
+            window.addEventListener('resize', function () { setTimeout(fitCamera, 90); });
             window.addEventListener('orientationchange', function () { setTimeout(fitCamera, 260); });
             if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { setTimeout(fitCamera, 180); });
             var al = $('btn-align');
@@ -1659,6 +1693,9 @@ body.dark-mode .ebar .lp-bar::after { background: rgba(255, 255, 255, .34); }
             if (rs) rs.addEventListener('click', function () { setTimeout(resetAll, 0); });
         },
         update: update,
+        onDark: function (dark) {
+            if (scene.fog) scene.fog.color.setHex(dark ? 0x121a26 : 0xedf2fa);
+        },
         reset: function () {
             readSliders();
             rebuild();
