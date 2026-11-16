@@ -1,0 +1,1980 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>별의 색과 표면 온도 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script>if(!window.THREE){document.write('<scr'+'ipt src="../../common/lib/three.min.js"><\/scr'+'ipt>');}</script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<script>if(!(window.THREE&&THREE.OrbitControls)){document.write('<scr'+'ipt src="../../common/lib/OrbitControls.js"><\/scr'+'ipt>');}</script>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+<style>
+@font-face{
+  font-family:'SeoulNamsan';
+  src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+  font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+  font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color:#eef4ff;
+  background:radial-gradient(120% 120% at 50% 0%,#111a2c 0%,#080d17 48%,#03060c 100%);
+  transition:background .35s ease,color .35s ease;
+  touch-action:none;
+}
+body.light-mode{
+  color:#16202e;
+  background:linear-gradient(180deg,#f8fbff 0%,#e9f1fa 55%,#dde7f3 100%);
+}
+#canvas-container{position:absolute;inset:0;z-index:1;touch-action:none}
+#canvas-container canvas{display:block}
+
+/* ---------- 유리 카드 ---------- */
+.glass-panel{
+  background:rgba(18,28,46,.84);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:18px;
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+  transition:background .35s ease,border-color .35s ease,color .35s ease;
+}
+body.light-mode .glass-panel{
+  background:rgba(255,255,255,.86);
+  border-color:rgba(255,255,255,.7);
+  box-shadow:0 10px 28px rgba(15,23,42,.10);
+}
+
+/* ---------- 좌상단 ---------- */
+.top-left-bar{position:fixed;top:16px;left:18px;display:flex;align-items:center;gap:10px;z-index:40;max-width:calc(100vw - 104px)}
+.back-btn{
+  display:flex;align-items:center;gap:6px;padding:9px 16px;font-size:14px;font-weight:700;font-family:inherit;
+  color:#eaf1ff;text-decoration:none;border:none;border-radius:999px;cursor:pointer;white-space:nowrap;
+  transition:transform .18s,background .2s;
+}
+body.light-mode .back-btn{color:#16202e}
+.back-btn:hover{transform:translateY(-1px)}
+.back-btn:active{transform:scale(.97)}
+.tag-badge{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:14px;font-weight:700;border-radius:999px;min-width:0;overflow:hidden}
+.tag-badge .title-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:800;letter-spacing:-.3px}
+.vision-badge{flex:0 0 auto;background:rgba(10,132,255,.28);color:#8cc6ff;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.2px}
+body.light-mode .vision-badge{background:rgba(0,122,255,.14);color:#007aff}
+
+/* ---------- 우상단 ---------- */
+.icon-btn{
+  width:38px;height:38px;min-width:38px;border-radius:50%;border:1px solid rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+  color:#eaf1ff;background:rgba(18,28,46,.84);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 8px 22px rgba(0,0,0,.35);transition:background .35s,border-color .35s;
+}
+body.light-mode .icon-btn{color:#16202e;background:rgba(255,255,255,.86);border-color:rgba(255,255,255,.7)}
+.data-card{display:flex;align-items:center;gap:14px;padding:9px 16px;border-radius:16px}
+.data-item{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.data-label{font-size:10.5px;font-weight:700;color:#9fb3ce;white-space:nowrap;line-height:1.2}
+body.light-mode .data-label{color:#64748b}
+.data-value{font-size:14px;font-weight:800;color:#f4f8ff;white-space:nowrap;line-height:1.25;display:flex;align-items:center;gap:5px}
+body.light-mode .data-value{color:#0f172a}
+.data-value .dot{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid rgba(255,255,255,.35);flex:0 0 auto}
+body.light-mode .data-value .dot{border-color:rgba(0,0,0,.2)}
+
+/* ---------- 중앙 안내 ---------- */
+.center-tooltip{
+  position:fixed;top:80px;left:50%;transform:translateX(-50%);padding:8px 18px;border-radius:999px;
+  font-size:12.5px;font-weight:700;color:#c7d5e8;pointer-events:none;z-index:15;white-space:nowrap;
+  max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;
+  background:rgba(12,20,34,.76);border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  transition:opacity .3s ease;
+}
+body.light-mode .center-tooltip{color:#334155;background:rgba(255,255,255,.8);border-color:rgba(0,0,0,.08)}
+
+/* ---------- 좌측 그래프 패널 ---------- */
+.side-left-panel{
+  position:fixed;left:18px;bottom:78px;width:256px;padding:11px 12px 9px;z-index:20;border-radius:18px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.sl-title{font-size:11.5px;font-weight:800;color:#c7d5e8;letter-spacing:-.2px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+body.light-mode .sl-title{color:#334155}
+.sl-title em{font-style:normal;font-size:9.5px;font-weight:700;color:#7f93ad}
+body.light-mode .sl-title em{color:#64748b}
+.spec-canvas{display:block;width:100%;height:124px;border-radius:10px}
+.sl-cap{font-size:10px;font-weight:700;line-height:1.4;color:#93a7c0;letter-spacing:-.1px;word-break:keep-all}
+body.light-mode .sl-cap{color:#5b6b82}
+.sl-cap b{color:#ffd479;font-weight:800}
+body.light-mode .sl-cap b{color:#b45309}
+.myth-badge{
+  margin-top:2px;padding:6px 8px;border-radius:10px;font-size:10px;line-height:1.42;font-weight:700;
+  background:rgba(255,171,64,.13);border:1px solid rgba(255,171,64,.35);color:#ffcf8f;word-break:keep-all;
+}
+body.light-mode .myth-badge{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.32);color:#92400e}
+.myth-badge b{font-weight:800}
+
+/* ---------- 우측 조절 패널 ---------- */
+body #side-ctrl.side-ctrl-panel{
+  width:250px !important;padding:11px 12px !important;gap:8px !important;
+  max-height:calc(100vh - 150px) !important;
+}
+.panel-header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12);width:100%}
+body.light-mode .panel-header{border-bottom-color:rgba(15,23,42,.08)}
+.panel-title{font-size:12.5px !important;font-weight:800 !important;color:#eef4ff !important;letter-spacing:-.2px !important;text-align:left !important;border:none !important;margin:0 !important;padding:0 !important}
+body.light-mode .panel-title{color:#0f172a !important}
+.mode-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:100%}
+.mode-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:46px;padding:6px 2px;
+  border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(30,42,62,.9);color:#cbd5e1;
+  font-family:inherit;font-size:10.5px;font-weight:800;white-space:nowrap;cursor:pointer;transition:all .18s;letter-spacing:-.3px;
+}
+body.light-mode .mode-btn{background:rgba(255,255,255,.9);border-color:rgba(15,23,42,.09);color:#334155}
+.mode-btn .mb-icon{font-size:15px;line-height:1}
+.mode-btn.active{background:#0a84ff;border-color:#0a84ff;color:#fff;box-shadow:0 4px 12px rgba(10,132,255,.35)}
+.tab-content{display:none;flex-direction:column;gap:8px;width:100%}
+.tab-content.active{display:flex}
+.ctrl-row{display:flex;flex-direction:column;gap:3px;width:100%}
+.ctrl-row-header{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.ctrl-label{font-size:11.5px;font-weight:700;color:#cbd5e1;white-space:nowrap;line-height:1.25}
+body.light-mode .ctrl-label{color:#475569}
+.ctrl-val{font-size:12.5px;font-weight:800;color:#ffd479;white-space:nowrap;line-height:1.25}
+body.light-mode .ctrl-val{color:#b45309}
+.ctrl-slider{
+  width:100%;height:8px;border-radius:999px;outline:none;-webkit-appearance:none;appearance:none;cursor:pointer;margin:4px 0 2px;
+  background:linear-gradient(90deg,#7a1c00 0%,#ff5a00 16%,#ffa500 34%,#ffe08a 52%,#ffffff 68%,#cfe2ff 84%,#9dc0ff 100%);
+  border:1px solid rgba(255,255,255,.18);
+}
+.ctrl-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;cursor:pointer;
+  border:3px solid #0a84ff;box-shadow:0 2px 8px rgba(0,0,0,.45);
+}
+.ctrl-slider::-moz-range-thumb{width:16px;height:16px;border:3px solid #0a84ff;border-radius:50%;background:#fff}
+.preset-row{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;width:100%}
+.preset-btn{
+  padding:6px 1px;border-radius:9px;font-size:10px;font-weight:800;font-family:inherit;letter-spacing:-.4px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#dbe6f5;
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+body.light-mode .preset-btn{background:rgba(0,0,0,.04);border-color:rgba(15,23,42,.1);color:#334155}
+.preset-btn:hover{background:rgba(255,255,255,.16)}
+.preset-btn.active{background:#0a84ff;border-color:#0a84ff;color:#fff;box-shadow:0 2px 8px rgba(10,132,255,.4)}
+.info-card{
+  background:rgba(0,0,0,.32);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:5px;
+  border:1px solid rgba(255,255,255,.1);width:100%;
+}
+body.light-mode .info-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.06)}
+.info-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11.5px}
+.info-title{color:#9fb3ce;font-weight:600;white-space:nowrap}
+body.light-mode .info-title{color:#64748b}
+.info-desc{font-weight:800;color:#f1f5f9;white-space:nowrap;text-align:right}
+body.light-mode .info-desc{color:#0f172a}
+.banner-guide{
+  padding:7px 9px;border-radius:10px;font-size:10.5px;line-height:1.42;font-weight:700;
+  background:rgba(56,189,248,.13);border:1px solid rgba(56,189,248,.28);color:#9ddcff;word-break:keep-all;
+}
+body.light-mode .banner-guide{background:rgba(2,132,199,.08);border-color:rgba(2,132,199,.24);color:#075985}
+.banner-guide b{font-weight:800}
+.panel-note{font-size:9.5px;font-weight:600;color:#8fa3bd;line-height:1.45;letter-spacing:-.1px;word-break:keep-all}
+body.light-mode .panel-note{color:#64748b}
+.star-chip-row{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;width:100%}
+.star-chip{
+  display:flex;align-items:center;gap:5px;padding:6px 6px;border-radius:9px;font-size:10.5px;font-weight:800;font-family:inherit;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#dbe6f5;cursor:pointer;
+  transition:all .15s;white-space:nowrap;overflow:hidden;letter-spacing:-.3px;
+}
+body.light-mode .star-chip{background:rgba(0,0,0,.04);border-color:rgba(15,23,42,.1);color:#334155}
+.star-chip i{width:9px;height:9px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 6px currentColor}
+.star-chip.active{background:#0a84ff;border-color:#0a84ff;color:#fff;box-shadow:0 2px 8px rgba(10,132,255,.4)}
+.temp-ruler{position:relative;height:9px;border-radius:5px;margin:14px 2px 30px;border:1px solid rgba(255,255,255,.18);
+  background:linear-gradient(90deg,#7a1c00 0%,#ff5a00 10%,#ffa500 26%,#ffe08a 46%,#ffffff 62%,#cfe2ff 80%,#9dc0ff 100%)}
+body.light-mode .temp-ruler{border-color:rgba(15,23,42,.18)}
+.temp-ruler .mk{position:absolute;top:-3px;width:2px;height:15px;background:rgba(255,255,255,.9);transform:translateX(-1px);border-radius:1px}
+.temp-ruler .mk span{position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:8.5px;font-weight:800;color:#c7d5e8;white-space:nowrap}
+body.light-mode .temp-ruler .mk span{color:#475569}
+.temp-ruler .mk:nth-child(even) span{top:28px}
+.temp-ruler .mk.cur{width:3px;height:19px;top:-5px;background:#0a84ff;box-shadow:0 0 8px #0a84ff}
+.ctrl-action-btn{
+  width:100%;padding:9px 12px;border-radius:10px;border:none;font-size:12px;font-weight:800;font-family:inherit;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px;
+  background:rgba(255,255,255,.1);color:#f1f5f9;white-space:nowrap;
+}
+.ctrl-action-btn:hover{background:rgba(255,255,255,.2);transform:translateY(-1px)}
+.ctrl-action-btn.primary{background:#0a84ff;color:#fff;box-shadow:0 4px 12px rgba(10,132,255,.4)}
+.ctrl-action-btn.primary:hover{background:#0077ed}
+body.light-mode .ctrl-action-btn{background:rgba(0,0,0,.06);color:#334155}
+body.light-mode .ctrl-action-btn.primary{background:#0a84ff;color:#fff}
+
+/* 모바일에서만 보이는 작은 그래프 */
+.spec-inline{display:none;flex-direction:column;gap:4px;width:100%}
+.spec-inline canvas{display:block;width:100%;height:92px;border-radius:9px}
+
+/* ---------- 퀴즈 ---------- */
+.q-overlay{
+  position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:16px;
+  background:rgba(4,8,16,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
+.q-overlay.on{display:flex}
+.q-card{
+  width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 60px);overflow-y:auto;
+  padding:16px 18px 14px;border-radius:20px;display:flex;flex-direction:column;gap:10px;
+}
+body.light-mode .q-card{background:rgba(255,255,255,.94)}
+.q-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.q-title{font-size:15px;font-weight:800;color:#f4f8ff;letter-spacing:-.3px}
+body.light-mode .q-title{color:#0f172a}
+.q-step{font-size:11.5px;font-weight:800;color:#9fb3ce;background:rgba(255,255,255,.08);padding:3px 9px;border-radius:999px}
+body.light-mode .q-step{color:#475569;background:rgba(0,0,0,.05)}
+.q-ask{font-size:12.5px;font-weight:700;color:#c7d5e8;line-height:1.45;word-break:keep-all}
+body.light-mode .q-ask{color:#334155}
+.q-ask b{color:#ffd479;font-weight:800}
+body.light-mode .q-ask b{color:#b45309}
+.q-row{display:flex;gap:10px;justify-content:center;align-items:flex-start;margin:6px 0 2px}
+.q-disc{
+  position:relative;flex:1 1 0;max-width:132px;height:104px;border:none;background:transparent;padding:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:transform .15s;
+}
+.q-disc:active{transform:scale(.96)}
+.q-disc .orb{width:88px;height:88px;border-radius:50%;position:relative;transition:box-shadow .2s,transform .2s}
+.q-disc .num{
+  position:absolute;top:0;left:0;min-width:22px;height:22px;border-radius:999px;display:none;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;color:#08111f;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.35);z-index:3;
+}
+.q-disc.picked .num{display:flex}
+.q-disc.ok .orb{box-shadow:0 0 0 3px #22c55e,0 0 22px 2px rgba(34,197,94,.6)}
+.q-disc.err .orb{box-shadow:0 0 0 3px #ef4444,0 0 22px 2px rgba(239,68,68,.55)}
+.q-tag{
+  position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:800;color:#dbe6f5;
+  white-space:nowrap;text-align:center;line-height:1.3;
+}
+body.light-mode .q-tag{color:#334155}
+.q-tag small{display:block;font-size:9px;font-weight:700;color:#9fb3ce}
+body.light-mode .q-tag small{color:#64748b}
+.q-feedback{
+  min-height:34px;font-size:11.5px;font-weight:700;line-height:1.5;color:#c7d5e8;
+  background:rgba(255,255,255,.05);border-radius:10px;padding:7px 9px;word-break:keep-all;
+}
+body.light-mode .q-feedback{color:#334155;background:rgba(0,0,0,.04)}
+.q-feedback b{color:#ffd479}
+body.light-mode .q-feedback b{color:#b45309}
+.q-actions{display:flex;gap:8px;justify-content:flex-end}
+.q-btn{
+  padding:9px 16px;border-radius:11px;border:none;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;
+  background:rgba(255,255,255,.1);color:#f1f5f9;transition:all .2s;white-space:nowrap;
+}
+body.light-mode .q-btn{background:rgba(0,0,0,.06);color:#334155}
+.q-btn.primary{background:#0a84ff;color:#fff;box-shadow:0 4px 12px rgba(10,132,255,.4)}
+.q-btn[disabled]{opacity:.45;cursor:default}
+.q-score{font-size:30px;font-weight:800;color:#fff;text-align:center;letter-spacing:-1px}
+body.light-mode .q-score{color:#0f172a}
+.q-score span{font-size:14px;font-weight:700;color:#9fb3ce}
+body.light-mode .q-score span{color:#64748b}
+
+/* ---------- 하단 ---------- */
+.bottom-right-bar{position:fixed;right:18px;bottom:18px;display:flex;align-items:center;gap:10px;z-index:90}
+#fullscreenBtn{
+  height:42px;padding:0 15px;border-radius:999px;display:inline-flex;align-items:center;gap:7px;
+  font-size:12.5px;font-weight:800;font-family:inherit;color:#eaf1ff;cursor:pointer;
+  background:rgba(18,28,46,.9);border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 10px 26px rgba(0,0,0,.45);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  transition:transform .15s ease,background .2s ease;
+}
+body.light-mode #fullscreenBtn{background:rgba(255,255,255,.92);border-color:rgba(15,23,42,.12);color:#0f172a}
+#fullscreenBtn:hover{transform:translateY(-1px) scale(1.02)}
+#fullscreenBtn:active{transform:scale(.97)}
+
+/* ================= 모바일 세로 ================= */
+@media (max-width:900px){
+  .top-left-bar{top:max(8px,env(safe-area-inset-top));left:8px;gap:6px;max-width:calc(100vw - 64px)}
+  .back-btn{padding:7px 11px;font-size:12px}
+  .tag-badge{padding:7px 11px;font-size:12px}
+  .tag-badge .title-text{font-size:12px}
+  .vision-badge{display:none}
+  .qr-btn{display:none}
+  .icon-btn{width:32px;height:32px;min-width:32px;font-size:14px}
+  .data-card{gap:8px;padding:6px 10px;border-radius:14px}
+  .data-label{font-size:9px}
+  .data-value{font-size:11.5px}
+  .center-tooltip{display:none}
+  .side-left-panel{display:none}
+  .spec-inline{display:flex}
+  .top-right-bar{left:8px !important;right:8px !important;align-items:stretch !important}
+  .tr-util{justify-content:flex-end !important}
+  .data-card{width:100% !important;justify-content:space-around !important}
+  .panel-note{display:none}
+  .spec-inline canvas{height:70px}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(62px + env(safe-area-inset-bottom)) !important;
+    max-height:min(47vh,420px) !important;padding:8px 9px !important;gap:6px !important;
+  }
+  .panel-title{font-size:11.5px !important}
+  .mode-btn{min-height:42px;font-size:10px}
+  .mode-btn .mb-icon{font-size:14px}
+  .ctrl-label{font-size:10.5px}
+  .ctrl-val{font-size:11.5px}
+  .info-row{font-size:10.5px}
+  .banner-guide{font-size:10px}
+  .panel-note{font-size:9px}
+  .star-chip{font-size:10px;padding:5px 5px}
+  .preset-btn{font-size:9.5px;padding:5px 0}
+  .ctrl-action-btn{font-size:11.5px;padding:8px 10px}
+  .bottom-right-bar{right:8px;bottom:calc(8px + env(safe-area-inset-bottom))}
+  #fullscreenBtn{height:36px;padding:0 11px;font-size:12px}
+  #fullscreenText{display:none}
+  .q-card{padding:13px 13px 11px;gap:8px}
+  .q-title{font-size:13.5px}
+  .q-ask{font-size:11.5px}
+  .q-row{gap:6px}
+  .q-disc{height:86px}
+  .q-disc .orb{width:70px;height:70px}
+  .q-tag{font-size:9px}
+  .q-tag small{font-size:8px}
+}
+@media (max-width:400px){
+  .data-card{gap:6px;padding:5px 8px}
+  .data-item:nth-child(3){display:none}
+}
+
+/* ================= 모바일 가로 ================= */
+@media (max-height:520px) and (orientation:landscape){
+  .top-left-bar{top:max(6px,env(safe-area-inset-top));left:6px;gap:5px;max-width:46vw}
+  .back-btn{padding:5px 9px;font-size:11px}
+  .tag-badge{padding:5px 9px;font-size:11px}
+  .vision-badge{display:none}
+  .qr-btn{display:none}
+  .icon-btn{width:28px;height:28px;min-width:28px;font-size:13px}
+  .data-card{gap:8px;padding:4px 9px;border-radius:12px}
+  .data-label{font-size:8.5px}
+  .data-value{font-size:11px}
+  .center-tooltip{display:none}
+  .side-left-panel{display:none}
+  .spec-inline{display:none}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(46px + env(safe-area-inset-bottom)) !important;
+    max-height:calc(100vh - 108px) !important;padding:7px 9px !important;gap:5px !important;
+  }
+  .panel-title{font-size:11px !important}
+  .mode-btn{min-height:34px;font-size:9.5px}
+  .mode-btn .mb-icon{font-size:12px}
+  .info-row{font-size:10px}
+  .panel-note{display:none}
+  .bottom-right-bar{right:8px;bottom:calc(6px + env(safe-area-inset-bottom))}
+  #fullscreenBtn{height:32px;padding:0 10px}
+  #fullscreenText{display:none}
+  .q-card{max-height:calc(100vh - 24px);padding:10px 12px;gap:6px}
+  .q-row{gap:8px}
+}
+</style>
+</head>
+<body class="dark-mode">
+
+<div id="canvas-container"></div>
+
+<!-- 좌상단 -->
+<div class="top-left-bar">
+  <a href="../../../index.html" class="glass-panel back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+  <div class="glass-panel tag-badge">
+    <span class="title-text">별의 색과 표면 온도 3D</span>
+    <span class="vision-badge">visionOS</span>
+  </div>
+  <button class="glass-panel back-btn qr-btn" id="qrBtn" type="button" data-qr-title="별의 색과 표면 온도 3D" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span></button>
+</div>
+
+<!-- 우상단 : 1행 유틸 · 2행 데이터 배지 -->
+<div class="top-right-bar">
+  <div class="tr-util">
+    <button class="icon-btn" id="theme-toggle" type="button" title="주간/야간 모드" aria-label="주간/야간 모드 전환">☀️</button>
+  </div>
+  <div class="glass-panel data-card">
+    <div class="data-item" id="di-1">
+      <span class="data-label" id="lb-1">표면 온도</span>
+      <span class="data-value" id="val-temp">3,000 K</span>
+    </div>
+    <div class="data-item" id="di-2">
+      <span class="data-label" id="lb-2">색깔</span>
+      <span class="data-value" id="val-color"><i class="dot" id="val-dot" style="background:#ffa500"></i><span id="val-color-text">주황색</span></span>
+    </div>
+    <div class="data-item" id="di-3">
+      <span class="data-label" id="lb-3">복사 세기</span>
+      <span class="data-value" id="val-energy">0.07배</span>
+    </div>
+  </div>
+</div>
+
+<!-- 중앙 안내 -->
+<div class="center-tooltip" id="center-hint">🔥 쇠막대를 위아래로 드래그하거나 슬라이더로 불의 세기를 바꿔 보세요</div>
+
+<!-- 좌측 그래프 패널 (데스크톱) -->
+<div class="glass-panel side-left-panel" id="spec-left">
+  <div class="sl-title"><span>🌈 파장별 복사 세기</span><em id="spec-band">가시광선 · 적외선</em></div>
+  <canvas class="spec-canvas" id="spec-canvas"></canvas>
+  <div class="sl-cap" id="spec-cap">온도가 높을수록 가장 센 빛의 파장이 짧아집니다.</div>
+  <div class="myth-badge" id="myth-badge">💡 <b>수도꼭지의 빨강</b>은 ‘뜨거움’ 표시지만, <b>불꽃과 별빛은 파란색</b>이 더 뜨겁습니다.</div>
+</div>
+
+<!-- 하단 중앙 바 : 초기화 · 시점정렬 -->
+<div class="glass-panel bottom-control-bar">
+  <button class="control-tab-btn" id="btn-reset" type="button"><span>🔄</span><span>초기화</span></button>
+  <button class="control-tab-btn" id="btn-cam" type="button"><span>🎥</span><span>시점정렬</span></button>
+</div>
+
+<!-- 우하단 전체화면 -->
+<div class="bottom-right-bar">
+  <button id="fullscreenBtn" class="glass-panel" type="button" aria-label="전체화면으로 전환">
+    <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+  </button>
+</div>
+
+<!-- 우측 조절 패널 -->
+<div class="glass-panel side-ctrl-panel" id="side-ctrl">
+  <div class="panel-header"><span class="panel-title" id="panel-main-title">🔥 가스불 세기</span></div>
+
+  <div class="mode-grid" id="mode-grid">
+    <button class="mode-btn active" type="button" data-mode="A"><span class="mb-icon">🔥</span><span>쇠막대</span></button>
+    <button class="mode-btn" type="button" data-mode="B"><span class="mb-icon">🌟</span><span>실제 별</span></button>
+    <button class="mode-btn" type="button" data-mode="C"><span class="mb-icon">🎯</span><span>온도 퀴즈</span></button>
+  </div>
+
+  <div class="spec-inline" id="spec-inline">
+    <canvas id="spec-mini"></canvas>
+    <div class="sl-cap" id="spec-cap-mini">온도가 높을수록 가장 센 빛의 파장이 짧아집니다.</div>
+  </div>
+
+  <!-- 모드 A : 쇠막대 & 가스불 -->
+  <div class="tab-content active" id="tab-A">
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">가스불 세기 (온도)</span><span class="ctrl-val" id="lbl-temp-A">3,000 K</span></div>
+      <input type="range" class="ctrl-slider" id="sld-temp" min="1500" max="15000" step="50" value="3000" aria-label="온도 조절">
+    </div>
+    <div class="preset-row" id="preset-row">
+      <button class="preset-btn" type="button" data-temp="1500">약불</button>
+      <button class="preset-btn active" type="button" data-temp="3000">붉은불</button>
+      <button class="preset-btn" type="button" data-temp="5800">노란불</button>
+      <button class="preset-btn" type="button" data-temp="9000">하얀불</button>
+      <button class="preset-btn" type="button" data-temp="13000">청백불</button>
+    </div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-title">쇠막대 온도</span><span class="info-desc" id="a-temp">3,000 K</span></div>
+      <div class="info-row"><span class="info-title">빛의 색</span><span class="info-desc" id="a-color">주황색</span></div>
+      <div class="info-row"><span class="info-title">태양과 비교한 복사 세기</span><span class="info-desc" id="a-energy">0.07배</span></div>
+      <div class="info-row"><span class="info-title">가장 센 빛의 파장</span><span class="info-desc" id="a-peak">966 nm</span></div>
+    </div>
+    <div class="banner-guide" id="guide-A">🔥 불의 세기를 올리면 쇠막대가 <b>붉은색 → 주황색 → 노란색 → 흰색 → 청백색</b>으로 변합니다.</div>
+    <div class="panel-note">실제 철은 약 1,800 K에서 녹지만, 색과 온도의 관계를 보기 위해 가상으로 더 뜨겁게 가열합니다.</div>
+  </div>
+
+  <!-- 모드 B : 실제 별 비교 -->
+  <div class="tab-content" id="tab-B">
+    <div class="star-chip-row" id="star-chips">
+      <button class="star-chip" type="button" data-star="0"><i style="background:#ffa94d"></i>베텔게우스</button>
+      <button class="star-chip" type="button" data-star="1"><i style="background:#fff2cc"></i>태양</button>
+      <button class="star-chip" type="button" data-star="2"><i style="background:#e2edff"></i>시리우스</button>
+      <button class="star-chip" type="button" data-star="3"><i style="background:#b9d2ff"></i>리겔</button>
+    </div>
+    <div class="temp-ruler" id="temp-ruler">
+      <div class="mk" style="left:11.5%"><span>베텔게우스</span></div>
+      <div class="mk" style="left:29.2%"><span>태양</span></div>
+      <div class="mk" style="left:60.8%"><span>시리우스</span></div>
+      <div class="mk" style="left:77.7%"><span>리겔</span></div>
+    </div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-title">별</span><span class="info-desc" id="b-name">—</span></div>
+      <div class="info-row"><span class="info-title">표면 온도</span><span class="info-desc" id="b-temp">—</span></div>
+      <div class="info-row"><span class="info-title">빛의 색</span><span class="info-desc" id="b-color">—</span></div>
+      <div class="info-row"><span class="info-title">분광형</span><span class="info-desc" id="b-spec">—</span></div>
+      <div class="info-row"><span class="info-title">가장 센 빛의 파장</span><span class="info-desc" id="b-peak">—</span></div>
+    </div>
+    <div class="banner-guide" id="guide-B">🌟 네 별을 <b>같은 크기</b>로 세웠습니다. 크기가 아니라 <b>색</b>으로 온도를 비교해 보세요.</div>
+    <button class="ctrl-action-btn" id="btn-all-stars" type="button">🌟 네 별 나란히 보기</button>
+  </div>
+
+  <!-- 모드 C : 온도 맞히기 -->
+  <div class="tab-content" id="tab-C">
+    <div class="banner-guide" id="guide-C">🎯 별의 <b>색</b>만 보고 온도 순서를 맞히는 활동입니다. 가운데 카드에서 <b>차가운 것부터</b> 차례로 누르세요.</div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-title">진행</span><span class="info-desc" id="c-step">1 / 5</span></div>
+      <div class="info-row"><span class="info-title">점수</span><span class="info-desc" id="c-score">0</span></div>
+      <div class="info-row"><span class="info-title">지금까지</span><span class="info-desc" id="c-detail">—</span></div>
+    </div>
+    <button class="ctrl-action-btn primary" id="btn-quiz" type="button">🎯 퀴즈 시작</button>
+    <div class="panel-note">색이 파란 별일수록 표면 온도가 높습니다. 정답은 카드에 바로 알려 줍니다.</div>
+  </div>
+</div>
+
+<!-- 퀴즈 오버레이 -->
+<div class="q-overlay" id="q-overlay">
+  <div class="q-card glass-panel">
+    <div class="q-head">
+      <span class="q-title">🎯 온도 맞히기</span>
+      <span class="q-step" id="q-step">1 / 5</span>
+    </div>
+    <div class="q-ask" id="q-ask">색이 <b>차가운</b> 별부터 차례대로 눌러 보세요.</div>
+    <div class="q-row" id="q-row"></div>
+    <div class="q-feedback" id="q-feedback">정답을 모두 고르면 바로 채점합니다.</div>
+    <div class="q-actions">
+      <button class="q-btn" id="q-close" type="button">닫기</button>
+      <button class="q-btn primary" id="q-next" type="button" disabled>다음 ➜</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+var $ = function (s) { return document.querySelector(s); };
+var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+var fmt = function (n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+
+/* ============================================================
+   1. 색 · 온도 계산
+   ============================================================ */
+/* 흑체 색 근사 (표준 관측표를 잇는 보간값, 1500~15000 K) */
+var TEMP_STOPS = [
+    [1500, 255, 100,   0], [2000, 255, 126,   0], [2500, 255, 146,   0],
+    [3000, 255, 167,   0], [3500, 255, 183,  30], [4000, 255, 200,  56],
+    [4500, 255, 215, 105], [5000, 255, 228, 150], [5500, 255, 238, 185],
+    [5800, 255, 242, 200], [6500, 255, 249, 238], [7000, 250, 250, 255],
+    [8000, 228, 238, 255], [9000, 210, 225, 255], [10000, 201, 220, 255],
+    [12000, 183, 206, 255], [15000, 166, 194, 255]
+];
+
+function kelvinRGB(K) {
+    var i, a, b, t;
+    if (K <= TEMP_STOPS[0][0]) { a = TEMP_STOPS[0]; return [a[1], a[2], a[3]]; }
+    for (i = 1; i < TEMP_STOPS.length; i++) {
+        if (K <= TEMP_STOPS[i][0]) {
+            a = TEMP_STOPS[i - 1]; b = TEMP_STOPS[i];
+            t = (K - a[0]) / (b[0] - a[0]);
+            return [
+                Math.round(a[1] + (b[1] - a[1]) * t),
+                Math.round(a[2] + (b[2] - a[2]) * t),
+                Math.round(a[3] + (b[3] - a[3]) * t)
+            ];
+        }
+    }
+    b = TEMP_STOPS[TEMP_STOPS.length - 1];
+    return [b[1], b[2], b[3]];
+}
+function rgbCss(rgb, a) {
+    return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (a === undefined ? 1 : a) + ')';
+}
+/* 화면 표시용 색 램프 — 실제 흑체색보다 채도를 살려 눈으로 구분되게 조정 */
+var ROD_STOPS = [
+    [1500, 150, 26,   0], [1800, 190, 45,   2], [2200, 235, 70,   6],
+    [2600, 255, 100,  12], [3000, 255, 126,  20], [3500, 255, 150,  34],
+    [4000, 255, 172,  58], [4600, 255, 196,  96], [5200, 255, 215, 132],
+    [5800, 255, 226, 158], [6400, 255, 238, 192], [7000, 250, 246, 226],
+    [7600, 238, 242, 252], [8600, 218, 231, 255], [9800, 212, 228, 255],
+    [11000, 190, 214, 255], [13000, 160, 194, 255], [15000, 140, 180, 255]
+];
+function rodRGB(K) {
+    var i, a, b, t;
+    if (K <= ROD_STOPS[0][0]) { a = ROD_STOPS[0]; return [a[1], a[2], a[3]]; }
+    for (i = 1; i < ROD_STOPS.length; i++) {
+        if (K <= ROD_STOPS[i][0]) {
+            a = ROD_STOPS[i - 1]; b = ROD_STOPS[i];
+            t = (K - a[0]) / (b[0] - a[0]);
+            return [
+                Math.round(a[1] + (b[1] - a[1]) * t),
+                Math.round(a[2] + (b[2] - a[2]) * t),
+                Math.round(a[3] + (b[3] - a[3]) * t)
+            ];
+        }
+    }
+    b = ROD_STOPS[ROD_STOPS.length - 1];
+    return [b[1], b[2], b[3]];
+}
+/* sRGB 값을 선형으로 바꿔 화면에 의도한 색이 나오게 한다 */
+function dispColor(rgb) {
+    var c = new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
+    if (c.convertSRGBToLinear) c.convertSRGBToLinear();
+    return c;
+}
+/* 화면에서 색 차이를 또렷하게 보이도록 채도만 살짝 올린다 */
+function saturate(rgb, k) {
+    var avg = (rgb[0] + rgb[1] + rgb[2]) / 3;
+    return [
+        clamp(Math.round(avg + (rgb[0] - avg) * k), 0, 255),
+        clamp(Math.round(avg + (rgb[1] - avg) * k), 0, 255),
+        clamp(Math.round(avg + (rgb[2] - avg) * k), 0, 255)
+    ];
+}
+function colorName(K) {
+    if (K < 1700) return '검붉은색';
+    if (K < 2600) return '붉은색';
+    if (K < 4200) return '주황색';
+    if (K < 6500) return '노란색';
+    if (K < 9500) return '흰색';
+    if (K < 12000) return '푸른 흰색';
+    return '청백색';
+}
+/* 빈의 법칙 : 가장 센 빛의 파장(nm) */
+function peakNm(T) { return 2898000 / T; }
+function bandName(nm) {
+    if (nm < 380) return '자외선';
+    if (nm <= 750) return '가시광선';
+    return '적외선';
+}
+/* 태양(5,800 K) 대비 표면 복사 세기 : (T/Tsun)^4 */
+function energyRatio(T) { var r = Math.pow(T / 5800, 4); return r; }
+function energyText(r) {
+    if (r >= 10) return Math.round(r) + '배';
+    if (r >= 0.01) return r.toFixed(2) + '배';
+    return r.toFixed(3) + '배';
+}
+/* 플랑크 복사 곡선 (상대값) */
+function planckRel(nm, T) {
+    var h = 6.62607015e-34, c = 2.99792458e8, k = 1.380649e-23;
+    var m = nm * 1e-9;
+    var x = h * c / (m * k * T);
+    if (x > 700) return 0;
+    var v = 1 / (Math.pow(m, 5) * (Math.exp(x) - 1));
+    return isFinite(v) ? v : 0;
+}
+
+/* ============================================================
+   2. 별 자료
+   ============================================================ */
+var STARS = [
+    { name: '베텔게우스', temp: 3500,  spec: 'M1Ia', note: '적색 초거성 · 오리온자리의 어깨' },
+    { name: '태양',       temp: 5800,  spec: 'G2V',  note: '우리 별 · 낮에 보는 별' },
+    { name: '시리우스',   temp: 9900,  spec: 'A1V',  note: '밤하늘에서 가장 밝은 별' },
+    { name: '리겔',       temp: 12100, spec: 'B8Ia', note: '청색 초거성 · 오리온자리의 발' }
+];
+/* 퀴즈용 : 차가운 무리 · 중간 무리 · 뜨거운 무리에서 하나씩 고른다 */
+var QUIZ_BANDS = [
+    [{ name: '베텔게우스', temp: 3500 }, { name: '알데바란', temp: 3900 }],
+    [{ name: '카펠라', temp: 5000 }, { name: '태양', temp: 5800 }],
+    [{ name: '시리우스', temp: 9900 }, { name: '리겔', temp: 12100 }, { name: '스피카', temp: 22500 }]
+];
+var QUIZ_TOTAL = 5;
+
+/* ============================================================
+   3. 상태
+   ============================================================ */
+var state = {
+    mode: 'A',
+    temp: 3000,
+    star: -1,
+    dark: true
+};
+var quiz = {
+    on: false, round: 0, score: 0, items: [], picked: [], phase: 'idle', history: []
+};
+
+/* ============================================================
+   4. Three.js 기본
+   ============================================================ */
+var container = $('#canvas-container');
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.NoToneMapping;
+container.appendChild(renderer.domElement);
+window.__LAB_CAM__ = camera;
+
+var controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.075;
+controls.minDistance = 3.4;
+controls.maxDistance = 70;
+controls.maxPolarAngle = Math.PI * 0.54;
+controls.enablePan = true;
+controls.panSpeed = 0.65;
+
+/* 조명 */
+var hemi = new THREE.HemisphereLight(0xdce8ff, 0x0a0f18, 0.1);
+scene.add(hemi);
+var keyLight = new THREE.DirectionalLight(0xffffff, 0.16);
+keyLight.position.set(6, 12, 8);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.width = 1024;
+keyLight.shadow.mapSize.height = 1024;
+keyLight.shadow.camera.left = -12;
+keyLight.shadow.camera.right = 12;
+keyLight.shadow.camera.top = 12;
+keyLight.shadow.camera.bottom = -12;
+keyLight.shadow.camera.near = 1;
+keyLight.shadow.camera.far = 46;
+keyLight.shadow.radius = 3;
+scene.add(keyLight);
+var fillLight = new THREE.DirectionalLight(0xa8c8ff, 0.05);
+fillLight.position.set(-8, 5, -6);
+scene.add(fillLight);
+
+/* 배경 별무리 */
+var bgGeo = new THREE.BufferGeometry();
+var BG_N = 1100;
+var bgPos = new Float32Array(BG_N * 3);
+var bgCol = new Float32Array(BG_N * 3);
+for (var bi = 0; bi < BG_N; bi++) {
+    var u = Math.random(), v = Math.random();
+    var th = u * Math.PI * 2, ph = Math.acos(2 * v - 1);
+    var rr = 150 + Math.random() * 120;
+    bgPos[bi * 3] = rr * Math.sin(ph) * Math.cos(th);
+    bgPos[bi * 3 + 1] = rr * Math.cos(ph);
+    bgPos[bi * 3 + 2] = rr * Math.sin(ph) * Math.sin(th);
+    var c = new THREE.Color(Math.random() < 0.7 ? 0xcfe0ff : 0xffffff);
+    bgCol[bi * 3] = c.r; bgCol[bi * 3 + 1] = c.g; bgCol[bi * 3 + 2] = c.b;
+}
+bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+bgGeo.setAttribute('color', new THREE.BufferAttribute(bgCol, 3));
+var bgStars = new THREE.Points(bgGeo, new THREE.PointsMaterial({ size: 1.1, vertexColors: true, transparent: true, opacity: 0.8, depthWrite: false }));
+scene.add(bgStars);
+
+/* ============================================================
+   5. 라벨 스프라이트
+   ============================================================ */
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+function makeLabel(w, h) {
+    var cv = document.createElement('canvas');
+    cv.width = w || 512; cv.height = h || 160;
+    var tex = new THREE.CanvasTexture(cv);
+    var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false });
+    var sp = new THREE.Sprite(mat);
+    sp.userData = { cv: cv, ctx: cv.getContext('2d'), tex: tex };
+    return sp;
+}
+/* lines: [{t:'텍스트', s:글자크기, c:'#fff'}] */
+function drawLabel(sp, lines, bg) {
+    var cv = sp.userData.cv, ctx = sp.userData.ctx;
+    var W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    var n = lines.length;
+    var pad = 14;
+    var lh = (H - pad * 2) / n;
+    if (bg) {
+        ctx.fillStyle = bg;
+        roundRect(ctx, 4, 6, W - 8, H - 12, 24);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i < n; i++) {
+        var ln = lines[i];
+        ctx.fillStyle = ln.c || '#ffffff';
+        ctx.font = '800 ' + (ln.s || 26) + "px 'SeoulNamsan', sans-serif";
+        ctx.fillText(ln.t, W / 2, pad + lh * i + lh / 2);
+    }
+    sp.userData.tex.needsUpdate = true;
+}
+
+/* ============================================================
+   6. 모드 A : 쇠막대와 가스불
+   ============================================================ */
+var forge = new THREE.Group();
+scene.add(forge);
+
+var benchMat = new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.92, metalness: 0.08 });
+var bench = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.5, 3.6), benchMat);
+bench.position.set(0, -1.35, 0);
+bench.receiveShadow = true;
+bench.castShadow = true;
+forge.add(bench);
+
+/* 작업대 윗면 */
+var benchTop = new THREE.Mesh(new THREE.BoxGeometry(8.9, 0.06, 3.9),
+    new THREE.MeshStandardMaterial({ color: 0x1b2028, roughness: 0.78, metalness: 0.08 }));
+benchTop.position.set(0, -1.09, 0);
+benchTop.receiveShadow = true;
+forge.add(benchTop);
+
+/* 가스버너 */
+var burnerGroup = new THREE.Group();
+forge.add(burnerGroup);
+var brassMat = new THREE.MeshStandardMaterial({ color: 0xb08a34, roughness: 0.45, metalness: 0.7 });
+var steelMat = new THREE.MeshStandardMaterial({ color: 0x5b626d, roughness: 0.55, metalness: 0.45 });
+
+var bBase = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.16, 32), steelMat);
+bBase.position.set(0, -1.0, 0); bBase.receiveShadow = true; bBase.castShadow = true;
+burnerGroup.add(bBase);
+var bBody = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.42, 0.5, 28), steelMat);
+bBody.position.set(0, -0.7, 0); bBody.castShadow = true;
+burnerGroup.add(bBody);
+var bRing = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 12, 28), brassMat);
+bRing.rotation.x = Math.PI / 2; bRing.position.set(0, -0.44, 0);
+burnerGroup.add(bRing);
+var bNozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 0.26, 20), brassMat);
+bNozzle.position.set(0, -0.32, 0);
+burnerGroup.add(bNozzle);
+/* 가스 밸브 손잡이 */
+var valve = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 20), brassMat);
+valve.rotation.z = Math.PI / 2;
+valve.position.set(0.46, -0.68, 0);
+burnerGroup.add(valve);
+var valveArm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.09), brassMat);
+valveArm.position.set(0.5, -0.68, 0);
+burnerGroup.add(valveArm);
+/* 가스 호스 */
+var hosePts = [];
+for (var hi = 0; hi <= 12; hi++) {
+    var tt = hi / 12;
+    hosePts.push(new THREE.Vector3(0.15 + tt * 1.5, -0.9 - Math.sin(tt * Math.PI) * 0.16, -0.5 - tt * 0.5));
+}
+var hose = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(hosePts), 24, 0.055, 8, false),
+    new THREE.MeshStandardMaterial({ color: 0x1b2330, roughness: 0.95, metalness: 0.1 }));
+forge.add(hose);
+
+/* 불꽃의 부드러운 가장자리를 만드는 그라데이션 텍스처 */
+function flameTexture() {
+    var cv = document.createElement('canvas');
+    cv.width = 64; cv.height = 128;
+    var ctx = cv.getContext('2d');
+    var img = ctx.createImageData(64, 128);
+    for (var y = 0; y < 128; y++) {
+        var vFade = Math.pow((y + 1) / 128, 0.7);
+        for (var x = 0; x < 64; x++) {
+            var dx = (x / 63) * 2 - 1;
+            var hFade = Math.max(0, 1 - dx * dx);
+            var a = Math.min(1, vFade * hFade * 1.45);
+            var i = (y * 64 + x) * 4;
+            img.data[i] = 255; img.data[i + 1] = 255; img.data[i + 2] = 255;
+            img.data[i + 3] = Math.round(a * 255);
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+    var t = new THREE.CanvasTexture(cv);
+    return t;
+}
+var FLAME_TEX = flameTexture();
+
+/* 불꽃 (겹친 물방울 모양 3장) */
+var flameGroup = new THREE.Group();
+flameGroup.position.set(0, -0.2, 0);
+forge.add(flameGroup);
+var flameLayers = [];
+var FLAME_LAYERS = [
+    { h: 1.62, r: 0.41, op: 0.30, wt: 0.02 },
+    { h: 1.20, r: 0.28, op: 0.30, wt: 0.14 },
+    { h: 0.72, r: 0.15, op: 0.42, wt: 0.3 }
+];
+/* 불꽃 단면 : 아래는 넓고 위로 갈수록 뾰족해지는 물방울 */
+function flameProfile(rBase, h) {
+    var prof = [[0, 0.5], [0.1, 1.0], [0.26, 0.9], [0.45, 0.7], [0.63, 0.48], [0.8, 0.28], [0.92, 0.12], [1, 0.004]];
+    var pts = [];
+    for (var i = 0; i < prof.length; i++) {
+        pts.push(new THREE.Vector2(Math.max(0.004, prof[i][1] * rBase), prof[i][0] * h));
+    }
+    return pts;
+}
+for (var fi = 0; fi < FLAME_LAYERS.length; fi++) {
+    var L = FLAME_LAYERS[fi];
+    var fGeo = new THREE.LatheGeometry(flameProfile(L.r, L.h), 26);
+    var fMat = new THREE.MeshBasicMaterial({
+        color: 0xff8a2b, map: FLAME_TEX, transparent: true, opacity: L.op,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false
+    });
+    var fMesh = new THREE.Mesh(fGeo, fMat);
+    flameLayers.push({ mesh: fMesh, mat: fMat, baseH: L.h, wt: L.wt, op: L.op });
+    flameGroup.add(fMesh);
+}
+var flameLight = new THREE.PointLight(0xff8a2b, 1.6, 16, 2);
+flameLight.position.set(0, 0.45, 0);
+forge.add(flameLight);
+
+/* 불꽃 바닥 번짐 */
+function glowTexture(inner) {
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    var x = cv.getContext('2d');
+    var g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(inner || 0.28, 'rgba(255,255,255,0.62)');
+    g.addColorStop(0.62, 'rgba(255,255,255,0.16)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    var t = new THREE.CanvasTexture(cv);
+    return t;
+}
+var GLOW_TEX = glowTexture(0.3);
+var benchGlow = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.6, 2.9),
+    new THREE.MeshBasicMaterial({ map: GLOW_TEX, color: 0xff8a2b, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false })
+);
+benchGlow.rotation.x = -Math.PI / 2;
+benchGlow.position.set(0, -1.05, 0);
+forge.add(benchGlow);
+
+/* 쇠막대 */
+var ROD_Y = 1.0;
+var rodPivot = new THREE.Group();
+rodPivot.position.set(0, ROD_Y, 0);
+forge.add(rodPivot);
+
+/* 길이 방향 발광 그라데이션 (가운데가 가장 뜨겁다) */
+var rodGlowCv = document.createElement('canvas');
+rodGlowCv.width = 8; rodGlowCv.height = 256;
+var rodGlowTex = new THREE.CanvasTexture(rodGlowCv);
+rodGlowTex.wrapS = rodGlowTex.wrapT = THREE.ClampToEdgeWrapping;
+function paintRodGlow(spread) {
+    var x = rodGlowCv.getContext('2d');
+    x.clearRect(0, 0, 8, 256);
+    var g = x.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(clamp(0.5 - spread, 0.001, 0.49), 'rgba(120,120,120,0.85)');
+    g.addColorStop(0.5, 'rgba(255,255,255,1)');
+    g.addColorStop(clamp(0.5 + spread, 0.51, 0.999), 'rgba(120,120,120,0.85)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 8, 256);
+    rodGlowTex.needsUpdate = true;
+}
+paintRodGlow(0.2);
+
+var rodMat = new THREE.MeshStandardMaterial({
+    color: 0x33363d, metalness: 0.55, roughness: 0.5,
+    emissive: 0xff8a2b, emissiveIntensity: 0.2, emissiveMap: rodGlowTex
+});
+var rodGeo = new THREE.CylinderGeometry(0.095, 0.095, 6.3, 26, 1, false);
+var rod = new THREE.Mesh(rodGeo, rodMat);
+rod.rotation.z = Math.PI / 2;
+rod.castShadow = true;
+rodPivot.add(rod);
+
+/* 쇠막대 양 끝의 클램프 받침대 */
+var postMat = new THREE.MeshStandardMaterial({ color: 0x4a505b, metalness: 0.35, roughness: 0.62 });
+[-1, 1].forEach(function (sgn) {
+    var post = new THREE.Mesh(new THREE.BoxGeometry(0.16, ROD_Y + 1.09, 0.16), postMat);
+    post.position.set(sgn * 2.86, -0.34, -0.02);
+    post.castShadow = true;
+    forge.add(post);
+    var clamp = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.045, 10, 22), postMat);
+    clamp.position.set(sgn * 2.86, ROD_Y, 0);
+    forge.add(clamp);
+    var foot = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.08, 18), postMat);
+    foot.position.set(sgn * 2.86, -1.06, -0.02);
+    forge.add(foot);
+});
+
+/* 쇠막대 발광 후광 — 막대를 따라 여러 장을 두어 어느 각도에서도 막대를 감싼다 */
+var rodGlows = [];
+[-2.9, -1.45, 0, 1.45, 2.9].forEach(function (gx, gi) {
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: GLOW_TEX, color: 0xff8a2b, transparent: true, opacity: 0.3,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    sp.scale.set(gi === 2 ? 3.8 : 3.3, gi === 2 ? 3.8 : 3.3, 1);
+    sp.position.set(gx, ROD_Y, 0);
+    sp.userData.w = gi === 2 ? 1 : 0.86 - Math.abs(gx) * 0.1;
+    forge.add(sp);
+    rodGlows.push(sp);
+});
+var rodLight = new THREE.PointLight(0xff8a2b, 1.0, 12, 2);
+rodLight.position.set(0, ROD_Y + 0.3, 0.2);
+forge.add(rodLight);
+
+/* 쇠막대 3D 온도 라벨 */
+var rodLabel = makeLabel(512, 150);
+rodLabel.scale.set(3.5, 1.02, 1);
+rodLabel.position.set(0, ROD_Y + 1.1, 0);
+forge.add(rodLabel);
+
+/* 드래그용 투명 히트박스 */
+var rodHit = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.45, 0.45, 6.5, 12),
+    new THREE.MeshBasicMaterial({ visible: false })
+);
+rodHit.rotation.z = Math.PI / 2;
+rodHit.position.set(0, ROD_Y, 0);
+forge.add(rodHit);
+
+/* 쇠막대 위 "손으로 잡고 위아래" 표시는 라벨 두번째 줄로 대신한다 */
+
+/* ============================================================
+   7. 모드 B : 실제 별 4종
+   ============================================================ */
+var starField = new THREE.Group();
+scene.add(starField);
+
+function granulationTexture() {
+    var cv = document.createElement('canvas');
+    cv.width = 512; cv.height = 256;
+    var x = cv.getContext('2d');
+    x.fillStyle = '#ffffff';
+    x.fillRect(0, 0, 512, 256);
+    for (var i = 0; i < 420; i++) {
+        var px = Math.random() * 512, py = Math.random() * 256;
+        var r = 5 + Math.random() * 24;
+        var g = x.createRadialGradient(px, py, 0, px, py, r);
+        var dark = Math.random() < 0.55;
+        var a = dark ? 0.06 + Math.random() * 0.14 : 0.1 + Math.random() * 0.22;
+        g.addColorStop(0, dark ? 'rgba(40,40,60,' + a + ')' : 'rgba(255,255,255,' + a + ')');
+        g.addColorStop(1, 'rgba(255,255,255,0)');
+        x.fillStyle = g;
+        x.beginPath();
+        x.arc(px, py, r, 0, Math.PI * 2);
+        x.fill();
+    }
+    var t = new THREE.CanvasTexture(cv);
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
+}
+var GRAN_TEX = granulationTexture();
+
+var starObjs = [];
+var starHit = [];
+var STAR_R = 1.05;
+
+STARS.forEach(function (sd, idx) {
+    var rgb = rodRGB(sd.temp);
+    var col = dispColor(rgb);
+    var g = new THREE.Group();
+    starField.add(g);
+
+    var core = new THREE.Mesh(
+        new THREE.SphereGeometry(STAR_R, 44, 30),
+        new THREE.MeshBasicMaterial({ map: GRAN_TEX, color: col })
+    );
+    g.add(core);
+
+    var corona = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: GLOW_TEX, color: col, transparent: true, opacity: 0.55,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    corona.scale.set(3.7, 3.7, 1);
+    g.add(corona);
+
+    var halo = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: GLOW_TEX, color: col, transparent: true, opacity: 0.16,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    halo.scale.set(7.4, 7.4, 1);
+    g.add(halo);
+
+    var label = makeLabel(440, 150);
+    drawLabel(label, [
+        { t: sd.name, s: 30, c: '#ffffff' },
+        { t: fmt(sd.temp) + ' K', s: 24, c: rgbCss(rgb) }
+    ], 'rgba(8,14,24,0.7)');
+    label.scale.set(3.2, 1.09, 1);
+    g.add(label);
+
+    var ring = new THREE.Mesh(
+        new THREE.RingGeometry(1.45, 1.53, 40),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = -1.95;
+    g.add(ring);
+
+    var hit = new THREE.Mesh(
+        new THREE.SphereGeometry(1.85, 12, 10),
+        new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hit.userData.idx = idx;
+    g.add(hit);
+    starHit.push(hit);
+
+    starObjs.push({ d: sd, rgb: rgb, col: col, group: g, core: core, corona: corona, halo: halo, label: label, ring: ring, baseY: 0 });
+});
+
+/* 선택 표시 링 */
+var selRing = new THREE.Mesh(
+    new THREE.RingGeometry(1.28, 1.33, 44),
+    new THREE.MeshBasicMaterial({ color: dispColor([10, 132, 255]), transparent: true, opacity: 0.95, side: THREE.DoubleSide })
+);
+selRing.visible = false;
+starField.add(selRing);
+
+/* 별 배치 (넓으면 한 줄, 좁으면 2×2) */
+var LAYOUT_ROW = [[-7.5, 0.55, 0], [-2.5, 0.55, 0], [2.5, 0.55, 0], [7.5, 0.55, 0]];
+var LAYOUT_GRID = [[-3.9, 0.9, 0], [-1.3, 0.9, 0], [1.3, 0.9, 0], [3.9, 0.9, 0]];
+var starBox = { hw: 9.6, hh: 3.4 };
+
+var compactLabels = false;
+function layoutStars() {
+    var narrow = (window.innerWidth < 900 && window.innerHeight > window.innerWidth * 0.85) || camera.aspect < 0.95;
+    var L = narrow ? LAYOUT_GRID : LAYOUT_ROW;
+    compactLabels = narrow;
+    for (var i = 0; i < starObjs.length; i++) {
+        starObjs[i].group.position.set(L[i][0], L[i][1], L[i][2]);
+        starObjs[i].baseY = L[i][1];
+        starObjs[i].labelOffset = narrow ? 1.55 : 2.15;
+        starObjs[i].label.position.y = starObjs[i].labelOffset;
+        starObjs[i].glowScale = narrow ? 0.62 : 1;
+    }
+    starBox.hw = narrow ? 5.2 : 9.7;
+    starBox.hh = narrow ? 3.4 : 3.5;
+    syncStarLabels();
+}
+/* 좁은 화면에서는 고른 별의 이름표만 보여 준다 */
+function syncStarLabels() {
+    for (var i = 0; i < starObjs.length; i++) {
+        starObjs[i].label.visible = !compactLabels || i === state.star;
+    }
+}
+
+/* ============================================================
+   8. 카메라 맞춤
+   ============================================================ */
+function fitDistance(halfW, halfH, padZ) {
+    var vf = camera.fov * Math.PI / 180;
+    var hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+    var dW = halfW / Math.tan(hf / 2);
+    var dH = halfH / Math.tan(vf / 2);
+    return Math.max(dW, dH) * 1.06 + (padZ || 1.6);
+}
+var camTween = null;
+var lastFitKey = '';
+function flyTo(pos, target, dur) {
+    camTween = {
+        t0: performance.now(), dur: dur || 620,
+        p0: camera.position.clone(), p1: pos.clone(),
+        t1: controls.target.clone(), t2: target.clone()
+    };
+}
+function applyViewOffset() {
+    var w = window.innerWidth, h = window.innerHeight;
+    if (w < 900 && state.mode !== 'C') {
+        camera.setViewOffset(w, h, 0, Math.round(h * 0.1), w, h);
+    } else if (camera.clearViewOffset) {
+        camera.clearViewOffset();
+    }
+    camera.updateProjectionMatrix();
+}
+
+function applyModeCamera(instant) {
+    var target, dir, dist;
+    if (state.mode === 'A') {
+        var narrowA = camera.aspect < 1.0;
+        target = new THREE.Vector3(0, 0.35, 0);
+        dir = new THREE.Vector3(0.42, 0.40, 1).normalize();
+        dist = fitDistance(narrowA ? 3.7 : 5.5, narrowA ? 2.9 : 3.0, 1.4);
+    } else {
+        target = new THREE.Vector3(0, camera.aspect < 0.95 ? 0.85 : 0.4, 0);
+        dir = new THREE.Vector3(0, 0.16, 1).normalize();
+        dist = fitDistance(starBox.hw, starBox.hh, 1.0);
+    }
+    var pos = target.clone().addScaledVector(dir, dist);
+    lastFitKey = viewKey();
+    applyViewOffset();
+    if (instant) {
+        camTween = null;
+        camera.position.copy(pos);
+        controls.target.copy(target);
+        controls.update();
+    } else {
+        flyTo(pos, target, 620);
+    }
+}
+
+/* ============================================================
+   9. 모드 A 갱신
+   ============================================================ */
+function viewKey() {
+    return (camera.aspect < 0.95 ? 'n' : 'w') + '|' + state.mode;
+}
+var lastRodSpread = -1;
+function flameRGB(T) {
+    /* 낮은 온도 : 붉은 불완전 연소 → 높은 온도 : 파란 완전 연소 */
+    var stops = [
+        [1500, [255, 96, 34]],
+        [2600, [255, 138, 40]],
+        [4200, [255, 196, 74]],
+        [6000, [130, 178, 255]],
+        [9000, [96, 150, 255]],
+        [15000, [140, 188, 255]]
+    ];
+    if (T <= stops[0][0]) return stops[0][1];
+    for (var i = 1; i < stops.length; i++) {
+        if (T <= stops[i][0]) {
+            var a = stops[i - 1], b = stops[i];
+            var t = (T - a[0]) / (b[0] - a[0]);
+            return [
+                Math.round(a[1][0] + (b[1][0] - a[1][0]) * t),
+                Math.round(a[1][1] + (b[1][1] - a[1][1]) * t),
+                Math.round(a[1][2] + (b[1][2] - a[1][2]) * t)
+            ];
+        }
+    }
+    return stops[stops.length - 1][1];
+}
+
+function applyForge(T) {
+    var rgb = rodRGB(T);
+    var col = dispColor(rgb);
+    var f = Math.pow(T / 5800, 1.3);
+    var k = Math.min(1, f);
+
+    rodMat.emissive.copy(col);
+    rodMat.emissiveIntensity = 0.34 + 0.6 * Math.min(1.35, f * 1.1);
+    var base = 0.12 + 0.22 * k;
+    rodMat.color.setRGB(base * 0.95, base * 0.96, base);
+
+    var glowBase = 0.09 + 0.3 * Math.min(1.15, f);
+    for (var gi2 = 0; gi2 < rodGlows.length; gi2++) {
+        rodGlows[gi2].material.color.copy(col);
+        rodGlows[gi2].material.opacity = glowBase * rodGlows[gi2].userData.w;
+    }
+    rodLight.color.copy(col);
+    rodLight.intensity = 0.1 + 0.28 * Math.min(1, f);
+
+    var spread = 0.14 + 0.3 * Math.min(1, f);
+    if (Math.abs(spread - lastRodSpread) > 0.02) { paintRodGlow(spread); lastRodSpread = spread; }
+
+    /* 불꽃 */
+    var frgb = flameRGB(T);
+    var fcol = dispColor(frgb);
+    var tNorm = clamp((T - 1500) / 13500, 0, 1);
+    for (var i = 0; i < flameLayers.length; i++) {
+        var L = flameLayers[i];
+        var mix = fcol.clone().lerp(new THREE.Color(1, 1, 1), (L.wt || 0) * 0.9);
+        L.mat.color.copy(mix);
+        L.mat.opacity = L.op * (0.85 + 0.4 * tNorm);
+        L.baseScale = 1.02 - 0.28 * tNorm;
+    }
+    flameLight.color.copy(fcol);
+    flameLight.intensity = 0.12 + 0.24 * tNorm;
+    benchGlow.material.color.copy(fcol);
+    benchGlow.material.opacity = 0.22 + 0.26 * tNorm;
+
+    var lbl = [{ t: fmt(T) + ' K · ' + colorName(T), s: 30, c: rgbCss(rgb) }];
+    if (hintUsed) {
+        lbl[0].s = 30;
+    } else {
+        lbl.push({ t: '↕ 쇠막대를 위아래로 드래그', s: 19, c: 'rgba(255,212,121,0.95)' });
+    }
+    drawLabel(rodLabel, lbl, 'rgba(8,14,24,0.74)');
+    updateLeftGraph();
+}
+
+/* ============================================================
+   10. 화면 값 · 데이터 배지
+   ============================================================ */
+function starColorCSS(sd) { return rgbCss(rodRGB(sd.temp)); }
+
+function updateData() {
+    if (state.mode === 'A') {
+        var T = Math.round(state.temp);
+        var rgb = rodRGB(T);
+        $('#lb-1').textContent = '표면 온도';
+        $('#val-temp').textContent = fmt(T) + ' K';
+        $('#lb-2').textContent = '색깔';
+        $('#val-color-text').textContent = colorName(T);
+        $('#val-dot').style.background = rgbCss(rgb);
+        $('#lb-3').textContent = '복사 세기';
+        $('#val-energy').textContent = energyText(energyRatio(T));
+        $('#di-3').style.display = '';
+    } else if (state.mode === 'B') {
+        var idx = state.star < 0 ? 1 : state.star;
+        var sd = STARS[idx];
+        $('#lb-1').textContent = '표면 온도';
+        $('#val-temp').textContent = fmt(sd.temp) + ' K';
+        $('#lb-2').textContent = '색깔';
+        $('#val-color-text').textContent = colorName(sd.temp);
+        $('#val-dot').style.background = starColorCSS(sd);
+        $('#lb-3').textContent = '분광형';
+        $('#val-energy').textContent = sd.spec;
+        $('#di-3').style.display = '';
+    } else {
+        $('#lb-1').textContent = '진행';
+        $('#val-temp').textContent = Math.max(1, quiz.round) + ' / ' + QUIZ_TOTAL;
+        $('#lb-2').textContent = '점수';
+        $('#val-color-text').textContent = quiz.score + '문제';
+        $('#val-dot').style.background = '#ffd479';
+        $('#di-3').style.display = 'none';
+    }
+}
+
+/* ============================================================
+   11. 스펙트럼 그래프
+   ============================================================ */
+var SPEC_MIN = 100, SPEC_MAX = 2000, SPEC_N = 150;
+
+function spectrumCanvas(cv) {
+    if (!cv) return null;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = cv.clientWidth, h = cv.clientHeight;
+    if (w < 20 || h < 20) return null;
+    var needW = Math.round(w * dpr), needH = Math.round(h * dpr);
+    if (cv.width !== needW || cv.height !== needH) { cv.width = needW; cv.height = needH; }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx: ctx, w: w, h: h };
+}
+
+function drawSpectrum(cv, temps) {
+    var c = spectrumCanvas(cv);
+    if (!c) return;
+    var ctx = c.ctx, W = c.w, H = c.h;
+    var dark = state.dark;
+    var padL = 5, padR = 5, padT = 6, stripH = 9, labelH = 13;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - stripH - labelH - 4;
+    var baseY = padT + plotH;
+    var lmin = SPEC_MIN, lmax = SPEC_MAX;
+
+    function X(nm) { return padL + (nm - lmin) / (lmax - lmin) * plotW; }
+
+    /* 배경 */
+    ctx.fillStyle = dark ? 'rgba(6,11,20,0.55)' : 'rgba(255,255,255,0.65)';
+    ctx.fillRect(0, 0, W, H);
+
+    /* 가시광선 영역 음영 */
+    ctx.fillStyle = dark ? 'rgba(120,170,255,0.09)' : 'rgba(120,170,255,0.16)';
+    ctx.fillRect(X(380), padT, X(750) - X(380), plotH);
+
+    /* 곡선 */
+    var list = temps || [{ T: state.temp, rgb: kelvinRGB(state.temp) }];
+    var i, j, pts, maxV, v, nm;
+    for (j = 0; j < list.length; j++) {
+        var item = list[j];
+        var T = item.T;
+        var rgb = item.rgb || rodRGB(T);
+        var hScale = 0.9 * Math.pow(clamp(T, 1500, 15000) / 15000, 0.5);
+        pts = []; maxV = 0;
+        for (i = 0; i < SPEC_N; i++) {
+            nm = lmin + (lmax - lmin) * i / (SPEC_N - 1);
+            v = planckRel(nm, T);
+            if (v > maxV) maxV = v;
+            pts.push([nm, v]);
+        }
+        if (maxV <= 0) maxV = 1;
+        var col = rgbCss(rgb);
+        ctx.beginPath();
+        for (i = 0; i < pts.length; i++) {
+            var px = X(pts[i][0]);
+            var py = baseY - (pts[i][1] / maxV) * plotH * hScale;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.lineWidth = list.length > 1 ? 1.9 : 2.2;
+        ctx.strokeStyle = col;
+        ctx.stroke();
+        /* 면 채우기 */
+        ctx.lineTo(X(lmax), baseY);
+        ctx.lineTo(X(lmin), baseY);
+        ctx.closePath();
+        ctx.fillStyle = rgbCss(rgb, list.length > 1 ? 0.07 : 0.14);
+        ctx.fill();
+        /* 최대 파장 표시 */
+        var pk = peakNm(T);
+        if (pk >= lmin && pk <= lmax) {
+            var pkx = X(pk);
+            ctx.save();
+            ctx.setLineDash([2, 3]);
+            ctx.strokeStyle = list.length > 1 ? rgbCss(rgb, 0.45) : rgbCss(rgb, 0.85);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(pkx, padT + 2);
+            ctx.lineTo(pkx, baseY);
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    /* 스펙트럼 띠 */
+    var grad = ctx.createLinearGradient(X(lmin), 0, X(lmax), 0);
+    grad.addColorStop(0, '#2a0f4a');
+    grad.addColorStop(clamp((380 - lmin) / (lmax - lmin), 0, 1), '#7b2ff7');
+    grad.addColorStop(clamp((440 - lmin) / (lmax - lmin), 0, 1), '#3b49ff');
+    grad.addColorStop(clamp((490 - lmin) / (lmax - lmin), 0, 1), '#22d3ee');
+    grad.addColorStop(clamp((530 - lmin) / (lmax - lmin), 0, 1), '#22c55e');
+    grad.addColorStop(clamp((580 - lmin) / (lmax - lmin), 0, 1), '#fde047');
+    grad.addColorStop(clamp((620 - lmin) / (lmax - lmin), 0, 1), '#fb923c');
+    grad.addColorStop(clamp((700 - lmin) / (lmax - lmin), 0, 1), '#ef4444');
+    grad.addColorStop(clamp((750 - lmin) / (lmax - lmin), 0, 1), '#8b1a1a');
+    grad.addColorStop(1, '#3d0d0d');
+    ctx.fillStyle = grad;
+    ctx.fillRect(padL, baseY + 3, plotW, stripH);
+
+    /* 축 라벨 */
+    ctx.font = "700 8px 'SeoulNamsan', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = dark ? 'rgba(200,215,235,0.75)' : 'rgba(60,75,95,0.85)';
+    ctx.fillText('380', X(380), H - 3);
+    ctx.fillText('750', X(750), H - 3);
+    ctx.fillText('2000 nm', X(lmax) - 12, H - 3);
+    ctx.textAlign = 'left';
+    /* 최대 파장 수치 (곡선이 하나일 때만) */
+    if (list.length === 1) {
+        var peakMain = peakNm(list[0].T);
+        ctx.fillStyle = rgbCss(list[0].rgb || rodRGB(list[0].T), 0.95);
+        ctx.font = "800 9px 'SeoulNamsan', sans-serif";
+        ctx.fillText('최대 ' + Math.round(peakMain) + ' nm', padL + 2, padT + 8);
+    }
+}
+
+function updateLeftGraph() {
+    var big = $('#spec-canvas');
+    var mini = $('#spec-mini');
+    var capA, capB;
+    if (state.mode === 'B') {
+        var arr = STARS.map(function (s) { return { T: s.temp, rgb: rodRGB(s.temp) }; });
+        drawSpectrum(big, arr);
+        drawSpectrum(mini, arr);
+        capA = '별의 표면 온도가 높을수록 가장 센 빛의 파장이 짧아집니다.';
+        capB = '온도가 높을수록 곡선의 봉우리가 왼쪽(짧은 파장)으로 이동합니다.';
+        $('#spec-band').textContent = '별 4종';
+    } else {
+        var one = [{ T: state.temp, rgb: rodRGB(state.temp) }];
+        drawSpectrum(big, one);
+        drawSpectrum(mini, one);
+        var pk = peakNm(state.temp);
+        capA = '가장 센 빛의 파장 <b>' + Math.round(pk) + ' nm</b> (' + bandName(pk) + ')';
+        capB = '가장 센 빛의 파장 <b>' + Math.round(pk) + ' nm</b> (' + bandName(pk) + ')';
+        $('#spec-band').textContent = bandName(pk);
+    }
+    $('#spec-cap').innerHTML = capA;
+    $('#spec-cap-mini').innerHTML = capB;
+}
+
+/* ============================================================
+   12. 모드 B UI
+   ============================================================ */
+function selectStar(idx, noFly) {
+    state.star = idx;
+    var sd = STARS[idx];
+    var rgb = rodRGB(sd.temp);
+    $('#b-name').textContent = sd.name;
+    $('#b-temp').textContent = fmt(sd.temp) + ' K';
+    $('#b-color').textContent = colorName(sd.temp);
+    $('#b-spec').textContent = sd.spec;
+    var pk = peakNm(sd.temp);
+    $('#b-peak').textContent = Math.round(pk) + ' nm';
+    $('#b-name').style.color = rgbCss(rgb);
+    document.querySelectorAll('.star-chip').forEach(function (b) {
+        b.classList.toggle('active', Number(b.getAttribute('data-star')) === idx);
+    });
+    var so = starObjs[idx];
+    syncStarLabels();
+    selRing.visible = true;
+    selRing.position.copy(so.group.position).add(new THREE.Vector3(0, 0, 0.1));
+    var sxs = so.group.position.x, sys = so.group.position.y;
+    if (!noFly) {
+        var flyD = 7.2 / Math.max(0.5, Math.min(1, camera.aspect));
+        flyTo(new THREE.Vector3(sxs, sys + 0.9, flyD), new THREE.Vector3(sxs, sys, 0), 640);
+    }
+    updateData();
+    updateLeftGraph();
+    var cur = document.querySelector('.temp-ruler .mk.cur');
+    if (cur) cur.classList.remove('cur');
+}
+
+/* ============================================================
+   13. 퀴즈
+   ============================================================ */
+function pickTriple() {
+    var out;
+    for (var tryN = 0; tryN < 40; tryN++) {
+        out = QUIZ_BANDS.map(function (band) { return band[Math.floor(Math.random() * band.length)]; });
+        var key = out.map(function (o) { return o.temp; }).join('-');
+        if (quiz.history.indexOf(key) < 0) { quiz.history.push(key); break; }
+    }
+    return out.slice();
+}
+function shuffle(a) {
+    for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+}
+function renderQuizRow() {
+    var row = $('#q-row');
+    row.innerHTML = '';
+    quiz.items.forEach(function (it, i) {
+        var rgb = rodRGB(it.temp);
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'q-disc';
+        btn.setAttribute('data-i', String(i));
+        btn.innerHTML = '<span class="orb" style="background:radial-gradient(circle at 50% 42%,rgba(255,255,255,' +
+            (it.temp > 8000 ? '0.92' : '0.8') + ') 0%,' + rgbCss(rgb) + ' 34%,' + rgbCss(rgb, 0.65) +
+            ' 62%,rgba(0,0,0,0) 78%);box-shadow:0 0 26px 8px ' + rgbCss(rgb, 0.4) + '"></span>' +
+            '<span class="num"></span><span class="q-tag"></span>';
+        btn.addEventListener('click', function () { tapDisc(i); });
+        row.appendChild(btn);
+    });
+}
+function tapDisc(i) {
+    if (quiz.phase !== 'playing') return;
+    if (quiz.picked.indexOf(i) >= 0) return;
+    quiz.picked.push(i);
+    var el = document.querySelector('.q-disc[data-i="' + i + '"]');
+    if (el) {
+        el.classList.add('picked');
+        el.querySelector('.num').textContent = String(quiz.picked.length);
+    }
+    if (quiz.picked.length === quiz.items.length) {
+        setTimeout(function () { judgeQuiz(); }, 320);
+    }
+}
+function judgeQuiz() {
+    quiz.phase = 'judged';
+    var order = quiz.items.map(function (o, i) { return { i: i, t: o.temp }; })
+        .sort(function (a, b) { return a.t - b.t; })
+        .map(function (o) { return o.i; });
+    var allOk = true;
+    quiz.items.forEach(function (it, i) {
+        var given = quiz.picked.indexOf(i) + 1;
+        var right = order.indexOf(i) + 1;
+        var ok = given === right;
+        if (!ok) allOk = false;
+        var el = document.querySelector('.q-disc[data-i="' + i + '"]');
+        if (el) {
+            el.classList.add(ok ? 'ok' : 'err');
+            var tag = el.querySelector('.q-tag');
+            tag.innerHTML = (ok ? '✓ ' : '✗ ') + it.name + '<small>' + fmt(it.temp) + ' K</small>';
+        }
+    });
+    if (allOk) quiz.score++;
+    var coldest = quiz.items[order[0]];
+    var hottest = quiz.items[order[order.length - 1]];
+    var fb = $('#q-feedback');
+    if (allOk) {
+        fb.innerHTML = '🎉 <b>정답!</b> 가장 차가운 별은 <b>' + coldest.name + '(' + fmt(coldest.temp) +
+            ' K)</b>, 가장 뜨거운 별은 <b>' + hottest.name + '(' + fmt(hottest.temp) +
+            ' K)</b>입니다. 파란색일수록 뜨겁습니다.';
+    } else {
+        fb.innerHTML = '🙂 정답은 <b>' + coldest.name + ' → ' + quiz.items[order[1]].name + ' → ' +
+            hottest.name + '</b> 순서입니다. (색이 파란 별일수록 뜨겁습니다)';
+    }
+    $('#q-next').disabled = false;
+    $('#q-next').textContent = quiz.round >= QUIZ_TOTAL ? '결과 보기 ➜' : '다음 ➜';
+    syncQuizPanel();
+}
+function syncQuizPanel() {
+    $('#c-step').textContent = Math.min(quiz.round, QUIZ_TOTAL) + ' / ' + QUIZ_TOTAL;
+    $('#c-score').textContent = String(quiz.score);
+    var detail = quiz.history.length ? '방금까지 ' + quiz.history.length + '문제' : '—';
+    if (quiz.phase === 'done') detail = '다시 도전할 수 있어요';
+    $('#c-detail').textContent = detail;
+    $('#q-step').textContent = Math.min(quiz.round, QUIZ_TOTAL) + ' / ' + QUIZ_TOTAL + ' · 점수 ' + quiz.score;
+    updateData();
+}
+function nextRound() {
+    if (quiz.round >= QUIZ_TOTAL) return finishQuiz();
+    quiz.round++;
+    quiz.items = shuffle(pickTriple());
+    quiz.picked = [];
+    quiz.phase = 'playing';
+    $('#q-ask').innerHTML = '색이 <b>차가운</b> 별부터 차례대로 눌러 보세요.';
+    $('#q-feedback').textContent = '세 별을 차례로 누르면 바로 채점합니다.';
+    $('#q-next').disabled = true;
+    $('#q-next').textContent = '다음 ➜';
+    renderQuizRow();
+    syncQuizPanel();
+}
+function finishQuiz() {
+    quiz.phase = 'done';
+    var row = $('#q-row');
+    row.innerHTML = '<div style="width:100%;text-align:center;padding:4px 0 2px;">' +
+        '<div class="q-score">' + quiz.score + ' <span>/ ' + QUIZ_TOTAL + '</span></div></div>';
+    var msg;
+    if (quiz.score >= 4) msg = '🏆 <b>완벽해요!</b> 별의 색이 곧 표면 온도라는 것을 잘 알았습니다.';
+    else if (quiz.score >= 2) msg = '👍 <b>좋아요.</b> 파란색일수록 뜨겁다는 것만 기억하면 됩니다.';
+    else msg = '💪 다시 해 봐요. 쇠막대 실험에서 <b>붉은색 → 청백색</b> 순서를 떠올려 보세요.';
+    $('#q-ask').innerHTML = '5문제를 모두 풀었습니다.';
+    $('#q-feedback').innerHTML = msg;
+    $('#q-next').disabled = false;
+    $('#q-next').textContent = '다시 도전 ↺';
+    syncQuizPanel();
+}
+function openQuiz(autoStart) {
+    $('#q-overlay').classList.add('on');
+    quiz.on = true;
+    if (autoStart && quiz.phase !== 'playing' && quiz.phase !== 'judged') {
+        quiz.round = 0; quiz.score = 0; quiz.history = [];
+        nextRound();
+    }
+    syncQuizPanel();
+}
+function closeQuiz() {
+    $('#q-overlay').classList.remove('on');
+    quiz.on = false;
+}
+$('#btn-quiz').addEventListener('click', function () {
+    if (quiz.phase === 'done' || quiz.phase === 'idle') {
+        quiz.round = 0; quiz.score = 0; quiz.history = [];
+    }
+    $('#q-overlay').classList.add('on');
+    quiz.on = true;
+    if (quiz.phase !== 'playing' && quiz.phase !== 'judged') nextRound();
+    syncQuizPanel();
+});
+$('#q-next').addEventListener('click', function () {
+    if (quiz.phase === 'done') {
+        quiz.round = 0; quiz.score = 0; quiz.history = [];
+        nextRound();
+    } else {
+        nextRound();
+    }
+});
+$('#q-close').addEventListener('click', function () { closeQuiz(); setMode('A'); });
+
+/* ============================================================
+   14. 모드 전환
+   ============================================================ */
+var TITLES = { A: '🔥 가스불 세기', B: '🌟 별 선택', C: '🎯 온도 맞히기' };
+var HINTS = {
+    A: '🔥 쇠막대를 위아래로 드래그하거나 슬라이더로 불의 세기를 바꿔 보세요',
+    B: '🌟 별을 눌러 표면 온도와 색을 하나씩 비교해 보세요',
+    C: '🎯 색이 차가운 별부터 차례대로 눌러 보세요'
+};
+function setMode(m) {
+    state.mode = m;
+    document.querySelectorAll('.mode-btn').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-mode') === m);
+    });
+    document.querySelectorAll('.tab-content').forEach(function (t) {
+        t.classList.toggle('active', t.id === 'tab-' + m);
+    });
+    $('#panel-main-title').textContent = TITLES[m];
+    $('#center-hint').textContent = HINTS[m];
+    forge.visible = (m === 'A');
+    starField.visible = (m === 'B' || m === 'C');
+    selRing.visible = (m === 'B' && state.star >= 0);
+    $('#spec-left').style.display = (m === 'C') ? 'none' : '';
+    $('#spec-inline').style.display = '';
+    if (window.innerWidth < 900 || (window.innerHeight <= 520 && window.innerWidth > window.innerHeight)) {
+        $('#spec-inline').style.display = (m === 'C') ? 'none' : 'flex';
+    }
+    if (m === 'C') {
+        openQuiz(true);
+    } else {
+        closeQuiz();
+    }
+    if (m === 'B' && state.star < 0) selectStar(1, true);
+    applyModeCamera(false);
+    if (m === 'C') { starField.visible = true; bgStars.material.opacity = 0.35; }
+    else { bgStars.material.opacity = 0.8; }
+    updateData();
+    updateLeftGraph();
+}
+document.querySelectorAll('.mode-btn').forEach(function (b) {
+    b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
+});
+
+/* ============================================================
+   15. 슬라이더 · 프리셋 · 버튼
+   ============================================================ */
+var slider = $('#sld-temp');
+function setTemp(T, fromSlider) {
+    T = clamp(Math.round(T / 50) * 50, 1500, 15000);
+    state.temp = T;
+    $('#lbl-temp-A').textContent = fmt(T) + ' K';
+    $('#a-temp').textContent = fmt(T) + ' K';
+    $('#a-color').textContent = colorName(T);
+    $('#a-energy').textContent = energyText(energyRatio(T));
+    var pk = peakNm(T);
+    $('#a-peak').textContent = Math.round(pk) + ' nm (' + bandName(pk) + ')';
+    if (!fromSlider) slider.value = String(T);
+    document.querySelectorAll('.preset-btn').forEach(function (b) {
+        b.classList.toggle('active', Math.abs(Number(b.getAttribute('data-temp')) - T) < 60);
+    });
+    applyForge(T);
+    if (state.mode === 'A') updateData();
+}
+slider.addEventListener('input', function () { setTemp(parseFloat(slider.value), true); });
+document.querySelectorAll('.preset-btn').forEach(function (b) {
+    b.addEventListener('click', function () { setTemp(Number(b.getAttribute('data-temp'))); });
+});
+document.querySelectorAll('.star-chip').forEach(function (b) {
+    b.addEventListener('click', function () { selectStar(Number(b.getAttribute('data-star'))); });
+});
+$('#btn-all-stars').addEventListener('click', function () {
+    state.star = -1;
+    document.querySelectorAll('.star-chip').forEach(function (b) { b.classList.remove('active'); });
+    selRing.visible = false;
+    applyModeCamera(false);
+});
+$('#btn-reset').addEventListener('click', function () {
+    if (state.mode === 'A') {
+        setTemp(3000);
+    } else if (state.mode === 'B') {
+        state.star = -1;
+        document.querySelectorAll('.star-chip').forEach(function (b) { b.classList.remove('active'); });
+        selRing.visible = false;
+    } else {
+        quiz.round = 0; quiz.score = 0; quiz.history = []; quiz.phase = 'idle';
+        nextRound();
+    }
+    applyModeCamera(false);
+    updateData();
+});
+$('#btn-cam').addEventListener('click', function () { applyModeCamera(false); });
+
+/* ============================================================
+   16. 3D 클릭 · 드래그
+   ============================================================ */
+var ray = new THREE.Raycaster();
+var pointer = new THREE.Vector2();
+var drag = { on: false, y0: 0, t0: 3000, moved: 0 };
+var hintUsed = false;
+
+function setPointer(e) {
+    var r = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+    pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+}
+renderer.domElement.addEventListener('pointerdown', function (e) {
+    setPointer(e);
+    drag.moved = 0;
+    if (state.mode === 'A') {
+        ray.setFromCamera(pointer, camera);
+        var hit = ray.intersectObject(rodHit, false);
+        if (hit.length) {
+            drag.on = true;
+            drag.y0 = e.clientY;
+            drag.t0 = state.temp;
+            hintUsed = true;
+            controls.enabled = false;
+            renderer.domElement.style.cursor = 'grabbing';
+            dragHint.visible = false;
+            e.preventDefault();
+        }
+    }
+});
+window.addEventListener('pointermove', function (e) {
+    if (!drag.on) return;
+    var dy = drag.y0 - e.clientY;
+    drag.moved = Math.abs(dy);
+    var T = drag.t0 + dy * ((15000 - 1500) / 380);
+    setTemp(T);
+    e.preventDefault();
+});
+window.addEventListener('pointerup', function (e) {
+    if (drag.on) {
+        drag.on = false;
+        controls.enabled = true;
+        renderer.domElement.style.cursor = 'default';
+        return;
+    }
+    if (state.mode !== 'B') return;
+    if (e.target !== renderer.domElement) return;
+    if (drag.moved > 8) return;
+    setPointer(e);
+    ray.setFromCamera(pointer, camera);
+    var hits = ray.intersectObjects(starHit, false);
+    if (hits.length) {
+        selectStar(hits[0].object.userData.idx);
+    } else {
+        state.star = -1;
+        document.querySelectorAll('.star-chip').forEach(function (b) { b.classList.remove('active'); });
+        selRing.visible = false;
+        applyModeCamera(false);
+    }
+});
+
+/* ============================================================
+   17. 테마
+   ============================================================ */
+function applyTheme(dark) {
+    state.dark = dark;
+    document.body.classList.toggle('dark-mode', dark);
+    document.body.classList.toggle('light-mode', !dark);
+    $('#theme-toggle').textContent = dark ? '☀️' : '🌙';
+    /* 빛을 내는 장면이라 두 테마 모두 무대는 어둡게 두고 UI만 밝힌다 */
+    scene.background = new THREE.Color(dark ? 0x05080f : 0x111c2e);
+    hemi.intensity = dark ? 0.1 : 0.2;
+    hemi.color.setHex(dark ? 0xdce8ff : 0xffffff);
+    keyLight.intensity = dark ? 0.16 : 0.24;
+    fillLight.intensity = dark ? 0.05 : 0.1;
+    benchMat.color.setHex(dark ? 0x191d24 : 0x232833);
+    benchTop.material.color.setHex(dark ? 0x22262e : 0x2c313a);
+    bgStars.material.opacity = dark ? 0.8 : 0.5;
+    applyForge(state.temp);
+    updateLeftGraph();
+    try { localStorage.setItem('svlLabTheme', dark ? 'dark' : 'light'); } catch (err) {}
+}
+$('#theme-toggle').addEventListener('click', function () { applyTheme(!state.dark); });
+var savedTheme = null;
+try { savedTheme = localStorage.getItem('svlLabTheme'); } catch (err) {}
+applyTheme(savedTheme !== 'light');
+
+/* ============================================================
+   18. 리사이즈 · 애니메이션
+   ============================================================ */
+function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    layoutStars();
+    if (viewKey() !== lastFitKey) applyModeCamera(true);
+    else applyViewOffset();
+    updateLeftGraph();
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function () { setTimeout(resize, 220); });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { setTimeout(resize, 200); });
+
+var clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    var dt = Math.min(clock.getDelta(), 0.05);
+    var t = clock.elapsedTime;
+
+    if (camTween) {
+        var p = Math.min(1, (performance.now() - camTween.t0) / camTween.dur);
+        var e = 1 - Math.pow(1 - p, 3);
+        camera.position.lerpVectors(camTween.p0, camTween.p1, e);
+        controls.target.lerpVectors(camTween.t1, camTween.t2, e);
+        if (p >= 1) camTween = null;
+    }
+
+    /* 불꽃 흔들림 */
+    if (forge.visible) {
+        for (var i = 0; i < flameLayers.length; i++) {
+            var L = flameLayers[i];
+            var s = (L.baseScale || 1) * (1 + 0.05 * Math.sin(t * 9.1 + i) + 0.03 * Math.sin(t * 17.3 + i * 2));
+            L.mesh.scale.set(1 + 0.04 * Math.sin(t * 11 + i), s, 1 + 0.04 * Math.cos(t * 8 + i));
+            L.mesh.rotation.y = t * 0.4 + i;
+        }
+        rodLabel.position.y = ROD_Y + 1.1 + Math.sin(t * 1.4) * 0.015;
+    }
+
+    /* 별 표면 · 코로나 */
+    if (starField.visible) {
+        for (var j = 0; j < starObjs.length; j++) {
+            var so = starObjs[j];
+            so.core.rotation.y += dt * 0.16;
+            var pulse = 1 + 0.045 * Math.sin(t * 1.7 + j * 1.3);
+            var gs = so.glowScale || 1;
+            so.corona.scale.set(4.1 * pulse * gs, 4.1 * pulse * gs, 1);
+            var hs = 8.2 * gs * (1 + 0.03 * Math.sin(t * 0.9 + j));
+            so.halo.scale.set(hs, hs, 1);
+            if (so.label.visible) so.label.position.y = so.labelOffset + Math.sin(t * 1.1 + j) * 0.03;
+        }
+        GRAN_TEX.offset.x = (GRAN_TEX.offset.x + dt * 0.008) % 1;
+        if (selRing.visible) {
+            selRing.rotation.z += dt * 0.6;
+            selRing.lookAt(camera.position);
+            var sp = 1 + 0.04 * Math.sin(t * 4);
+            selRing.scale.set(sp, sp, 1);
+        }
+    }
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+/* ============================================================
+   19. 시작
+   ============================================================ */
+layoutStars();
+applyModeCamera(true);
+setMode('A');
+setTemp(3000);
+updateLeftGraph();
+requestAnimationFrame(animate);
+
+
+/* 폰트 로딩 뒤 캔버스 라벨 다시 그리기 */
+if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () {
+        applyForge(state.temp);
+        updateLeftGraph();
+        starObjs.forEach(function (so) {
+            var rgb = so.rgb;
+            drawLabel(so.label, [
+                { t: so.d.name, s: 30, c: '#ffffff' },
+                { t: fmt(so.d.temp) + ' K', s: 24, c: rgbCss(rgb) }
+            ], 'rgba(8,14,24,0.7)');
+        });
+    }).catch(function () {});
+}
+
+/* ============================================================
+   20. 전체화면 / 몰입 모드
+   ============================================================ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var el = document.getElementById('ux-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'ux-toast';
+            el.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(16,24,38,.92);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.35)';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.style.opacity = '1';
+        clearTimeout(el._t);
+        el._t = setTimeout(function () { el.style.opacity = '0'; }, 2600);
+    }
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs(), wasPseudo = pseudo();
+            try {
+                if (!wasReal) {
+                    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen ||
+                              docEl.webkitRequestFullScreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                    if (req) req.call(docEl);
+                } else {
+                    var exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                               document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                    if (exit) exit.call(document);
+                }
+            } catch (err) {}
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); resize(); return; }
+                if (!realFs()) {
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (err2) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+                resize();
+            }, 420);
+        });
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, function () { setUI(); setTimeout(resize, 120); });
+    });
+    setUI();
+})();
+
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
