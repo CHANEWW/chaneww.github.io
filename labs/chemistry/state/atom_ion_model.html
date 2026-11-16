@@ -146,6 +146,7 @@
     .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; font-weight: 800; color: #334155; padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, .07); }
     body.dark-mode .panel-title { color: #dce7f7; border-bottom-color: rgba(255, 255, 255, .12); }
     .panel-sub { font-size: 10.6px; font-weight: 700; color: #7b8794; }
+    .data-value sup, .lp-v sup { font-size: .62em; vertical-align: super; line-height: 0; font-weight: 900; }
     body.dark-mode .panel-sub { color: #93a3b8; }
     .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .ctrl-grid.one { grid-template-columns: 1fr; }
@@ -656,7 +657,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         <div class="lp-row"><span class="lp-k">전하량</span><span class="lp-v" id="lp-charge">0 (중성)</span></div>
         <div class="lp-row"><span class="lp-k">이온식</span><span class="lp-v" id="lp-ion">Na</span></div>
         <table class="lp-tbl"><thead><tr><th>전자 껍질</th><th>전자 수</th></tr></thead><tbody id="shell-body"></tbody></table>
-        <div class="lp-note">전자를 잃으면 양이온(+), 얻으면 음이온(−)이 돼요. 껍질은 K·L·M 순서로 2·8·8개까지 채워져요.</div>
+        <div class="lp-row"><span class="lp-k">가능한 이온</span><span class="lp-v" id="lp-ion-rule" style="font-size:11px;line-height:1.4">—</span></div>
+        <div class="lp-note">전자를 잃으면 양이온(+), 얻으면 음이온(−)이 돼요. 실제로 만들어지는 이온(예: Na⁺, Mg²⁺, O²⁻, Cl⁻)까지만 만들 수 있어요.</div>
 </div>
 
 <div class="side-ctrl-panel glass-panel">
@@ -1110,14 +1112,16 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     var S = window.SVL;
     var $ = S.$;
     var scene = S.scene;
+    var ION_FONT = "'SeoulNamsan', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
+    /* ions: 이 원소로 실제로 만드는 대표적인 이온의 전하(+ 양이온 / − 음이온) */
     var ELEM = {
-        H:  { name: '수소', p: 1, n: 0, sym: 'H' },
-        Li: { name: '리튬', p: 3, n: 4, sym: 'Li' },
-        Na: { name: '나트륨', p: 11, n: 12, sym: 'Na' },
-        Mg: { name: '마그네슘', p: 12, n: 12, sym: 'Mg' },
-        O:  { name: '산소', p: 8, n: 8, sym: 'O' },
-        Cl: { name: '염소', p: 17, n: 18, sym: 'Cl' }
+        H:  { name: '수소', p: 1, n: 0, sym: 'H', ions: [1] },
+        Li: { name: '리튬', p: 3, n: 4, sym: 'Li', ions: [1] },
+        Na: { name: '나트륨', p: 11, n: 12, sym: 'Na', ions: [1] },
+        Mg: { name: '마그네슘', p: 12, n: 12, sym: 'Mg', ions: [2] },
+        O:  { name: '산소', p: 8, n: 8, sym: 'O', ions: [-2] },
+        Cl: { name: '염소', p: 17, n: 18, sym: 'Cl', ions: [-1] }
     };
     var ORDER = ['H', 'Li', 'Na', 'Mg', 'O', 'Cl'];
     var CAP = [2, 8, 8];
@@ -1217,20 +1221,78 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         shells[2].label.userData.setText('M');
     }
 
-    /* ---------- 이온식 ---------- */
-    var ionLabel = S.makeLabel('Na', { size: 0.62, color: '#12305a', bg: 'rgba(255,255,255,0.9)', pad: 0.4 });
-    ionLabel.position.set(0, 4.55, 0);
+    /* ---------- 이온식 (숫자를 위첨자로 직접 그린다) ---------- */
+    var ionCv = document.createElement('canvas');
+    ionCv.width = 512; ionCv.height = 192;
+    var ionCtx = ionCv.getContext('2d');
+    var ionTex = new THREE.CanvasTexture(ionCv);
+    ionTex.minFilter = THREE.LinearFilter;
+    var ionLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: ionTex, transparent: true, depthWrite: false }));
+    ionLabel.scale.set(2.6, 0.975, 1);
+    ionLabel.position.set(0, 4.72, 0);
     scene.add(ionLabel);
 
-    function ionText() {
+    function ionParts() {
         var e = ELEM[state.el];
         var q = e.p - state.electrons;
-        var sym = e.sym;
-        if (q === 0) return sym;
-        var mag = Math.abs(q);
-        var sign = q > 0 ? '\u207A' : '\u207B';
-        var sup = mag === 1 ? sign : (String(mag).replace('2', '\u00B2').replace('3', '\u00B3')) + sign;
-        return sym + sup;
+        return { sym: e.sym, mag: Math.abs(q), up: q > 0, q: q };
+    }
+
+    /* 화면·패널용 HTML (위첨자 태그) */
+    function ionHTML() {
+        var p = ionParts();
+        if (p.q === 0) return p.sym;
+        var t = (p.mag > 1 ? p.mag : '') + (p.up ? '+' : '−');
+        return p.sym + '<sup>' + t + '</sup>';
+    }
+
+    /* 토스트·안내용 일반 텍스트 */
+    function ionText() {
+        var p = ionParts();
+        if (p.q === 0) return p.sym;
+        return p.sym + (p.mag > 1 ? p.mag : '') + (p.up ? '+' : '−');
+    }
+
+    function drawIon() {
+        var p = ionParts();
+        var W = ionCv.width, H = ionCv.height;
+        ionCtx.clearRect(0, 0, W, H);
+        var fs = 116, cs = 66;
+        ionCtx.font = '900 ' + fs + 'px ' + ION_FONT;
+        var symW = ionCtx.measureText(p.sym).width;
+        var chTxt = p.q === 0 ? '' : ((p.mag > 1 ? String(p.mag) : '') + (p.up ? '+' : '−'));
+        ionCtx.font = '900 ' + cs + 'px ' + ION_FONT;
+        var chW = chTxt ? ionCtx.measureText(chTxt).width : 0;
+        var totalW = symW + chW + (chW ? 6 : 0);
+        var x0 = (W - totalW) / 2, baseY = H * 0.74;
+        /* 캡슐 */
+        var padX = 34, top = 26, bot = H - 22;
+        ionCtx.fillStyle = 'rgba(255,255,255,0.92)';
+        var rx = x0 - padX, rw = totalW + padX * 2, r = 26;
+        ionCtx.beginPath();
+        ionCtx.moveTo(rx + r, top);
+        ionCtx.lineTo(rx + rw - r, top);
+        ionCtx.quadraticCurveTo(rx + rw, top, rx + rw, top + r);
+        ionCtx.lineTo(rx + rw, bot - r);
+        ionCtx.quadraticCurveTo(rx + rw, bot, rx + rw - r, bot);
+        ionCtx.lineTo(rx + r, bot);
+        ionCtx.quadraticCurveTo(rx, bot, rx, bot - r);
+        ionCtx.lineTo(rx, top + r);
+        ionCtx.quadraticCurveTo(rx, top, rx + r, top);
+        ionCtx.closePath();
+        ionCtx.fill();
+        /* 기호 */
+        ionCtx.textAlign = 'left';
+        ionCtx.textBaseline = 'alphabetic';
+        ionCtx.font = '900 ' + fs + 'px ' + ION_FONT;
+        ionCtx.fillStyle = p.q > 0 ? '#c2311f' : (p.q < 0 ? '#1b63b8' : '#12305a');
+        ionCtx.fillText(p.sym, x0, baseY);
+        /* 전하 = 위첨자 (기호 위쪽에 작게) */
+        if (chTxt) {
+            ionCtx.font = '900 ' + cs + 'px ' + ION_FONT;
+            ionCtx.fillText(chTxt, x0 + symW + 6, baseY - fs * 0.42);
+        }
+        ionTex.needsUpdate = true;
     }
 
     function chargeText() {
@@ -1250,7 +1312,12 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         $('#lp-e').textContent = state.electrons + ' 개';
         $('#lp-charge').textContent = chargeText();
         $('#lp-charge').style.color = q > 0 ? '#e2452f' : (q < 0 ? '#2f7fe0' : '#1a9e54');
-        $('#lp-ion').textContent = ionText();
+        $('#lp-ion').innerHTML = ionHTML();
+        var ionInfo = $('#lp-ion-rule');
+        if (ionInfo) {
+            var names = e.ions.map(function (qq) { return e.sym + (Math.abs(qq) > 1 ? Math.abs(qq) : '') + (qq > 0 ? '+' : '−'); });
+            ionInfo.textContent = e.name + '으로 만들 수 있는 이온: ' + names.join(', ') + (e.ions[0] > 0 ? ' (양이온)' : ' (음이온)');
+        }
         var body = $('#shell-body');
         body.innerHTML = '';
         ['K', 'L', 'M'].forEach(function (nm, i) {
@@ -1264,10 +1331,10 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         else if (q > 0) { chip.textContent = '양이온 (+' + q + ')'; chip.className = 'chip warn'; }
         else { chip.textContent = '음이온 (−' + Math.abs(q) + ')'; chip.className = 'chip'; }
         $('#val-el').textContent = e.name;
-        $('#val-ion').textContent = ionText();
+        $('#val-ion').innerHTML = ionHTML();
         $('#val-charge').textContent = chargeText();
         $('#val-charge').style.color = q > 0 ? '#e2452f' : (q < 0 ? '#2f7fe0' : '#1a9e54');
-        ionLabel.userData.setText(ionText());
+        drawIon();
     }
 
     function setElement(key) {
@@ -1280,25 +1347,47 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         S.toast(ELEM[key].name + ' 원자 · 양성자 ' + ELEM[key].p + '개, 전자 ' + state.electrons + '개');
     }
 
-    function addElectron() {
-        if (state.electrons >= 20) { S.toast('전자를 더 넣을 수 없어요'); return; }
-        state.electrons++;
-        buildElectrons(state.electrons);
-        updatePanel();
-        var q = ELEM[state.el].p - state.electrons;
-        if (q < 0) S.toast('전자가 1개 늘어 ' + ionText() + ' 음이온이 되었어요');
-        else if (q === 0) S.toast('전자와 양성자 수가 같아져 중성 원자가 되었어요');
+    /* 이 원소로 실제로 만들어지는 전하만 오가도록 한다 (0 → +1 → +2, 0 → −1 → −2) */
+    function chargeList(key) {
+        var el = ELEM[key];
+        var list = [0].concat(el.ions || []);
+        list.sort(function (a, b) { return a - b; });
+        return list;
     }
 
-    function removeElectron() {
-        if (state.electrons <= 0) { S.toast('전자를 더 뺄 수 없어요'); return; }
-        state.electrons--;
+    function stepCharge(dir) {
+        var el = ELEM[state.el];
+        var q = el.p - state.electrons;
+        var list = chargeList(state.el);
+        var i = list.indexOf(q);
+        if (i < 0) { // 목록에 없으면 가장 가까운 실제 이온으로
+            var best = 0, bd = 99;
+            list.forEach(function (v) { if (Math.abs(v - q) < bd) { bd = Math.abs(v - q); best = v; } });
+            i = list.indexOf(best);
+        }
+        var ni = i + dir;
+        if (ni < 0 || ni >= list.length) {
+            S.toast(dir > 0 ? '이 원소로 만드는 음이온은 ' + ionName(el, list[0]) + ' 까지예요'
+                : '이 원소로 만드는 양이온은 ' + ionName(el, list[list.length - 1]) + ' 까지예요');
+            return;
+        }
+        var nq = list[ni];
+        var before = state.electrons;
+        state.electrons = el.p - nq;
+        var moved = Math.abs(state.electrons - before);
         buildElectrons(state.electrons);
         updatePanel();
-        var q = ELEM[state.el].p - state.electrons;
-        if (q > 0) S.toast('전자가 1개 줄어 ' + ionText() + ' 양이온이 되었어요');
-        else if (q === 0) S.toast('전자와 양성자 수가 같아져 중성 원자가 되었어요');
+        if (nq === 0) S.toast('전자와 양성자 수가 같아져 중성 원자가 되었어요');
+        else if (nq > 0) S.toast('전자 ' + moved + '개를 잃어 ' + ionText() + ' 양이온이 되었어요');
+        else S.toast('전자 ' + moved + '개를 얻어 ' + ionText() + ' 음이온이 되었어요');
     }
+
+    function ionName(el, q) {
+        return el.sym + (Math.abs(q) > 1 ? Math.abs(q) : '') + (q > 0 ? '+' : '−');
+    }
+
+    function addElectron() { stepCharge(-1); }   // 전하가 음수 쪽으로
+    function removeElectron() { stepCharge(1); } // 전하가 양수 쪽으로
 
     function updateButtons() {
         ORDER.forEach(function (k) {

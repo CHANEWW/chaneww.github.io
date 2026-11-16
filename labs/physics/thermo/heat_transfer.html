@@ -512,14 +512,23 @@ window.SVL = (function () {
 
     /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ---- */
     var labelList = [];
+    var LABEL_FONT = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+    var probeCv = document.createElement('canvas');
+    var probeCtx = probeCv.getContext('2d');
+    function measureLabel(text) {
+        probeCtx.font = LABEL_FONT;
+        return probeCtx.measureText(text).width;
+    }
     function drawLabel(cv, text, color) {
         var g = cv.getContext('2d');
-        g.clearRect(0, 0, 512, 128);
-        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        var CW = cv.width, CH = cv.height;
+        g.clearRect(0, 0, CW, CH);
+        g.font = LABEL_FONT;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
-        var tw = Math.min(470, g.measureText(text).width + 46);
-        var x0 = (512 - tw) / 2, r = 30;
+        /* 글씨 폭에 맞춰 캡슐을 넓힌다 — 긴 문구도 칸 밖으로 튀어나오지 않음 */
+        var tw = Math.min(CW - 46, g.measureText(text).width + 92);
+        var x0 = (CW - tw) / 2, r = 30;
         g.fillStyle = 'rgba(255,255,255,0.93)';
         g.beginPath();
         g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
@@ -533,18 +542,20 @@ window.SVL = (function () {
         g.closePath();
         g.fill();
         g.fillStyle = color || '#124';
-        g.fillText(text, 256, 66);
+        g.fillText(text, CW / 2, 66);
     }
     function makeLabel(text, color, w) {
+        var cw = Math.max(512, Math.ceil(measureLabel(text) + 166));
         var cv = document.createElement('canvas');
-        cv.width = 512; cv.height = 128;
+        cv.width = cw; cv.height = 128;
         drawLabel(cv, text, color);
         var tex = new THREE.CanvasTexture(cv);
         tex.minFilter = THREE.LinearFilter;
         var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-        var ww = w || 1.9;
-        spr.scale.set(ww, ww * 0.25, 1);
-        spr.userData.label = { cv: cv, tex: tex, text: text, color: color };
+        var unit = (w || 1.9) / 512;
+        spr.scale.set(cw * unit, 128 * unit, 1);
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color, unit: unit };
+        spr.userData.bw = spr.scale.x;
         labelList.push(spr);
         return spr;
     }
@@ -552,6 +563,17 @@ window.SVL = (function () {
         for (var i = 0; i < labelList.length; i++) {
             var L = labelList[i].userData.label;
             if (!L) continue;
+            var need = Math.max(512, Math.ceil(measureLabel(L.text) + 166));
+            if (L.cv.width !== need) {
+                L.cv.width = need;
+                labelList[i].scale.set(need * L.unit, 128 * L.unit, 1);
+                labelList[i].userData.bw = labelList[i].scale.x;
+                L.tex.dispose();
+                L.tex = new THREE.CanvasTexture(L.cv);
+                L.tex.minFilter = THREE.LinearFilter;
+                labelList[i].material.map = L.tex;
+                labelList[i].material.needsUpdate = true;
+            }
             drawLabel(L.cv, L.text, L.color);
             if (L.tex) L.tex.needsUpdate = true;
         }
@@ -739,6 +761,43 @@ window.SVL = (function () {
     rods.push({ cfg: m, grp: grp, heat: heat, heatMat: heatMat, waxes: waxes, burner: b, flame: b.getObjectByName('flame'), rank: 0 });
   });
 
+  /* 막대를 감싸는 입자 모형 — 가열될수록 진동이 커지고 열이 흘러간다 */
+  rods.forEach(function (r) {
+    var N = 54;
+    var pos = new Float32Array(N * 3);
+    var base = [], ph = [];
+    for (var i = 0; i < N; i++) {
+      base.push([ROD_X0 + Math.random() * ROD_L, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2]);
+      ph.push(Math.random() * 6.28);
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    var mat = new THREE.PointsMaterial({
+      color: r.cfg.key === 'cu' ? 0xffb066 : (r.cfg.key === 'fe' ? 0xcfe3ff : 0xa8ecff),
+      size: 0.05, sizeAttenuation: true, transparent: true, opacity: 0.9, depthWrite: false
+    });
+    var pts = new THREE.Points(geo, mat);
+    r.grp.add(pts);
+    r.atoms = { geo: geo, base: base, ph: ph, mat: mat, n: N, pos: pos };
+  });
+
+  function updateRodParticles(r, clock) {
+    var A = r.atoms;
+    if (!A) return;
+    var reach = Math.min(ROD_L, r.cfg.speed * condT);
+    for (var i = 0; i < A.n; i++) {
+      var b = A.base[i];
+      var local = Math.max(0, Math.min(1, (reach - (b[0] - ROD_X0)) / 0.55));
+      var amp = 0.004 + 0.016 * local;
+      var ang = b[1] + clock * (0.9 + 3.4 * local);
+      var rr = 0.088 + 0.012 * Math.sin(clock * 2 + b[2]);
+      A.pos[i * 3] = b[0] + Math.sin(clock * 12 + A.ph[i]) * amp;
+      A.pos[i * 3 + 1] = Math.cos(ang) * rr + Math.cos(clock * 11 + A.ph[i]) * amp;
+      A.pos[i * 3 + 2] = Math.sin(ang) * rr + Math.sin(clock * 13 + A.ph[i]) * amp;
+    }
+    A.geo.attributes.position.needsUpdate = true;
+  }
+
   /* 공용 프레임: H자 지지대 (좌우 기둥 + 가로대) */
   [-1.32, 1.32].forEach(function (sx) {
     var post = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, ROD_Y, 14), darkMat);
@@ -762,10 +821,10 @@ window.SVL = (function () {
   }
   var labelsCond = [];
   MATS.forEach(function (m) {
-    var l = lab3(m.name, m.key === 'cu' ? '#b45309' : (m.key === 'fe' ? '#475569' : '#0e7490'), 0.85, 2.12, ROD_Y + 0.22, m.z * 0.95, gCond);
+    var l = lab3(m.name, m.key === 'cu' ? '#b45309' : (m.key === 'fe' ? '#475569' : '#0e7490'), 1.05, 2.3, ROD_Y + 0.3, m.z * 0.95, gCond);
     labelsCond.push(l);
   });
-  var labCondHeat = lab3('열이 이동하는 방향 →', '#c2410c', 1.45, 0.72, ROD_Y + 0.78, 1.25, gCond);
+  var labCondHeat = lab3('열이 이동하는 방향 →', '#c2410c', 1.75, 0.55, ROD_Y + 0.9, 1.25, gCond);
   labelsCond.push(labCondHeat);
 
   /* ============================ 2. 대류 ============================ */
@@ -785,31 +844,39 @@ window.SVL = (function () {
   water.position.y = 0.06 + BK_H * 0.43;
   gConvRig.add(water);
 
-  /* 톱밥 · 잉크 입자 */
-  var PART = 150;
+  /* 톱밥 · 잉크 입자 — 열운동(미세 진동) + 대류 순환을 함께 표현 */
+  var PART = 190;
   var pPos = new Float32Array(PART * 3);
-  var pPhase = [], pAz = [], pRad = [];
+  var pCol = new Float32Array(PART * 3);
+  var pPhase = [], pAz = [], pRad = [], pSpd = [], pJit = [];
   for (var pi = 0; pi < PART; pi++) {
     pPhase.push(Math.random());
     pAz.push(Math.random() * Math.PI * 2);
-    pRad.push(0.72 + Math.random() * 0.3);
+    pRad.push(0.68 + Math.random() * 0.34);
+    pSpd.push(0.72 + Math.random() * 0.62);
+    pJit.push([Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28]);
   }
   var pGeo = new THREE.BufferGeometry();
   pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-  var pMat = new THREE.PointsMaterial({ color: 0x8a5a2b, size: 0.07, sizeAttenuation: true, transparent: true, opacity: 0.95 });
+  pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+  var pMat = new THREE.PointsMaterial({ color: 0xffffff, vertexColors: true, size: 0.07, sizeAttenuation: true, transparent: true, opacity: 0.95 });
   var sawdust = new THREE.Points(pGeo, pMat);
   gConvRig.add(sawdust);
 
-  var INK = 46;
+  var INK = 60;
   var iPos = new Float32Array(INK * 3);
-  var iPhase = [], iAz = [];
+  var iPhase = [], iAz = [], iSpd = [], iJit = [], iRad = [];
   for (var ii = 0; ii < INK; ii++) {
     iPhase.push(Math.random() * 0.12);
     iAz.push(Math.random() * Math.PI * 2);
+    iSpd.push(0.7 + Math.random() * 0.6);
+    iJit.push([Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28]);
+    iRad.push(0.8 + Math.random() * 0.22);
   }
   var iGeo = new THREE.BufferGeometry();
   iGeo.setAttribute('position', new THREE.BufferAttribute(iPos, 3));
-  var ink = new THREE.Points(iGeo, new THREE.PointsMaterial({ color: 0x1d4ed8, size: 0.1, sizeAttenuation: true, transparent: true, opacity: 0.9 }));
+  var iMat = new THREE.PointsMaterial({ color: 0x1d4ed8, size: 0.095, sizeAttenuation: true, transparent: true, opacity: 0.9 });
+  var ink = new THREE.Points(iGeo, iMat);
   gConvRig.add(ink);
 
   /* 순환 화살표 */
@@ -860,8 +927,8 @@ window.SVL = (function () {
 
   var convState = { on: false, t: 0, temp: 20, speed: 60, phase: 0 };
   var convLabels = [
-    lab3('톱밥 · 파란 잉크', '#1d4ed8', 1.5, 0, 3.15, 0, gConv),
-    lab3('가열', '#c2410c', 0.8, 1.15, 0.5, 0.75, gConv)
+    lab3('톱밥 · 파란 잉크', '#1d4ed8', 1.5, 0, 3.5, 0, gConv),
+    lab3('🔥 가열', '#c2410c', 1.05, 1.24, 0.55, 0.8, gConv)
   ];
 
   /* ============================ 3. 복사 ============================ */
@@ -1098,7 +1165,10 @@ window.SVL = (function () {
     updateReadout();
   });
 
+  var condClock = 0;
   function stepCond(dt) {
+    condClock += dt;
+    rods.forEach(function (r) { updateRodParticles(r, condClock); });
     if (!condState.on) return;
     dt *= 0.45;
     condT += dt;
@@ -1162,24 +1232,42 @@ window.SVL = (function () {
       }
       updateReadout();
     }
+    /* 열운동 시계 — 가열하지 않아도 분자는 미세하게 떨린다 */
+    convState.therm = (convState.therm || 0) + dt;
+    var tc = convState.therm;
+    var jig = 0.007 + 0.032 * heat;         /* 가열할수록 진동이 커진다 */
     /* 톱밥 */
     var pos = pGeo.attributes.position;
+    var col = pGeo.attributes.color;
     for (var i = 0; i < PART; i++) {
-      var p = (pPhase[i] + convState.phase) % 1;
+      var p = (pPhase[i] + convState.phase * pSpd[i]) % 1;
       convPoint(p, tmpP);
-      var r = Math.min(BK_R * 0.92, tmpP.r * pRad[i]);
-      pos.setXYZ(i, Math.cos(pAz[i]) * r, 0.1 + tmpP.y, Math.sin(pAz[i]) * r);
+      var r = Math.min(BK_R * 0.92, tmpP.r * pRad[i] * (1 + 0.05 * Math.sin(tc * 2.6 + pJit[i][1])));
+      var jx = Math.sin(tc * 9.5 + pJit[i][0]) * jig;
+      var jy = Math.cos(tc * 11.3 + pJit[i][1]) * jig * 1.15;
+      var jz = Math.sin(tc * 8.1 + pJit[i][2]) * jig;
+      var yy = 0.1 + tmpP.y;
+      pos.setXYZ(i, Math.cos(pAz[i]) * r + jx, yy + jy, Math.sin(pAz[i]) * r + jz);
+      /* 온도 색: 뜨거운 아래쪽은 주황, 위쪽은 식은 갈색 */
+      var t01 = Math.max(0, Math.min(1, yy / (BK_H * 0.86)));
+      col.setXYZ(i, 0.72 + 0.28 * (1 - t01), 0.34 + 0.36 * (1 - t01) * (0.4 + 0.6 * heat), 0.22 + 0.1 * (1 - t01));
     }
     pos.needsUpdate = true;
+    col.needsUpdate = true;
+    pMat.size = 0.06 + 0.022 * heat;
     /* 잉크 */
     var ipos = iGeo.attributes.position;
     for (var j = 0; j < INK; j++) {
-      var pp = (iPhase[j] + convState.phase) % 1;
+      var pp = (iPhase[j] + convState.phase * iSpd[j]) % 1;
       convPoint(pp, tmpP);
-      var rr = Math.min(BK_R * 0.92, tmpP.r * 0.92);
-      ipos.setXYZ(j, Math.cos(iAz[j]) * rr, 0.1 + tmpP.y, Math.sin(iAz[j]) * rr);
+      var rr = Math.min(BK_R * 0.92, tmpP.r * 0.92 * iRad[j]);
+      var ix = Math.sin(tc * 7.7 + iJit[j][0]) * jig * 1.2;
+      var iy = Math.cos(tc * 10.1 + iJit[j][1]) * jig * 1.2;
+      var iz = Math.sin(tc * 6.3 + iJit[j][2]) * jig * 1.2;
+      ipos.setXYZ(j, Math.cos(iAz[j]) * rr + ix, 0.1 + tmpP.y + iy, Math.sin(iAz[j]) * rr + iz);
     }
     ipos.needsUpdate = true;
+    iMat.size = 0.085 + 0.02 * heat;
     /* 화살표 */
     arrows.forEach(function (a) {
       var p = (a.off + convState.phase) % 1;
@@ -1256,16 +1344,17 @@ window.SVL = (function () {
   function fit() {
     var w = window.innerWidth, h = window.innerHeight;
     var portrait = h > w, landscape = h <= 520 && w > h;
-    scaleLabels(portrait ? 0.55 : (landscape ? 0.62 : 0.82));
+    scaleLabels(portrait ? 1.34 : (landscape ? 0.78 : 0.95));
     var dist, ty, ty2, fov;
-    if (MODE === 'cond') { dist = portrait ? 12.6 : (landscape ? 8.0 : 8.0); ty = 1.3; ty2 = 2.7; fov = portrait ? 50 : 40; }
+    if (MODE === 'cond') { dist = portrait ? 13.8 : (landscape ? 8.0 : 8.0); ty = 1.3; ty2 = 2.7; fov = portrait ? 50 : 40; }
     else if (MODE === 'conv') { dist = portrait ? 9.6 : (landscape ? 7.4 : 7.6); ty = 1.7; ty2 = 2.0; fov = portrait ? 48 : 40; }
     else { dist = portrait ? 9.4 : (landscape ? 6.6 : 6.8); ty = 1.15; ty2 = 1.55; fov = portrait ? 48 : 40; }
     S.camera.fov = fov;
     gCond.scale.setScalar(portrait ? 0.72 : 1);
     if (MODE === 'cond') {
-      S.camera.position.set(portrait ? 2.6 : 4.3, ty2, dist * (portrait ? 0.8 : 0.78));
-      S.controls.target.set(0.1, ty, 0);
+      /* 실험 시작 시 정면(막대를 바라보는 방향)으로 정렬 */
+      S.camera.position.set(portrait ? 0.55 : 0.28, ty2, dist * 0.84);
+      S.controls.target.set(portrait ? 0.62 : 0.28, ty, 0);
     } else {
       S.camera.position.set(0.05, ty2, dist);
       S.controls.target.set(landscape ? 0.35 : 0.02, ty, 0);

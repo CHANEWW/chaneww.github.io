@@ -300,7 +300,7 @@ body.dark-mode #fullscreenBtn{background:rgba(10,18,28,.8); color:#eaf1fb}
     }
 
     /* ---------------- 입력 ---------------- */
-    var paddle = { x: 0, y: 0, px: 0, py: 0, vx: 0, vy: 0, r: 62, live: false, hand: false, lastMove: 0 };
+    var paddle = { x: 0, y: 0, px: 0, py: 0, vx: 0, vy: 0, r: 62, handR: 0, live: false, hand: false, lastMove: 0 };
     var hand = { lm: null, seen: 0, present: false, ready: false };
     var handLM = null, lastDetect = 0;
 
@@ -360,10 +360,23 @@ body.dark-mode #fullscreenBtn{background:rgba(10,18,28,.8); color:#eaf1fb}
         }
         var lm = res.landmarks[0];
         hand.lm = lm; hand.seen = now; hand.present = true;
-        var p = cam.toStage(lm[9].x, lm[9].y, W, H);
+        /* 손바닥 중심: 손목(0)·검지 MCP(5)·중지 MCP(9)·약지 MCP(13)·새끼 MCP(17)의 무게중심 */
+        var cxN = (lm[0].x + lm[5].x + lm[9].x + lm[13].x + lm[17].x) / 5;
+        var cyN = (lm[0].y + lm[5].y + lm[9].y + lm[13].y + lm[17].y) / 5;
+        var p = cam.toStage(cxN, cyN, W, H);
+        /* 손바닥 실측 크기: 화면에 비친 손바닥 너비(5↔17)·길이(0↔9)를 픽셀로 환산해
+           판정 반경을 손바닥 크기에 맞춘다(가까이 오면 커지고 멀면 작아짐) */
+        var m = cam.metrics(W, H);
+        var spanW = Math.hypot((lm[5].x - lm[17].x) * m.vw, (lm[5].y - lm[17].y) * m.vh) * m.scale;
+        var spanL = Math.hypot((lm[0].x - lm[9].x) * m.vw, (lm[0].y - lm[9].y) * m.vh) * m.scale;
+        var palmR = Math.max(spanW, spanL) * 0.82;
+        paddle.handR = U.clamp(palmR, 52, Math.min(W, H) * 0.30);
         if (!paddle.live) { paddle.x = p.x; paddle.y = p.y; paddle.live = true; }
+        /* 6프레임 정도의 부드러운 추적(손 떨림 완화) */
+        var k = 0.55;
         paddle.px = paddle.x; paddle.py = paddle.y;
-        paddle.x = p.x; paddle.y = p.y;
+        paddle.x = paddle.x + (p.x - paddle.x) * k;
+        paddle.y = paddle.y + (p.y - paddle.y) * k;
         paddle.hand = true;
         paddle.lastMove = now;
     }
@@ -428,7 +441,8 @@ body.dark-mode #fullscreenBtn{background:rgba(10,18,28,.8); color:#eaf1fb}
         /* 라켓 속도 */
         paddle.vx = (paddle.x - paddle.px) / Math.max(dt, 0.008);
         paddle.vy = (paddle.y - paddle.py) / Math.max(dt, 0.008);
-        paddle.r = U.clamp(W * 0.075, 46, 82);
+        /* 손 모드에서는 손바닥 크기, 마우스 모드에서는 무대 폭 기준 */
+        paddle.r = (paddle.hand && paddle.handR) ? paddle.handR : U.clamp(W * 0.075, 46, 82);
 
         if (G.mode === 'play') {
             G.t += dt;
@@ -456,7 +470,7 @@ body.dark-mode #fullscreenBtn{background:rgba(10,18,28,.8); color:#eaf1fb}
                 /* 라켓(손바닥) 충돌 */
                 if (G.mode === 'play' && paddle.live && b.cool <= 0 && b.vy > 0) {
                     var d = U.dist(b.x, b.y, paddle.x, paddle.y);
-                    if (d < b.r + paddle.r * 0.86) {
+                    if (d < b.r + paddle.r) {
                         bounce(b, gy);
                         continue;
                     }
@@ -606,11 +620,11 @@ body.dark-mode #fullscreenBtn{background:rgba(10,18,28,.8); color:#eaf1fb}
         ctx.beginPath(); ctx.arc(paddle.x, paddle.y, r, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = 'rgba(110,231,183,.9)';
         ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(paddle.x, paddle.y, r * 0.78, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(paddle.x, paddle.y, r * 0.92, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([6, 6]);
         ctx.strokeStyle = 'rgba(167,243,208,.55)';
         ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(paddle.x, paddle.y, r * 0.55, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(paddle.x, paddle.y, r * 0.62, 0, Math.PI * 2); ctx.stroke();
         ctx.restore();
     }
 

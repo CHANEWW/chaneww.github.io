@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>분별 깔때기 & 증류 3D</title>
+<title>혼합물의 분리 3D</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -623,7 +623,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 <div class="top-left-bar">
     <a href="/index.html" class="back-btn glass-panel" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
     <div class="tag-badge glass-panel">
-        <span>혼합물 분리 3D</span>
+        <span>혼합물의 분리 3D</span>
         <span class="tag-pill">visionOS</span>
     </div>
     <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span></button>
@@ -1105,7 +1105,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 </script>
 <script>
 /* ============================================================
-   분별 깔때기 & 증류 3D — 혼합물 분리
+   혼합물의 분리 3D — 분별 깔때기·증류
    모드 1: 물+식용유를 분별 깔때기로 분리
    모드 2: 물+에탄올을 가열·증류로 분리
    ============================================================ */
@@ -1164,7 +1164,19 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         new THREE.MeshPhysicalMaterial({ color: 0x3f9be0, transparent: true, opacity: 0.6, roughness: 0.2, depthWrite: false }));
     collectedMesh.visible = false;
     funnelGroup.add(collectedMesh);
-    var beakerLabel = S.makeLabel('받는 비커', { size: 0.24, color: '#334155', bg: 'rgba(255,255,255,0.84)', pad: 0.3 });
+    /* 받는 비커에서도 물·식용유가 층으로 다시 나뉜다 */
+    var collectedOilMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.555, 0.545, 1, 40),
+        new THREE.MeshPhysicalMaterial({ color: 0xf0cf46, transparent: true, opacity: 0.72, roughness: 0.25, depthWrite: false }));
+    collectedOilMesh.visible = false;
+    funnelGroup.add(collectedOilMesh);
+    /* 비커 눈금 (20·40·60·80 mL) */
+    for (var bi = 1; bi <= 4; bi++) {
+      var tick = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.012, 0.012),
+        new THREE.MeshBasicMaterial({ color: 0x7f95ab, transparent: true, opacity: 0.8 }));
+      tick.position.set(-0.58, 0.17 + bi * 0.22, 0.56);
+      funnelGroup.add(tick);
+    }
+    var beakerLabel = S.makeLabel('받는 비커', { size: 0.36, color: '#334155', bg: 'rgba(255,255,255,0.88)', pad: 0.34 });
     beakerLabel.position.set(-1.3, 0.45, 0.2);
     funnelGroup.add(beakerLabel);
 
@@ -1217,12 +1229,41 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         new THREE.MeshPhysicalMaterial({ color: 0xeec93a, transparent: true, opacity: 0.68, roughness: 0.18, depthWrite: false }));
     funnelOil.position.y = 0.21;
     funnel.add(funnelOil);
-    var waterLabel = S.makeLabel('물 1.00', { size: 0.24, color: '#2b7dbb', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
-    waterLabel.position.set(-1.45, 2.75, 0.1);
+    var waterLabel = S.makeLabel('물 1.00 g/mL', { size: 0.34, color: '#2b7dbb', bg: 'rgba(255,255,255,0.9)', pad: 0.34 });
+    waterLabel.position.set(-1.16, 2.74, 0.1);
     funnelGroup.add(waterLabel);
-    var oilLabel = S.makeLabel('식용유 0.92', { size: 0.24, color: '#a98a12', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
-    oilLabel.position.set(-1.5, 3.5, 0.1);
+    var oilLabel = S.makeLabel('식용유 0.92 g/mL', { size: 0.34, color: '#a98a12', bg: 'rgba(255,255,255,0.9)', pad: 0.34 });
+    oilLabel.position.set(-1.24, 3.38, 0.1);
     funnelGroup.add(oilLabel);
+    /* 라벨과 액체층을 잇는 지시선 */
+    [[2.74, -0.62], [3.38, -0.2]].forEach(function (ln) {
+      var lead = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(ln[1]) - 0.32, 0.014, 0.014),
+        new THREE.MeshBasicMaterial({ color: 0x8aa2bb, transparent: true, opacity: 0.75 }));
+      lead.position.set((ln[1] - 0.32) / 2 - 0.02, ln[0], 0.12);
+      funnelGroup.add(lead);
+    });
+
+    /* 깔때기 목을 잡아 주는 클램프 */
+    var clampArm = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.07, 0.07), metal);
+    clampArm.position.set(0.85, 4.16, 0.02);
+    funnelGroup.add(clampArm);
+    var clampJaw = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.03, 8, 28), metal);
+    clampJaw.rotation.x = Math.PI / 2;
+    clampJaw.scale.setScalar(1.15);
+    clampJaw.position.set(0.24, 4.16, 0.02);
+    funnelGroup.add(clampJaw);
+    var clampScrew = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 10), metal);
+    clampScrew.rotation.z = Math.PI / 2;
+    clampScrew.position.set(1.5, 4.16, 0.02);
+    funnelGroup.add(clampScrew);
+
+    /* 깔때기 구부의 눈금 (10 mL 간격) */
+    for (var gi = 0; gi < 6; gi++) {
+      var gm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.016, 0.016),
+        new THREE.MeshBasicMaterial({ color: 0x5d7a97, transparent: true, opacity: 0.75 }));
+      gm.position.set(0.62, 0.55 - gi * 0.24, 0.42);
+      funnel.add(gm);
+    }
 
     // 깔때기 걸이(링 스탠드)
     var rod = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4.9, 12), metal);
@@ -1296,7 +1337,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     var mercury = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1, 10), new THREE.MeshBasicMaterial({ color: 0xe23b2e }));
     mercury.position.set(flaskC.x, flaskC.y + 1.1, 0.0);
     distillGroup.add(mercury);
-    var tempLabel = S.makeLabel('22 ℃', { size: 0.28, color: '#c2311f', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    var tempLabel = S.makeLabel('22 ℃', { size: 0.36, color: '#c2311f', bg: 'rgba(255,255,255,0.88)', pad: 0.34 });
     tempLabel.position.set(flaskC.x - 0.9, flaskC.y + 1.65, 0);
     distillGroup.add(tempLabel);
 
@@ -1315,7 +1356,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     distillGroup.add(cw1);
     var cw2 = tubeBetween(condA.clone().lerp(condB, 0.8).add(new THREE.Vector3(0, -0.05, 0)), condA.clone().lerp(condB, 0.8).add(new THREE.Vector3(0, -0.34, 0)), 0.045, new THREE.MeshStandardMaterial({ color: 0x7fc0e8, roughness: 0.4 }));
     distillGroup.add(cw2);
-    var condLabel = S.makeLabel('리비히 냉각기', { size: 0.22, color: '#2b6ea8', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    var condLabel = S.makeLabel('리비히 냉각기', { size: 0.3, color: '#2b6ea8', bg: 'rgba(255,255,255,0.88)', pad: 0.34 });
     condLabel.position.set(0.1, 2.5, 0.1);
     distillGroup.add(condLabel);
 
@@ -1336,7 +1377,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     recLiquid.position.set(recC.x, recC.y - 0.28, 0);
     recLiquid.scale.y = 0.001;
     distillGroup.add(recLiquid);
-    var recLabel = S.makeLabel('받은 에탄올', { size: 0.22, color: '#5b3fa8', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    var recLabel = S.makeLabel('받은 에탄올', { size: 0.3, color: '#5b3fa8', bg: 'rgba(255,255,255,0.88)', pad: 0.34 });
     recLabel.position.set(recC.x + 0.1, recC.y + 1.1, 0.1);
     distillGroup.add(recLabel);
 
@@ -1468,12 +1509,17 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         funnelOil.scale.y = oh / 0.5;
         funnelOil.position.y = -0.06 + oh / 2;
         funnelOil.visible = state.oil > 0.4;
+        /* 받는 비커: 물이 아래, 식용유가 위 — 밀도 차로 층이 다시 나뉜다 */
         var ch = Math.min(1.1, (state.collected / 60) * 1.1);
-        collectedMesh.visible = state.collected > 0.5;
-        collectedMesh.scale.y = Math.max(0.001, ch);
-        collectedMesh.position.set(0, 0.06 + ch / 2, 0);
-        var oilShare = state.collected > 0 ? state.collectedOil / state.collected : 0;
-        collectedMesh.material.color.setHex(oilShare > 0.5 ? 0xeec93a : (oilShare > 0.05 ? 0xb5c463 : 0x3f9be0));
+        var shareOil = state.collected > 0.01 ? state.collectedOil / state.collected : 0;
+        var oilH = ch * shareOil;
+        var waterH = ch - oilH;
+        collectedMesh.visible = waterH > 0.01;
+        collectedMesh.scale.y = Math.max(0.001, waterH);
+        collectedMesh.position.set(0, 0.06 + waterH / 2, 0);
+        collectedOilMesh.visible = oilH > 0.01;
+        collectedOilMesh.scale.y = Math.max(0.001, oilH);
+        collectedOilMesh.position.set(0, 0.06 + waterH + oilH / 2, 0);
         flow.visible = state.cockOpen && (state.water > 0.2 || state.oil > 0.2);
         flow.position.set(0, 1.9, 0);
         flow.scale.y = Math.max(0.2, (1.9 - state.collected * 0.0 - 1.2) / 0.5);

@@ -489,14 +489,23 @@ window.SVL = (function () {
 
     /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ---- */
     var labelList = [];
+    var LABEL_FONT = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+    var probeCv = document.createElement('canvas');
+    var probeCtx = probeCv.getContext('2d');
+    function measureLabel(text) {
+        probeCtx.font = LABEL_FONT;
+        return probeCtx.measureText(text).width;
+    }
     function drawLabel(cv, text, color) {
         var g = cv.getContext('2d');
-        g.clearRect(0, 0, 512, 128);
-        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        var CW = cv.width, CH = cv.height;
+        g.clearRect(0, 0, CW, CH);
+        g.font = LABEL_FONT;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
-        var tw = Math.min(470, g.measureText(text).width + 46);
-        var x0 = (512 - tw) / 2, r = 30;
+        /* 글씨 폭에 맞춰 캡슐을 넓힌다 — 긴 문구도 칸 밖으로 튀어나오지 않음 */
+        var tw = Math.min(CW - 70, g.measureText(text).width + 52);
+        var x0 = (CW - tw) / 2, r = 30;
         g.fillStyle = 'rgba(255,255,255,0.93)';
         g.beginPath();
         g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
@@ -510,18 +519,22 @@ window.SVL = (function () {
         g.closePath();
         g.fill();
         g.fillStyle = color || '#124';
-        g.fillText(text, 256, 66);
+        g.fillText(text, CW / 2, 66);
     }
     function makeLabel(text, color, w) {
+        /* 캔버스 폭을 글씨에 맞춰 늘리고, 스프라이트 폭도 같은 비율로 늘린다(글자 크기는 그대로) */
+        var cw = Math.max(512, Math.ceil(measureLabel(text) + 126));
         var cv = document.createElement('canvas');
-        cv.width = 512; cv.height = 128;
+        cv.width = cw; cv.height = 128;
         drawLabel(cv, text, color);
         var tex = new THREE.CanvasTexture(cv);
         tex.minFilter = THREE.LinearFilter;
         var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-        var ww = w || 1.9;
-        spr.scale.set(ww, ww * 0.25, 1);
-        spr.userData.label = { cv: cv, tex: tex, text: text, color: color };
+        var unit = (w || 1.9) / 512;            /* 512px 캔버스 = 기준 폭 */
+        spr.scale.set(cw * unit, 128 * unit, 1);
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color, unit: unit };
+        spr.userData.bw = spr.scale.x;
+        spr.userData.bh = spr.scale.y;
         labelList.push(spr);
         return spr;
     }
@@ -529,6 +542,18 @@ window.SVL = (function () {
         for (var i = 0; i < labelList.length; i++) {
             var L = labelList[i].userData.label;
             if (!L) continue;
+            var need = Math.max(512, Math.ceil(measureLabel(L.text) + 126));
+            if (L.cv.width !== need) {
+                L.cv.width = need;
+                labelList[i].scale.set(need * L.unit, 128 * L.unit, 1);
+                labelList[i].userData.bw = labelList[i].scale.x;
+                labelList[i].userData.bh = labelList[i].scale.y;
+                L.tex.dispose();
+                L.tex = new THREE.CanvasTexture(L.cv);
+                L.tex.minFilter = THREE.LinearFilter;
+                labelList[i].material.map = L.tex;
+                labelList[i].material.needsUpdate = true;
+            }
             drawLabel(L.cv, L.text, L.color);
             if (L.tex) L.tex.needsUpdate = true;
         }
@@ -887,13 +912,13 @@ window.SVL = (function () {
   var labMass = lab('1 kg', '#b45309', 1.45, -2.55, 0.0, 0.0);
   var labPanL = lab('이 물체', '#1d4ed8', 1.55, 0, 0, 0);
   var labPanR = lab('1 kg 표준추', '#15803d', 1.9, 0, 0, 0);
-  var labEnv = lab('지구 · 중력 9.8 m/s²', '#1d4ed8', 2.05, 0, 2.95, -2.6);
+  var labEnv = lab('지구 · 중력 9.8 m/s²', '#1d4ed8', 2.4, 0, 2.95, -2.6);
 
-  [labSpring, labBal, labMass, labPanL, labPanR, labEnv].forEach(function (l) { l.userData.bw = l.scale.x; });
+  [labSpring, labBal, labMass, labPanL, labPanR, labEnv].forEach(function (l) { l.userData.bw = l.scale.x; l.userData.bh = l.scale.y; });
   function scaleLabels(f) {
     [labSpring, labBal, labMass, labPanL, labPanR, labEnv].forEach(function (l) {
-      var b = l.userData.bw || l.scale.x;
-      l.scale.set(b * f, b * 0.25 * f, 1);
+      var bw = l.userData.bw || l.scale.x, bh = l.userData.bh || l.scale.x * 0.25;
+      l.scale.set(bw * f, bh * f, 1);
     });
   }
 

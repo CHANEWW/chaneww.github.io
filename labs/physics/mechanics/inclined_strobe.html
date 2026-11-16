@@ -353,6 +353,14 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
   body .side-ctrl-panel { width: min(196px, calc(100vw - 186px)) !important; }
 }
 
+
+/* 좁은 화면에서 제목 배지가 우측 버튼(제안하기·테마)을 침범하지 않도록 폭을 제한 */
+@media (max-width: 900px) {
+  body .side-ctrl-panel.side-ctrl-panel { width: min(172px, calc(100vw - 196px)) !important; max-height: 40vh !important; }
+  .top-left-bar { right: auto !important; width: max-content !important; max-width: calc(100vw - 172px) !important; }
+  .top-left-bar .tag-badge { max-width: 86px !important; overflow: hidden !important; min-width: 0 !important; }
+  .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 </style>
 <link rel="stylesheet" href="../../common/qr-modal.css">
 <link rel="stylesheet" href="../../common/ui-layout.css">
@@ -621,12 +629,19 @@ window.SVL = (function () {
 
   var L_M = 1.6;               /* 빗면 길이 (m) */
   var L_U = 3.2;               /* 3D 길이 (unit) */
+  var WS = 2;                  /* 화면에서 실험을 2배로 크게 보여 주는 배율 */
+  var wsNow = WS;              /* 화면 방향에 따라 바뀌는 현재 배율 */
   var SCALE = L_U / L_M;       /* unit per m */
   var G = 9.8, V0 = 0.5, FLASH = 0.2, SLOW = 0.4;
 
   var state = { ang: 15, running: false, t: 0, s: 0, v: V0, done: false };
   var lastFlash = -1;
 
+  /* 바닥면을 넓혀 카메라가 멀어져도 지평선이 화면 한가운데 걸리지 않게 한다 */
+  S.scene.children.forEach(function (o) {
+    var g = o.geometry && o.geometry.parameters;
+    if (o.isMesh && g && g.width === 90 && g.height === 60) { o.scale.set(4, 4, 1); }
+  });
   S.benchMat.color.setHex(0xb9c6d4);
   S.key.intensity = 0.92;
   S.hemi.intensity = 0.62;
@@ -634,6 +649,7 @@ window.SVL = (function () {
 
   /* ---------- 빗면 ---------- */
   var ramp = new THREE.Group();
+  ramp.scale.setScalar(WS);
   scene.add(ramp);
   var woodMat = new THREE.MeshStandardMaterial({ color: 0xd9b183, roughness: 0.82 });
   var woodDark = new THREE.MeshStandardMaterial({ color: 0xb98d5e, roughness: 0.86 });
@@ -719,19 +735,19 @@ window.SVL = (function () {
   function layoutRamp() {
     var th = state.ang * Math.PI / 180;
     ramp.rotation.z = -th;
-    ramp.position.y = (L_U / 2) * Math.sin(th) + 0.09;
-    var hx = -(L_U / 2) * Math.cos(th);
-    var h = L_U * Math.sin(th) + 0.09;
-    postMesh.position.set(hx + 0.02, 0, 0);
+    ramp.position.y = (L_U / 2) * Math.sin(th) * wsNow + 0.09 * wsNow;
+    var hx = -(L_U / 2) * Math.cos(th) * wsNow;
+    var h = L_U * Math.sin(th) * wsNow + 0.09 * wsNow;
+    postMesh.position.set(hx + 0.02 * wsNow, 0, 0);
     postMesh.scale.y = Math.max(0.02, h);
-    postBase.position.set(hx + 0.02, 0.03, 0);
-    postBase.visible = h > 0.16;
-    postMesh.visible = h > 0.16;
+    postBase.position.set(hx + 0.02 * wsNow, 0.03 * wsNow, 0);
+    postBase.visible = h > 0.16 * wsNow;
+    postMesh.visible = h > 0.16 * wsNow;
     startMark.position.set(-L_U / 2 + 0.34, 0.01, 0);
-    labAngle.position.set(hx - 0.1, 0.32, 0.62);
+    labAngle.position.set(hx - 0.05 * wsNow, Math.max(0.5, h * 0.72), 0.7 * wsNow);
     setText(labAngle, state.ang + '°');
-    labFlash.position.set(0.2, 1.05 + L_U * Math.sin(th) * 0.35, 0.75);
-    labScale.position.set(0.95, 0.2, 0.66);
+    labFlash.position.set(0.2 * wsNow, (1.02 + L_U * Math.sin(th) * 0.35) * wsNow, 0.8 * wsNow);
+    labScale.position.set(0.95 * wsNow, 0.2 * wsNow, 0.7 * wsNow);
   }
 
   /* ---------- 물리 ---------- */
@@ -883,11 +899,15 @@ window.SVL = (function () {
   function fit() {
     var w = window.innerWidth, h = window.innerHeight;
     var portrait = h > w, landscape = h <= 520 && w > h;
-    scaleLabels(portrait ? 0.55 : (landscape ? 0.62 : 0.8));
-    var dist = portrait ? 10.6 : (landscape ? 5.9 : 7.4);
-    S.camera.fov = portrait ? 48 : 40;
-    S.camera.position.set(portrait ? 0.15 : 0.75, portrait ? 3.2 : (landscape ? 2.7 : 2.55), dist * 0.9);
-    S.controls.target.set(portrait ? 0 : 0.35, portrait ? 0.85 : (landscape ? 0.68 : 0.72), 0);
+    /* 화면이 좁으면 실험 배율을 줄여 빗면 전체가 들어오게 한다 */
+    wsNow = portrait ? 1.15 : (landscape ? 1.7 : WS);
+    ramp.scale.setScalar(wsNow);
+    layoutRamp();
+    scaleLabels(portrait ? 0.95 : (landscape ? 0.86 : 1.18));
+    var dist = portrait ? 12.4 : (landscape ? 9.2 : 9.9);
+    S.camera.fov = portrait ? 50 : 44;
+    S.camera.position.set(portrait ? 0.45 : 0.75, portrait ? 2.9 : (landscape ? 2.9 : 3.15), dist);
+    S.controls.target.set(portrait ? 0.0 : -0.5, portrait ? 0.95 : (landscape ? 0.95 : 0.95), 0);
     S.camera.updateProjectionMatrix();
     S.controls.update();
   }

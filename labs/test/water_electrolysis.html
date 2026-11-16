@@ -799,6 +799,13 @@ html.pseudo-fs .bottom-right-bar { display: flex !important; }
 /* ---------- 전체화면 시 캔버스 채움 ---------- */
 body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
 
+
+/* 좁은 화면에서 제목 배지가 우측 버튼(제안하기·테마)을 침범하지 않도록 폭을 제한 */
+@media (max-width: 900px) {
+  .top-left-bar { right: auto !important; width: max-content !important; max-width: calc(100vw - 172px) !important; }
+  .top-left-bar .tag-badge { max-width: 86px !important; overflow: hidden !important; min-width: 0 !important; }
+  .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 </style>
 <link rel="stylesheet" href="../common/qr-modal.css">
 <link rel="stylesheet" href="../common/ui-layout.css">
@@ -866,6 +873,7 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
             <button class="seg-btn active" id="btnNaoh" type="button">🧂 전해질 있음</button>
             <button class="seg-btn" id="btnWater" type="button">💧 순수한 물</button>
         </div>
+        <button class="seg-btn active" id="btnMolecule" type="button" style="width:100%;">🧪 수소·산소 모형 표시</button>
         <div class="state-badge" id="stateBadge">
             <span id="sbName">전원 꺼짐</span>
             <span class="sb-note" id="sbNote">전원을 켜 주세요</span>
@@ -1244,6 +1252,57 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
     }
     initBubbles();
 
+    /* ---------- 수소·산소 분자 모형 ---------- */
+    function makeMoleculeMesh(kind) {
+        var g = new THREE.Group();
+        var isH = kind === 'H';
+        var mat = new THREE.MeshStandardMaterial(isH
+            ? { color: 0xdbeafe, roughness: 0.3, metalness: 0.05, emissive: 0x2f6fb5, emissiveIntensity: 0.75 }
+            : { color: 0xf05a5a, roughness: 0.34, metalness: 0.05, emissive: 0x8f1a1a, emissiveIntensity: 0.7 });
+        var r = isH ? 0.075 : 0.088;
+        [-1, 1].forEach(function (sx) {
+            var m = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 12), mat);
+            m.position.x = sx * r * 0.95;
+            g.add(m);
+        });
+        var bond = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.36, r * 0.36, r * 1.0, 10), mat);
+        bond.rotation.z = Math.PI / 2;
+        g.add(bond);
+        return g;
+    }
+
+    var molecules = [];
+    (function () {
+        var nH = 16, nO = 10;
+        for (var i = 0; i < nH + nO; i++) {
+            var kind = i < nH ? 'H' : 'O';
+            var mesh = makeMoleculeMesh(kind);
+            mesh.visible = false;
+            scene.add(mesh);
+            molecules.push({ kind: kind, mesh: mesh, active: false, x: 0, y: 0, z: 0, vy: 0, sp: 0, bob: 0 });
+        }
+    })();
+    var molOn = true, molAcc = 0;
+
+    function spawnMolecule(kind) {
+        for (var i = 0; i < molecules.length; i++) {
+            var m = molecules[i];
+            if (m.active || m.kind !== kind) continue;
+            m.active = true;
+            var baseX = kind === 'H' ? -1.1 : 1.1;
+            m.x = baseX + (Math.random() - 0.5) * 0.3;
+            m.z = (Math.random() - 0.5) * 0.3;
+            m.y = 0.42 + Math.random() * 0.3;
+            m.vy = 0.42 + Math.random() * 0.34;
+            m.sp = (Math.random() - 0.5) * 2.2;
+            m.bob = Math.random() * 6.28;
+            m.mesh.position.set(m.x, m.y, m.z);
+            m.mesh.visible = true;
+            m.mesh.scale.setScalar(1);
+            return;
+        }
+    }
+
     function spawnBubble(tube) {
         for (var i = 0; i < bubbles.length; i++) {
             var b = bubbles[i];
@@ -1407,6 +1466,29 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
             spawnAcc[0] += rate * 15 * dt;
             while (spawnAcc[1] >= 1) { spawnBubble(1); spawnAcc[1] -= 1; }
             while (spawnAcc[0] >= 1) { spawnBubble(0); spawnAcc[0] -= 1; }
+            // 분자 모형: 수소 2 : 산소 1 비율로 조금씩
+            if (molOn) {
+                molAcc += rate * 7 * dt;
+                while (molAcc >= 1) {
+                    molAcc -= 1;
+                    spawnMolecule(Math.random() < 0.66 ? 'H' : 'O');
+                }
+            }
+        }
+        // 분자 모형 상승 (물을 타고 시험관으로 올라간다)
+        var limitH = TUBE_INNER_TOP - state.h2 * ML_TO_H;
+        var limitO = TUBE_INNER_TOP - state.o2 * ML_TO_H;
+        for (var mi = 0; mi < molecules.length; mi++) {
+            var mo = molecules[mi];
+            if (!mo.active) continue;
+            if (!molOn) { mo.active = false; mo.mesh.visible = false; continue; }
+            mo.y += mo.vy * dt;
+            mo.bob += dt * 3.4;
+            mo.mesh.position.set(mo.x + Math.sin(mo.bob) * 0.03, mo.y, mo.z + Math.cos(mo.bob * 0.9) * 0.03);
+            mo.mesh.rotation.y += mo.sp * dt;
+            mo.mesh.rotation.z = Math.sin(mo.bob * 0.7) * 0.5;
+            var lim = mo.kind === 'H' ? limitH : limitO;
+            if (mo.y >= lim - 0.05) { mo.active = false; mo.mesh.visible = false; }
         }
 
         // 전극 발광
@@ -1609,6 +1691,16 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
     $('voltRange').addEventListener('input', function (e) {
         state.volt = parseFloat(e.target.value);
         updateHud();
+    });
+
+    $('btnMolecule').addEventListener('click', function () {
+        molOn = !molOn;
+        this.classList.toggle('active', molOn);
+        this.innerHTML = molOn ? '🧪 수소·산소 모형 표시' : '🧪 수소·산소 모형 숨김';
+        if (!molOn) {
+            molecules.forEach(function (m) { m.active = false; m.mesh.visible = false; });
+        }
+        setHint(molOn ? '🧪 전극에서 올라오는 수소(H₂)·산소(O₂) 분자 모형을 보여 줍니다.' : '🧪 분자 모형을 숨겼습니다. 기포의 부피만 봅니다.', false);
     });
 
     $('btnNaoh').addEventListener('click', function () {
