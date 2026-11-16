@@ -234,6 +234,35 @@ body.dark-mode .mini-row { color: #cbd5e1; border-bottom-color: rgba(148, 163, 1
 body.dark-mode input[type="range"].ctrl-slider { background: #334155; }
 
 /* ============================================================
+   성분 상세 카드 (조절 탭 위 3D 인터랙티브 모형)
+   ============================================================ */
+.cell-detail {
+    position: fixed; right: 20px; width: 232px; padding: 10px 11px; box-sizing: border-box;
+    display: none; flex-direction: column; gap: 6px; z-index: 59; border-radius: 16px;
+}
+.cell-detail.show { display: flex; }
+.cd-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; font-weight: 800; color: #0f172a; }
+body.dark-mode .cd-head { color: #e8f1fb; }
+.cd-tag { font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: #fee2e2; color: #b91c1c; white-space: nowrap; }
+body.dark-mode .cd-tag { background: rgba(239, 68, 68, .22); color: #fca5a5; }
+.cd-canvas { width: 100%; height: 132px; display: block; border-radius: 12px; background: linear-gradient(160deg, rgba(240, 246, 255, .9), rgba(226, 236, 247, .65)); cursor: grab; touch-action: none; }
+.cd-canvas:active { cursor: grabbing; }
+body.dark-mode .cd-canvas { background: linear-gradient(160deg, rgba(28, 38, 54, .95), rgba(18, 26, 40, .9)); }
+.cd-text { font-size: 10.6px; line-height: 1.45; color: #475569; word-break: keep-all; }
+body.dark-mode .cd-text { color: #a9bad0; }
+.cd-facts { display: flex; flex-wrap: wrap; gap: 4px; }
+.cd-facts span { font-size: 9.4px; font-weight: 800; padding: 2px 6px; border-radius: 7px; background: rgba(15, 23, 42, .07); color: #334155; }
+body.dark-mode .cd-facts span { background: rgba(255, 255, 255, .1); color: #d6e2f2; }
+.cd-hint { font-size: 9.2px; color: #94a3b8; text-align: right; }
+@media (max-width: 900px) {
+    .cell-detail { padding: 8px 9px; gap: 5px; border-radius: 14px; }
+    .cd-canvas { height: 96px; }
+    .cd-text { font-size: 9.8px; line-height: 1.4; }
+    .cd-head { font-size: 11.5px; }
+    .cd-hint { display: none; }
+}
+
+/* ============================================================
    모바일 반응형 보정 (세로/가로) — 공통 블록
    ============================================================ */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -384,6 +413,14 @@ body.dark-mode .result-cell b { color: #f1f5f9; }
     <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
         <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
     </button>
+</div>
+
+<div class="cell-detail glass-panel" id="cellDetail">
+    <div class="cd-head"><span id="cdName">적혈구</span><span class="cd-tag" id="cdTag">산소 운반</span></div>
+    <canvas id="cdCanvas" class="cd-canvas"></canvas>
+    <div class="cd-text" id="cdText"></div>
+    <div class="cd-facts" id="cdFacts"></div>
+    <div class="cd-hint">모형을 끌어 돌려 볼 수 있어요</div>
 </div>
 
 <div class="side-ctrl-panel glass-panel">
@@ -721,20 +758,29 @@ window.SVL = (function () {
 
     /* 혈구 입자 */
     var parts = [];
-    var rbcGeo = new THREE.SphereGeometry(0.12, 12, 8);
-    var wbcGeo = new THREE.SphereGeometry(0.17, 14, 10);
-    var pltGeo = new THREE.SphereGeometry(0.055, 8, 6);
+    var rbcGeo = biconcaveGeo(0.13);
+    var wbcGeo = new THREE.SphereGeometry(0.17, 18, 14);
+    var pltGeo = new THREE.SphereGeometry(0.055, 10, 8);
+    var nucGeo = new THREE.SphereGeometry(0.062, 12, 10);
     (function buildParticles() {
         var i;
         for (i = 0; i < 64; i++) {
             var m = new THREE.Mesh(rbcGeo, rbcMat);
-            m.scale.set(1, 0.55, 1);
+            m.scale.set(1, 1, 1);
             m.userData = { kind: 'rbc', sp: 0.5 + Math.random() * 0.7 };
             m.position.set(-V_LEN / 2 + Math.random() * V_LEN, (Math.random() - 0.5) * 0.66, (Math.random() - 0.5) * 0.66);
             vesselG.add(m); parts.push(m);
         }
         for (i = 0; i < 7; i++) {
-            var w = new THREE.Mesh(wbcGeo, wbcMat);
+            var w = new THREE.Group();
+            var wBody = new THREE.Mesh(wbcGeo, wbcMat);
+            w.add(wBody);
+            var nucMat2 = new THREE.MeshStandardMaterial({ color: 0x7b5aa6, roughness: 0.55 });
+            [[-0.06, 0.04, 0.02], [0.05, 0.06, -0.03], [0.03, -0.05, 0.04]].forEach(function (nn) {
+                var lo = new THREE.Mesh(nucGeo, nucMat2);
+                lo.position.set(nn[0], nn[1], nn[2]);
+                wBody.add(lo);
+            });
             w.userData = { kind: 'wbc', sp: 0.32 + Math.random() * 0.3 };
             w.position.set(-V_LEN / 2 + Math.random() * V_LEN, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6);
             vesselG.add(w); parts.push(w);
@@ -986,6 +1032,13 @@ window.SVL = (function () {
         pla: ['혈장', '혈액의 액체 성분으로 영양소·노폐물을 실어 나릅니다 (약 55%)']
     };
 
+    var COMP_DETAIL = {
+        rbc: { tag: '산소 운반', text: '가운데가 오목한 원반 모양이라 표면적이 넓어 산소를 많이 붙잡아요. 핵이 없어서 산소를 실을 공간이 더 많고, 혈액의 약 45%를 차지해요.', facts: ['지름 7~8 μm', '핵 없음', '오목한 원반'] },
+        wbc: { tag: '면역 · 식세포', text: '모양이 일정하지 않고 핵이 여러 갈래로 갈라져 있어요. 혈관 밖으로 나가 세균을 잡아먹는 식세포 작용을 해요.', facts: ['핵 있음', '가장 큼', '1% 미만'] },
+        plt: { tag: '혈액 응고', text: '세포가 아니라 세포가 부서진 조각이에요. 핵이 없고, 혈관이 다치면 서로 모여 피를 굳히는 막을 만들어요.', facts: ['세포 조각', '핵 없음', '2~4 μm'] },
+        pla: { tag: '물질 운반', text: '약 90%가 물인 노란 액체예요. 영양소·호르몬·노폐물을 실어 나르고, 혈액의 약 55%를 차지해요.', facts: ['약 90% 물', '혈액의 55%', '노란 액체'] }
+    };
+
     function selectComp(kind) {
         state.comp = kind;
         var ids = { rbc: 'btnRBC', wbc: 'btnWBC', plt: 'btnPLT', pla: 'btnPLA' };
@@ -994,7 +1047,173 @@ window.SVL = (function () {
         $('sbBloodNote').textContent = COMP_INFO[kind][1];
         var b = $('badgeBlood'); b.classList.remove('good', 'warn');
         S.setHint('🔍 ' + COMP_INFO[kind][0] + ': ' + COMP_INFO[kind][1], false);
+        showDetail(kind);
         updateHud();
+    }
+
+    /* ============================================================
+       성분 상세 카드 (작은 3D 뷰)
+       ============================================================ */
+    var cd = { renderer: null, scene: null, cam: null, pivot: null, models: {}, cur: null, yaw: 0.5, pitch: 0.18, drag: null, auto: 0 };
+
+    function biconcaveGeo(R) {
+        var g = new THREE.SphereGeometry(R, 30, 22);
+        var pos = g.attributes.position;
+        for (var i = 0; i < pos.count; i++) {
+            var x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+            var rr = Math.min(1, Math.sqrt(x * x + z * z) / R);
+            var f = 0.55 - 0.42 * (1 - rr * rr);
+            pos.setY(i, y * Math.max(0.24, f));
+        }
+        g.computeVertexNormals();
+        return g;
+    }
+
+    function buildDetailModels() {
+        var bloodMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.42, metalness: 0.02 });
+        // 적혈구: 가운데가 오목한 원반
+        var rbc = new THREE.Group();
+        rbc.add(new THREE.Mesh(biconcaveGeo(1.05), bloodMat));
+        cd.models.rbc = rbc;
+
+        // 백혈구: 불규칙한 세포 + 갈라진 핵 + 과립
+        var wbc = new THREE.Group();
+        var cyto = new THREE.Mesh(new THREE.SphereGeometry(1.0, 26, 20),
+            new THREE.MeshStandardMaterial({ color: 0xf4f7fb, roughness: 0.6, transparent: true, opacity: 0.9 }));
+        cyto.scale.set(1, 0.96, 1.02);
+        wbc.add(cyto);
+        var nucMat = new THREE.MeshStandardMaterial({ color: 0x6b3fa0, roughness: 0.55 });
+        [[-0.28, 0.18, 0.1], [0.22, 0.3, -0.12], [0.3, -0.2, 0.14], [-0.05, -0.3, -0.15]].forEach(function (n, i) {
+            var lobe = new THREE.Mesh(new THREE.SphereGeometry(0.36 - i * 0.03, 18, 14), nucMat);
+            lobe.position.set(n[0], n[1], n[2]);
+            lobe.scale.set(1, 0.86, 1);
+            wbc.add(lobe);
+        });
+        for (var i = 0; i < 10; i++) {
+            var a = (i / 10) * Math.PI * 2;
+            var gr = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6),
+                new THREE.MeshStandardMaterial({ color: 0xd98b8b, roughness: 0.7 }));
+            gr.position.set(Math.cos(a) * 0.78, Math.sin(a * 1.7) * 0.55, Math.sin(a) * 0.78);
+            wbc.add(gr);
+        }
+        cd.models.wbc = wbc;
+
+        // 혈소판: 납작하고 울퉁불퉁한 세포 조각
+        var plt = new THREE.Group();
+        var frag = new THREE.Mesh(new THREE.SphereGeometry(0.75, 20, 14),
+            new THREE.MeshStandardMaterial({ color: 0xf0c674, roughness: 0.55 }));
+        frag.scale.set(1.25, 0.42, 0.95);
+        plt.add(frag);
+        for (var j = 0; j < 5; j++) {
+            var bump = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 10),
+                new THREE.MeshStandardMaterial({ color: 0xe8bb63, roughness: 0.6 }));
+            var ang = (j / 5) * Math.PI * 2;
+            bump.position.set(Math.cos(ang) * 0.62, 0.12 * (j % 2 ? 1 : -1), Math.sin(ang) * 0.45);
+            bump.scale.set(1, 0.6, 1);
+            plt.add(bump);
+        }
+        cd.models.plt = plt;
+
+        // 혈장: 노란 액체와 그 안의 영양소·노폐물 입자
+        var pla = new THREE.Group();
+        pla.add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 28, 22),
+            new THREE.MeshPhysicalMaterial({ color: 0xf6e08a, transparent: true, opacity: 0.55, roughness: 0.15, metalness: 0 })));
+        for (var k = 0; k < 9; k++) {
+            var pk = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8),
+                new THREE.MeshStandardMaterial({ color: k % 3 === 0 ? 0x4aa3e8 : (k % 3 === 1 ? 0x7ac47a : 0xe08a5a), roughness: 0.5 }));
+            var pa = (k / 9) * Math.PI * 2, pr = 0.35 + (k % 3) * 0.18;
+            pk.position.set(Math.cos(pa) * pr, Math.sin(pa * 2) * 0.5, Math.sin(pa) * pr);
+            pla.add(pk);
+        }
+        cd.models.pla = pla;
+    }
+
+    function initDetail() {
+        var cvv = $('cdCanvas');
+        if (!cvv || !window.THREE) return;
+        var r = new THREE.WebGLRenderer({ canvas: cvv, antialias: true, alpha: true });
+        r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        cd.renderer = r;
+        cd.scene = new THREE.Scene();
+        cd.cam = new THREE.PerspectiveCamera(36, 1, 0.1, 60);
+        cd.cam.position.set(0, 0.35, 4.4);
+        cd.cam.lookAt(0, 0, 0);
+        cd.scene.add(new THREE.HemisphereLight(0xffffff, 0x93a4bb, 0.95));
+        var d1 = new THREE.DirectionalLight(0xffffff, 0.75); d1.position.set(3, 5, 4); cd.scene.add(d1);
+        var d2 = new THREE.DirectionalLight(0xffffff, 0.35); d2.position.set(-4, -2, -3); cd.scene.add(d2);
+        cd.pivot = new THREE.Group();
+        cd.scene.add(cd.pivot);
+        buildDetailModels();
+        for (var k in cd.models) cd.models[k].visible = false;
+        sizeDetail();
+
+        cvv.addEventListener('pointerdown', function (ev) {
+            cd.drag = { x: ev.clientX, y: ev.clientY };
+            try { cvv.setPointerCapture(ev.pointerId); } catch (e) {}
+            ev.preventDefault();
+        });
+        cvv.addEventListener('pointermove', function (ev) {
+            if (!cd.drag) return;
+            cd.yaw += (ev.clientX - cd.drag.x) * 0.012;
+            cd.pitch = Math.max(-1.1, Math.min(1.1, cd.pitch + (ev.clientY - cd.drag.y) * 0.008));
+            cd.drag = { x: ev.clientX, y: ev.clientY };
+            ev.preventDefault();
+        });
+        var stop = function () { cd.drag = null; };
+        cvv.addEventListener('pointerup', stop);
+        cvv.addEventListener('pointercancel', stop);
+        window.addEventListener('resize', function () { positionDetail(); sizeDetail(); });
+    }
+
+    function sizeDetail() {
+        if (!cd.renderer) return;
+        var cvv = $('cdCanvas');
+        var w = cvv.clientWidth || 200, h = cvv.clientHeight || 120;
+        cd.renderer.setSize(w, h, false);
+        cd.cam.aspect = w / h;
+        cd.cam.updateProjectionMatrix();
+    }
+
+    function positionDetail() {
+        var panel = document.querySelector('.side-ctrl-panel');
+        var d = $('cellDetail');
+        if (!panel || !d) return;
+        var r = panel.getBoundingClientRect();
+        d.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+        d.style.width = Math.round(r.width) + 'px';
+        d.style.bottom = Math.round(window.innerHeight - r.top + 10) + 'px';
+        var dh = d.offsetHeight || 240;
+        if (r.top - 10 - dh < 96) {
+            d.style.bottom = 'auto';
+            d.style.top = Math.max(96, r.top - dh - 6) + 'px';
+        } else {
+            d.style.top = 'auto';
+        }
+    }
+
+    function showDetail(kind) {
+        var d = $('cellDetail');
+        if (!d) return;
+        var info = COMP_INFO[kind], det = COMP_DETAIL[kind];
+        $('cdName').textContent = info[0];
+        $('cdTag').textContent = det.tag;
+        $('cdText').textContent = det.text;
+        var f = $('cdFacts');
+        f.innerHTML = '';
+        det.facts.forEach(function (t) {
+            var sp = document.createElement('span');
+            sp.textContent = t;
+            f.appendChild(sp);
+        });
+        d.classList.add('show');
+        cd.cur = kind;
+        cd.yaw = 0.5; cd.pitch = 0.18;
+        if (cd.models[kind]) {
+            for (var k in cd.models) cd.models[k].visible = (k === kind);
+            cd.pivot.clear();
+            cd.pivot.add(cd.models[kind]);
+        }
+        setTimeout(function () { positionDetail(); sizeDetail(); }, 30);
     }
 
     function updateHud() {
@@ -1033,10 +1252,20 @@ window.SVL = (function () {
         S.setHint('🎲 새로운 미지의 혈액으로 바꿨습니다.', false);
     });
 
+    initDetail();
+    positionDetail();
+
     /* ============================================================
        E. 프레임
        ============================================================ */
     S.onFrame(function (dt) {
+        /* 성분 상세 3D 뷰 */
+        if (cd.renderer && cd.cur) {
+            if (!cd.drag) cd.yaw += dt * 0.5;
+            cd.pivot.rotation.y = cd.yaw;
+            cd.pivot.rotation.x = cd.pitch;
+            try { cd.renderer.render(cd.scene, cd.cam); } catch (e) {}
+        }
         /* 혈구 흐름 */
         if (groupBlood.visible) {
             for (var i = 0; i < parts.length; i++) {
@@ -1072,7 +1301,7 @@ window.SVL = (function () {
                     var q = parts[k];
                     var on = q.userData.kind === state.comp;
                     var s = on ? 1 + 0.35 * (0.5 + 0.5 * Math.sin(performance.now() / 200)) : 0.85;
-                    if (q.userData.kind === 'rbc') q.scale.set(s, 0.55 * s, s);
+                    if (q.userData.kind === 'rbc') q.scale.set(s, s, s);
                     else if (q.userData.kind === 'plt') q.scale.set(s, 0.5 * s, 1.6 * s);
                     else q.scale.setScalar(s);
                     q.material = on ? q.material : q.material;

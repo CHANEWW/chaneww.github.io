@@ -546,7 +546,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         .chip { font-size: 9px; padding: 1px 6px; }
         .side-ctrl-panel {
             right: 8px; bottom: calc(60px + env(safe-area-inset-bottom));
-            width: min(49vw, 210px); max-height: 52vh; padding: 8px; gap: 6px; border-radius: 14px;
+            width: min(49vw, 210px); max-height: 66vh; padding: 8px; gap: 6px; border-radius: 14px;
+            overflow-y: auto; -webkit-overflow-scrolling: touch;
         }
         .panel-title { font-size: 10.4px; padding-bottom: 4px; }
         .panel-sub { font-size: 9px; }
@@ -573,6 +574,13 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
     /* ---------- 모바일: 좌측 데이터 패널 접기/펼치기 ---------- */
     #lp-fab { display: none; }
+    /* 펜 종류 항목이 늘어 조절 패널이 길어졌으므로 모바일에서 조금 더 펼친다 */
+    .pen-grid #pen-pc { grid-column: 1 / -1; }
+    @media (max-width: 900px) {
+        body .side-ctrl-panel { max-height: 62vh !important; overflow-y: auto !important; }
+        body .side-ctrl-panel .ctrl-grid.pen-grid { grid-template-columns: repeat(3, 1fr) !important; }
+        body .side-ctrl-panel .pen-grid #pen-pc { grid-column: auto !important; font-size: 9px !important; min-height: 44px !important; }
+    }
     .lp-close { display: none; }
     @media (max-width: 768px) {
         .left-panel {
@@ -646,19 +654,28 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     </div>
 </div>
 
-<div class="glass-panel" id="guide-tooltip">거름종이에 사인펜 점을 찍고 용매에 담그면 색소가 Rf 값대로 나뉘어요</div>
+<div class="glass-panel" id="guide-tooltip">수성·유성·컴퓨터용 사인펜을 골라 물/에탄올에서 색소가 어떻게 나뉘는지 비교해요</div>
 
 <div class="left-panel glass-panel">
 <div class="lp-title"><span>🧻 색소 분리</span><span class="chip" id="lp-state">준비</span></div>
-        <div class="lp-row"><span class="lp-k">사인펜</span><span class="lp-v" id="lp-ink">검정 사인펜</span></div>
+        <div class="lp-row"><span class="lp-k">펜 종류</span><span class="lp-v" id="lp-pen">수성 사인펜</span></div>
+        <div class="lp-row"><span class="lp-k">잉크색</span><span class="lp-v" id="lp-ink">검정</span></div>
         <div class="lp-row"><span class="lp-k">용매</span><span class="lp-v" id="lp-solvent">물</span></div>
         <div class="lp-row"><span class="lp-k">용매 이동</span><span class="lp-v" id="lp-front">0.0 cm</span></div>
         <table class="lp-tbl"><thead><tr><th>색소</th><th>이동 거리</th><th>Rf</th></tr></thead><tbody id="rf-body"></tbody></table>
+        <div class="lp-note" id="lp-note">수성 사인펜의 색소는 물에 잘 녹아요. 물에서는 끝까지 잘 전개되지만 에탄올에는 거의 녹지 않아 기준선 근처에 뭉친 채로 남아요.</div>
         <div class="lp-note">Rf = 색소가 이동한 거리 ÷ 용매가 이동한 거리. 색소마다 Rf가 달라 띠로 나뉘어요.</div>
 </div>
 
 <div class="side-ctrl-panel glass-panel">
-<div class="panel-title"><span>⚙️ 실험 조절</span><span class="panel-sub">사인펜 색</span></div>
+<div class="panel-title"><span>⚙️ 실험 조절</span><span class="panel-sub">펜 종류 · 색</span></div>
+        <div class="ctrl-grid pen-grid">
+            <button class="control-tab-btn on" id="pen-water" type="button">💧 수성</button>
+            <button class="control-tab-btn" id="pen-oil" type="button">🛢 유성</button>
+            <button class="control-tab-btn" id="pen-pc" type="button">🖊 컴퓨터용</button>
+        </div>
+        <div class="panel-hr"></div>
+        <div class="panel-sub">사인펜 색</div>
         <div class="ctrl-grid" id="ink-grid"></div>
         <div class="panel-hr"></div>
         <div class="panel-sub">용매 선택</div>
@@ -1126,14 +1143,34 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             { name: '파랑', rf: 0.22, color: '#3f57c8' }] }
     };
     var IORDER = ['black', 'green', 'orange', 'purple'];
-    var SOLV = { water: { name: '물', factor: 1.0, color: 0xcfe8f7 }, ethanol: { name: '에탄올', factor: 1.16, color: 0xdcd6f5 } };
+
+    // 컴퓨터용 사인펜: 검정 단일 안료(카본 블랙) → 전개해도 띠가 하나만 생긴다
+    var PC_BLACK = { name: '검정', css: '#262626', pigments: [
+        { name: '카본 블랙(단일)', rf: 0.62, color: '#333333' }] };
+
+    // 펜 종류별 용해도: 수성 잉크는 물에, 유성 잉크는 유기 용매(에탄올)에 잘 녹는다
+    var PENS = {
+        water: { name: '수성 사인펜', short: '수성', colors: ['black', 'green', 'orange', 'purple'],
+                 factor: { water: 1.0, ethanol: 0.14 },
+                 note: '수성 사인펜의 색소는 물에 잘 녹아요. 물에서는 끝까지 잘 전개되지만 에탄올에는 거의 녹지 않아 기준선 근처에 뭉친 채로 남아요.' },
+        oil:   { name: '유성 사인펜', short: '유성', colors: ['black', 'green', 'orange', 'purple'],
+                 factor: { water: 0.10, ethanol: 1.0 },
+                 note: '유성 사인펜의 색소는 유기 용매(에탄올)에 잘 녹아요. 에탄올에서는 잘 전개되지만 물에는 거의 녹지 않아 전개되지 않아요.' },
+        pc:    { name: '컴퓨터용 사인펜', short: '컴퓨터용', colors: ['black'],
+                 factor: { water: 1.0, ethanol: 0.12 },
+                 note: '컴퓨터용 사인펜은 검정 단일 안료(카본 블랙)라서 물에서 전개해도 띠가 하나만 생겨요. 여러 색소가 섞인 사인펜과 비교해 보세요.' }
+    };
+    var SOLV = { water: { name: '물', color: 0xcfe8f7 }, ethanol: { name: '에탄올', color: 0xdcd6f5 } };
 
     var PAPER_BOT = 0.42, PAPER_H = 3.5, BASE_W = 1.02, FRONT_MAX = 3.6;
 
     var state = {
-        ink: 'black', solvent: 'water',
+        pen: 'water', ink: 'black', solvent: 'water',
         front: 0, running: false, done: false, startT: 0
     };
+
+    function curInk() { return state.pen === 'pc' ? PC_BLACK : (INK[state.ink] || INK.black); }
+    function solvFactor() { return PENS[state.pen].factor[state.solvent]; }
 
     /* ---------- 3D 무대 ---------- */
     var tray = new THREE.Group();
@@ -1194,10 +1231,14 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     tray.add(arm);
 
     // 종이 눈금 (기준선 표시용 작은 라벨)
-    var baseLabel = S.makeLabel('기준선', { size: 0.2, color: '#475569', bg: 'rgba(255,255,255,0.82)', pad: 0.3 });
-    baseLabel.position.set(1.28, BASE_W, 0.05);
+    // 거름종이 명판 — 글자를 크게 키워 바로 읽히게
+    var paperLabel = S.makeLabel('거름종이', { size: 0.36, color: '#334155', bg: 'rgba(255,255,255,0.9)', pad: 0.36 });
+    paperLabel.position.set(1.58, 3.36, 0.05);
+    scene.add(paperLabel);
+    var baseLabel = S.makeLabel('기준선', { size: 0.24, color: '#475569', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    baseLabel.position.set(1.36, BASE_W, 0.05);
     scene.add(baseLabel);
-    var frontLabel = S.makeLabel('용매 앞면', { size: 0.2, color: '#2b6ea8', bg: 'rgba(255,255,255,0.82)', pad: 0.3 });
+    var frontLabel = S.makeLabel('용매 앞면', { size: 0.24, color: '#2b6ea8', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
     frontLabel.visible = false;
     scene.add(frontLabel);
 
@@ -1253,14 +1294,20 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         pctx.stroke();
         pctx.restore();
 
-        var ink = INK[state.ink];
+        var ink = curInk();
+        var f = solvFactor();
         if (state.front <= 0.002) {
             // 아직 전개 전: 진한 점 하나
             drawSpot(PW / 2, cy(BASE_W), ink.css, 30, 0.95);
             drawSpot(PW / 2, cy(BASE_W), '#00000033', 46, 0.35);
+        } else if (f < 0.3) {
+            // 이 용매에 거의 녹지 않음 → 색소가 갈라지지 않고 기준선에 뭉쳐 있음
+            var cw = 62 + state.front * 5;
+            drawBand(PW / 2, cy(BASE_W + 0.07), ink.css, cw, 0.92);
+            drawBand(PW / 2, cy(BASE_W + 0.05), '#00000026', cw * 1.3, 0.45);
         } else {
             ink.pigments.forEach(function (p) {
-                var rf = Math.min(0.95, p.rf * SOLV[state.solvent].factor);
+                var rf = Math.min(0.95, p.rf * f);
                 var y = cy(BASE_W + state.front * rf);
                 var spread = 58 + state.front * 22;
                 drawBand(PW / 2, y, p.color, spread, 0.9);
@@ -1269,10 +1316,10 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         }
 
         // 종이 이름
-        pctx.fillStyle = dark ? '#8fa3bd' : '#9aa8b8';
-        pctx.font = "700 15px 'SeoulNamsan', sans-serif";
+        pctx.fillStyle = dark ? '#8fa3bd' : '#8a98a8';
+        pctx.font = "800 40px 'SeoulNamsan', sans-serif";
         pctx.textAlign = 'center';
-        pctx.fillText('거름종이', PW / 2, PH - 16);
+        pctx.fillText('거름종이', PW / 2, PH - 32);
 
         paperTex.needsUpdate = true;
     }
@@ -1311,9 +1358,13 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
     /* ---------- 패널 ---------- */
     function updatePanel() {
-        var ink = INK[state.ink];
+        var ink = curInk();
         var solv = SOLV[state.solvent];
-        $('#lp-ink').textContent = ink.name + ' 사인펜';
+        var pen = PENS[state.pen];
+        var f = solvFactor();
+        $('#lp-pen').textContent = pen.name;
+        $('#lp-ink').textContent = ink.name;
+        $('#lp-note').textContent = pen.note;
         $('#lp-solvent').textContent = solv.name;
         var frontCm = state.front * 3.0;   // 3 cm 눈금 기준
         $('#lp-front').textContent = frontCm.toFixed(1) + ' cm';
@@ -1323,11 +1374,11 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         var body = $('#rf-body');
         body.innerHTML = '';
         ink.pigments.slice().sort(function (a, b) { return b.rf - a.rf; }).forEach(function (p) {
-            var rf = Math.min(0.95, p.rf * solv.factor);
+            var rf = Math.min(0.95, p.rf * f);
             var dist = state.front * rf * 3.0;
             var tr = document.createElement('tr');
             tr.innerHTML = '<td><i class="swatch" style="background:' + p.color + '"></i>' + p.name + '</td>' +
-                '<td>' + dist.toFixed(1) + ' cm</td>' +
+                '<td>' + (state.front > 0.01 ? dist.toFixed(1) + ' cm' : '—') + '</td>' +
                 '<td>' + (state.front > 0.01 ? rf.toFixed(2) : '—') + '</td>';
             body.appendChild(tr);
         });
@@ -1336,9 +1387,9 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         frontLabel.position.set(-1.35, BASE_W + state.front, 0.06);
         baseLabel.visible = true;
 
-        $('#val-ink').textContent = ink.name;
+        $('#val-ink').textContent = pen.short + ' ' + ink.name;
         $('#val-solvent').textContent = solv.name;
-        $('#val-rf').textContent = state.done ? (Math.min(0.95, ink.pigments[0].rf * solv.factor)).toFixed(2) : '—';
+        $('#val-rf').textContent = state.done ? (f < 0.3 ? '—' : (Math.min(0.95, ink.pigments[0].rf * f)).toFixed(2)) : '—';
         $('#val-state').textContent = state.done ? '완료' : (state.running ? '전개 중' : '준비');
     }
 
@@ -1370,7 +1421,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             if (p >= 1) {
                 state.running = false;
                 state.done = true;
-                S.toast('✅ 색소가 Rf 값에 따라 띠로 분리되었어요');
+                if (solvFactor() < 0.3) S.toast('⚠️ 이 용매에는 잉크가 거의 녹지 않아 색소가 기준선에 그대로 남았어요');
+                else S.toast('✅ 색소가 Rf 값에 따라 띠로 분리되었어요');
             }
             drawPaper();
             updatePanel();
@@ -1380,24 +1432,29 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     S.start({
         home: { x: 0, y: 2.9, z: 9.9, tx: 0, ty: 1.9, tz: 0.05, fov: 38 },
         build: function () {
-            var ig = $('#ink-grid');
-            IORDER.forEach(function (k) {
-                var ink = INK[k];
-                var b = document.createElement('button');
-                b.type = 'button';
-                b.className = 'control-tab-btn';
-                b.id = 'ink-' + k;
-                b.innerHTML = '<span class="dot" style="background:' + ink.css + '"></span>' + ink.name;
-                b.addEventListener('click', function () {
-                    state.ink = k;
+            buildInkGrid();
+            [['water', 'pen-water'], ['oil', 'pen-oil'], ['pc', 'pen-pc']].forEach(function (pair) {
+                $('#' + pair[1]).addEventListener('click', function () {
+                    state.pen = pair[0];
+                    if (PENS[state.pen].colors.indexOf(state.ink) < 0) state.ink = PENS[state.pen].colors[0];
+                    buildInkGrid();
                     resetPaper();
                     updateButtons();
-                    S.toast(ink.name + ' 사인펜으로 점을 찍었어요 · 전개 시작을 눌러 보세요');
+                    S.toast(PENS[state.pen].name + ' 선택 · 전개 시작을 눌러 보세요');
                 });
-                ig.appendChild(b);
             });
-            $('#btn-water').addEventListener('click', function () { state.solvent = 'water'; solventMesh.material.color.setHex(SOLV.water.color); resetPaper(); updateButtons(); });
-            $('#btn-ethanol').addEventListener('click', function () { state.solvent = 'ethanol'; solventMesh.material.color.setHex(SOLV.ethanol.color); resetPaper(); updateButtons(); });
+            $('#btn-water').addEventListener('click', function () {
+                state.solvent = 'water';
+                solventMesh.material.color.setHex(SOLV.water.color);
+                resetPaper(); updateButtons();
+                S.toast(state.pen === 'oil' ? '물 용매 · 유성 잉크는 물에 거의 녹지 않아 전개되지 않아요' : '물 용매 · 수성 잉크 색소가 잘 전개돼요');
+            });
+            $('#btn-ethanol').addEventListener('click', function () {
+                state.solvent = 'ethanol';
+                solventMesh.material.color.setHex(SOLV.ethanol.color);
+                resetPaper(); updateButtons();
+                S.toast(state.pen === 'water' ? '에탄올 용매 · 수성 잉크는 거의 녹지 않아 전개되지 않아요' : '에탄올 용매 · 유기 용매에 잘 녹는 색소가 전개돼요');
+            });
             $('#btn-run').addEventListener('click', startRun);
             $('#btn-new').addEventListener('click', function () { resetPaper(); S.toast('새 거름종이에 점을 찍었어요'); });
 
@@ -1407,8 +1464,10 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         },
         update: update,
         reset: function () {
+            state.pen = 'water';
             state.ink = 'black';
             state.solvent = 'water';
+            if ($('#ink-grid')) buildInkGrid();
             solventMesh.material.color.setHex(SOLV.water.color);
             resetPaper();
             updateButtons();
@@ -1416,11 +1475,34 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         onDark: function () { drawPaper(); }
     });
 
+    function buildInkGrid() {
+        var ig = $('#ink-grid');
+        ig.innerHTML = '';
+        PENS[state.pen].colors.forEach(function (k) {
+            var ink = INK[k];
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'control-tab-btn' + (state.ink === k ? ' on' : '');
+            b.id = 'ink-' + k;
+            b.innerHTML = '<span class="dot" style="background:' + ink.css + '"></span>' + ink.name;
+            b.addEventListener('click', function () {
+                state.ink = k;
+                resetPaper();
+                updateButtons();
+                S.toast(ink.name + ' 사인펜으로 점을 찍었어요 · 전개 시작을 눌러 보세요');
+            });
+            ig.appendChild(b);
+        });
+    }
+
     function updateButtons() {
         IORDER.forEach(function (k) {
             var b = $('#ink-' + k);
             if (b) b.classList.toggle('on', state.ink === k);
         });
+        $('#pen-water').classList.toggle('on', state.pen === 'water');
+        $('#pen-oil').classList.toggle('on', state.pen === 'oil');
+        $('#pen-pc').classList.toggle('on', state.pen === 'pc');
         $('#btn-water').classList.toggle('on', state.solvent === 'water');
         $('#btn-ethanol').classList.toggle('on', state.solvent === 'ethanol');
     }

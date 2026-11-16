@@ -643,7 +643,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     </div>
 </div>
 
-<div class="glass-panel" id="guide-tooltip">금속 가루의 질량을 바꾸며 가열하면 결합하는 산소의 질량비가 늘 같아요</div>
+<div class="glass-panel" id="guide-tooltip">도가니를 끌어 저울에 올리고 → 금속을 넣고 → 가열대에서 가열한 뒤 → 다시 저울로 옮겨 질량을 확인해요</div>
 
 <div class="left-panel glass-panel">
 <div class="lp-title"><span>⚖️ 성분비 측정</span><span class="chip" id="lp-verdict">가열 전</span></div>
@@ -654,6 +654,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         <div class="lp-row"><span class="chip" id="lp-ratio">구리 : 산소 = 4 : 1</span></div>
         <canvas class="lp-canvas" id="cv-prop"></canvas>
         <div class="lp-eq" id="lp-eq">2Cu + O₂ → 2CuO</div>
+        <div class="lp-note">가열하면 공기 중 O₂ 분자가 도가니 속 Cu 원자와 결합해 CuO가 돼요. 늘 같은 질량비로 결합해요.</div>
         <div class="lp-note">그래프의 직선 기울기가 늘 같아요. 금속의 양이 달라져도 결합하는 산소의 비율은 변하지 않아요.</div>
 </div>
 
@@ -666,6 +667,12 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         <div class="ctrl-row">
             <div class="ctrl-row-head"><span>금속 가루 질량</span><span class="ctrl-val" id="val-mass-range">2.0 g</span></div>
             <input type="range" class="ctrl-slider" id="mass-range" min="5" max="40" value="20">
+        </div>
+        <div class="panel-hr"></div>
+        <div class="panel-sub">도가니 옮기기 (3D에서 끌어도 돼요)</div>
+        <div class="ctrl-grid">
+            <button class="control-tab-btn" id="btn-to-scale" type="button">⚖️ 저울로</button>
+            <button class="control-tab-btn" id="btn-to-stand" type="button">🔥 가열대로</button>
         </div>
         <button class="control-tab-btn wide" id="btn-heat" type="button">🔥 가열하기</button>
         <button class="control-tab-btn wide" id="btn-again" type="button">🔄 다시 하기</button>
@@ -1115,7 +1122,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         cu: { name: '구리', sym: 'Cu', color: 0xb4643a, oxide: 0x2b2b2e, css: '#b4643a', cssOx: '#2b2b2e', oRatio: 0.25, prodName: '산화 구리(CuO)', eq: '2Cu + O₂ → 2CuO', max: 4.0 },
         mg: { name: '마그네슘', sym: 'Mg', color: 0xc9d2da, oxide: 0xf2f4f6, css: '#c9d2da', cssOx: '#f2f4f6', oRatio: 2 / 3, prodName: '산화 마그네슘(MgO)', eq: '2Mg + O₂ → 2MgO', max: 3.6 }
     };
-    var state = { metal: 'cu', mass: 2.0, heated: false, heating: 0, shown: 2.0 };
+    var state = { metal: 'cu', mass: 2.0, heated: false, heating: 0, shown: 0, place: 'table', metalAdded: false };
 
     function oxygen() { return state.mass * METAL[state.metal].oRatio; }
     function product() { return state.mass + oxygen(); }
@@ -1173,20 +1180,31 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     stage.add(flameLight);
     flame.visible = false;
 
-    // 도가니
+    // 도가니 (실험대 위에서 시작 → 끌어서 저울·가열 장치로 옮긴다)
+    var ZONE = {
+        table: { x: 1.62, y: 0.06, z: 1.2, name: '실험대', snap: 1.5 },
+        scale: { x: -2.25, y: 0.58, z: 0.83, name: '전자저울', snap: 1.0 },
+        stand: { x: 0, y: 1.22, z: 0, name: '가열 장치', snap: 1.0 }
+    };
+    var matPad = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.66, 0.06, 32),
+        new THREE.MeshStandardMaterial({ color: 0xdde3ea, roughness: 0.92 }));
+    matPad.position.set(ZONE.table.x, 0.03, ZONE.table.z);
+    matPad.receiveShadow = true;
+    scene.add(matPad);
+
     var crucible = new THREE.Group();
-    crucible.position.set(0, 1.22, 0);
+    crucible.position.set(ZONE.table.x, ZONE.table.y, ZONE.table.z);
     stage.add(crucible);
     var cruMat = new THREE.MeshStandardMaterial({ color: 0xdfe4ea, roughness: 0.7, metalness: 0.05 });
-    var cruBody = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.38, 0.56, 32, 1, true), new THREE.MeshStandardMaterial({ color: 0xe4e9ef, roughness: 0.65, side: THREE.DoubleSide }));
-    cruBody.position.y = 0.28;
+    var cruBody = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.38, 0.34, 32, 1, true), new THREE.MeshStandardMaterial({ color: 0xe4e9ef, roughness: 0.65, side: THREE.DoubleSide }));
+    cruBody.position.y = 0.17;
     crucible.add(cruBody);
     var cruBottom = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.36, 0.05, 32), cruMat);
     cruBottom.position.y = 0.025;
     crucible.add(cruBottom);
     var cruRim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.025, 6, 40), cruMat);
     cruRim.rotation.x = Math.PI / 2;
-    cruRim.position.y = 0.56;
+    cruRim.position.y = 0.34;
     crucible.add(cruRim);
     // 뚜껑
     var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 32), cruMat);
@@ -1199,20 +1217,39 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
 
     // 금속 가루
     var powderMat = new THREE.MeshStandardMaterial({ color: METAL.cu.color, roughness: 0.85, metalness: 0.35 });
-    var powder = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.18, 30), powderMat);
-    powder.position.y = 0.12;
+    var powder = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.36, 0.18, 30), powderMat);
+    powder.position.y = 0.22;
+    powder.visible = false;
     crucible.add(powder);
 
-    // 산소 입자 (가열 시 공기 중 산소가 결합)
-    var oxy = [];
-    for (var o = 0; o < 14; o++) {
-        var m = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8),
-            new THREE.MeshBasicMaterial({ color: 0x6fc2ff, transparent: true, opacity: 0 }));
-        m.userData.seed = Math.random();
-        m.userData.ang = Math.random() * Math.PI * 2;
-        stage.add(m);
-        oxy.push(m);
+    /* ---------- 입자 모형: Cu 원자 + 공기 중 O₂ 분자 ---------- */
+    var atoms = [];
+    for (var ai = 0; ai < 26; ai++) {
+        var am = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8),
+            new THREE.MeshStandardMaterial({ color: METAL.cu.color, roughness: 0.45, metalness: 0.4 }));
+        var ar = Math.sqrt(Math.random()) * 0.29;
+        var aa = Math.random() * Math.PI * 2;
+        am.position.set(Math.cos(aa) * ar, 0.34 + Math.random() * 0.03, Math.sin(aa) * ar);
+        am.userData.y0 = am.position.y;
+        am.visible = false;
+        crucible.add(am);
+        atoms.push(am);
     }
+
+    var o2s = [];
+    for (var oi = 0; oi < 9; oi++) {
+        var og = new THREE.Group();
+        var s1 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: 0x3f9be0, transparent: true, opacity: 0 }));
+        var s2 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: 0x3f9be0, transparent: true, opacity: 0 }));
+        s1.position.x = -0.045; s2.position.x = 0.045;
+        og.add(s1, s2);
+        og.userData.seed = Math.random();
+        og.userData.ang = Math.random() * Math.PI * 2;
+        og.visible = false;
+        stage.add(og);
+        o2s.push(og);
+    }
+
 
     /* ---------- 저울 ---------- */
     var bal = new THREE.Group();
@@ -1257,9 +1294,90 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
     }
     drawBalance();
 
-    var balLabel = S.makeLabel('전자저울', { size: 0.22, color: '#475569', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
-    balLabel.position.set(-2.25, 0.12, 1.55);
+    var balLabel = S.makeLabel('전자저울', { size: 0.2, color: '#475569', bg: 'rgba(255,255,255,0.86)', pad: 0.3 });
+    balLabel.position.set(-2.25, -0.08, 1.9);
     scene.add(balLabel);
+
+    var standLabel = S.makeLabel('가열 장치', { size: 0.2, color: '#8a4b00', bg: 'rgba(255,250,240,0.88)', pad: 0.3 });
+    standLabel.position.set(1.05, 1.55, 0.15);
+    scene.add(standLabel);
+
+    /* ---------- 도가니 드래그로 옮기기 ---------- */
+    var drag = null;
+    var dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    var dragRay = new THREE.Raycaster();
+
+    function measured() {
+        if (state.place !== 'scale' || !state.metalAdded) return 0;
+        return state.heated ? product() : state.mass;
+    }
+
+    function placeCrucible(k) {
+        var z = ZONE[k];
+        crucible.position.set(z.x, z.y, z.z);
+        state.place = k;
+        if (k === 'scale') {
+            S.toast(state.heated
+                ? '전자저울에 올렸어요 · 반응 후 질량이 표시돼요'
+                : (state.metalAdded ? '전자저울에 올렸어요 · 금속 질량이 표시돼요' : '도가니를 올렸어요 · 구리나 마그네슘을 넣어 보세요'));
+        } else if (k === 'stand') {
+            S.toast(state.heated ? '가열이 끝난 도가니를 가열 장치에 두었어요' : '가열 장치 위에 도가니를 올렸어요 · [가열하기]를 눌러요');
+        } else {
+            S.toast('실험대 위에 도가니를 내려놓았어요');
+        }
+        updatePanel();
+    }
+
+    function onCrucibleDown(ev) {
+        if (state.heating > 0) return;
+        var hit = S.pick([crucible], ev);
+        if (!hit.length) return;
+        drag = { lift: Math.max(crucible.position.y, 0.7) + 0.15 };
+        dragPlane.set(new THREE.Vector3(0, 1, 0), -drag.lift);
+        S.controls.enabled = false;
+        try { S.renderer.domElement.setPointerCapture(ev.pointerId); } catch (e) {}
+        ev.preventDefault();
+    }
+
+    function onCrucibleMove(ev) {
+        if (!drag) return;
+        dragRay.setFromCamera(S.pointerNDC(ev), S.camera);
+        var pt = new THREE.Vector3();
+        if (!dragRay.ray.intersectPlane(dragPlane, pt)) return;
+        crucible.position.set(
+            Math.max(-4.2, Math.min(4.2, pt.x)),
+            drag.lift,
+            Math.max(-1.6, Math.min(3.0, pt.z))
+        );
+        ev.preventDefault();
+    }
+
+    function zoneAnchor(k) {
+        if (k === 'stand') return new THREE.Vector3(0, 1.35, 0);
+        if (k === 'scale') return new THREE.Vector3(-2.25, 0.72, 0.83);
+        return new THREE.Vector3(1.62, 0.35, 1.2);
+    }
+
+    function screenOf(v3) {
+        var v = v3.clone().project(S.camera);
+        var r = S.renderer.domElement.getBoundingClientRect();
+        return { x: r.left + (v.x * 0.5 + 0.5) * r.width, y: r.top + (-v.y * 0.5 + 0.5) * r.height };
+    }
+
+    function onCrucibleUp(ev) {
+        if (!drag) return;
+        drag = null;
+        S.controls.enabled = true;
+        // 놓은 지점과 가장 가까운 구역으로 스냅 (화면 거리 기준)
+        var best = null, bd = 1e9;
+        ['scale', 'stand', 'table'].forEach(function (k) {
+            var sp = screenOf(zoneAnchor(k));
+            var d = Math.sqrt(Math.pow(ev.clientX - sp.x, 2) + Math.pow(ev.clientY - sp.y, 2));
+            if (d < bd) { bd = d; best = k; }
+        });
+        if (!best || bd > 150) best = 'table';
+        placeCrucible(best);
+    }
 
     /* ---------- 그래프 ---------- */
     function drawGraph() {
@@ -1322,7 +1440,7 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         chip.textContent = state.heated ? '산화 완료' : '가열 전';
         chip.className = 'chip' + (state.heated ? ' ok' : '');
         $('#val-metal').textContent = m.name;
-        $('#val-mass').textContent = state.shown.toFixed(2) + ' g';
+        $('#val-mass').textContent = state.place === 'scale' ? state.shown.toFixed(2) + ' g' : '—';
         $('#val-oxy').textContent = state.heated ? oxygen().toFixed(2) + ' g' : '—';
     }
 
@@ -1335,12 +1453,22 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             var m = METAL[state.metal];
             var c1 = new THREE.Color(m.color), c2 = new THREE.Color(m.oxide);
             powderMat.color.copy(c1).lerp(c2, Math.min(1, k * 1.2));
-            // 산소 입자
-            oxy.forEach(function (p, i) {
-                var life = ((t * 0.7 + p.userData.seed) % 1);
-                p.material.opacity = Math.sin(life * Math.PI) * 0.9;
-                var rr = 1.5 - life * 0.9;
-                p.position.set(Math.cos(p.userData.ang + t) * rr, 1.5 + Math.sin(life * 3) * 0.2 - life * 0.2, Math.sin(p.userData.ang + t) * rr);
+            // Cu 원자가 차례로 산화되어 CuO가 된다
+            atoms.forEach(function (a, i) {
+                var th = (i / atoms.length) * 0.8;
+                var kk = Math.max(0, Math.min(1, (k - th) * 6));
+                a.material.color.copy(c1).lerp(c2, kk);
+                a.position.y = a.userData.y0 + Math.sin(t * 3 + i) * 0.012;
+            });
+            // 공기 중 O₂ 분자가 날아와 결합한다
+            o2s.forEach(function (g, i) {
+                var life = ((t * 0.45 + g.userData.seed) % 1);
+                var rr = 2.0 - life * 1.6;
+                g.visible = true;
+                g.position.set(Math.cos(g.userData.ang + t * 0.6) * rr, 2.15 - life * 0.85, Math.sin(g.userData.ang + t * 0.6) * rr);
+                var fade = Math.min(1, life * 3) * (1 - Math.max(0, (life - 0.75) / 0.25));
+                g.children.forEach(function (c) { c.material.opacity = 0.9 * fade; });
+                g.scale.setScalar(0.85 + life * 0.45);
             });
             flame.visible = true;
             flameLight.intensity = 0.9;
@@ -1354,8 +1482,8 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
                 state.shown = product();
                 flame.visible = false;
                 flameLight.intensity = 0;
-                oxy.forEach(function (p) { p.material.opacity = 0; });
-                S.toast('✅ ' + METAL[state.metal].name + ' ' + state.mass.toFixed(1) + ' g + 산소 ' + oxygen().toFixed(2) + ' g = ' + product().toFixed(2) + ' g');
+                o2s.forEach(function (g) { g.visible = false; });
+                S.toast('✅ ' + METAL[state.metal].name + ' ' + state.mass.toFixed(1) + ' g + 산소 ' + oxygen().toFixed(2) + ' g = ' + product().toFixed(2) + ' g · 저울에 올려 확인해 보세요', 3200);
                 updatePanel();
             }
         }
@@ -1363,12 +1491,18 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         if (flame.visible) {
             flame.scale.set(0.9 + Math.sin(t * 12) * 0.06, 0.9 + Math.sin(t * 16) * 0.08, 0.9 + Math.sin(t * 9) * 0.06);
         }
+        var mv = measured();
+        state.shown += (mv - state.shown) * Math.min(1, dt * 7);
+        if (Math.abs(state.shown - mv) < 0.005) state.shown = mv;
+        if ($('#val-mass')) $('#val-mass').textContent = state.place === 'scale' ? state.shown.toFixed(2) + ' g' : '—';
         drawBalance();
         if (state.heated) { drawGraph(); }
     }
 
     function startHeat() {
         if (state.heating > 0) return;
+        if (state.place !== 'stand') { S.toast('먼저 도가니를 가열 장치 위로 옮겨 주세요', 2600); return; }
+        if (!state.metalAdded) { S.toast('도가니에 구리나 마그네슘 가루를 먼저 넣어 주세요', 2600); return; }
         state.heating = 4.0;
         state.heated = false;
         state.shown = state.mass;
@@ -1383,39 +1517,56 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
         powderMat.color.setHex(METAL[state.metal].color);
         flame.visible = false;
         flameLight.intensity = 0;
-        oxy.forEach(function (p) { p.material.opacity = 0; });
+        o2s.forEach(function (g) { g.visible = false; });
+        atoms.forEach(function (a) { a.material.color.setHex(METAL[state.metal].color); a.position.y = a.userData.y0; });
         updatePanel();
         drawGraph();
     }
 
+    function addMetal(k) {
+        state.metal = k;
+        state.mass = Math.min(state.mass || 2.0, METAL[k].max);
+        state.metalAdded = true;
+        state.heated = false;
+        state.heating = 0;
+        powder.visible = true;
+        powderMat.color.setHex(METAL[k].color);
+        atoms.forEach(function (a) { a.visible = true; a.material.color.setHex(METAL[k].color); });
+        $('#mass-range').max = k === 'cu' ? '40' : '36';
+        $('#mass-range').value = String(Math.round(state.mass * 10));
+        $('#val-mass-range').textContent = state.mass.toFixed(1) + ' g';
+        flame.visible = false;
+        flameLight.intensity = 0;
+        updatePanel(); updateButtons(); drawGraph();
+        if (state.place === 'scale') S.toast(METAL[k].name + ' 가루를 넣었어요 · 저울에 ' + state.mass.toFixed(1) + ' g이 표시돼요');
+        else S.toast(METAL[k].name + ' 가루를 넣었어요 · 도가니를 전자저울에 올려 보세요', 2600);
+    }
+
     S.start({
-        home: { x: 0.15, y: 3.2, z: 8.6, tx: 0.0, ty: 1.25, tz: 0.25, fov: 40 },
+        home: (function () {
+            var portrait = window.innerWidth < window.innerHeight && window.innerWidth <= 620;
+            return portrait
+                ? { x: 0.0, y: 3.4, z: 12.6, tx: -0.35, ty: -1.55, tz: 0.4, fov: 40 }
+                : { x: 0.15, y: 3.2, z: 8.6, tx: 0.0, ty: 1.25, tz: 0.25, fov: 40 };
+        })(),
         build: function () {
-            $('#btn-cu').addEventListener('click', function () {
-                state.metal = 'cu';
-                state.mass = Math.min(state.mass, METAL.cu.max);
-                $('#mass-range').max = '40';
-                $('#mass-range').value = String(Math.round(state.mass * 10));
-                $('#val-mass-range').textContent = state.mass.toFixed(1) + ' g';
-                powderMat.color.setHex(METAL.cu.color);
-                resetAll();
-                updateButtons();
-                S.toast('구리 가루를 도가니에 넣었어요');
-            });
-            $('#btn-mg').addEventListener('click', function () {
-                state.metal = 'mg';
-                state.mass = Math.min(state.mass, METAL.mg.max);
-                $('#mass-range').max = '36';
-                $('#mass-range').value = String(Math.round(state.mass * 10));
-                $('#val-mass-range').textContent = state.mass.toFixed(1) + ' g';
-                powderMat.color.setHex(METAL.mg.color);
-                resetAll();
-                updateButtons();
-                S.toast('마그네슘 가루를 도가니에 넣었어요');
-            });
+            $('#btn-cu').addEventListener('click', function () { addMetal('cu'); });
+            $('#btn-mg').addEventListener('click', function () { addMetal('mg'); });
+            $('#btn-to-scale').addEventListener('click', function () { placeCrucible('scale'); });
+            $('#btn-to-stand').addEventListener('click', function () { placeCrucible('stand'); });
+            var cv = S.renderer.domElement;
+            cv.addEventListener('pointerdown', onCrucibleDown, true);
+            window.addEventListener('pointermove', onCrucibleMove, true);
+            window.addEventListener('pointerup', onCrucibleUp, true);
+            window.addEventListener('pointercancel', onCrucibleUp, true);
             var mr = $('#mass-range');
             mr.addEventListener('input', function () {
                 state.mass = parseInt(mr.value, 10) / 10;
+                if (!state.metalAdded) {
+                    state.metalAdded = true;
+                    powder.visible = true;
+                    atoms.forEach(function (a) { a.visible = true; });
+                }
                 $('#val-mass-range').textContent = state.mass.toFixed(1) + ' g';
                 state.shown = state.mass;
                 state.heated = false;
@@ -1438,8 +1589,12 @@ body.is-fullscreen #webgl-container { width: 100vw !important; height: 100vh !im
             state.mass = 2.0;
             $('#mass-range').value = '20';
             $('#val-mass-range').textContent = '2.0 g';
+            powder.visible = false;
+            atoms.forEach(function (a) { a.visible = false; });
+            state.metalAdded = false;
             powderMat.color.setHex(METAL.cu.color);
             resetAll();
+            placeCrucible('table');
             updateButtons();
         },
         onDark: drawGraph

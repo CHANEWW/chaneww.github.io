@@ -148,6 +148,31 @@ html, body {
 }
 .mini:hover { background: #ffffff; }
 .mini.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+.step-strip { display: flex; gap: 4px; }
+@media (max-width: 900px) {
+    body .side-ctrl-panel { max-height: 62vh !important; overflow-y: auto !important; }
+    .step-strip .step { font-size: 8.4px; padding: 4px 1px; }
+    .btn-cover { padding: 7px 6px; font-size: 10.5px; }
+}
+.step-strip .step {
+    flex: 1; text-align: center; font-size: 9.4px; font-weight: 900; letter-spacing: -0.4px;
+    padding: 5px 2px; border-radius: 8px; background: rgba(15, 23, 42, .06); color: #94a3b8;
+    border: 1px solid transparent; white-space: nowrap;
+}
+.step-strip .step.done { background: rgba(34, 197, 94, .14); color: #15803d; }
+.step-strip .step.on { background: #2563eb; color: #fff; border-color: #2563eb; box-shadow: 0 3px 10px rgba(37, 99, 235, .28); }
+body.dark-mode .step-strip .step { background: rgba(255, 255, 255, .08); color: #94a3b8; }
+body.dark-mode .step-strip .step.done { background: rgba(34, 197, 94, .22); color: #86efac; }
+body.dark-mode .step-strip .step.on { background: #2563eb; color: #fff; }
+.btn-cover {
+    width: 100%; padding: 9px 8px; border-radius: 12px; border: 1px solid rgba(37, 99, 235, .28);
+    background: rgba(255, 255, 255, .92); color: #1d4ed8; font-family: inherit;
+    font-size: 12px; font-weight: 900; cursor: pointer; transition: transform .14s ease, background .14s ease;
+}
+.btn-cover:hover { transform: translateY(-1px); background: #fff; }
+.btn-cover.on { background: #2563eb; color: #fff; border-color: #2563eb; }
+body.dark-mode .btn-cover { background: rgba(44, 54, 74, .92); color: #93c5fd; border-color: rgba(147, 197, 253, .3); }
+body.dark-mode .btn-cover.on { background: #2563eb; color: #fff; }
 .slider-row { display: flex; flex-direction: column; gap: 3px; }
 .slider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .slider-name { font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
@@ -396,6 +421,12 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
 <div class="side-ctrl-panel glass-panel">
     <div class="panel-title">⚙️ 현미경 조작</div>
     <div class="panel-body">
+        <div class="step-strip" id="stepStrip">
+            <span class="step done" data-step="1">① 시료</span>
+            <span class="step on" data-step="2">② 염색</span>
+            <span class="step" data-step="3">③ 덮개유리</span>
+            <span class="step" data-step="4">④ 초점</span>
+        </div>
         <div class="seg">
             <button class="seg-btn active" id="btnOnion" type="button">🌰 양파 표피</button>
             <button class="seg-btn" id="btnBuccal" type="button">👄 입안 상피</button>
@@ -405,6 +436,7 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
             <button class="seg-btn" id="btnMethylene" type="button">💙 메틸렌블루</button>
         </div>
         <button class="btn-start" id="btnDrop" type="button">💧 염색약 떨어뜨리기</button>
+        <button class="btn-cover" id="btnCover" type="button">🪟 덮개유리 덮기</button>
         <div class="mag-info" id="magInfo">
             <span><b>접안</b><span id="miEye">10×</span></span>
             <span class="mi-op">×</span>
@@ -606,6 +638,7 @@ window.SVL = (function () {
     var S = window.SVL, $ = S.$, scene = S.scene, camera = S.camera, controls = S.controls;
 
     var state = {
+        coverslip: false, coverT: 0,
         sample: 'onion', stain: 'carmine', stained: false,
         mag: 100, eye: 10, coarse: 30, fine: 50, sharp: 0,
         dropping: false, dropT: 0, dropStart: 0, dir: 0, targetDir: 0,
@@ -690,6 +723,12 @@ window.SVL = (function () {
     spot.rotation.x = -Math.PI / 2;
     spot.position.set(0.35, 1.777, 0.05);
     micro.add(spot);
+    /* 덮개유리 (시료 위로 내려온다) */
+    var coverMesh = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.012, 0.46),
+        new THREE.MeshPhysicalMaterial({ color: 0xe3f2ff, transparent: true, opacity: 0.45, roughness: 0.04, metalness: 0.02 }));
+    coverMesh.position.set(1.15, 2.28, 0.55);
+    coverMesh.rotation.z = 0.5;
+    micro.add(coverMesh);
     /* 클립 */
     var clipMat = new THREE.MeshStandardMaterial({ color: 0xc4ccd8, roughness: 0.32, metalness: 0.3 });
     var cl1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.5), clipMat);
@@ -1071,9 +1110,15 @@ window.SVL = (function () {
         state.sample = s;
         setSeg(['btnOnion', 'btnBuccal'], s === 'onion' ? 'btnOnion' : 'btnBuccal');
         state.stained = false;
+        state.coverslip = false;
+        state.coverT = 0;
+        coverMesh.position.set(1.15, 2.28, 0.55);
+        coverMesh.rotation.z = 0.5;
+        $('btnCover').classList.remove('on');
+        $('btnCover').textContent = '🪟 덮개유리 덮기';
         spotMat.color.setHex(0xf0efe6);
         state.dirty = true; state.fieldDirty = true;
-        S.setHint(s === 'onion' ? '🧅 양파 표피 세포를 올렸습니다. 아세트산카민으로 염색해 보세요.' : '👄 입안 상피 세포를 올렸습니다. 메틸렌블루로 염색해 보세요.', false);
+        S.setHint(s === 'onion' ? '① 양파 표피 세포를 올렸어요. ② ' + (state.stain === 'methylene' ? '아세트산카민' : state.stain === 'carmine' ? '아세트산카민' : '염색약') + '을 떨어뜨려 보세요.' : '① 입안 상피 세포를 올렸어요. ② 메틸렌블루를 떨어뜨려 보세요.', false);
         updateHud();
     }
 
@@ -1087,12 +1132,25 @@ window.SVL = (function () {
 
     function dropStain() {
         if (state.dropping) return;
+        if (state.coverslip) { S.setHint('이미 덮개유리를 덮었어요. 시료를 바꾸려면 ①에서 다시 시작하세요.', false); return; }
         state.dropping = true;
         state.dropT = 0;
         state.dropStart = performance.now();
         dropBall.visible = true;
         dropBall.position.set(0, 0, 0);
         S.setHint(state.stain === 'carmine' ? '🍒 아세트산카민을 떨어뜨립니다…' : '💙 메틸렌블루를 떨어뜨립니다…', true);
+    }
+
+    function coverSlip() {
+        if (!state.stained) { S.setHint('먼저 ② 염색약을 떨어뜨려 주세요.', false); return; }
+        if (state.coverslip) { S.setHint('덮개유리는 이미 덮여 있어요. ④ 조동·미동나사로 초점을 맞춰 보세요.', false); return; }
+        state.coverslip = true;
+        state.coverT = 0;
+        $('btnCover').classList.add('on');
+        $('btnCover').textContent = '🪟 덮개유리 덮음';
+        S.setHint('③ 덮개유리를 덮었어요. 시료가 얇게 펴졌습니다. ④ 조동나사로 크게 맞춘 뒤 미동나사로 선명하게!', false);
+        state.dirty = true; state.fieldDirty = true;
+        recomputeSharp();
     }
 
     function setMag(m) {
@@ -1118,10 +1176,26 @@ window.SVL = (function () {
         $('valStain').textContent = state.stained ? (state.stain === 'carmine' ? '카민' : '메틸렌') : '없음';
         var correct = (state.sample === 'onion' && state.stain === 'carmine') || (state.sample === 'buccal' && state.stain === 'methylene');
         var badge = $('stateBadge'), nm = $('sbName'), note = $('sbNote');
+        /* 단계 표시: ① 시료 · ② 염색 · ③ 덮개유리 · ④ 초점 */
+        var stepNo = !state.stained ? 2 : (!state.coverslip ? 3 : 4);
+        var doneNo = !state.stained ? 1 : (!state.coverslip ? 2 : 3);
+        var strip = $('stepStrip');
+        if (strip) {
+            for (var si = 0; si < strip.children.length; si++) {
+                var el = strip.children[si];
+                var n = parseInt(el.getAttribute('data-step'), 10);
+                el.classList.toggle('on', n === stepNo);
+                el.classList.toggle('done', n <= doneNo);
+            }
+        }
         badge.classList.remove('good', 'warn');
         if (!state.stained) {
             nm.textContent = '염색 안 됨';
-            note.textContent = '염색약을 떨어뜨려 핵을 봅니다';
+            note.textContent = '② 염색약을 떨어뜨려 핵을 봅니다';
+        } else if (!state.coverslip) {
+            badge.classList.add('warn');
+            nm.textContent = '덮개유리 필요';
+            note.textContent = '③ 덮개유리를 덮어야 초점이 선명해져요';
         } else if (state.sharp > 0.78) {
             badge.classList.add('good');
             nm.textContent = '초점 완벽!';
@@ -1141,6 +1215,7 @@ window.SVL = (function () {
     $('btnCarmine').addEventListener('click', function () { setStain('carmine'); });
     $('btnMethylene').addEventListener('click', function () { setStain('methylene'); });
     $('btnDrop').addEventListener('click', dropStain);
+    $('btnCover').addEventListener('click', coverSlip);
     $('btnMag40').addEventListener('click', function () { setMag(40); });
     $('btnMag100').addEventListener('click', function () { setMag(100); });
     $('btnMag400').addEventListener('click', function () { setMag(400); });
@@ -1157,10 +1232,11 @@ window.SVL = (function () {
     });
 
     function recomputeSharp() {
+        var coverPenalty = state.coverslip ? 1 : 0.34;   // 덮개유리가 없으면 초점이 잘 맞지 않는다
         var dc = (state.coarse - 50) / 50;
         var df = (state.fine - 50) / 50;
         var d = Math.sqrt(dc * dc + df * df * 0.62);
-        state.sharp = Math.max(0, Math.min(1, 1 - d * 1.95));
+        state.sharp = Math.max(0, Math.min(1, (1 - d * 1.95) * coverPenalty));
         state.dirty = true;
         updateHud();
     }
@@ -1231,6 +1307,19 @@ window.SVL = (function () {
         knobCoarse.rotation.z = (state.coarse - 50) * 0.06;
         knobFine.rotation.z = (state.fine - 50) * 0.12;
 
+        /* 덮개유리 내려오기 */
+        if (state.coverslip && state.coverT < 1) {
+            state.coverT = Math.min(1, state.coverT + dt * 1.6);
+            var k2 = 1 - Math.pow(1 - state.coverT, 3);
+            coverMesh.position.set(
+                1.15 + (0.35 - 1.15) * k2,
+                2.28 + (1.79 - 2.28) * k2,
+                0.55 + (0.05 - 0.55) * k2
+            );
+            coverMesh.rotation.z = 0.5 * (1 - k2);
+            if (state.coverT >= 1) { state.dirty = true; state.fieldDirty = true; recomputeSharp(); }
+        }
+
         /* 염색약 방울 */
         if (state.dropping) {
             var t = (performance.now() - state.dropStart) / 1000;
@@ -1250,7 +1339,7 @@ window.SVL = (function () {
                     spotMat.color.setHex(state.stain === 'carmine' ? 0xe091a6 : 0x8fb2e8);
                     state.dirty = true; state.fieldDirty = true;
                     var okStain = (state.sample === 'onion' && state.stain === 'carmine') || (state.sample === 'buccal' && state.stain === 'methylene');
-                    S.setHint(okStain ? '✅ 염색이 잘 되었습니다. 초점을 맞춰 세포를 관찰하세요.'
+                    S.setHint(okStain ? '② 염색 완료! 이제 ③ 덮개유리를 덮어 시료를 눌러 주세요.'
                                       : '⚠️ 염색약이 이 시료에 잘 맞지 않아 구조가 흐릿합니다. 다른 염색약을 써 보세요.', false);
                     updateHud();
                 }
@@ -1321,6 +1410,11 @@ window.SVL = (function () {
         setSeg(['btnMag40', 'btnMag100', 'btnMag400'], 'btnMag100');
         setStain('carmine');
         spotMat.color.setHex(0xf0efe6);
+        state.coverslip = false; state.coverT = 0;
+        coverMesh.position.set(1.15, 2.28, 0.55);
+        coverMesh.rotation.z = 0.5;
+        $('btnCover').classList.remove('on');
+        $('btnCover').textContent = '🪟 덮개유리 덮기';
         dropBall.visible = false;
         recomputeSharp();
         state.dirty = true;

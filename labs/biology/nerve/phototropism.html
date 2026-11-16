@@ -577,7 +577,8 @@ window.SVL = (function () {
     'use strict';
     var S = window.SVL, $ = S.$, scene = S.scene, camera = S.camera, controls = S.controls;
 
-    var state = { light: 'left', cond: 'normal', t: 0, playing: true };
+    var state = { lightX: -4.2, lightY: 4.0, cond: 'normal', t: 0, playing: true };
+    function sideName() { return state.lightX < -0.8 ? 'left' : state.lightX > 0.8 ? 'right' : 'top'; }
 
     /* ============================================================
        1. 암실 상자
@@ -588,7 +589,7 @@ window.SVL = (function () {
     });
     var edgeMat = new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.85 });
 
-    var BOX_W = 4.6, BOX_H = 4.4, BOX_D = 3.6;
+    var BOX_W = 5.4, BOX_H = 5.6, BOX_D = 4.2;
     var boxG = new THREE.Group();
     scene.add(boxG);
 
@@ -619,11 +620,11 @@ window.SVL = (function () {
     /* 빛이 들어오는 창 (전등 방향에 따라 위치 이동) */
     var winMat = new THREE.MeshBasicMaterial({ color: 0xfff3b0, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
     var winL = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), winMat);
-    winL.position.set(-BOX_W / 2 + 0.02, 2.3, 0);
+    winL.position.set(-BOX_W / 2 + 0.02, 2.9, 0);
     winL.rotation.y = Math.PI / 2;
     boxG.add(winL);
     var winR = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), winMat);
-    winR.position.set(BOX_W / 2 - 0.02, 2.3, 0);
+    winR.position.set(BOX_W / 2 - 0.02, 2.9, 0);
     winR.rotation.y = -Math.PI / 2;
     boxG.add(winR);
     var winT = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.3), winMat);
@@ -647,6 +648,11 @@ window.SVL = (function () {
     var stemLamp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 8), shadeMat);
     stemLamp.position.y = 0.5;
     lampG.add(stemLamp);
+    // 끌어 잡기 쉽도록 보이지 않는 큰 손잡이 영역
+    var lampHit = new THREE.Mesh(new THREE.SphereGeometry(1.05, 10, 8),
+        new THREE.MeshBasicMaterial({ visible: false }));
+    lampHit.position.y = -0.1;
+    lampG.add(lampHit);
 
     var lampLight = new THREE.PointLight(0xfff2b0, 1.1, 22, 2);
     scene.add(lampLight);
@@ -707,7 +713,7 @@ window.SVL = (function () {
         auxin.push(p);
     }
 
-    var auxLabel = S.makeLabel('옥신', '#a16207', 0.95);
+    var auxLabel = S.makeLabel('옥신', '#a16207', 1.45);
     plantG.add(auxLabel);
 
     /* ============================================================
@@ -718,19 +724,24 @@ window.SVL = (function () {
     var tipDir = new THREE.Vector3(0, 1, 0);
 
     function lightSign() {
-        return state.light === 'left' ? -1 : state.light === 'right' ? 1 : 0;
+        var sx = sideName();
+        return sx === 'left' ? -1 : sx === 'right' ? 1 : 0;
+    }
+    // 빛의 좌우 위치만큼 더 크게 휜다 (빛을 멀리 옮기면 더 굽음)
+    function lightStrength() {
+        return Math.min(1.25, Math.abs(state.lightX) / 4.2);
     }
 
     function bendAngle() {
         if (state.cond !== 'normal') return 0;
-        return 26 * state.t * Math.min(1, state.t * 1.6);
+        return 40 * lightStrength() * state.t * Math.min(1, state.t * 1.35);
     }
 
     function buildStem() {
-        var H = 0.55 + 3.5 * state.t;
+        var H = 0.65 + 4.5 * state.t;
         var sign = lightSign();
         var bend = bendAngle() * Math.PI / 180;
-        var amp = Math.tan(bend) * H * 0.42 * sign;
+        var amp = Math.tan(bend) * H * 0.5 * sign;
         var pts = [];
         for (var i = 0; i <= CURVE_N; i++) {
             var s = i / CURVE_N;
@@ -796,20 +807,10 @@ window.SVL = (function () {
        5. 전등 위치
        ============================================================ */
     function placeLamp() {
-        var target = new THREE.Vector3(0, 2.0, 0);
-        if (state.light === 'left') {
-            lampG.position.set(-4.0, 3.5, 0.5);
-            lampG.rotation.z = -Math.PI / 2.6;
-            lampLight.position.set(-3.5, 3.4, 1.1);
-        } else if (state.light === 'right') {
-            lampG.position.set(4.0, 3.5, 0.5);
-            lampG.rotation.z = Math.PI / 2.6;
-            lampLight.position.set(3.5, 3.4, 1.1);
-        } else {
-            lampG.position.set(0, 6.3, 0.4);
-            lampG.rotation.z = 0;
-            lampLight.position.set(0, 5.6, 1.0);
-        }
+        var target = new THREE.Vector3(0, 2.2, 0);
+        lampG.position.set(state.lightX, state.lightY, 0.5);
+        lampG.rotation.z = -Math.atan2(state.lightX, Math.max(0.4, state.lightY - 2.2)) * 0.55;
+        lampLight.position.set(state.lightX * 0.92, state.lightY - 0.1, 1.1);
         lampG.updateMatrixWorld();
         var lampPos = lampG.position.clone();
         for (var i = 0; i < rayGroup.children.length; i++) {
@@ -822,25 +823,75 @@ window.SVL = (function () {
             r.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir.clone().normalize());
             r.scale.set(1, len / 3.2, 1);
         }
-        winL.visible = state.light === 'left';
-        winR.visible = state.light === 'right';
-        winT.visible = state.light === 'top';
+        var sx = sideName();
+        winL.visible = sx === 'left';
+        winR.visible = sx === 'right';
+        winT.visible = sx === 'top';
     }
 
     /* ============================================================
        6. UI
        ============================================================ */
-    function setLight(l) {
-        state.light = l;
+    function setLightPos(x, y) {
+        state.lightX = Math.max(-4.8, Math.min(4.8, x));
+        state.lightY = Math.max(1.4, Math.min(7.4, y));
+        var l = sideName();
         $('btnTop').classList.toggle('active', l === 'top');
         $('btnLeft').classList.toggle('active', l === 'left');
         $('btnRight').classList.toggle('active', l === 'right');
-        $('valLight').textContent = l === 'top' ? '위' : l === 'left' ? '왼쪽' : '오른쪽';
+        $('valLight').textContent = l === 'left' ? '왼쪽' : l === 'right' ? '오른쪽' : '위';
         placeLamp();
         needUpdate = true;
         updateHud();
-        S.setHint(l === 'top' ? '💡 빛이 위에서 곧게 내려옵니다.' : l === 'left' ? '💡 빛이 왼쪽에서 비칩니다. 싹이 어느 쪽으로 자랄까요?' : '💡 빛이 오른쪽에서 비칩니다. 싹이 어느 쪽으로 자랄까요?', false);
     }
+
+    function lightHint() {
+        var l = sideName();
+        S.setHint(l === 'top' ? '💡 빛이 위에서 곧게 내려옵니다. 싹이 휘지 않고 곧게 자랍니다.' :
+            (l === 'left' ? '💡 빛이 왼쪽에서 비칩니다. 싹이 어느 쪽으로 자랄까요?' : '💡 빛이 오른쪽에서 비칩니다. 싹이 어느 쪽으로 자랄까요?'), false);
+    }
+
+    /* 전등을 직접 끌어서 옮기기 */
+    var lampDrag = false;
+    var lampPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -0.5);
+    var lampRay = new THREE.Raycaster();
+    var lampNDC = new THREE.Vector2();
+    var lampPickRay = new THREE.Raycaster();
+    function hitLamp(ev) {
+        var r = S.renderer.domElement.getBoundingClientRect();
+        lampNDC.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+        lampNDC.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+        lampPickRay.setFromCamera(lampNDC, camera);
+        return lampPickRay.intersectObject(lampHit, false).length > 0 || lampPickRay.intersectObject(lampG, true).length > 0;
+    }
+    function lampDown(ev) {
+        if (!hitLamp(ev)) return;
+        lampDrag = true;
+        controls.enabled = false;
+        try { S.renderer.domElement.setPointerCapture(ev.pointerId); } catch (e) {}
+        ev.preventDefault();
+    }
+    function lampMove(ev) {
+        if (!lampDrag) return;
+        var r = S.renderer.domElement.getBoundingClientRect();
+        lampNDC.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+        lampNDC.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+        lampRay.setFromCamera(lampNDC, camera);
+        var pt = new THREE.Vector3();
+        if (!lampRay.ray.intersectPlane(lampPlane, pt)) return;
+        setLightPos(pt.x, pt.y);
+        ev.preventDefault();
+    }
+    function lampUp() {
+        if (!lampDrag) return;
+        lampDrag = false;
+        controls.enabled = true;
+        lightHint();
+    }
+    S.renderer.domElement.addEventListener('pointerdown', lampDown, true);
+    window.addEventListener('pointermove', lampMove, true);
+    window.addEventListener('pointerup', lampUp, true);
+    window.addEventListener('pointercancel', lampUp, true);
 
     function setCond(c) {
         state.cond = c;
@@ -855,7 +906,7 @@ window.SVL = (function () {
     }
 
     function updateHud() {
-        var days = (state.t * 7);
+        var days = (state.t * 10);
         $('valTime').textContent = days.toFixed(1) + ' 일';
         $('valSlider').textContent = days.toFixed(1) + ' 일';
         var ang = bendAngle();
@@ -872,7 +923,7 @@ window.SVL = (function () {
         } else if (state.t < 0.22) {
             nm.textContent = '자라는 중';
             note.textContent = '아직 줄기가 어립니다';
-        } else if (state.light === 'top') {
+        } else if (sideName() === 'top') {
             badge.classList.add('good');
             nm.textContent = '곧게 자람';
             note.textContent = '빛이 위에서 오면 휘지 않습니다';
@@ -885,9 +936,9 @@ window.SVL = (function () {
 
     var needUpdate = true, lastBuild = 0;
 
-    $('btnTop').addEventListener('click', function () { setLight('top'); });
-    $('btnLeft').addEventListener('click', function () { setLight('left'); });
-    $('btnRight').addEventListener('click', function () { setLight('right'); });
+    $('btnTop').addEventListener('click', function () { setLightPos(0, 7.0); lightHint(); });
+    $('btnLeft').addEventListener('click', function () { setLightPos(-4.2, 4.0); lightHint(); });
+    $('btnRight').addEventListener('click', function () { setLightPos(4.2, 4.0); lightHint(); });
     $('btnNormal').addEventListener('click', function () { setCond('normal'); });
     $('btnCap').addEventListener('click', function () { setCond('cap'); });
     $('btnCut').addEventListener('click', function () { setCond('cut'); });
@@ -914,7 +965,7 @@ window.SVL = (function () {
     S.onFrame(function (dt) {
         if (state.playing) {
             var before = state.t;
-            state.t = Math.min(1, state.t + dt * 0.085);
+            state.t = Math.min(1, state.t + dt * 0.055);
             if (state.t !== before) {
                 $('rngTime').value = Math.round(state.t * 100);
                 needUpdate = true;
@@ -939,13 +990,13 @@ window.SVL = (function () {
     function fitCamera() {
         var aspect = window.innerWidth / Math.max(1, window.innerHeight);
         var portrait = aspect < 0.88;
-        var needW = portrait ? 6.4 : 9.2;
-        var needH = portrait ? 8.0 : 6.6;
+        var needW = portrait ? 7.0 : 11.4;
+        var needH = portrait ? 9.4 : 8.6;
         var vfov = camera.fov * Math.PI / 180;
         var distH = (needH / 2) / Math.tan(vfov / 2);
         var distW = (needW / 2) / Math.tan(vfov / 2) / Math.max(0.2, aspect);
         var dist = Math.max(distH, distW) * 1.02;
-        var target = new THREE.Vector3(0, portrait ? 2.3 : 2.2, 0);
+        var target = new THREE.Vector3(0, portrait ? 2.9 : 2.7, 0);
         var dir = new THREE.Vector3(0, 0.1, 1).normalize();
         camera.position.copy(target).add(dir.multiplyScalar(dist));
         controls.target.copy(target);
@@ -956,11 +1007,11 @@ window.SVL = (function () {
     S.setFit(fitCamera);
 
     S.setReset(function () {
-        state.t = 0; state.playing = true; state.light = 'left'; state.cond = 'normal';
+        state.t = 0; state.playing = true; state.lightX = -4.2; state.lightY = 4.0; state.cond = 'normal';
         $('rngTime').value = 0;
         $('btnPlay').textContent = '⏸ 멈춤';
         $('btnPlay').classList.add('on');
-        setLight('left'); setCond('normal');
+        setLightPos(-4.2, 4.0); setCond('normal');
         needUpdate = true;
         buildStem();
         updateHud();
@@ -969,7 +1020,7 @@ window.SVL = (function () {
     });
 
     /* 시작 */
-    setLight('left');
+    setLightPos(-4.2, 4.0);
     setCond('normal');
     buildStem();
     updateHud();
