@@ -25,7 +25,9 @@
     /* ==========================================================
        0. 설정 — 배포 후 여기에 웹 앱 URL을 붙여 넣으세요
        ========================================================== */
-    var HALL_OF_FAME_WEBAPP_URL = '';   /* 예: 'https://script.google.com/macros/s/AKfy.../exec' */
+    /* 아래 한 줄만 바꾸면 됩니다(원하면 페이지에서 window.HALL_OF_FAME_WEBAPP_URL 로 덮어쓸 수도 있음). */
+    var HALL_OF_FAME_WEBAPP_URL = (typeof window !== 'undefined' && window.HALL_OF_FAME_WEBAPP_URL) ||
+        '';   /* 예: 'https://script.google.com/macros/s/AKfy.../exec' */
 
     var LS_KEY = 'svl_hof_v1_';
     var LS_NICK = 'svl_hof_nick';
