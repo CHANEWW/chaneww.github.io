@@ -619,13 +619,13 @@
         },
         er: {
             name: '소포체', en: 'Endoplasmic Reticulum', icon: '🛤️',
-            desc: '핵 주변에서 단백질과 지질을 만들어 세포 안 곳곳으로 운반하는 통로입니다. 표면에 리보솜이 붙은 부분은 거친면 소포체라고 부릅니다.',
+            desc: '핵막(외막)과 직접 이어져 있는 통로로, 단백질과 지질을 만들어 세포 안 곳곳으로 운반합니다. 표면에 리보솜이 붙은 부분은 거친면(조면) 소포체, 매끈한 부분은 매끈한면(활면) 소포체라고 부릅니다.',
             metaphor: '세포의 생산 라인 겸 택배 통로',
             tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
         },
         golgi: {
             name: '골지체', en: 'Golgi Apparatus', icon: '📦',
-            desc: '소포체에서 만든 물질을 받아 모양을 다듬고 포장해, 세포 밖으로 내보내거나 다른 소기관으로 보냅니다.',
+            desc: '소포체에서 만든 물질을 받아 모양을 다듬고 포장해, 세포 밖으로 내보내거나 다른 소기관으로 보냅니다. 납작한 주머니(시스터나)가 팬케이크처럼 겹겹이 쌓인 모양입니다.',
             metaphor: '세포의 포장·배송 센터',
             tagAnimal: '동물·식물 공통', tagPlant: '동물·식물 공통'
         },
@@ -827,48 +827,123 @@
         return g;
     }
 
-    function buildER(scale) {
-        const g = new THREE.Group();
-        const mat = matStd(0x22d3ee, { transparent: true, opacity: 0.9, roughness: 0.5, side: THREE.DoubleSide });
+    /* 소포체(ER)
+       - 조면 소포체: 핵막(외막) 바로 바깥에서 출발해 겹겹이 쌓인 납작한 주머니(시스터나)와,
+         핵막과 주머니를 실제로 이어 주는 목(연결관)으로 구성한다.
+       - 활면 소포체: 리보솜이 붙지 않은 매끈한 관이 핵막에서 직접 이어져 나온다.
+       nucleusCenter(핵의 중심)와 nucleusRadius(핵 반지름), outward(핵막에서 소포체가 뻗는 방향)를
+       그대로 받아, 소포체가 핵막에 접합된 채로 만들어지도록 한다. */
+    /* 소포체(ER)
+       - 조면 소포체: 리보솜이 붙은 납작한 주머니(시스터나)가 겹겹이 놓인 다발.
+         다발의 안쪽 끝을 핵막(외막)에 닿게 두고, 핵막과 소포체 사이를 잇는 목(연결관)을
+         실제 좌표로 계산해 붙여 '소포체가 핵막과 이어져 있음'이 3D에서 그대로 보이게 한다.
+       - 활면 소포체: 리보솜이 붙지 않은 매끈한 관이 핵막에서 직접 이어져 나온다. */
+    function buildER(nucleusCenter, nucleusRadius, opts) {
+        const o = opts || {};
+        const R0 = nucleusRadius;
+        const k = R0 / 1.35;
+        const dir = (o.dir || new THREE.Vector3(0.88, 0.30, 0.36)).clone().normalize();
+        const rot = o.rot || [0.15, -0.85, 0.25];
+        const dist = (o.dist || 1.45) * R0;
+
+        const wrap = new THREE.Group();
+        const nest = new THREE.Group();
+        nest.position.copy(nucleusCenter).add(dir.clone().multiplyScalar(dist));
+        nest.rotation.set(rot[0], rot[1], rot[2]);
+        nest.scale.setScalar(k * (o.scale || 1));
+        wrap.add(nest);
+
+        const mat = matStd(0x22d3ee, { transparent: true, opacity: 0.96, roughness: 0.5, side: THREE.DoubleSide });
         const dotMat = matStd(0x0e7490, { roughness: 0.6 });
+        const neckMat = matStd(0x06b6d4, { transparent: true, opacity: 0.95, roughness: 0.45 });
+
         const radii = [0.72, 0.97, 1.22, 1.47];
+        const ARC = Math.PI * 0.92;
+        const ends = [];
         for (let i = 0; i < radii.length; i++) {
             const radius = radii[i];
-            const arc = new THREE.Mesh(
-                new THREE.TorusGeometry(radius, 0.068, 8, 30, Math.PI * 0.92),
-                mat
-            );
-            arc.rotation.z = -0.5 + i * 0.12;
-            arc.position.set(0.05 * i, 0.08 * i, -0.2 * i);
-            g.add(arc);
+            const rotZ = -0.5 + i * 0.12;
+            const px = 0.05 * i, py = 0.08 * i, pz = -0.2 * i;
+            const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.068, 10, 34, ARC), mat);
+            arc.rotation.z = rotZ;
+            arc.position.set(px, py, pz);
+            nest.add(arc);
 
-            for (let k = 0; k < 4; k++) {
-                const a = -0.3 + k * 0.4;
+            for (let j = 0; j < 4; j++) {
+                const a = rotZ + 0.22 + j * 0.4;
                 const dot = new THREE.Mesh(new THREE.SphereGeometry(0.058, 8, 6), dotMat);
-                dot.position.set(Math.cos(a) * radius, Math.sin(a) * radius, -0.2 * i + 0.02);
-                g.add(dot);
+                dot.position.set(px + Math.cos(a) * radius, py + Math.sin(a) * radius, pz + 0.02);
+                nest.add(dot);
             }
+
+            ends.push(new THREE.Vector3(px + Math.cos(rotZ) * radius, py + Math.sin(rotZ) * radius, pz));
+            ends.push(new THREE.Vector3(px + Math.cos(rotZ + ARC) * radius, py + Math.sin(rotZ + ARC) * radius, pz));
         }
-        g.scale.setScalar(scale || 1);
-        return g;
+
+        /* 핵막(외막)과 소포체 다발을 실제로 이어 주는 목 */
+        nest.updateMatrixWorld(true);
+        const surf = R0 * 1.005;
+        ends.forEach(function (lp) {
+            const p = lp.clone().applyMatrix4(nest.matrixWorld);
+            const v = p.clone().sub(nucleusCenter);
+            const d = v.length();
+            if (d <= surf + 0.02 || d > surf + 0.9) return;
+            const q = nucleusCenter.clone().add(v.clone().normalize().multiplyScalar(surf));
+            const mid = q.clone().lerp(p, 0.5);
+            wrap.add(new THREE.Mesh(
+                new THREE.TubeGeometry(new THREE.CatmullRomCurve3([q, mid, p]), 14, 0.058, 9, false),
+                neckMat
+            ));
+        });
+
+        /* 활면 소포체: 핵막에서 직접 이어져 나온 매끈한 관 */
+        const smoothDir = (o.smoothDir || new THREE.Vector3(-0.42, -0.70, 0.58)).clone().normalize();
+        const sb = new THREE.Group();
+        sb.position.copy(nucleusCenter);
+        sb.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), smoothDir);
+        function sphT(r, th, ph) {
+            return new THREE.Vector3(
+                -Math.sin(th) * Math.cos(ph),
+                Math.cos(th),
+                Math.sin(th) * Math.sin(ph)
+            ).multiplyScalar(r);
+        }
+        function smoothTubule(th0, ph0, twist) {
+            const pts = [];
+            for (let i = 0; i <= 5; i++) {
+                const t = i / 5;
+                const r = R0 * 0.995 + 0.06 + t * (0.42 * k + 0.2);
+                const th = th0 + Math.sin(t * Math.PI * 1.1) * 0.14 + t * twist * 0.3;
+                const ph = ph0 + Math.sin(t * Math.PI * 0.9 + 1) * 0.26 + t * twist;
+                pts.push(sphT(r, th, ph));
+            }
+            return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.055 * Math.max(0.8, k), 9, false), neckMat);
+        }
+        sb.add(smoothTubule(0.90, -0.55, 0.52));
+        sb.add(smoothTubule(1.12, -1.05, -0.30));
+        wrap.add(sb);
+
+        return wrap;
     }
 
+    /* 골지체: 납작한 주머니(시스터나)를 팬케이크처럼 겹겹이 쌓은 모양 */
     function buildGolgi(scale) {
         const g = new THREE.Group();
-        const mat = matStd(0xf472b6, { transparent: true, opacity: 0.92, roughness: 0.45 });
-        for (let i = 0; i < 5; i++) {
-            const radius = 0.92 - i * 0.125;
-            const arc = new THREE.Mesh(
-                new THREE.TorusGeometry(radius, 0.072, 8, 26, Math.PI * 1.0),
-                mat
-            );
-            arc.rotation.z = Math.PI * 0.52;
-            arc.position.set(0, i * 0.175 - 0.35, 0);
-            g.add(arc);
+        const mat = matStd(0xf472b6, { transparent: true, opacity: 0.95, roughness: 0.5 });
+        const capMat = matStd(0xdb2777, { transparent: true, opacity: 0.93, roughness: 0.52 });
+        const LAYERS = 5;
+        for (let i = 0; i < LAYERS; i++) {
+            const k = i / (LAYERS - 1);
+            const rx = 0.98 - k * 0.14;
+            const rz = 0.80 - k * 0.10;
+            const disc = new THREE.Mesh(new THREE.SphereGeometry(1, 34, 20), i === 0 ? capMat : mat);
+            disc.scale.set(rx, 0.042, rz);
+            disc.position.set(k * 0.05, -0.40 + i * 0.19, 0);
+            g.add(disc);
         }
-        const vesicleMat = matStd(0xf9a8d4, { transparent: true, opacity: 0.9, roughness: 0.5 });
-        [[0.75, 0.62, 0.18], [-0.7, 0.55, -0.12], [0.45, -0.7, 0.1]].forEach(function (p) {
-            const v = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), vesicleMat);
+        const vesicleMat = matStd(0xf9a8d4, { transparent: true, opacity: 0.92, roughness: 0.5 });
+        [[0.98, 0.48, 0.26, 0.13], [-1.02, 0.30, -0.2, 0.11], [0.86, -0.56, 0.3, 0.115], [-0.78, -0.60, -0.26, 0.095]].forEach(function (p) {
+            const v = new THREE.Mesh(new THREE.SphereGeometry(p[3], 14, 10), vesicleMat);
             v.position.set(p[0], p[1], p[2]);
             g.add(v);
         });
@@ -1061,12 +1136,10 @@
         root.add(mito);
         registerOrganelle('animal', 'mitochondria', mito, 1.4);
 
-        // 소포체 (핵 주변을 감싸듯 배치)
-        const er = buildER(0.95);
-        er.position.set(0.15, 1.25, 0.15);
-        er.rotation.set(0.15, -0.85, 0.25);
+        // 소포체 (핵막 외막에서 직접 이어져 나오도록 배치)
+        const er = buildER(nucleus.position, 1.35, { dir: new THREE.Vector3(0.88, 0.30, 0.36) });
         root.add(er);
-        registerOrganelle('animal', 'er', er, 1.6);
+        registerOrganelle('animal', 'er', er, 1.9);
 
         // 골지체
         const golgi = buildGolgi(1.0);
@@ -1107,7 +1180,7 @@
             ['membrane', '세포막', 3.55, 2.95, -1.2, '#7dd3fc'],
             ['nucleus', '핵', -2.0, 2.25, -0.5, '#c4b5fd'],
             ['mitochondria', '미토콘드리아', 1.95, -1.05, 0.6, '#fdba74'],
-            ['er', '소포체', 1.0, 3.05, 0.4, '#67e8f9'],
+            ['er', '소포체', 0.60, 3.05, 0.40, '#67e8f9'],
             ['golgi', '골지체', 3.1, 0.85, 0.7, '#f9a8d4'],
             ['lysosome', '리소좀', -2.65, -3.35, 1.1, '#d8b4fe'],
             ['centrosome', '중심체', -3.2, 3.25, 0.95, '#fde047'],
@@ -1199,12 +1272,10 @@
         root.add(mito);
         registerOrganelle('plant', 'mitochondria', mito, 1.1);
 
-        // 소포체
-        const er = buildER(0.86);
-        er.position.set(-2.45, 1.15, 0.1);
-        er.rotation.set(0.2, -0.8, 0.2);
+        // 소포체 (핵막 외막에서 직접 이어져 나오도록 배치)
+        const er = buildER(nucleus.position, 1.15, { dir: new THREE.Vector3(-0.30, -0.90, 0.30), dist: 1.34, scale: 0.92, smoothDir: new THREE.Vector3(-0.35, -0.20, 0.92) });
         root.add(er);
-        registerOrganelle('plant', 'er', er, 1.4);
+        registerOrganelle('plant', 'er', er, 1.7);
 
         // 골지체
         const golgi = buildGolgi(0.9);
@@ -1231,7 +1302,7 @@
             ['vacuole', '액포', 0.8, 2.6, 0.2, '#7dd3fc'],
             ['chloroplast', '엽록체', 2.9, 2.95, 0.9, '#86efac'],
             ['mitochondria', '미토콘드리아', 1.45, 3.6, -1.8, '#fdba74'],
-            ['er', '소포체', -1.45, 2.6, 1.0, '#67e8f9'],
+            ['er', '소포체', -3.30, -3.10, 0.95, '#67e8f9'],
             ['golgi', '골지체', 2.9, -1.0, 1.4, '#f9a8d4'],
             ['ribosome', '리보솜', 3.4, 1.5, 2.2, '#a5b4fc']
         ];
