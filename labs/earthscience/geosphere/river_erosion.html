@@ -487,16 +487,29 @@ window.SVL = (function () {
     bench.receiveShadow = true;
     scene.add(bench);
 
-    /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ---- */
+    /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ----
+       글자 확대·선명화: 캔버스를 2배 해상도로 그리고, 라벨 길이에 맞춰 폭을 잡는다. */
     var labelList = [];
+    var LAB_DPR = 2;
+    var LAB_H = 128;
+    var LAB_FONT = 54;
+    var LAB_PAD = 46;
+    var LAB_MAXW = 1536;
+    var LAB_BOOST = 1.4;      /* 휴대폰에서 라벨을 키우는 배율 */
+    function labelLogicalWidth(g, text) {
+        var tw = g.measureText(text).width;
+        return Math.max(LAB_FONT * 1.6 + LAB_PAD, Math.min(LAB_MAXW, tw + LAB_PAD + 14));
+    }
     function drawLabel(cv, text, color) {
         var g = cv.getContext('2d');
-        g.clearRect(0, 0, 512, 128);
-        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        var S = LAB_DPR, W = cv.width / S, H = cv.height / S;
+        g.setTransform(S, 0, 0, S, 0, 0);
+        g.clearRect(0, 0, W, H);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
         g.textAlign = 'center';
         g.textBaseline = 'middle';
-        var tw = Math.min(470, g.measureText(text).width + 46);
-        var x0 = (512 - tw) / 2, r = 30;
+        var tw = Math.min(W - 12, g.measureText(text).width + LAB_PAD);
+        var x0 = (W - tw) / 2, r = 30;
         g.fillStyle = 'rgba(255,255,255,0.93)';
         g.beginPath();
         g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
@@ -510,27 +523,41 @@ window.SVL = (function () {
         g.closePath();
         g.fill();
         g.fillStyle = color || '#124';
-        g.fillText(text, 256, 66);
+        g.fillText(text, W / 2, 66);
+    }
+    function layoutLabel(spr) {
+        var L = spr.userData.label;
+        if (!L) return;
+        var cv = L.cv, g = cv.getContext('2d');
+        var f = (window.innerWidth < 900) ? LAB_BOOST : 1;
+        g.setTransform(LAB_DPR, 0, 0, LAB_DPR, 0, 0);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
+        var W = labelLogicalWidth(g, L.text);
+        var pw = Math.round(W * LAB_DPR), ph = Math.round(LAB_H * LAB_DPR);
+        if (cv.width !== pw) cv.width = pw;
+        if (cv.height !== ph) cv.height = ph;
+        drawLabel(cv, L.text, L.color);
+        if (L.tex) L.tex.needsUpdate = true;
+        spr.scale.set(L.ww * (W / 512) * f, L.ww * 0.25 * f, 1);
     }
     function makeLabel(text, color, w) {
         var cv = document.createElement('canvas');
-        cv.width = 512; cv.height = 128;
-        drawLabel(cv, text, color);
+        cv.width = 512; cv.height = LAB_H;
         var tex = new THREE.CanvasTexture(cv);
         tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        try { tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
         var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
         var ww = w || 1.9;
-        spr.scale.set(ww, ww * 0.25, 1);
-        spr.userData.label = { cv: cv, tex: tex, text: text, color: color };
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color, ww: ww };
         labelList.push(spr);
+        layoutLabel(spr);
         return spr;
     }
     function relabelAll() {
         for (var i = 0; i < labelList.length; i++) {
-            var L = labelList[i].userData.label;
-            if (!L) continue;
-            drawLabel(L.cv, L.text, L.color);
-            if (L.tex) L.tex.needsUpdate = true;
+            layoutLabel(labelList[i]);
         }
     }
     if (document.fonts && document.fonts.ready) {
@@ -848,14 +875,14 @@ window.SVL = (function () {
 
   /* ---------- 3D 라벨 ---------- */
   function lab(t, c, w, x, y, z) { var l = S.makeLabel(t, c, w); l.position.set(x, y, z); scene.add(l); return l; }
-  var labV = lab('V자곡', '#0f172a', 1.15, -5.2, baseH(-5.2) + 0.55, centerZ(-5.2));
-  var labF = lab('폭포', '#0f172a', 1.0, -3.3, baseH(-3.3) + 0.75, centerZ(-3.3) - 0.15);
-  var labM = lab('곡류', '#0f172a', 1.0, 0.35, baseH(0.35) + 1.35, centerZ(0.35) + 0.2);
-  var labT = lab('하안단구', '#0f172a', 1.35, -1.55, baseH(-1.55) + 1.5, centerZ(-1.55) - 2.0);
-  var labFl = lab('범람원', '#0f172a', 1.25, 2.35, baseH(2.35) + 1.05, centerZ(2.35) - 2.2);
-  var labD = lab('삼각주', '#0f172a', 1.15, 4.15, 0.62, 1.15);
-  var labEro = lab('침식 →', '#15803d', 1.15, -5.6, baseH(-5.6) + 1.55, centerZ(-5.6));
-  var labDep = lab('→ 퇴적', '#b45309', 1.15, 3.2, 1.35, centerZ(3.2) + 1.4);
+  var labV = lab('V자곡', '#0f172a', 3.0, -5.2, baseH(-5.2) + 0.6, centerZ(-5.2));
+  var labF = lab('폭포', '#0f172a', 2.7, -3.3, baseH(-3.3) + 0.8, centerZ(-3.3) - 0.15);
+  var labM = lab('곡류', '#0f172a', 2.7, 0.35, baseH(0.35) + 1.4, centerZ(0.35) + 0.2);
+  var labT = lab('하안단구', '#0f172a', 3.3, -1.55, baseH(-1.55) + 1.55, centerZ(-1.55) - 2.0);
+  var labFl = lab('범람원', '#0f172a', 3.1, 2.35, baseH(2.35) + 1.1, centerZ(2.35) - 2.2);
+  var labD = lab('삼각주', '#0f172a', 3.0, 4.15, 0.66, 1.15);
+  var labEro = lab('침식 →', '#15803d', 3.0, -5.6, baseH(-5.6) + 1.65, centerZ(-5.6));
+  var labDep = lab('→ 퇴적', '#b45309', 3.0, 3.2, 1.42, centerZ(3.2) + 1.4);
 
   /* ---------- 좌측 단면 패널 ---------- */
   var cv = document.getElementById('sectionCanvas');
@@ -1042,6 +1069,7 @@ window.SVL = (function () {
     S.camera.fov = portrait ? 56 : 45;
     S.camera.updateProjectionMatrix();
     S.controls.update();
+    S.relabel();
   };
   S.setFit(fitFn); S.setAlign(fitFn);
   S.setReset(function () {

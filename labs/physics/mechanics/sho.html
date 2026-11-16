@@ -220,6 +220,56 @@
 
         .sub-panel.show { display: flex; }
 
+        /* 좌측 하단 역학적 에너지 막대 패널 */
+        .energy-panel {
+            position: absolute;
+            left: 20px;
+            bottom: calc(96px + env(safe-area-inset-bottom));
+            width: 252px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+        }
+        .energy-panel.hidden { display: none; }
+        .energy-panel.peek-off { display: none; }
+        .energy-title {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 6px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #1c1c1e;
+        }
+        .energy-title small { font-size: 10px; font-weight: bold; color: #8e8e93; }
+        .bar-row { display: flex; flex-direction: column; gap: 3px; }
+        .bar-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            font-size: 11.5px;
+            font-weight: bold;
+            color: #3a3a3c;
+        }
+        .bar-head .bv { font-variant-numeric: tabular-nums; font-weight: bold; }
+        .bar-track {
+            width: 100%;
+            height: 10px;
+            background: rgba(0, 0, 0, 0.07);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .bar-fill { height: 100%; width: 0%; border-radius: 6px; transition: width 0.08s linear; }
+        .bar-fill.pe { background: linear-gradient(90deg, #5aa9ff, #007aff); }
+        .bar-fill.ke { background: linear-gradient(90deg, #ffc46b, #ff9500); }
+        .bar-fill.me { background: linear-gradient(90deg, #b6bcc6, #8e8e93); }
+        body.dark-mode .energy-panel { background: rgba(28, 28, 30, 0.82); }
+        body.dark-mode .energy-title, body.dark-mode .bar-head { color: #f2f2f7; }
+        body.dark-mode .energy-title small { color: #a1a1a6; }
+        body.dark-mode .bar-track { background: rgba(255, 255, 255, 0.14); }
+
         .slider-row {
             display: flex;
             flex-direction: column;
@@ -438,6 +488,18 @@ img, canvas { max-width: 100%; }
     }
     .sub-panel-title { font-size: 11px !important; }
     .slider-header { font-size: 11px !important; }
+    .energy-panel {
+        left: 8px !important;
+        bottom: calc(58px + env(safe-area-inset-bottom)) !important;
+        width: 142px !important;
+        padding: 7px 9px !important;
+        gap: 5px !important;
+        border-radius: 14px !important;
+    }
+    .energy-title { font-size: 9.5px !important; }
+    .energy-title small { display: none !important; }
+    .bar-head { font-size: 9px !important; white-space: nowrap; }
+    .bar-track { height: 7px !important; }
     .control-row { gap: 5px !important; flex-wrap: wrap; }
     .toggle-btn, .mode-btn, .quick-btn, .example-item, .preset-btn { font-size: 11px !important; }
     input[type="range"] { height: 22px; }
@@ -1204,10 +1266,31 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             <span>⚙️</span>
             <span>물리 조절</span>
         </button>
+        <button class="control-tab-btn active" id="btn-energy-toggle" style="grid-column: 1 / -1;" aria-pressed="true">
+            <span>⚡</span>
+            <span id="lbl-energy">에너지 막대 숨기기</span>
+        </button>
         </div>
     </div>
 
-<div class="glass-panel bottom-control-bar">
+<!-- 좌측 하단 : 역학적 에너지 전환 막대 -->
+    <div class="glass-panel energy-panel" id="energy-panel" role="group" aria-label="역학적 에너지 막대">
+        <div class="energy-title"><span>⚡ 역학적 에너지</span><small>막대 길이 = 에너지양</small></div>
+        <div class="bar-row">
+            <div class="bar-head"><span>위치 에너지</span><span class="bv" id="pe-val">0.0 J</span></div>
+            <div class="bar-track"><div class="bar-fill pe" id="pe-bar"></div></div>
+        </div>
+        <div class="bar-row">
+            <div class="bar-head"><span>운동 에너지</span><span class="bv" id="ke-val">0.0 J</span></div>
+            <div class="bar-track"><div class="bar-fill ke" id="ke-bar"></div></div>
+        </div>
+        <div class="bar-row">
+            <div class="bar-head"><span>합계 (역학적 에너지)</span><span class="bv" id="me-val">0.0 J</span></div>
+            <div class="bar-track"><div class="bar-fill me" id="me-bar"></div></div>
+        </div>
+    </div>
+
+    <div class="glass-panel bottom-control-bar">
         <button class="control-tab-btn" id="btn-reset">
             <span>🔄</span>
             <span>초기화</span>
@@ -1330,6 +1413,46 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             document.getElementById('val-speed').innerText = Math.abs(angularVelocity * rodLength).toFixed(2) + 'm/s';
         }
 
+        /* ---- 역학적 에너지 : 위치 에너지 ↔ 운동 에너지 실시간 막대 ---- */
+        let energyOn = true;
+        let energyRef = 0.001;
+        const peBar = document.getElementById('pe-bar');
+        const keBar = document.getElementById('ke-bar');
+        const meBar = document.getElementById('me-bar');
+        const peVal = document.getElementById('pe-val');
+        const keVal = document.getElementById('ke-val');
+        const meVal = document.getElementById('me-val');
+        const energyPanel = document.getElementById('energy-panel');
+        const energyBtn = document.getElementById('btn-energy-toggle');
+        const energyLbl = document.getElementById('lbl-energy');
+
+        function updateEnergy() {
+            const speed = Math.abs(angularVelocity) * rodLength;
+            const pe = mass * gravity * rodLength * (1 - Math.cos(angle));
+            const ke = 0.5 * mass * speed * speed;
+            const me = pe + ke;
+            if (me > energyRef) energyRef = me;
+            if (!energyOn) return;
+            const denom = Math.max(energyRef, 0.001);
+            const pct = function (v) { return Math.min(100, (v / denom) * 100).toFixed(1) + '%'; };
+            peBar.style.width = pct(pe);
+            keBar.style.width = pct(ke);
+            meBar.style.width = pct(me);
+            peVal.innerText = pe.toFixed(2) + ' J';
+            keVal.innerText = ke.toFixed(2) + ' J';
+            meVal.innerText = me.toFixed(2) + ' J';
+        }
+
+        function setEnergyVisible(on) {
+            energyOn = on;
+            energyPanel.classList.toggle('hidden', !on);
+            energyBtn.classList.toggle('active', on);
+            energyBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            energyLbl.innerText = on ? '에너지 막대 숨기기' : '에너지 막대 표시';
+            if (on) updateEnergy();
+        }
+        energyBtn.addEventListener('click', function () { setEnergyVisible(!energyOn); });
+
         // 6. Touch & Drag Controls
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
@@ -1401,6 +1524,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         btnTogglePhysics.addEventListener('click', () => {
             physicsPanel.classList.toggle('show');
             btnTogglePhysics.classList.toggle('active');
+            /* 좁은 화면에서는 슬라이더 패널과 겹치지 않도록 에너지 막대를 잠시 숨긴다 */
+            const peekOff = physicsPanel.classList.contains('show') && window.innerWidth <= 900;
+            energyPanel.classList.toggle('peek-off', peekOff);
         });
 
         document.getElementById('sld-length').addEventListener('input', (e) => {
@@ -1426,6 +1552,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             angle = Math.PI / 6;
             angularVelocity = 0;
             pivotGroup.rotation.z = angle;
+            energyRef = 0.001;
+            updateEnergy();
         });
 
         document.getElementById('btn-align').addEventListener('click', () => {
@@ -1450,7 +1578,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         // 8. Animation Loop
         function animate() {
             requestAnimationFrame(animate);
-            updatePhysics(clock.getDelta());
+            /* 첫 프레임의 큰 시간 간격으로 진자가 튀거나 에너지가 어긋나지 않도록 제한 */
+            updatePhysics(Math.min(clock.getDelta(), 0.033));
+            updateEnergy();
             controls.update();
             renderer.render(scene, camera);
         }

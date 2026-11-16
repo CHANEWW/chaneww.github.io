@@ -481,16 +481,29 @@ window.SVL = (function () {
     bench.receiveShadow = true;
     scene.add(bench);
 
-    /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ---- */
+    /* ---- 라벨 스프라이트 (폰트 로드 후 재그리기 지원) ----
+       글자 깨짐 방지: 캔버스를 2배 해상도(DPR 2)로 그리고,
+       라벨 길이에 맞춰 캔버스 폭을 늘려 긴 글자가 잘리거나 뭉개지지 않게 한다. */
     var labelList = [];
+    var LAB_DPR = 2;          /* 라벨 캔버스 해상도 배율 */
+    var LAB_H = 128;          /* 라벨 캔버스 논리 높이(px) */
+    var LAB_FONT = 54;        /* 라벨 글자 크기(논리 px) */
+    var LAB_PAD = 46;         /* 알약 좌우 여백(논리 px) */
+    var LAB_MAXW = 1536;      /* 논리 기준 최대 폭 */
+    function labelLogicalWidth(g, text) {
+        var tw = g.measureText(text).width;
+        return Math.max(LAB_FONT * 1.6 + LAB_PAD, Math.min(LAB_MAXW, tw + LAB_PAD + 14));
+    }
     function drawLabel(cv, text, color) {
         var g = cv.getContext('2d');
-        g.clearRect(0, 0, 512, 128);
-        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        var S = LAB_DPR, W = cv.width / S, H = cv.height / S;
+        g.setTransform(S, 0, 0, S, 0, 0);
+        g.clearRect(0, 0, W, H);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
         g.textAlign = 'center';
         g.textBaseline = 'middle';
-        var tw = Math.min(470, g.measureText(text).width + 46);
-        var x0 = (512 - tw) / 2, r = 30;
+        var tw = Math.min(W - 12, g.measureText(text).width + LAB_PAD);
+        var x0 = (W - tw) / 2, r = 30;
         g.fillStyle = 'rgba(255,255,255,0.93)';
         g.beginPath();
         g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
@@ -504,27 +517,42 @@ window.SVL = (function () {
         g.closePath();
         g.fill();
         g.fillStyle = color || '#124';
-        g.fillText(text, 256, 66);
+        g.fillText(text, W / 2, 66);
+    }
+    function layoutLabel(spr) {
+        var L = spr.userData.label;
+        if (!L) return;
+        var cv = L.cv, g = cv.getContext('2d');
+        var f = (window.innerWidth < 900) ? 1.7 : 1;   /* 휴대폰에서는 라벨을 크게 */
+        g.setTransform(LAB_DPR, 0, 0, LAB_DPR, 0, 0);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
+        var W = labelLogicalWidth(g, L.text);
+        var pw = Math.round(W * LAB_DPR), ph = Math.round(LAB_H * LAB_DPR);
+        if (cv.width !== pw) cv.width = pw;
+        if (cv.height !== ph) cv.height = ph;
+        drawLabel(cv, L.text, L.color);
+        if (L.tex) L.tex.needsUpdate = true;
+        /* ww = 예전 512px 기준 라벨 폭, 글자 크기는 그대로 두고 알약 폭만 글자에 맞춘다 */
+        spr.scale.set(L.ww * (W / 512) * f, L.ww * 0.25 * f, 1);
     }
     function makeLabel(text, color, w) {
         var cv = document.createElement('canvas');
-        cv.width = 512; cv.height = 128;
-        drawLabel(cv, text, color);
+        cv.width = 512; cv.height = LAB_H;
         var tex = new THREE.CanvasTexture(cv);
         tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        try { tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
         var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
         var ww = w || 1.9;
-        spr.scale.set(ww, ww * 0.25, 1);
-        spr.userData.label = { cv: cv, tex: tex, text: text, color: color };
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color, ww: ww };
         labelList.push(spr);
+        layoutLabel(spr);
         return spr;
     }
     function relabelAll() {
         for (var i = 0; i < labelList.length; i++) {
-            var L = labelList[i].userData.label;
-            if (!L) continue;
-            drawLabel(L.cv, L.text, L.color);
-            if (L.tex) L.tex.needsUpdate = true;
+            layoutLabel(labelList[i]);
         }
     }
     if (document.fonts && document.fonts.ready) {
@@ -764,10 +792,14 @@ window.SVL = (function () {
 
   /* ---------- 3D 라벨 ---------- */
   function lab(t, c, w, x, y, z) { var l = S.makeLabel(t, c, w); l.position.set(x, y, z); scene.add(l); return l; }
-  var labEarth = lab('지구', '#1d4ed8', 1.0, 0, R_EARTH + 1.15, 0);
-  var labMoon = lab('달', '#475569', 1.25, 0, 1.05, 0);
-  var labSun = lab('태양', '#b45309', 1.3, 7.4, 5.95, -4.2);
+  var labEarth = lab('지구', '#1d4ed8', 2.15, 0, R_EARTH + 1.34, 0);
+  var labMoon = lab('달', '#475569', 2.4, 0, 1.05, 0);
+  var labSun = lab('태양', '#b45309', 1.9, 7.4, 5.95, -4.2);
   var labBulge = lab('바닷물이 부풀어 오른 곳', '#0891b2', 2.4, 1.55, 2.15, 0);
+  /* 지구 표면의 빨간 표시가 무엇인지 알려 주는 이름표 (지구와 같이 돈다) */
+  var labPin = S.makeLabel('관측 지점(부두)', '#be123c', 2.0);
+  labPin.position.set(0, 0.82, R_EARTH + 0.08);
+  earth.add(labPin);
 
   /* ---------- 부두 수위계 (모형 인셋) ---------- */
   var pierGroup = new THREE.Group();
@@ -840,7 +872,7 @@ window.SVL = (function () {
   var boatMast = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.34, 8), new THREE.MeshStandardMaterial({ color: 0x334155 }));
   pierGroup.add(boatMast);
 
-  var pierLab = lab('부두 수위계', '#0f172a', 1.5, 2.2, -0.5, 2.6);
+  var pierLab = lab('부두 수위계', '#0f172a', 2.9, 2.2, -0.5, 2.6);
   
   /* ---------- 좌측 그래프 ---------- */
   var cv = document.getElementById('tideCanvas');
@@ -987,7 +1019,7 @@ window.SVL = (function () {
     var am = Math.PI * 2 * state.day / SYN;
     moon.position.set(Math.cos(am) * MOON_R, 0, Math.sin(am) * MOON_R);
     moonDir.set(Math.cos(am), 0, Math.sin(am)).normalize();
-    labMoon.position.set(moon.position.x, moon.position.y + 0.85, moon.position.z);
+    labMoon.position.set(moon.position.x, moon.position.y + labMoonGap, moon.position.z);
 
     /* 지구 자전 */
     earth.rotation.y = Math.PI * 2 * (state.hour / 24) + Math.PI;
@@ -1021,6 +1053,15 @@ window.SVL = (function () {
   }
 
   /* ---------- 초기화/시점 ---------- */
+  /* 화면 비율에 따라 라벨 자리를 잡는다 (휴대폰에서는 라벨이 커져 겹치지 않도록 벌린다) */
+  var labMoonGap = 0.85;
+  function applyLabelLayout() {
+    var p = window.innerHeight > window.innerWidth;
+    labMoonGap = p ? 1.55 : 0.85;
+    labEarth.position.set(0, R_EARTH + (p ? 2.0 : 1.34), 0);
+    labBulge.position.set(p ? 2.2 : 1.55, p ? 3.05 : 2.15, 0);
+    pierLab.position.set(p ? 1.65 : 2.2, p ? 0.1 : -0.5, 2.6);
+  }
   var fitFn = function () {
     var w = window.innerWidth, h = window.innerHeight;
     var portrait = h > w;
@@ -1030,6 +1071,9 @@ window.SVL = (function () {
     S.camera.fov = portrait ? 56 : 46;
     S.camera.updateProjectionMatrix();
     S.controls.update();
+    applyLabelLayout();
+    S.relabel();
+    positionBodies();
   };
   S.setFit(fitFn); S.setAlign(fitFn);
   S.setReset(function () {

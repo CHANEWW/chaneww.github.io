@@ -1164,7 +1164,8 @@ function applyModeCamera(instant) {
     if (state.mode === 'A') {
         var narrowA = camera.aspect < 1.0;
         target = new THREE.Vector3(0, 0.35, 0);
-        dir = new THREE.Vector3(0.42, 0.40, 1).normalize();
+        /* 정면에서 바라보는 기본 시점(좌우로 비스듬히 돌지 않게) */
+        dir = new THREE.Vector3(0, 0.26, 1).normalize();
         dist = fitDistance(narrowA ? 3.7 : 5.5, narrowA ? 2.9 : 3.0, 1.4);
     } else {
         /* 오른쪽 조절 패널에 가리지 않도록 무리 전체를 왼쪽으로 살짝 민다 */
@@ -1517,17 +1518,30 @@ function renderQuizRow() {
         row.appendChild(btn);
     });
 }
+function syncPicks() {
+    document.querySelectorAll('.q-disc').forEach(function (el) {
+        var idx = Number(el.getAttribute('data-i'));
+        var pos = quiz.picked.indexOf(idx);
+        el.classList.toggle('picked', pos >= 0);
+        var num = el.querySelector('.num');
+        if (num) num.textContent = pos >= 0 ? String(pos + 1) : '';
+    });
+}
 function tapDisc(i) {
     if (quiz.phase !== 'playing') return;
-    if (quiz.picked.indexOf(i) >= 0) return;
-    quiz.picked.push(i);
-    var el = document.querySelector('.q-disc[data-i="' + i + '"]');
-    if (el) {
-        el.classList.add('picked');
-        el.querySelector('.num').textContent = String(quiz.picked.length);
+    var at = quiz.picked.indexOf(i);
+    if (at >= 0) {
+        /* 이미 고른 별을 한 번 더 누르면 선택을 취소한다 */
+        quiz.picked.splice(at, 1);
+        syncPicks();
+        return;
     }
+    quiz.picked.push(i);
+    syncPicks();
     if (quiz.picked.length === quiz.items.length) {
-        setTimeout(function () { judgeQuiz(); }, 320);
+        setTimeout(function () {
+            if (quiz.phase === 'playing' && quiz.picked.length === quiz.items.length) judgeQuiz();
+        }, 320);
     }
 }
 function judgeQuiz() {
@@ -1579,8 +1593,8 @@ function nextRound() {
     quiz.items = shuffle(pickTriple());
     quiz.picked = [];
     quiz.phase = 'playing';
-    $('#q-ask').innerHTML = '색이 <b>차가운</b> 별부터 차례대로 눌러 보세요.';
-    $('#q-feedback').textContent = '세 별을 차례로 누르면 바로 채점합니다.';
+    $('#q-ask').innerHTML = '색이 <b>차가운</b> 별부터 차례대로 눌러 보세요. <span style="opacity:.72;font-weight:700">(한 번 더 누르면 취소)</span>';
+    $('#q-feedback').textContent = '세 별을 차례로 누르면 바로 채점합니다. 잘못 눌렀으면 그 별을 다시 누르세요.';
     $('#q-next').disabled = true;
     $('#q-next').textContent = '다음 ➜';
     renderQuizRow();

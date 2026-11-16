@@ -193,15 +193,15 @@ input[type="range"].ctrl-slider::-moz-range-thumb {
 
 /* ---------- 통계 막대 ---------- */
 .stat-block { display: flex; flex-direction: column; gap: 5px; }
-.stat-title { font-size: 10.5px; font-weight: 900; color: #334155; letter-spacing: -0.3px; display: flex; justify-content: space-between; align-items: center; }
+.stat-title { font-size: 12px; font-weight: 900; color: #334155; letter-spacing: -0.3px; display: flex; justify-content: space-between; align-items: center; }
 .stat-title b { color: #2563eb; font-variant-numeric: tabular-nums; }
-.stat-row { display: grid; grid-template-columns: 62px 1fr 54px; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; }
+.stat-row { display: grid; grid-template-columns: 62px 1fr 54px; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; color: #475569; }
 .stat-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-row .bar { height: 9px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; }
 .stat-row .bar i { display: block; height: 100%; width: 0%; border-radius: 999px; transition: width 0.35s ease; }
 .stat-row .vl { text-align: right; font-variant-numeric: tabular-nums; color: #0f172a; }
 .mini-table { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 8px; }
-.mini-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 9.5px; font-weight: 800; color: #475569; padding: 2px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.3); }
+.mini-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11.5px; font-weight: 800; color: #475569; padding: 2px 0; border-bottom: 1px dashed rgba(148, 163, 184, 0.3); }
 .mini-row .vl { font-variant-numeric: tabular-nums; color: #0f172a; }
 .hr { height: 1px; background: rgba(0, 0, 0, 0.07); margin: 1px 0; }
 
@@ -482,17 +482,24 @@ window.SVL = (function () {
     bench.receiveShadow = true;
     scene.add(bench);
 
-    /* ---- 라벨 스프라이트 ---- */
-    function makeLabel(text, color, w) {
-        var cv = document.createElement('canvas');
-        cv.width = 512; cv.height = 128;
+    /* ---- 라벨 스프라이트 ----
+       글자 크기는 그대로 두고, 라벨 길이에 맞춰 알약 폭을 잡아 짧은 글씨도 크게 보이게 한다. */
+    var LAB_DPR = 2, LAB_H = 128, LAB_FONT = 54, LAB_PAD = 46, LAB_MAXW = 1536;
+    var LAB_BOOST = 1.5;      /* 휴대폰에서 라벨을 키우는 배율 */
+    function labelLogicalWidth(g, text) {
+        var tw = g.measureText(text).width;
+        return Math.max(LAB_FONT * 1.7 + LAB_PAD, Math.min(LAB_MAXW, tw + LAB_PAD + 14));
+    }
+    function drawLabel(cv, text, color) {
         var g = cv.getContext('2d');
-        g.clearRect(0, 0, 512, 128);
-        g.font = "bold 54px 'SeoulNamsan', -apple-system, sans-serif";
+        var S = LAB_DPR, W = cv.width / S, H = cv.height / S;
+        g.setTransform(S, 0, 0, S, 0, 0);
+        g.clearRect(0, 0, W, H);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
         g.textAlign = 'center';
         g.textBaseline = 'middle';
-        var tw = Math.min(470, g.measureText(text).width + 46);
-        var x0 = (512 - tw) / 2, r = 30;
+        var tw = Math.min(W - 8, g.measureText(text).width + LAB_PAD);
+        var x0 = (W - tw) / 2, r = Math.min(30, (W - tw) / 2 + 2);
         g.fillStyle = 'rgba(255,255,255,0.93)';
         g.beginPath();
         g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
@@ -506,12 +513,26 @@ window.SVL = (function () {
         g.closePath();
         g.fill();
         g.fillStyle = color || '#124';
-        g.fillText(text, 256, 66);
+        g.fillText(text, W / 2, 66);
+    }
+    function makeLabel(text, color, w) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = LAB_H * LAB_DPR;
         var tex = new THREE.CanvasTexture(cv);
         tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        try { tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); } catch (e) {}
         var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
         var ww = w || 1.9;
-        spr.scale.set(ww, ww * 0.25, 1);
+        var g0 = cv.getContext('2d');
+        g0.setTransform(LAB_DPR, 0, 0, LAB_DPR, 0, 0);
+        g0.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
+        var W = labelLogicalWidth(g0, text);
+        cv.width = Math.round(W * LAB_DPR);
+        drawLabel(cv, text, color);
+        var f = (window.innerWidth < 900) ? LAB_BOOST : 1;
+        spr.scale.set(ww * (W / 512) * f, ww * 0.25 * f, 1);
         return spr;
     }
 
@@ -666,7 +687,7 @@ window.SVL = (function () {
             g.add(pod);
         }
 
-        var lab = S.makeLabel(tag, '#14532d', 1.45);
+        var lab = S.makeLabel(tag, '#14532d', 2.0);
         lab.position.set(0, 2.55, 0);
         g.add(lab);
         return g;
@@ -696,11 +717,11 @@ window.SVL = (function () {
     p2Seed.position.set(2.3, 0.58, 0.15);
     p2Seed.castShadow = true;
     scene.add(p2Seed);
-    var p1SeedLabel = S.makeLabel('씨', '#92400e', 0.8);
-    p1SeedLabel.position.set(-2.3, 0.98, 0.15);
+    var p1SeedLabel = S.makeLabel('씨', '#92400e', 2.2);
+    p1SeedLabel.position.set(-2.3, 1.06, 0.15);
     scene.add(p1SeedLabel);
-    var p2SeedLabel = S.makeLabel('씨', '#166534', 0.8);
-    p2SeedLabel.position.set(2.3, 0.98, 0.15);
+    var p2SeedLabel = S.makeLabel('씨', '#166534', 2.2);
+    p2SeedLabel.position.set(2.3, 1.06, 0.15);
     scene.add(p2SeedLabel);
 
     /* ============================================================

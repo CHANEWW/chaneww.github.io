@@ -163,6 +163,20 @@ input[type="range"].ctrl-slider::-webkit-slider-thumb {
 input[type="range"].ctrl-slider::-moz-range-thumb {
     width: 14px; height: 14px; border-radius: 50%; background: #3b82f6; border: 2px solid #fff; cursor: pointer;
 }
+.mag-info {
+    display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: nowrap;
+    padding: 7px 6px; border-radius: 12px; background: rgba(37, 99, 235, 0.08);
+    border: 1px solid rgba(37, 99, 235, 0.22); font-size: 10.5px; font-weight: 800; color: #1e293b;
+    letter-spacing: -0.4px; white-space: nowrap;
+}
+.mag-info b { font-size: 9.5px; font-weight: 800; color: #64748b; margin-right: 3px; }
+.mag-info .mi-op { color: #94a3b8; font-weight: 900; }
+.mag-info .mi-total {
+    font-size: 14px; font-weight: 900; color: #1d4ed8; font-variant-numeric: tabular-nums;
+}
+body.dark-mode .mag-info { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.3); color: #dbeafe; }
+body.dark-mode .mag-info b { color: #94a3b8; }
+body.dark-mode .mag-info .mi-total { color: #7dd3fc; }
 .state-badge {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
     padding: 7px 8px; border-radius: 12px; background: rgba(2, 132, 199, 0.09);
@@ -358,7 +372,7 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
         <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
     </div>
     <div class="data-card glass-panel">
-        <div class="data-item"><span class="data-label">배율</span><span class="data-value" id="valMag">100×</span></div>
+        <div class="data-item"><span class="data-label">총배율</span><span class="data-value" id="valMag">100×</span></div>
         <div class="data-sep"></div>
         <div class="data-item"><span class="data-label">초점</span><span class="data-value" id="valSharp">0 %</span></div>
         <div class="data-sep"></div>
@@ -391,9 +405,17 @@ body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !i
             <button class="seg-btn" id="btnMethylene" type="button">💙 메틸렌블루</button>
         </div>
         <button class="btn-start" id="btnDrop" type="button">💧 염색약 떨어뜨리기</button>
-        <div class="seg">
-            <button class="seg-btn accent active" id="btn100" type="button">100×</button>
-            <button class="seg-btn accent" id="btn400" type="button">400×</button>
+        <div class="mag-info" id="magInfo">
+            <span><b>접안</b><span id="miEye">10×</span></span>
+            <span class="mi-op">×</span>
+            <span><b>대물</b><span id="miObj">10×</span></span>
+            <span class="mi-op">=</span>
+            <span class="mi-total" id="miTotal">100×</span>
+        </div>
+        <div class="seg three">
+            <button class="seg-btn accent" id="btnMag40" type="button">4×</button>
+            <button class="seg-btn accent active" id="btnMag100" type="button">10×</button>
+            <button class="seg-btn accent" id="btnMag400" type="button">40×</button>
         </div>
         <div class="slider-row">
             <div class="slider-head"><span class="slider-name">🔧 조동나사 (대략)</span><span class="slider-val" id="valCoarse">30</span></div>
@@ -585,7 +607,7 @@ window.SVL = (function () {
 
     var state = {
         sample: 'onion', stain: 'carmine', stained: false,
-        mag: 100, coarse: 30, fine: 50, sharp: 0,
+        mag: 100, eye: 10, coarse: 30, fine: 50, sharp: 0,
         dropping: false, dropT: 0, dropStart: 0, dir: 0, targetDir: 0,
         dirty: true, fieldDirty: true, lastDraw: 0
     };
@@ -646,12 +668,16 @@ window.SVL = (function () {
         g.add(ring);
         return g;
     }
-    var objA = makeObjective(0.42, 0.11, 0x1f6feb);
-    objA.position.x = 0.28;
+    /* 대물렌즈 3단(4×·10×·40×) — 회전판을 돌려 관찰 중인 렌즈를 앞으로 세운다 */
+    var objA = makeObjective(0.42, 0.11, 0x1f6feb);   /* 4×  */
+    objA.position.set(0.28, 0, 0);
     nosepiece.add(objA);
-    var objB = makeObjective(0.72, 0.13, 0xd93b52);
-    objB.position.x = -0.28;
+    var objB = makeObjective(0.72, 0.13, 0x16a34a);   /* 10× */
+    objB.position.set(-0.28, 0, 0);
     nosepiece.add(objB);
+    var objC = makeObjective(0.98, 0.15, 0xd93b52);   /* 40× */
+    objC.position.set(0, 0, -0.28);
+    nosepiece.add(objC);
 
     /* 재물대 */
     var stage = box(2.3, 0.13, 2.0, bodyMat, 0.3, 1.62, 0.05);
@@ -904,7 +930,7 @@ window.SVL = (function () {
 
     function composeField() {
         var g = cg, pal = palette();
-        var magF = state.mag === 400 ? 2.35 : 1.0;
+        var magF = state.mag === 400 ? 2.35 : (state.mag === 40 ? 0.62 : 1.0);
         g.setTransform(1, 0, 0, 1, 0, 0);
         g.clearRect(0, 0, FIELD, FIELD);
         g.save();
@@ -1071,15 +1097,23 @@ window.SVL = (function () {
 
     function setMag(m) {
         state.mag = m;
-        setSeg(['btn100', 'btn400'], m === 100 ? 'btn100' : 'btn400');
-        state.targetDir = m === 100 ? 0 : Math.PI;
+        var key = m === 40 ? 'btnMag40' : (m === 100 ? 'btnMag100' : 'btnMag400');
+        setSeg(['btnMag40', 'btnMag100', 'btnMag400'], key);
+        /* 4× : 회전판 0°, 10× : 180°, 40× : -90° 로 돌려 해당 렌즈를 앞에 세운다 */
+        state.targetDir = m === 40 ? 0 : (m === 100 ? Math.PI : -Math.PI / 2);
         state.dirty = true;
-        S.setHint(m === 100 ? '🔎 100× 배율: 넓은 시야로 세포 전체를 봅니다.' : '🔎 400× 배율: 확대되어 세포 하나가 크게 보입니다. 초점을 다시 맞추세요.', false);
+        S.setHint(m === 40 ? '🔎 40× (접안 10× × 대물 4×): 가장 넓은 시야로 시료 전체를 봅니다.'
+            : m === 100 ? '🔎 100× (접안 10× × 대물 10×): 세포 여러 개가 한눈에 보입니다.'
+            : '🔎 400× (접안 10× × 대물 40×): 세포 하나가 크게 보입니다. 초점을 다시 맞추세요.', false);
         updateHud();
     }
 
     function updateHud() {
+        var obj = Math.round(state.mag / state.eye);
         $('valMag').textContent = state.mag + '×';
+        $('miEye').textContent = state.eye + '×';
+        $('miObj').textContent = obj + '×';
+        $('miTotal').textContent = state.mag + '×';
         $('valSharp').textContent = Math.round(state.sharp * 100) + ' %';
         $('valStain').textContent = state.stained ? (state.stain === 'carmine' ? '카민' : '메틸렌') : '없음';
         var correct = (state.sample === 'onion' && state.stain === 'carmine') || (state.sample === 'buccal' && state.stain === 'methylene');
@@ -1107,8 +1141,9 @@ window.SVL = (function () {
     $('btnCarmine').addEventListener('click', function () { setStain('carmine'); });
     $('btnMethylene').addEventListener('click', function () { setStain('methylene'); });
     $('btnDrop').addEventListener('click', dropStain);
-    $('btn100').addEventListener('click', function () { setMag(100); });
-    $('btn400').addEventListener('click', function () { setMag(400); });
+    $('btnMag40').addEventListener('click', function () { setMag(40); });
+    $('btnMag100').addEventListener('click', function () { setMag(100); });
+    $('btnMag400').addEventListener('click', function () { setMag(400); });
 
     $('rngCoarse').addEventListener('input', function () {
         state.coarse = parseFloat(this.value);
@@ -1283,7 +1318,7 @@ window.SVL = (function () {
         $('valCoarse').textContent = '30'; $('valFine').textContent = '50';
         setSeg(['btnOnion', 'btnBuccal'], 'btnOnion');
         setSeg(['btnCarmine', 'btnMethylene'], 'btnCarmine');
-        setSeg(['btn100', 'btn400'], 'btn100');
+        setSeg(['btnMag40', 'btnMag100', 'btnMag400'], 'btnMag100');
         setStain('carmine');
         spotMat.color.setHex(0xf0efe6);
         dropBall.visible = false;
