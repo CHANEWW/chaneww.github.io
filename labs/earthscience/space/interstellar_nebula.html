@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>성간 성운 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script>if(!window.THREE){document.write('<scr'+'ipt src="../../common/lib/three.min.js"><\/scr'+'ipt>');}</script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<script>if(!(window.THREE&&THREE.OrbitControls)){document.write('<scr'+'ipt src="../../common/lib/OrbitControls.js"><\/scr'+'ipt>');}</script>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+<style>
+@font-face{
+  font-family:'SeoulNamsan';
+  src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+  font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+  font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color:#eef4ff;
+  background:radial-gradient(130% 120% at 50% 8%,#141427 0%,#0a0a18 46%,#04040b 100%);
+  transition:background .35s ease,color .35s ease;
+  touch-action:none;
+}
+body.light-mode{
+  color:#16202e;
+  background:linear-gradient(180deg,#f8f7ff 0%,#eceaf8 55%,#e2e0f2 100%);
+}
+#canvas-container{position:absolute;inset:0;z-index:1;touch-action:none}
+#canvas-container canvas{display:block}
+
+.glass-panel{
+  background:rgba(24,22,42,.84);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:18px;
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+  transition:background .35s ease,border-color .35s ease,color .35s ease;
+}
+body.light-mode .glass-panel{
+  background:rgba(255,255,255,.9);
+  border-color:rgba(255,255,255,.7);
+  box-shadow:0 10px 28px rgba(15,23,42,.10);
+}
+
+/* ---------- 좌상단 ---------- */
+.top-left-bar{position:fixed;top:16px;left:18px;display:flex;align-items:center;gap:10px;z-index:40;max-width:calc(100vw - 104px)}
+.back-btn{
+  display:flex;align-items:center;gap:6px;padding:9px 16px;font-size:14px;font-weight:700;font-family:inherit;
+  color:#eaf1ff;text-decoration:none;border:none;border-radius:999px;cursor:pointer;white-space:nowrap;
+  transition:transform .18s,background .2s;
+}
+body.light-mode .back-btn{color:#16202e}
+.back-btn:hover{transform:translateY(-1px)}
+.back-btn:active{transform:scale(.97)}
+.tag-badge{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:14px;font-weight:700;border-radius:999px;min-width:0;overflow:hidden}
+.tag-badge .title-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:800;letter-spacing:-.3px}
+.vision-badge{flex:0 0 auto;background:rgba(10,132,255,.28);color:#8cc6ff;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;letter-spacing:.2px}
+body.light-mode .vision-badge{background:rgba(0,122,255,.14);color:#007aff}
+
+/* ---------- 우상단 ---------- */
+.icon-btn{
+  width:38px;height:38px;min-width:38px;border-radius:50%;border:1px solid rgba(255,255,255,.14);
+  display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+  color:#eaf1ff;background:rgba(24,22,42,.84);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 8px 22px rgba(0,0,0,.35);transition:background .35s,border-color .35s;
+}
+body.light-mode .icon-btn{color:#16202e;background:rgba(255,255,255,.9);border-color:rgba(255,255,255,.7)}
+.data-card{display:flex;align-items:center;gap:13px;padding:8px 15px;border-radius:16px}
+.data-item{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.data-label{font-size:10.5px;font-weight:700;color:#a8b3ce;white-space:nowrap;line-height:1.2}
+body.light-mode .data-label{color:#64748b}
+.data-value{font-size:13px;font-weight:800;color:#f4f8ff;white-space:nowrap;line-height:1.25;display:flex;align-items:center;gap:5px}
+body.light-mode .data-value{color:#0f172a}
+.data-value .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto}
+
+/* ---------- 중앙 안내 ---------- */
+.center-tooltip{
+  position:fixed;top:80px;left:50%;transform:translateX(-50%);padding:8px 18px;border-radius:999px;
+  font-size:12.5px;font-weight:700;color:#c7d5e8;pointer-events:none;z-index:15;white-space:nowrap;
+  max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;
+  background:rgba(16,14,30,.78);border:1px solid rgba(255,255,255,.12);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  transition:opacity .3s ease;
+}
+body.light-mode .center-tooltip{color:#334155;background:rgba(255,255,255,.86);border-color:rgba(0,0,0,.08)}
+
+/* ---------- 좌측 범례 ---------- */
+.side-left-panel{
+  position:fixed;left:18px;bottom:78px;width:252px;padding:11px 12px 10px;z-index:20;border-radius:18px;
+  display:flex;flex-direction:column;gap:8px;
+}
+.sl-title{font-size:11.5px;font-weight:800;color:#c7d5e8;letter-spacing:-.2px;display:flex;align-items:center;gap:6px}
+body.light-mode .sl-title{color:#334155}
+.legend-row{display:flex;gap:8px;align-items:flex-start}
+.legend-row .dot{width:11px;height:11px;border-radius:50%;margin-top:3px;flex:0 0 auto;box-shadow:0 0 8px currentColor}
+.dot.red{background:#ff5b7a;color:#ff5b7a}
+.dot.blue{background:#6ea8ff;color:#6ea8ff}
+.dot.dark{background:#5b5163;color:#5b5163}
+.legend-row b{display:block;font-size:11.5px;font-weight:800;color:#eef4ff;line-height:1.3;letter-spacing:-.2px}
+body.light-mode .legend-row b{color:#0f172a}
+.legend-row span{display:block;font-size:10px;font-weight:600;color:#94a3bf;line-height:1.42;letter-spacing:-.1px;word-break:keep-all}
+body.light-mode .legend-row span{color:#5b6b82}
+.sl-note{
+  font-size:10px;font-weight:700;line-height:1.45;color:#cdb6ff;word-break:keep-all;
+  background:rgba(140,110,255,.14);border:1px solid rgba(140,110,255,.28);border-radius:10px;padding:6px 8px;
+}
+body.light-mode .sl-note{background:rgba(109,74,214,.08);border-color:rgba(109,74,214,.22);color:#4c1d95}
+.sl-note b{font-weight:800}
+
+/* ---------- 우측 조절 패널 ---------- */
+body #side-ctrl.side-ctrl-panel{
+  width:252px !important;padding:11px 12px !important;gap:8px !important;
+  max-height:calc(100vh - 150px) !important;
+}
+.panel-header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.12);width:100%}
+body.light-mode .panel-header{border-bottom-color:rgba(15,23,42,.08)}
+.panel-title{font-size:12.5px !important;font-weight:800 !important;color:#eef4ff !important;letter-spacing:-.2px !important;text-align:left !important;border:none !important;margin:0 !important;padding:0 !important}
+body.light-mode .panel-title{color:#0f172a !important}
+.panel-fold{display:none;width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#cbd5e1;font-size:10px;line-height:1;cursor:pointer;font-family:inherit;flex:0 0 auto}
+body.light-mode .panel-fold{border-color:rgba(15,23,42,.14);background:rgba(0,0,0,.04);color:#475569}
+.mode-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%}
+.mode-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:44px;padding:5px 1px;
+  border-radius:11px;border:1px solid rgba(255,255,255,.14);background:rgba(34,30,54,.9);color:#cbd5e1;
+  font-family:inherit;font-size:10px;font-weight:800;white-space:nowrap;cursor:pointer;transition:all .18s;letter-spacing:-.4px;
+}
+body.light-mode .mode-btn{background:rgba(255,255,255,.92);border-color:rgba(15,23,42,.1);color:#334155}
+.mode-btn .mb-icon{font-size:14px;line-height:1}
+.mode-btn.active{background:#7c5cff;border-color:#7c5cff;color:#fff;box-shadow:0 4px 12px rgba(124,92,255,.4)}
+.tab-content{display:none;flex-direction:column;gap:8px;width:100%}
+.tab-content.active{display:flex}
+
+.ctrl-row{display:flex;flex-direction:column;gap:3px;width:100%}
+.ctrl-row-header{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+.ctrl-label{font-size:11.5px;font-weight:700;color:#cbd5e1;white-space:nowrap;line-height:1.25}
+body.light-mode .ctrl-label{color:#475569}
+.ctrl-val{font-size:12.5px;font-weight:800;color:#e0c8ff;white-space:nowrap;line-height:1.25}
+body.light-mode .ctrl-val{color:#6d28d9}
+.ctrl-slider{
+  width:100%;height:8px;border-radius:999px;outline:none;-webkit-appearance:none;appearance:none;cursor:pointer;margin:3px 0 1px;
+  background:#3b3356;border:1px solid rgba(255,255,255,.16);
+}
+body.light-mode .ctrl-slider{background:#ded9ef;border-color:rgba(15,23,42,.1)}
+.ctrl-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;width:19px;height:19px;border-radius:50%;background:#fff;cursor:pointer;
+  border:3px solid #7c5cff;box-shadow:0 2px 8px rgba(0,0,0,.45);
+}
+.ctrl-slider::-moz-range-thumb{width:16px;height:16px;border:3px solid #7c5cff;border-radius:50%;background:#fff}
+.info-card{
+  background:rgba(0,0,0,.32);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:5px;
+  border:1px solid rgba(255,255,255,.1);width:100%;
+}
+body.light-mode .info-card{background:rgba(0,0,0,.03);border-color:rgba(0,0,0,.06)}
+.info-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;font-size:11px}
+.info-title{color:#a8b3ce;font-weight:700;white-space:nowrap;flex:0 0 auto}
+body.light-mode .info-title{color:#64748b}
+.info-desc{font-weight:800;color:#f1f5f9;text-align:right;line-height:1.35;word-break:keep-all}
+body.light-mode .info-desc{color:#0f172a}
+.banner-guide{
+  padding:7px 9px;border-radius:10px;font-size:10.5px;line-height:1.45;font-weight:700;
+  background:rgba(124,92,255,.14);border:1px solid rgba(124,92,255,.3);color:#d3c3ff;word-break:keep-all;
+}
+body.light-mode .banner-guide{background:rgba(109,74,214,.08);border-color:rgba(109,74,214,.24);color:#4c1d95}
+.banner-guide b{font-weight:800}
+.panel-note{font-size:9.5px;font-weight:600;color:#94a3bf;line-height:1.45;letter-spacing:-.1px;word-break:keep-all}
+body.light-mode .panel-note{color:#64748b}
+.ctrl-action-btn{
+  width:100%;padding:9px 12px;border-radius:10px;border:none;font-size:12px;font-weight:800;font-family:inherit;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px;
+  background:rgba(255,255,255,.1);color:#f1f5f9;white-space:nowrap;
+}
+.ctrl-action-btn:hover{background:rgba(255,255,255,.2);transform:translateY(-1px)}
+.ctrl-action-btn.primary{background:#7c5cff;color:#fff;box-shadow:0 4px 12px rgba(124,92,255,.4)}
+.ctrl-action-btn.primary:hover{background:#6a49f0}
+body.light-mode .ctrl-action-btn{background:rgba(0,0,0,.06);color:#334155}
+body.light-mode .ctrl-action-btn.primary{background:#7c5cff;color:#fff}
+
+/* ---------- 활동 ---------- */
+.q-overlay{
+  position:fixed;inset:0;z-index:120;display:none;align-items:flex-end;justify-content:center;
+  padding:0 12px calc(14px + env(safe-area-inset-bottom));background:transparent;pointer-events:none;
+}
+.q-overlay.on{display:flex}
+.q-card{
+  pointer-events:auto;width:min(620px,calc(100vw - 24px));max-height:calc(100vh - 90px);overflow-y:auto;
+  padding:13px 16px 12px;border-radius:20px;display:flex;flex-direction:column;gap:8px;
+  box-shadow:0 14px 40px rgba(0,0,0,.5);
+}
+body.quiz-mode .side-ctrl-panel,
+body.quiz-mode .side-left-panel,
+body.quiz-mode .bottom-control-bar{display:none !important}
+body.light-mode .q-card{background:rgba(255,255,255,.96)}
+.q-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.q-title{font-size:14.5px;font-weight:800;color:#f4f8ff;letter-spacing:-.3px}
+body.light-mode .q-title{color:#0f172a}
+.q-step{font-size:11px;font-weight:800;color:#a8b3ce;background:rgba(255,255,255,.08);padding:3px 9px;border-radius:999px}
+body.light-mode .q-step{color:#475569;background:rgba(0,0,0,.05)}
+.q-ask{font-size:12.5px;font-weight:700;color:#c7d5e8;line-height:1.5;word-break:keep-all}
+body.light-mode .q-ask{color:#334155}
+.q-ask b{color:#e0c8ff;font-weight:800}
+body.light-mode .q-ask b{color:#6d28d9}
+.q-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:2px 0}
+.q-opt{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:12px 6px;
+  border-radius:14px;border:1px solid rgba(255,255,255,.16);background:rgba(34,30,54,.9);color:#eaf2ff;
+  font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;transition:all .16s;
+}
+body.light-mode .q-opt{background:rgba(255,255,255,.96);border-color:rgba(15,23,42,.12);color:#16202e}
+.q-opt:hover{transform:translateY(-1px);border-color:rgba(124,92,255,.7)}
+.q-opt .qo-ico{font-size:18px;line-height:1}
+.q-opt.ok{background:rgba(34,197,94,.22);border-color:#22c55e;color:#d7ffe6}
+.q-opt.err{background:rgba(239,68,68,.2);border-color:#ef4444;color:#ffdede}
+.q-opt[disabled]{cursor:default}
+.q-feedback{
+  min-height:38px;font-size:11.5px;font-weight:700;line-height:1.55;color:#c7d5e8;
+  background:rgba(255,255,255,.05);border-radius:10px;padding:8px 10px;word-break:keep-all;
+}
+body.light-mode .q-feedback{color:#334155;background:rgba(0,0,0,.04)}
+.q-feedback b{color:#e0c8ff}
+body.light-mode .q-feedback b{color:#6d28d9}
+.q-actions{display:flex;gap:8px;justify-content:flex-end}
+.q-btn{
+  padding:9px 16px;border-radius:11px;border:none;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;
+  background:rgba(255,255,255,.1);color:#f1f5f9;transition:all .2s;white-space:nowrap;
+}
+body.light-mode .q-btn{background:rgba(0,0,0,.06);color:#334155}
+.q-btn.primary{background:#7c5cff;color:#fff;box-shadow:0 4px 12px rgba(124,92,255,.4)}
+.q-btn[disabled]{opacity:.45;cursor:default}
+.q-score{font-size:30px;font-weight:800;color:#fff;text-align:center;letter-spacing:-1px}
+body.light-mode .q-score{color:#0f172a}
+.q-score span{font-size:14px;font-weight:700;color:#a8b3ce}
+body.light-mode .q-score span{color:#64748b}
+
+/* ---------- 하단 ---------- */
+.bottom-right-bar{position:fixed;right:18px;bottom:18px;display:flex;align-items:center;gap:10px;z-index:90}
+#fullscreenBtn{
+  height:42px;padding:0 15px;border-radius:999px;display:inline-flex;align-items:center;gap:7px;
+  font-size:12.5px;font-weight:800;font-family:inherit;color:#eaf1ff;cursor:pointer;
+  background:rgba(24,22,42,.9);border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 10px 26px rgba(0,0,0,.45);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  transition:transform .15s ease,background .2s ease;
+}
+body.light-mode #fullscreenBtn{background:rgba(255,255,255,.94);border-color:rgba(15,23,42,.12);color:#0f172a}
+#fullscreenBtn:hover{transform:translateY(-1px) scale(1.02)}
+#fullscreenBtn:active{transform:scale(.97)}
+
+/* ================= 모바일 세로 ================= */
+@media (max-width:900px){
+  .top-left-bar{top:max(8px,env(safe-area-inset-top));left:8px;gap:6px;max-width:calc(100vw - 152px)}
+  .back-btn{padding:7px 11px;font-size:12px}
+  .tag-badge{padding:7px 11px;font-size:12px}
+  .tag-badge .title-text{font-size:12px}
+  .vision-badge{display:none}
+  .qr-btn{display:none}
+  .icon-btn{width:32px;height:32px;min-width:32px;font-size:14px}
+  .data-card{gap:8px;padding:5px 10px;border-radius:14px}
+  .data-label{font-size:9px}
+  .data-value{font-size:11.5px}
+  .center-tooltip{display:none}
+  .side-left-panel{display:none}
+  .top-right-bar{left:8px !important;right:8px !important;align-items:stretch !important}
+  .tr-util{justify-content:flex-end !important}
+  .data-card{width:100% !important;justify-content:space-around !important}
+  .panel-note{display:none}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(62px + env(safe-area-inset-bottom)) !important;
+    max-height:min(44vh,400px) !important;padding:8px 9px !important;gap:6px !important;
+  }
+  .panel-title{font-size:11.5px !important}
+  .panel-fold{display:flex;align-items:center;justify-content:center}
+  body #side-ctrl.folded{max-height:none !important}
+  body #side-ctrl.folded .tab-content{display:none !important}
+  body #side-ctrl.folded #panelFold{transform:rotate(180deg)}
+  .mode-btn{min-height:38px;font-size:9.5px}
+  .mode-btn .mb-icon{font-size:13px}
+  .ctrl-label{font-size:10.5px}
+  .ctrl-val{font-size:11.5px}
+  .info-row{font-size:10px}
+  .banner-guide{font-size:9.8px;padding:6px 8px}
+  .ctrl-action-btn{font-size:11.5px;padding:8px 10px}
+  .bottom-right-bar{right:8px;bottom:calc(8px + env(safe-area-inset-bottom))}
+  #fullscreenBtn{height:36px;padding:0 11px;font-size:12px}
+  #fullscreenText{display:none}
+  .q-card{padding:12px 12px 10px;gap:7px}
+  .q-title{font-size:13px}
+  .q-ask{font-size:11.5px}
+  .q-opt{padding:10px 4px;font-size:11px}
+  .qo-ico{font-size:16px}
+}
+@media (max-width:360px){
+  .data-card{gap:6px;padding:4px 8px}
+  .data-item:nth-child(3){display:none}
+}
+
+/* ================= 모바일 가로 ================= */
+@media (max-height:520px) and (orientation:landscape){
+  .top-left-bar{top:max(6px,env(safe-area-inset-top));left:6px;gap:5px;max-width:46vw}
+  .back-btn{padding:5px 9px;font-size:11px}
+  .tag-badge{padding:5px 9px;font-size:11px}
+  .vision-badge{display:none}
+  .qr-btn{display:none}
+  .icon-btn{width:28px;height:28px;min-width:28px;font-size:13px}
+  .data-card{gap:8px;padding:4px 9px;border-radius:12px}
+  .data-label{font-size:8.5px}
+  .data-value{font-size:11px}
+  .center-tooltip{display:none}
+  .side-left-panel{display:none}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:220px !important;
+    bottom:calc(46px + env(safe-area-inset-bottom)) !important;
+    max-height:calc(100vh - 96px) !important;padding:7px 9px !important;gap:5px !important;
+  }
+  .mode-btn{min-height:30px;font-size:9px}
+  .mode-btn .mb-icon{font-size:12px}
+  .info-row{font-size:9.5px}
+  .banner-guide{font-size:9px;padding:5px 7px}
+  .panel-note{display:none}
+  .bottom-right-bar{right:8px;bottom:calc(6px + env(safe-area-inset-bottom))}
+  #fullscreenBtn{height:32px;padding:0 10px}
+  #fullscreenText{display:none}
+  .q-card{max-height:calc(100vh - 24px);padding:10px 12px;gap:6px}
+}
+</style>
+</head>
+<body class="dark-mode">
+
+<div id="canvas-container"></div>
+
+<!-- 좌상단 -->
+<div class="top-left-bar">
+  <a href="../../../index.html" class="glass-panel back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+  <div class="glass-panel tag-badge">
+    <span class="title-text">성간 성운 3D</span>
+    <span class="vision-badge">visionOS</span>
+  </div>
+  <button class="glass-panel back-btn qr-btn" id="qrBtn" type="button" data-qr-title="성간 성운 3D" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span></button>
+</div>
+
+<!-- 우상단 -->
+<div class="top-right-bar">
+  <div class="tr-util">
+    <button class="icon-btn" id="theme-toggle" type="button" title="주간/야간 모드" aria-label="주간/야간 모드 전환">☀️</button>
+  </div>
+  <div class="glass-panel data-card">
+    <div class="data-item">
+      <span class="data-label">관측 대상</span>
+      <span class="data-value" id="val-target">방출 성운</span>
+    </div>
+    <div class="data-item">
+      <span class="data-label">주변 별 온도</span>
+      <span class="data-value" id="val-temp">25,000 K</span>
+    </div>
+    <div class="data-item">
+      <span class="data-label">겉보기</span>
+      <span class="data-value" id="val-look">붉게 빛남</span>
+    </div>
+  </div>
+</div>
+
+<!-- 중앙 안내 -->
+<div class="center-tooltip" id="center-hint">🖱 드래그로 성운을 돌려 보고, 슬라이더로 별빛과 티끌을 바꿔 보세요</div>
+
+<!-- 좌측 범례 -->
+<div class="glass-panel side-left-panel" id="legend-panel">
+  <div class="sl-title"><span>💫 성운 세 종류</span></div>
+  <div class="legend-row"><i class="dot red"></i><div><b>방출 성운</b><span>뜨거운 별의 자외선이 수소 기체를 이온화 → 기체가 스스로 붉게 빛남</span></div></div>
+  <div class="legend-row"><i class="dot blue"></i><div><b>반사 성운</b><span>주변 별빛이 성간 티끌에 산란·반사 → 파랗게 보임</span></div></div>
+  <div class="legend-row"><i class="dot dark"></i><div><b>암흑 성운</b><span>짙은 티끌이 뒤쪽 별빛을 가로막음 → 검은 실루엣</span></div></div>
+  <div class="sl-note">성운은 <b>별이 태어나는 자리</b>입니다. 주변에 어떤 별이 있느냐가 성운의 색을 정합니다.</div>
+</div>
+
+<!-- 하단 중앙 -->
+<div class="glass-panel bottom-control-bar">
+  <button class="control-tab-btn" id="btn-reset" type="button"><span>🔄</span><span>초기화</span></button>
+  <button class="control-tab-btn" id="btn-cam" type="button"><span>🎥</span><span>시점정렬</span></button>
+</div>
+
+<!-- 우하단 전체화면 -->
+<div class="bottom-right-bar">
+  <button id="fullscreenBtn" class="glass-panel" type="button" aria-label="전체화면으로 전환">
+    <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+  </button>
+</div>
+
+<!-- 우측 조절 패널 -->
+<div class="glass-panel side-ctrl-panel" id="side-ctrl">
+  <div class="panel-header"><span class="panel-title" id="panel-main-title">💫 성운 관찰</span><button class="panel-fold" id="panelFold" type="button" aria-label="조절 패널 접기/펼치기">▾</button></div>
+
+  <div class="mode-grid" id="mode-grid">
+    <button class="mode-btn active" type="button" data-mode="emission"><span class="mb-icon">🔴</span><span>방출</span></button>
+    <button class="mode-btn" type="button" data-mode="reflection"><span class="mb-icon">🔵</span><span>반사</span></button>
+    <button class="mode-btn" type="button" data-mode="dark"><span class="mb-icon">⚫</span><span>암흑</span></button>
+    <button class="mode-btn" type="button" data-mode="quiz"><span class="mb-icon">🎯</span><span>활동</span></button>
+  </div>
+
+  <!-- 방출 성운 -->
+  <div class="tab-content active" id="tab-emission">
+    <div class="banner-guide" id="guide-emission">🔴 뜨거운 별의 <b>자외선</b>이 수소 기체를 이온화하면 기체가 스스로 <b>붉은빛</b>을 냅니다.</div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">주변 별의 표면 온도</span><span class="ctrl-val" id="lbl-etemp">25,000 K</span></div>
+      <input type="range" class="ctrl-slider" id="sld-etemp" min="6000" max="40000" step="500" value="25000" aria-label="별의 표면 온도">
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">수소 기체 밀도</span><span class="ctrl-val" id="lbl-edens">70%</span></div>
+      <input type="range" class="ctrl-slider" id="sld-edens" min="10" max="100" step="1" value="70" aria-label="기체 밀도">
+    </div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-title">자외선 세기</span><span class="info-desc" id="i-uv">충분함</span></div>
+      <div class="info-row"><span class="info-title">이온화된 수소</span><span class="info-desc" id="i-ion">68%</span></div>
+      <div class="info-row"><span class="info-title">겉보기 색</span><span class="info-desc" id="i-color">붉은색 (Hα)</span></div>
+      <div class="info-row"><span class="info-title">빛의 근원</span><span class="info-desc">기체 스스로</span></div>
+    </div>
+    <div class="panel-note">약 15,000 K보다 차가운 별은 자외선이 부족해 기체를 이온화하지 못합니다.</div>
+  </div>
+
+  <!-- 반사 성운 -->
+  <div class="tab-content" id="tab-reflection">
+    <div class="banner-guide" id="guide-reflection">🔵 주변 별빛이 성간 티끌에 <b>산란</b>되면, 파장이 짧은 <b>푸른빛</b>이 더 강하게 반사되어 파랗게 보입니다.</div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">주변 별의 표면 온도</span><span class="ctrl-val" id="lbl-rtemp">12,000 K</span></div>
+      <input type="range" class="ctrl-slider" id="sld-rtemp" min="3000" max="20000" step="500" value="12000" aria-label="별의 표면 온도">
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">주변 별의 밝기</span><span class="ctrl-val" id="lbl-rbright">10배</span></div>
+      <input type="range" class="ctrl-slider" id="sld-rbright" min="1" max="40" step="1" value="10" aria-label="별의 밝기">
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">성간 티끌 밀도</span><span class="ctrl-val" id="lbl-rdens">70%</span></div>
+      <input type="range" class="ctrl-slider" id="sld-rdens" min="10" max="100" step="1" value="70" aria-label="티끌 밀도">
+    </div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-title">산란되는 별빛</span><span class="info-desc" id="i-scatter">보통</span></div>
+      <div class="info-row"><span class="info-title">겉보기 색</span><span class="info-desc" id="i-rcolor">푸른색</span></div>
+      <div class="info-row"><span class="info-title">빛의 근원</span><span class="info-desc">주변 별 (반사)</span></div>
+    </div>
+    <div class="panel-note">별빛이 붉고 어두우면 산란되는 빛도 약해 성운이 거의 보이지 않습니다.</div>
+  </div>
+
+  <!-- 암흑 성운 -->
+  <div class="tab-content" id="tab-dark">
+    <div class="banner-guide" id="guide-dark">⚫ 짙은 성간 티끌이 뒤쪽 별빛을 흡수·산란해 가로막기 때문에, 별이 많은 곳에서 <b>검은 실루엣</b>으로 보입니다.</div>
+    <div class="ctrl-row">
+      <div class="ctrl-row-header"><span class="ctrl-label">성간 티끌 밀도</span><span class="ctrl-val" id="lbl-ddens">70%</span></div>
+      <input type="range" class="ctrl-slider" id="sld-ddens" min="10" max="100" step="1" value="70" aria-label="티끌 밀도">
+    </div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-title">가려지는 별빛</span><span class="info-desc" id="i-block">70%</span></div>
+      <div class="info-row"><span class="info-title">겉보기</span><span class="info-desc">검은 실루엣</span></div>
+      <div class="info-row"><span class="info-title">빛의 근원</span><span class="info-desc">없음 (빛을 막음)</span></div>
+    </div>
+    <div class="panel-note">티끌 밀도가 낮아지면 뒤쪽 별이 비쳐 보이고, 성운의 윤곽이 흐려집니다.</div>
+  </div>
+
+  <!-- 활동 -->
+  <div class="tab-content" id="tab-quiz">
+    <div class="banner-guide">🎯 화면 가운데 성운을 3D로 살펴보고 <b>방출·반사·암흑</b> 중 무엇인지 골라 보세요. 모두 6문제입니다.</div>
+    <div class="info-card">
+      <div class="info-row"><span class="info-title">진행</span><span class="info-desc" id="q-progress">—</span></div>
+      <div class="info-row"><span class="info-title">점수</span><span class="info-desc" id="q-score">0</span></div>
+      <div class="info-row"><span class="info-title">지금까지</span><span class="info-desc" id="q-history">—</span></div>
+    </div>
+    <button class="ctrl-action-btn primary" id="btn-quiz" type="button">🎯 활동 시작</button>
+    <div class="panel-note">정답은 바로 알려 주고, 왜 그런지도 함께 설명합니다.</div>
+  </div>
+</div>
+
+<!-- 활동 오버레이 -->
+<div class="q-overlay" id="q-overlay">
+  <div class="q-card glass-panel">
+    <div class="q-head">
+      <span class="q-title">🎯 성운 판별 미션</span>
+      <span class="q-step" id="q-step">1 / 6</span>
+    </div>
+    <div class="q-ask" id="q-ask">화면 가운데 성운은 어느 종류일까요?</div>
+    <div class="q-opts" id="q-opts">
+      <button class="q-opt" type="button" data-ans="emission"><span class="qo-ico">🔴</span><span>방출 성운</span></button>
+      <button class="q-opt" type="button" data-ans="reflection"><span class="qo-ico">🔵</span><span>반사 성운</span></button>
+      <button class="q-opt" type="button" data-ans="dark"><span class="qo-ico">⚫</span><span>암흑 성운</span></button>
+    </div>
+    <div class="q-feedback" id="q-feedback">색과 빛의 근원, 뒤쪽 별빛이 보이는지 살펴보세요.</div>
+    <div class="q-actions">
+      <button class="q-btn" id="q-close" type="button">닫기</button>
+      <button class="q-btn primary" id="q-next" type="button" disabled>다음 ➜</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+var $ = function (s) { return document.querySelector(s); };
+var clamp = function (v, a, b) { return v < a ? a : (v > b ? b : v); };
+function gauss() {
+    var u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+var fmt = function (n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+
+/* ============================================================
+   1. 규격 (1 unit = 1 광년)
+   ============================================================ */
+var NEB_R = 5.2;                  // 성운 반지름(광년)
+var NEB_X = { emission: -11, reflection: 0, dark: 11 };
+
+/* ============================================================
+   2. Three.js 기본
+   ============================================================ */
+var container = $('#canvas-container');
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 900);
+var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+window.__LAB_CAM__ = camera;
+
+var controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.rotateSpeed = 0.68;
+controls.zoomSpeed = 0.85;
+controls.panSpeed = 0.7;
+controls.enablePan = true;
+controls.minDistance = 3;
+controls.maxDistance = 200;
+controls.minPolarAngle = 0.1;
+controls.maxPolarAngle = Math.PI * 0.92;
+controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+renderer.domElement.addEventListener('pointerdown', function (e) {
+    if (e.button === 0 && e.shiftKey) controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+});
+window.addEventListener('pointerup', function () {
+    controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+});
+
+/* ============================================================
+   3. 텍스처
+   ============================================================ */
+function puffTexture() {
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    var ctx = cv.getContext('2d');
+    var g = ctx.createRadialGradient(64, 64, 0, 64, 64, 62);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.32, 'rgba(255,255,255,0.62)');
+    g.addColorStop(0.62, 'rgba(255,255,255,0.24)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(64, 64, 62, 0, Math.PI * 2);
+    ctx.fill();
+    /* 가장자리를 불규칙하게 만들어 구름처럼 보이게 한다 */
+    ctx.globalCompositeOperation = 'destination-out';
+    for (var i = 0; i < 10; i++) {
+        var a = Math.random() * Math.PI * 2;
+        var rr = 40 + Math.random() * 22;
+        var x = 64 + Math.cos(a) * rr;
+        var y = 64 + Math.sin(a) * rr;
+        var rad = 8 + Math.random() * 16;
+        var gg = ctx.createRadialGradient(x, y, 0, x, y, rad);
+        gg.addColorStop(0, 'rgba(0,0,0,0.55)');
+        gg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gg;
+        ctx.beginPath();
+        ctx.arc(x, y, rad, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    var tex = new THREE.CanvasTexture(cv);
+    if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+    return tex;
+}
+var PUFF = puffTexture();
+
+/* ============================================================
+   4. 배경 별 (암흑 성운의 실루엣이 보이도록 촘촘하게)
+   ============================================================ */
+var bgGeo = new THREE.BufferGeometry();
+var BG_N = 12000;
+var bgPos = new Float32Array(BG_N * 3);
+var bgCol = new Float32Array(BG_N * 3);
+var bgSize = new Float32Array(BG_N);
+var col = new THREE.Color();
+for (var bi = 0; bi < BG_N; bi++) {
+    var u = Math.random(), v = Math.random();
+    var th = u * Math.PI * 2, ph = Math.acos(2 * v - 1);
+    var rr = 210 + Math.random() * 90;
+    bgPos[bi * 3] = rr * Math.sin(ph) * Math.cos(th);
+    bgPos[bi * 3 + 1] = rr * Math.cos(ph);
+    bgPos[bi * 3 + 2] = rr * Math.sin(ph) * Math.sin(th);
+    var warm = Math.random();
+    col.setHex(warm < 0.62 ? 0xd6e4ff : (warm < 0.88 ? 0xffffff : 0xffe2b8)).convertSRGBToLinear();
+    var k = 0.55 + Math.random() * 0.45;
+    bgCol[bi * 3] = col.r * k; bgCol[bi * 3 + 1] = col.g * k; bgCol[bi * 3 + 2] = col.b * k;
+    bgSize[bi] = Math.random() < 0.2 ? 2.2 : 1.3;
+}
+bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+bgGeo.setAttribute('color', new THREE.BufferAttribute(bgCol, 3));
+var bgStars = new THREE.Points(bgGeo, new THREE.PointsMaterial({
+    size: 1.7, map: PUFF, vertexColors: true, transparent: true, opacity: 0.95,
+    depthWrite: false, sizeAttenuation: false
+}));
+scene.add(bgStars);
+
+/* 암흑 성운 뒤의 풍부한 별밭 — 티끌이 별빛을 가리는 모습이 또렷하게 보이도록 */
+var richGeo = new THREE.BufferGeometry();
+var RICH_N = 3600;
+var richPos = new Float32Array(RICH_N * 3);
+var richCol = new Float32Array(RICH_N * 3);
+var rc = new THREE.Color();
+for (var ri = 0; ri < RICH_N; ri++) {
+    var rr2 = 34 * Math.sqrt(Math.random());
+    var aa = Math.random() * Math.PI * 2;
+    richPos[ri * 3] = 11 + Math.cos(aa) * rr2;
+    richPos[ri * 3 + 1] = Math.sin(aa) * rr2 * 0.85;
+    richPos[ri * 3 + 2] = -48 - Math.random() * 12;
+    rc.setHex(Math.random() < 0.7 ? 0xd8e6ff : (Math.random() < 0.7 ? 0xffffff : 0xffe6c0)).convertSRGBToLinear();
+    var rk = 0.4 + Math.random() * 0.6;
+    richCol[ri * 3] = rc.r * rk; richCol[ri * 3 + 1] = rc.g * rk; richCol[ri * 3 + 2] = rc.b * rk;
+}
+richGeo.setAttribute('position', new THREE.BufferAttribute(richPos, 3));
+richGeo.setAttribute('color', new THREE.BufferAttribute(richCol, 3));
+var richStars = new THREE.Points(richGeo, new THREE.PointsMaterial({
+    size: 2.2, map: PUFF, vertexColors: true, transparent: true, opacity: 1,
+    depthWrite: false, sizeAttenuation: false
+}));
+scene.add(richStars);
+
+/* 별이 많은 은하수 빛 — 암흑 성운이 검은 실루엣으로 보이는 배경 */
+var milkyBack = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: PUFF, color: 0xa8c0ee, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false
+}));
+milkyBack.position.set(11, 0, -70);
+milkyBack.scale.set(92, 56, 1);
+scene.add(milkyBack);
+
+/* ============================================================
+   5. 성운 만들기
+   ============================================================ */
+var nebulae = {};
+
+function starColorRGB(K) {
+    /* 온도에 따른 별빛 색 (간단한 근사) */
+    var stops = [
+        [3000, 255, 180, 120], [5000, 255, 226, 190], [7000, 255, 248, 232],
+        [10000, 226, 238, 255], [20000, 190, 214, 255], [40000, 160, 195, 255]
+    ];
+    if (K <= stops[0][0]) return [stops[0][1], stops[0][2], stops[0][3]];
+    for (var i = 1; i < stops.length; i++) {
+        if (K <= stops[i][0]) {
+            var a = stops[i - 1], b = stops[i];
+            var t = (K - a[0]) / (b[0] - a[0]);
+            return [
+                Math.round(a[1] + (b[1] - a[1]) * t),
+                Math.round(a[2] + (b[2] - a[2]) * t),
+                Math.round(a[3] + (b[3] - a[3]) * t)
+            ];
+        }
+    }
+    return [160, 195, 255];
+}
+
+/* 성운 하나 = 여러 겹의 구름 점 + 중심 별 */
+function buildNebula(type, x) {
+    var g = new THREE.Group();
+    g.position.set(x, 0, 0);
+
+    var lobes = [];
+    var nl = 6;
+    for (var l = 0; l < nl; l++) {
+        lobes.push(new THREE.Vector3(
+            gauss() * NEB_R * 0.24,
+            gauss() * NEB_R * 0.18,
+            gauss() * NEB_R * 0.24
+        ));
+    }
+
+    var layers = [];
+    var LAYER_DEF = [
+        { n: 150, size: 4.4, opacity: 0.15, spread: 1.15 },
+        { n: 180, size: 2.5, opacity: 0.20, spread: 1.0 },
+        { n: 170, size: 1.35, opacity: 0.28, spread: 0.85 }
+    ];
+    LAYER_DEF.forEach(function (L, li) {
+        var pos = new Float32Array(L.n * 3);
+        var cols = new Float32Array(L.n * 3);
+        var sizeArr = new Float32Array(L.n);
+        for (var i = 0; i < L.n; i++) {
+            var j = i * 3;
+            var c = lobes[(Math.random() * lobes.length) | 0];
+            var spread = NEB_R * 0.22 * L.spread;
+            pos[j] = c.x + gauss() * spread;
+            pos[j + 1] = c.y + gauss() * spread * 0.85;
+            pos[j + 2] = c.z + gauss() * spread;
+            /* 중심에 가까울수록 밝다 */
+            var d = Math.sqrt(pos[j] * pos[j] + pos[j + 1] * pos[j + 1] + pos[j + 2] * pos[j + 2]);
+            var t = clamp(1 - d / (NEB_R * 2.0), 0.15, 1);
+            var col = new THREE.Color(1, 1, 1);
+            if (type === 'emission') {
+                col.setRGB(1, 0.34 + 0.2 * t, 0.42 + 0.26 * t);
+            } else if (type === 'reflection') {
+                col.setRGB(0.36 + 0.3 * t, 0.58 + 0.3 * t, 1.0);
+            } else {
+                var rim = 1 - t;
+                col.setRGB(0.075 + 0.30 * rim, 0.058 + 0.17 * rim, 0.085 + 0.10 * rim);
+            }
+            col.convertSRGBToLinear();
+            var k = 0.55 + 0.45 * t;
+            cols[j] = col.r * k; cols[j + 1] = col.g * k; cols[j + 2] = col.b * k;
+            sizeArr[i] = L.size * (0.7 + Math.random() * 0.7);
+        }
+        var geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+        geo.setAttribute('psize', new THREE.BufferAttribute(sizeArr, 1));
+
+        var mat = type === 'dark'
+            ? new THREE.PointsMaterial({
+                size: L.size, map: PUFF, vertexColors: true, transparent: true,
+                opacity: L.opacity * 3.6, depthWrite: false, sizeAttenuation: true,
+                blending: THREE.NormalBlending, alphaTest: 0.01
+            })
+            : new THREE.PointsMaterial({
+                size: L.size, map: PUFF, vertexColors: true, transparent: true,
+                opacity: L.opacity, depthWrite: false, sizeAttenuation: true,
+                blending: THREE.AdditiveBlending, alphaTest: 0.01
+            });
+        var pts = new THREE.Points(geo, mat);
+        pts.userData.baseOpacity = mat.opacity;
+        pts.userData.layer = li;
+        g.add(pts);
+        layers.push(pts);
+    });
+
+    /* 중심 별 */
+    var star = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: PUFF, color: 0xffffff, transparent: true, opacity: 1,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    star.scale.set(2.6, 2.6, 1);
+    if (type === 'dark') star.visible = false;
+    g.add(star);
+    var starCore = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: PUFF, color: 0xffffff, transparent: true, opacity: 1,
+        blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    starCore.scale.set(0.9, 0.9, 1);
+    if (type === 'dark') starCore.visible = false;
+    g.add(starCore);
+
+    scene.add(g);
+    return { type: type, group: g, layers: layers, star: star, starCore: starCore, x: x };
+}
+
+nebulae.emission = buildNebula('emission', NEB_X.emission);
+nebulae.reflection = buildNebula('reflection', NEB_X.reflection);
+nebulae.dark = buildNebula('dark', NEB_X.dark);
+
+/* ============================================================
+   6. 라벨
+   ============================================================ */
+function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+function makeLabel(w, h) {
+    var cv = document.createElement('canvas');
+    cv.width = w || 420; cv.height = h || 130;
+    var tex = new THREE.CanvasTexture(cv);
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+    sp.userData = { cv: cv, ctx: cv.getContext('2d'), tex: tex };
+    return sp;
+}
+function drawLabel(sp, lines, bg) {
+    var cv = sp.userData.cv, ctx = sp.userData.ctx;
+    var W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    var n = lines.length, pad = 10;
+    var lh = (H - pad * 2) / n;
+    if (bg) {
+        ctx.fillStyle = bg;
+        roundRect(ctx, 3, 3, W - 6, H - 6, 20);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i < n; i++) {
+        var ln = lines[i];
+        ctx.fillStyle = ln.c || '#fff';
+        ctx.font = '800 ' + (ln.s || 40) + "px 'SeoulNamsan', sans-serif";
+        ctx.fillText(ln.t, W / 2, pad + lh * i + lh / 2);
+    }
+    sp.userData.tex.needsUpdate = true;
+}
+var labelGroup = new THREE.Group();
+scene.add(labelGroup);
+var LABELS = {
+    emission:   { t: '방출 성운', c: '#ff9db0', w: 3.8 },
+    reflection: { t: '반사 성운', c: '#9dc3ff', w: 3.8 },
+    dark:       { t: '암흑 성운', c: '#cfc6da', w: 3.8 }
+};
+var labels = {};
+Object.keys(LABELS).forEach(function (k) {
+    var d = LABELS[k];
+    var sp = makeLabel(420, 130);
+    sp.scale.set(d.w, d.w * 130 / 420, 1);
+    sp.position.set(NEB_X[k], NEB_R * 1.55, 0);
+    labels[k] = sp;
+    labelGroup.add(sp);
+});
+function drawAllLabels() {
+    Object.keys(LABELS).forEach(function (k) {
+        var d = LABELS[k];
+        drawLabel(labels[k], [{ t: d.t, s: 52, c: d.c }], 'rgba(12,10,22,0.86)');
+    });
+}
+drawAllLabels();
+
+/* ============================================================
+   7. 상태
+   ============================================================ */
+var state = {
+    mode: 'emission',          // emission | reflection | dark | quiz
+    view: 'emission',          // 현재 카메라가 향한 대상 (emission|reflection|dark|all)
+    dark: true,
+    quizOn: false,
+    params: {
+        emission:   { temp: 25000, density: 70 },
+        reflection: { temp: 12000, bright: 10, density: 70 },
+        dark:       { density: 70 }
+    }
+};
+var quiz = { round: 0, total: 6, score: 0, target: null, answered: false, history: [] };
+
+/* ============================================================
+   8. 성운 모양 갱신
+   ============================================================ */
+function uvIndex(T) { return clamp((T - 13000) / 17000, 0, 1); }
+function scatterIndex(T) { return clamp((T - 4000) / 12000, 0, 1); }
+
+function applyEmission() {
+    var p = state.params.emission;
+    var uv = uvIndex(p.temp);
+    var dens = p.density / 100;
+    var glow = Math.pow(uv, 0.75) * (0.25 + 0.75 * dens);
+    var rgb = starColorRGB(p.temp);
+    var n = nebulae.emission;
+    n.layers.forEach(function (pts, i) {
+        pts.material.opacity = pts.userData.baseOpacity * (0.12 + 1.5 * glow) * [1.0, 1.1, 1.2][i];
+    });
+    n.star.material.color.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255).convertSRGBToLinear();
+    n.starCore.material.color.copy(n.star.material.color);
+    n.star.scale.setScalar(1.5 + 1.3 * glow);
+    n.starCore.scale.setScalar(0.5 + 0.35 * glow);
+    n.star.material.opacity = 0.4 + 0.4 * glow;
+    n.starCore.material.opacity = 0.5 + 0.4 * glow;
+
+    var ion = Math.round(uv * dens * 100);
+    $('#i-uv').textContent = p.temp >= 20000 ? '매우 강함' : (p.temp >= 15000 ? '충분함' : (p.temp >= 12000 ? '약함' : '거의 없음'));
+    $('#i-ion').textContent = ion + '%';
+    $('#i-color').textContent = glow > 0.45 ? '붉은색 (Hα)' : (glow > 0.15 ? '어두운 붉은색' : '거의 보이지 않음');
+}
+
+function applyReflection() {
+    var p = state.params.reflection;
+    var sc = scatterIndex(p.temp);
+    var dens = p.density / 100;
+    var bright = p.bright / 40;
+    var light = (0.12 + 0.88 * bright) * (0.2 + 0.8 * dens) * (0.25 + 0.75 * sc);
+    var n = nebulae.reflection;
+    n.layers.forEach(function (pts, i) {
+        pts.material.opacity = pts.userData.baseOpacity * (0.1 + 2.1 * light) * [1.0, 1.05, 1.1][i];
+    });
+    var rgb = starColorRGB(p.temp);
+    n.star.material.color.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255).convertSRGBToLinear();
+    n.starCore.material.color.copy(n.star.material.color);
+    n.star.scale.setScalar(1.2 + 2.2 * bright);
+    n.starCore.scale.setScalar(0.45 + 0.45 * bright);
+    n.star.material.opacity = 0.5 + 0.5 * bright;
+
+    $('#i-scatter').textContent = light > 0.55 ? '밝음' : (light > 0.22 ? '보통' : '매우 약함');
+    $('#i-rcolor').textContent = light > 0.3 ? '푸른색' : (light > 0.12 ? '희미한 푸른색' : '거의 보이지 않음');
+}
+
+function applyDark() {
+    var p = state.params.dark;
+    var dens = p.density / 100;
+    var n = nebulae.dark;
+    n.layers.forEach(function (pts, i) {
+        pts.material.opacity = clamp(pts.userData.baseOpacity * (0.4 + 1.2 * dens), 0, 1);
+    });
+    $('#i-block').textContent = Math.round(20 + 75 * dens) + '%';
+}
+
+function applyAll() {
+    applyEmission();
+    applyReflection();
+    applyDark();
+}
+
+/* ============================================================
+   9. 카메라
+   ============================================================ */
+var camTween = null;
+var lastFitKey = '';
+
+function fitDist(halfW, halfH, fov) {
+    var vf = fov * Math.PI / 180;
+    var dh = halfH / Math.tan(vf / 2);
+    var dw = halfW / (Math.tan(vf / 2) * Math.max(0.35, camera.aspect));
+    return Math.max(dh, dw) * 1.06;
+}
+/* 보이는 폭·높이를 기준으로 카메라 거리 계산 */
+function frameDist(needW, needH, fov) {
+    var tan = Math.tan(fov * Math.PI / 360);
+    return Math.max(needH / (2 * tan), needW / (2 * tan * Math.max(0.35, camera.aspect))) * 1.05;
+}
+function poseFor(view) {
+    var fov = 45;
+    if (view === 'all') {
+        var d = frameDist(NEB_R * 2.7 + 22, NEB_R * 2.9, fov);
+        return { pos: new THREE.Vector3(2.4, d * 0.12, d * 0.99), target: new THREE.Vector3(2.4, 0, 0), fov: fov };
+    }
+    var x = NEB_X[view];
+    var dd = frameDist(NEB_R * 2.7, NEB_R * 3.3, fov);
+    return { pos: new THREE.Vector3(x, dd * 0.14, dd), target: new THREE.Vector3(x, 0, 0), fov: fov };
+}
+function flyTo(pos, target, fov, dur) {
+    camTween = {
+        p0: camera.position.clone(), p1: pos.clone(),
+        t0: controls.target.clone(), t1: target.clone(),
+        f0: camera.fov, f1: fov,
+        start: performance.now(), dur: dur || 900
+    };
+}
+function goView(view, instant) {
+    state.view = view;
+    var pose = poseFor(view);
+    camera.fov = pose.fov;
+    camera.updateProjectionMatrix();
+    if (instant) {
+        camera.position.copy(pose.pos);
+        controls.target.copy(pose.target);
+        controls.update();
+        camTween = null;
+    } else {
+        flyTo(pose.pos, pose.target, pose.fov, 950);
+    }
+    lastFitKey = view + '|' + Math.round(camera.aspect * 100);
+    updateHud();
+}
+
+function updateHud() {
+    var names = { emission: '방출 성운', reflection: '반사 성운', dark: '암흑 성운', all: '3종 비교' };
+    $('#val-target').textContent = names[state.view];
+    var p = state.params;
+    if (state.view === 'emission') {
+        $('#val-temp').textContent = fmt(p.emission.temp) + ' K';
+        $('#val-look').textContent = ($('#i-color').textContent || '붉게 빛남');
+    } else if (state.view === 'reflection') {
+        $('#val-temp').textContent = fmt(p.reflection.temp) + ' K';
+        $('#val-look').textContent = '푸르게 반사';
+    } else if (state.view === 'dark') {
+        $('#val-temp').textContent = '별 없음';
+        $('#val-look').textContent = '검게 가림';
+    } else {
+        $('#val-temp').textContent = '—';
+        $('#val-look').textContent = '방출·반사·암흑';
+    }
+    var hint = {
+        emission: '🔴 성운을 돌려 보며 별의 자외선이 기체를 붉게 만드는 모습을 관찰하세요',
+        reflection: '🔵 별빛이 티끌에 부딪혀 파랗게 반사되는 모습을 관찰하세요',
+        dark: '⚫ 뒤쪽 별빛이 티끌에 가려지는 정도를 관찰하세요',
+        all: '🌫️ 세 성운의 색과 빛의 근원을 나란히 비교해 보세요'
+    };
+    $('#center-hint').textContent = hint[state.view];
+    layoutLabels();
+}
+function layoutLabels() {
+    var show = state.view === 'all' && !state.quizOn;
+    Object.keys(labels).forEach(function (k) {
+        labels[k].visible = show;
+        labels[k].position.set(NEB_X[k], NEB_R * 1.6, 0);
+    });
+    labelGroup.visible = show;
+}
+
+/* ============================================================
+   10. 탭
+   ============================================================ */
+function setMode(mode) {
+    state.mode = mode;
+    document.querySelectorAll('.mode-btn').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+    });
+    ['emission', 'reflection', 'dark', 'quiz'].forEach(function (m) {
+        var el = document.getElementById('tab-' + m);
+        if (el) el.classList.toggle('active', m === mode);
+    });
+    if (mode !== 'quiz' && !state.quizOn) goView(mode, false);
+}
+document.querySelectorAll('.mode-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+        setMode(b.getAttribute('data-mode'));
+        setFolded(false);
+    });
+});
+
+/* ============================================================
+   11. 슬라이더
+   ============================================================ */
+function bindRange(id, labelId, fmtFn, onChange) {
+    var el = $(id);
+    el.addEventListener('input', function () {
+        var v = parseFloat(el.value);
+        $(labelId).textContent = fmtFn(v);
+        onChange(v);
+        applyAll();
+        updateHud();
+    });
+}
+bindRange('#sld-etemp', '#lbl-etemp', function (v) { return fmt(v) + ' K'; }, function (v) { state.params.emission.temp = v; });
+bindRange('#sld-edens', '#lbl-edens', function (v) { return Math.round(v) + '%'; }, function (v) { state.params.emission.density = v; });
+bindRange('#sld-rtemp', '#lbl-rtemp', function (v) { return fmt(v) + ' K'; }, function (v) { state.params.reflection.temp = v; });
+bindRange('#sld-rbright', '#lbl-rbright', function (v) { return Math.round(v) + '배'; }, function (v) { state.params.reflection.bright = v; });
+bindRange('#sld-rdens', '#lbl-rdens', function (v) { return Math.round(v) + '%'; }, function (v) { state.params.reflection.density = v; });
+bindRange('#sld-ddens', '#lbl-ddens', function (v) { return Math.round(v) + '%'; }, function (v) { state.params.dark.density = v; });
+
+/* ============================================================
+   12. 활동
+   ============================================================ */
+var qOverlay = $('#q-overlay');
+var TYPES = ['emission', 'reflection', 'dark'];
+var TYPE_NAME = { emission: '방출 성운', reflection: '반사 성운', dark: '암흑 성운' };
+
+function refreshQuizPanel() {
+    $('#q-progress').textContent = quiz.round ? Math.min(quiz.round, quiz.total) + ' / ' + quiz.total : '—';
+    $('#q-score').textContent = quiz.score;
+    $('#q-history').textContent = quiz.history.length
+        ? quiz.history.map(function (h) { return h.ok ? '⭕' : '❌'; }).join(' ')
+        : '—';
+}
+
+function quizPose(type) {
+    var x = NEB_X[type];
+    var d = frameDist(NEB_R * 2.5, NEB_R * 3.0, 45);
+    return { pos: new THREE.Vector3(x + d * 0.16, d * 0.22, d), target: new THREE.Vector3(x, 0, 0) };
+}
+
+function randomizeParams(type) {
+    var p = state.params;
+    if (type === 'emission') {
+        p.emission.temp = [20000, 26000, 32000, 38000][(Math.random() * 4) | 0];
+        p.emission.density = 55 + Math.round(Math.random() * 45);
+    } else if (type === 'reflection') {
+        p.reflection.temp = [9000, 12000, 15000, 18000][(Math.random() * 4) | 0];
+        p.reflection.bright = 12 + Math.round(Math.random() * 22);
+        p.reflection.density = 45 + Math.round(Math.random() * 50);
+    } else {
+        p.dark.density = 55 + Math.round(Math.random() * 45);
+    }
+    $('#sld-etemp').value = p.emission.temp; $('#lbl-etemp').textContent = fmt(p.emission.temp) + ' K';
+    $('#sld-edens').value = p.emission.density; $('#lbl-edens').textContent = p.emission.density + '%';
+    $('#sld-rtemp').value = p.reflection.temp; $('#lbl-rtemp').textContent = fmt(p.reflection.temp) + ' K';
+    $('#sld-rbright').value = p.reflection.bright; $('#lbl-rbright').textContent = p.reflection.bright + '배';
+    $('#sld-rdens').value = p.reflection.density; $('#lbl-rdens').textContent = p.reflection.density + '%';
+    $('#sld-ddens').value = p.dark.density; $('#lbl-ddens').textContent = p.dark.density + '%';
+    applyAll();
+}
+
+function startQuiz() {
+    quiz.round = 0; quiz.score = 0; quiz.history = []; quiz.answered = false;
+    state.quizOn = true;
+    labelGroup.visible = false;
+    document.body.classList.add('quiz-mode');
+    qOverlay.classList.add('on');
+    refreshQuizPanel();
+    nextRound();
+}
+
+function endQuiz() {
+    state.quizOn = false;
+    qOverlay.classList.remove('on');
+    document.body.classList.remove('quiz-mode');
+    var sb = document.getElementById('q-summary');
+    if (sb && sb.parentNode) sb.parentNode.removeChild(sb);
+    qOverlay.querySelector('.q-opts').style.display = '';
+    var ask = qOverlay.querySelector('.q-ask');
+    ask.style.display = '';
+    TYPES.forEach(function (t) { nebulae[t].group.visible = true; });
+    state.params.emission.temp = 25000; state.params.emission.density = 70;
+    state.params.reflection.temp = 12000; state.params.reflection.bright = 10; state.params.reflection.density = 70;
+    state.params.dark.density = 70;
+    $('#sld-etemp').value = 25000; $('#lbl-etemp').textContent = '25,000 K';
+    $('#sld-edens').value = 70; $('#lbl-edens').textContent = '70%';
+    $('#sld-rtemp').value = 12000; $('#lbl-rtemp').textContent = '12,000 K';
+    $('#sld-rbright').value = 10; $('#lbl-rbright').textContent = '10배';
+    $('#sld-rdens').value = 70; $('#lbl-rdens').textContent = '70%';
+    $('#sld-ddens').value = 70; $('#lbl-ddens').textContent = '70%';
+    applyAll();
+    goView(state.mode === 'quiz' ? 'all' : state.mode, false);
+    refreshQuizPanel();
+}
+
+function nextRound() {
+    if (quiz.round >= quiz.total) return showSummary();
+    quiz.round++;
+    quiz.answered = false;
+    var type = TYPES[(Math.random() * 3) | 0];
+    var guard = 0;
+    while (quiz.history.length >= 2 && quiz.history[quiz.history.length - 1].type === type &&
+           quiz.history[quiz.history.length - 2].type === type && guard++ < 30) {
+        type = TYPES[(Math.random() * 3) | 0];
+    }
+    quiz.target = type;
+    randomizeParams(type);
+    TYPES.forEach(function (t) { nebulae[t].group.visible = (t === type); });
+    $('#q-step').textContent = quiz.round + ' / ' + quiz.total;
+    $('#q-ask').innerHTML = '화면 가운데 성운은 어느 종류일까요? <b>색</b>과 <b>빛의 근원</b>을 살펴보세요.';
+    $('#q-feedback').innerHTML = '빛을 스스로 내는지, 별빛을 반사하는지, 별빛을 가리는지 생각해 보세요.';
+    document.querySelectorAll('.q-opt').forEach(function (b) {
+        b.disabled = false;
+        b.classList.remove('ok', 'err');
+    });
+    $('#q-next').disabled = true;
+    $('#q-next').textContent = quiz.round >= quiz.total ? '결과 보기 ➜' : '다음 ➜';
+    var pose = quizPose(type);
+    camera.fov = 45;
+    camera.updateProjectionMatrix();
+    flyTo(pose.pos, pose.target, 45, 850);
+    controls.minDistance = 3;
+    controls.maxDistance = 120;
+    refreshQuizPanel();
+}
+
+function answer(choice) {
+    if (quiz.answered || !quiz.target) return;
+    quiz.answered = true;
+    var type = quiz.target;
+    var ok = choice === type;
+    if (ok) quiz.score++;
+    quiz.history.push({ type: type, ok: ok });
+    document.querySelectorAll('.q-opt').forEach(function (b) {
+        b.disabled = true;
+        var val = b.getAttribute('data-ans');
+        if (val === type) b.classList.add('ok');
+        else if (val === choice) b.classList.add('err');
+    });
+    var why = {
+        emission: '뜨거운 별의 <b>자외선</b>이 주변 수소 기체를 이온화해, 기체가 스스로 <b>붉은빛</b>을 냅니다.',
+        reflection: '성운 스스로는 빛을 내지 않고, 주변 별빛을 티끌이 <b>반사</b>해 <b>푸르게</b> 보입니다.',
+        dark: '성간 티끌이 뒤쪽 별빛을 <b>가로막아</b> 별이 많은 하늘에서 <b>검은 실루엣</b>으로 보입니다.'
+    }[type];
+    $('#q-feedback').innerHTML = (ok ? '⭕ 정답! ' : '❌ 아쉽습니다. 이 성운은 <b>' + TYPE_NAME[type] + '</b>입니다. ') + why;
+    $('#q-next').disabled = false;
+    refreshQuizPanel();
+}
+
+function showSummary() {
+    var opts = qOverlay.querySelector('.q-opts');
+    var ask = qOverlay.querySelector('.q-ask');
+    opts.style.display = 'none';
+    ask.style.display = 'none';
+    var old = document.getElementById('q-summary');
+    if (old) old.parentNode.removeChild(old);
+    var box = document.createElement('div');
+    box.id = 'q-summary';
+    box.className = 'q-score';
+    var msg = quiz.score >= 6 ? '완벽합니다! 세 성운의 빛의 근원을 정확히 구별했습니다.'
+        : quiz.score >= 5 ? '아주 잘했습니다. 색과 빛의 근원을 잘 연결했습니다.'
+        : quiz.score >= 4 ? '좋습니다. 반사 성운은 스스로 빛을 내지 않는다는 점을 기억하세요.'
+        : '다시 도전해 보세요. 방출은 붉게 스스로, 반사는 파랗게 반사, 암흑은 별빛을 가립니다.';
+    box.innerHTML = quiz.score + ' / ' + quiz.total + ' <span>정답</span>' +
+        '<div style="font-size:12.5px;font-weight:700;color:#c7d5e8;margin-top:8px;line-height:1.5">' + msg + '</div>';
+    qOverlay.querySelector('.q-card').insertBefore(box, qOverlay.querySelector('.q-feedback'));
+    $('#q-feedback').innerHTML = '닫기를 누르면 세 성운 비교 화면으로 돌아갑니다.';
+    $('#q-next').disabled = false;
+    $('#q-next').textContent = '다시 도전';
+    quiz.answered = 'summary';
+    TYPES.forEach(function (t) { nebulae[t].group.visible = true; });
+    goView('all', false);
+}
+
+$('#btn-quiz').addEventListener('click', function () {
+    if (state.quizOn) return;
+    startQuiz();
+});
+document.querySelectorAll('.q-opt').forEach(function (b) {
+    b.addEventListener('click', function () { answer(b.getAttribute('data-ans')); });
+});
+$('#q-next').addEventListener('click', function () {
+    if (quiz.answered === 'summary') { endQuiz(); startQuiz(); return; }
+    if (!quiz.answered) return;
+    if (quiz.round >= quiz.total) showSummary();
+    else nextRound();
+});
+$('#q-close').addEventListener('click', function () { endQuiz(); setMode(state.mode === 'quiz' ? 'emission' : state.mode); });
+
+/* ============================================================
+   13. 초기화 · 시점정렬
+   ============================================================ */
+$('#btn-reset').addEventListener('click', function () {
+    if (state.quizOn) endQuiz();
+    state.params.emission.temp = 25000; state.params.emission.density = 70;
+    state.params.reflection.temp = 12000; state.params.reflection.bright = 10; state.params.reflection.density = 70;
+    state.params.dark.density = 70;
+    $('#sld-etemp').value = 25000; $('#lbl-etemp').textContent = '25,000 K';
+    $('#sld-edens').value = 70; $('#lbl-edens').textContent = '70%';
+    $('#sld-rtemp').value = 12000; $('#lbl-rtemp').textContent = '12,000 K';
+    $('#sld-rbright').value = 10; $('#lbl-rbright').textContent = '10배';
+    $('#sld-rdens').value = 70; $('#lbl-rdens').textContent = '70%';
+    $('#sld-ddens').value = 70; $('#lbl-ddens').textContent = '70%';
+    applyAll();
+    setMode('emission');
+});
+$('#btn-cam').addEventListener('click', function () {
+    if (state.quizOn) return;
+    goView(state.view, false);
+});
+
+/* ============================================================
+   14. 테마
+   ============================================================ */
+function applyTheme(dark) {
+    state.dark = dark;
+    document.body.classList.toggle('dark-mode', dark);
+    document.body.classList.toggle('light-mode', !dark);
+    $('#theme-toggle').textContent = dark ? '☀️' : '🌙';
+    try { localStorage.setItem('svlLabTheme', dark ? 'dark' : 'light'); } catch (err) {}
+}
+$('#theme-toggle').addEventListener('click', function () { applyTheme(!state.dark); });
+var savedTheme = null;
+try { savedTheme = localStorage.getItem('svlLabTheme'); } catch (err) {}
+applyTheme(savedTheme !== 'light');
+
+/* ============================================================
+   15. 접이식 패널 (모바일)
+   ============================================================ */
+var sideCtrl = $('#side-ctrl');
+function setFolded(on) {
+    if (window.innerWidth > 900) on = false;
+    sideCtrl.classList.toggle('folded', on);
+}
+$('#panelFold').addEventListener('click', function () {
+    setFolded(!sideCtrl.classList.contains('folded'));
+});
+setFolded(window.innerWidth <= 900);
+
+/* ============================================================
+   16. 리사이즈 · 애니메이션
+   ============================================================ */
+function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    if (!state.quizOn) {
+        var key = state.view + '|' + Math.round(camera.aspect * 100);
+        if (key !== lastFitKey) goView(state.view, true);
+    }
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', function () { setTimeout(resize, 220); });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { setTimeout(resize, 200); });
+
+var clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    var t = clock.getElapsedTime();
+
+    if (camTween) {
+        var p = Math.min(1, (performance.now() - camTween.start) / camTween.dur);
+        var e = 1 - Math.pow(1 - p, 3);
+        camera.position.lerpVectors(camTween.p0, camTween.p1, e);
+        controls.target.lerpVectors(camTween.t0, camTween.t1, e);
+        if (Math.abs(camTween.f1 - camera.fov) > 0.01) {
+            camera.fov = camTween.f0 + (camTween.f1 - camTween.f0) * e;
+            camera.updateProjectionMatrix();
+        }
+        if (p >= 1) camTween = null;
+    }
+
+    /* 라벨은 거리와 무관하게 비슷한 크기로 보이게 보정 */
+    var dLab = camera.position.distanceTo(controls.target);
+    var lf = clamp(dLab / 19, 0.65, 3.0);
+    for (var lk in LABELS) {
+        var lw = LABELS[lk].w * lf;
+        labels[lk].scale.set(lw, lw * 130 / 420, 1);
+    }
+
+    /* 성운은 아주 천천히 흔들려 살아 있는 느낌을 준다 */
+    TYPES.forEach(function (tp, i) {
+        var n = nebulae[tp];
+        if (!n.group.visible) return;
+        n.group.rotation.y = Math.sin(t * 0.06 + i) * 0.06;
+        n.group.position.y = Math.sin(t * 0.22 + i * 2) * 0.08;
+    });
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+/* ============================================================
+   17. 시작
+   ============================================================ */
+resize();
+applyAll();
+goView('emission', true);
+setMode('emission');
+updateHud();
+requestAnimationFrame(animate);
+
+if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { drawAllLabels(); }).catch(function () {});
+}
+
+window.__NEB_STATE__ = state;
+window.__NEB_API__ = { setMode: setMode, goView: goView, startQuiz: startQuiz, nebulae: nebulae };
+
+/* ============================================================
+   18. 전체화면 / 몰입 모드
+   ============================================================ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var el = document.getElementById('ux-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'ux-toast';
+            el.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(20,16,34,.92);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.35)';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.style.opacity = '1';
+        clearTimeout(el._t);
+        el._t = setTimeout(function () { el.style.opacity = '0'; }, 2600);
+    }
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs(), wasPseudo = pseudo();
+            try {
+                if (!wasReal) {
+                    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen ||
+                              docEl.webkitRequestFullScreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                    if (req) req.call(docEl);
+                } else {
+                    var exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                               docEl.webkitCancelFullScreen || docEl.mozCancelFullScreen || docEl.msExitFullscreen;
+                    if (exit) exit.call(document);
+                }
+            } catch (err) {}
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); resize(); return; }
+                if (!realFs()) {
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (err2) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+                resize();
+            }, 420);
+        });
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, function () { setUI(); setTimeout(resize, 120); });
+    });
+    setUI();
+})();
+
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+</body>
+</html>
