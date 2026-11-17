@@ -472,15 +472,15 @@
 
     /* 게임이 자기 파일로 가는 경로 — 사이트 안에서 상대 경로로 이동 */
     var LINKS = {
-        element_ninja: 'labs/game/element_ninja.html',
-        air_bounce: 'labs/game/air_bounce.html',
-        finger_shooting: 'labs/game/finger_shooting.html',
-        red_light_green_light: 'labs/game/red_light_green_light.html',
-        silhouette_pose: 'labs/game/silhouette_pose.html',
-        school_challenge: 'labs/class/game.html',
-        ox_speed_quiz: 'labs/test/ox_speed_quiz.html',
-        digital_escape_room: 'labs/test/digital_escape_room.html',
-        festival_booth: 'labs/test/festival_booth_kiosk.html'
+        element_ninja: 'game/element_ninja.html',
+        air_bounce: 'game/air_bounce.html',
+        finger_shooting: 'game/finger_shooting.html',
+        red_light_green_light: 'game/red_light_green_light.html',
+        silhouette_pose: 'game/silhouette_pose.html',
+        school_challenge: 'game/game.html',
+        ox_speed_quiz: 'game/ox_speed_quiz.html',
+        digital_escape_room: 'game/digital_escape_room.html',
+        festival_booth: 'game/festival_booth_kiosk.html'
     };
     var PREFIX = (function () {
         /* hall-of-fame.js 는 labs/common/ 에 있으므로 사이트 뿌리는 ../../ */
@@ -493,7 +493,7 @@
         return /^https?:/.test(base) ? base : '';
     })();
     function gameLink(id) {
-        var isGamePage = /\/labs\//.test(location.pathname);
+        var isGamePage = /\/(labs|class|game)\//.test(location.pathname);
         if (isGamePage) return null;              /* 게임 안에서는 이동 버튼을 숨긴다 */
         return (PREFIX || '') + (LINKS[id] || '');
     }

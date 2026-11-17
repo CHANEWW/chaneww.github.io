@@ -12,8 +12,8 @@
    3) 움직임  : 저해상도 프레임 차분(기본 64×48 그리드) — 조명 변화에 강함
    4) 공통 UI : 토스트 · 야간 모드(body.dark-mode) · 전체화면(iOS 폴백)
 
-   사용법 (labs/game/*.html 기준, ui-layout.css 뒤에 한 줄):
-     <script src="../common/game-core.js"></script>
+   사용법 (game/*.html 기준, ui-layout.css 뒤에 한 줄):
+     <script src="../labs/common/game-core.js"></script>
    ============================================================ */
 (function () {
     'use strict';

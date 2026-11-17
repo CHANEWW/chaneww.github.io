@@ -25,7 +25,7 @@
     var STORAGE_KEY = 'svl_pending_feedbacks';
 
     /* ---------- 실험명 / 페이지 구분 ---------- */
-    var isIndex = /index(_3d)?\.html$/i.test(location.pathname) || location.pathname === '/' || location.pathname.endsWith('/') || !location.pathname.includes('/labs/');
+    var isIndex = /index(_3d)?\.html$/i.test(location.pathname) || location.pathname === '/' || location.pathname.endsWith('/') || !/\/(labs|class|game)\//.test(location.pathname);
     var EXPERIMENT = isIndex
         ? '홈페이지 전체 / 가상실험 제안'
         : (document.title || '가상실험').trim().replace(/\s*[-|–]\s*Science Virtual LAB\s*$/i, '');

@@ -74,7 +74,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 `jsQR.js` is [cozmo/jsQR](https://github.com/cozmo/jsQR) 1.4.0, released under the
 Apache License 2.0. It decodes QR codes from a canvas ImageData buffer in the browser,
-which is what the worksheet camera AR mode (`labs/test/qr_3d_viewer.html`) uses.
+which is what the worksheet camera AR mode (`class/qr_3d_viewer.html`) uses.
 
 ```
 Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
