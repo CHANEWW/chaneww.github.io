@@ -451,7 +451,16 @@ html.pseudo-fs #hint { display: none !important; }
     /* ---------- 설정 ---------- */
     var CFG = { volt: 6, temp: 20, width: 1.5, len: 40 };
     var LANES = [-1.05, 0, 1.05];
-    var CORRIDOR = 1.44;
+    var CORRIDOR = 1.35;
+    var WIRE_R = 1.98;          /* 도선 외벽 반지름(월드 단위) */
+    /* 도선 굵기(0.5~3.0 mm)에 따라 통로 폭·격자 폭·외벽 반지름이 함께 바뀐다 */
+    function applyWidthGeometry() {
+        var S = 0.62 + CFG.width * 0.30;        /* 칸 간격 */
+        LANES = [-S, 0, S];
+        CORRIDOR = S + 0.28;                    /* 좌우 이동 한계 */
+        WIRE_R = 1.55 * (0.68 + CFG.width * 0.40);
+    }
+    applyWidthGeometry();
     var R_ION = 0.3, R_E = 0.25;
     /* 충돌 판정 반경(보이는 크기보다 작게 — 스치는 건 통과) */
     var HIT_R_ION = 0.40, HIT_R_IMP = 0.50, HIT_Z = 0.48;
@@ -583,6 +592,7 @@ html.pseudo-fs #hint { display: none !important; }
 
     /* ---------- 무대 구성 ---------- */
     function rebuildStage() {
+        applyWidthGeometry();
         /* 기존 격자 제거 */
         while (ionGroup.children.length) ionGroup.remove(ionGroup.children[0]);
         ions.length = 0; decoIons.length = 0; impurities.length = 0;
@@ -593,9 +603,10 @@ html.pseudo-fs #hint { display: none !important; }
 
         wire.scale.set(1, Math.abs(G.zEnd - G.zStart) + 6, 1);
         wire.position.set(0, 0, (G.zStart + G.zEnd) / 2);
-        /* 굵기에 따라 도선 단면이 굵게 보인다 */
-        var wr = 0.72 + CFG.width * 0.28;
+        /* 굵기에 따라 도선 단면이 눈에 띄게 굵어진다 */
+        var wr = WIRE_R / 1.55;
         wire.scale.x = wr; wire.scale.z = wr;
+        wireMat.opacity = 0.10 + CFG.width * 0.03;
         for (var ri = 0; ri < rings.length; ri++) rings[ri].scale.setScalar(wr);
 
         var count = rings.length;
@@ -634,7 +645,7 @@ html.pseudo-fs #hint { display: none !important; }
             for (var d = 0; d < 2; d++) {
                 var dm = new THREE.Mesh(ionGeo, ionDecoMat);
                 var ang = Math.PI * (d ? 0.62 : -0.62) + (Math.random() - 0.5) * 0.3;
-                var dx = Math.sin(ang) * 1.12, dy = Math.cos(ang) * 1.12;
+                var dx = Math.sin(ang) * WIRE_R * 0.78, dy = Math.cos(ang) * WIRE_R * 0.78;
                 dm.position.set(dx, dy, z + 0.18);
                 dm.scale.setScalar(0.92);
                 ionGroup.add(dm);
@@ -881,7 +892,7 @@ html.pseudo-fs #hint { display: none !important; }
 
     function updateCamera(dt) {
         var ex = electron.position.x, ez = electron.position.z;
-        var back = G.state === 'ready' ? 5.6 : 4.9;
+        var back = (G.state === 'ready' ? 5.6 : 4.9) + (CFG.width - 1.5) * 0.40;
         var want = new THREE.Vector3(ex * 0.5, 1.55, ez + back);
         var look = new THREE.Vector3(ex * 0.62, 0.05, ez - 5.2);
         var k = Math.min(1, (dt || 0.016) * 6);
@@ -1052,7 +1063,13 @@ html.pseudo-fs #hint { display: none !important; }
     }
     bindSlider('rVolt', 'volt', null, null);
     bindSlider('rTemp', 'temp', null, null);
-    bindSlider('rWidth', 'width', null, null);
+    bindSlider('rWidth', 'width', null, function () {
+        /* 굵기는 통로 폭·격자 폭·외벽을 함께 바꾼다 → 무대를 다시 만든다 */
+        var wasPlaying = G.state === 'play' || G.state === 'pause';
+        applyWidthGeometry();
+        resetRun();
+        if (wasPlaying) { $('ovStart').classList.add('show'); }
+    });
     bindSlider('rLen', 'len', null, function () {
         /* 길이는 무대를 다시 만든다 (진행 중이면 처음부터) */
         var wasPlaying = G.state === 'play' || G.state === 'pause';
@@ -1098,7 +1115,8 @@ html.pseudo-fs #hint { display: none !important; }
                 energy: +G.energy.toFixed(1), x: +electron.position.x.toFixed(2), z: +electron.position.z.toFixed(2),
                 ions: ions.length, impurities: impurities.length, speed: +gameSpeed().toFixed(2),
                 hof: !!(window.HOF && window.HOF.games.electron_runner),
-                corridor: CORRIDOR, hitR: HIT_R_ION, hitZ: HIT_Z, amp: +vibration().toFixed(3),
+                corridor: +CORRIDOR.toFixed(2), hitR: HIT_R_ION, hitZ: HIT_Z, amp: +vibration().toFixed(3),
+                wireR: +WIRE_R.toFixed(2), laneGap: +(LANES[2] - LANES[1]).toFixed(2),
                 zEnd: +G.zEnd.toFixed(2)
             };
         },
@@ -1111,7 +1129,7 @@ html.pseudo-fs #hint { display: none !important; }
         set: function (o) {
             if (o.volt !== undefined) { CFG.volt = o.volt; $('rVolt').value = o.volt; }
             if (o.temp !== undefined) { CFG.temp = o.temp; $('rTemp').value = o.temp; }
-            if (o.width !== undefined) { CFG.width = o.width; $('rWidth').value = o.width; }
+            if (o.width !== undefined) { CFG.width = o.width; $('rWidth').value = o.width; applyWidthGeometry(); }
             if (o.len !== undefined) { CFG.len = o.len; $('rLen').value = o.len; }
             syncPanel();
         },
