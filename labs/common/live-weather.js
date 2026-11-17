@@ -1,0 +1,251 @@
+/* ============================================================
+   Science Virtual LAB — 오늘 실제 날씨 (Open-Meteo 연동 공용 모듈)
+   ------------------------------------------------------------
+   · Open-Meteo 무료 API(키 불필요)로 오늘의 기온·해면기압·풍속·풍향·
+     습도·낮/밤 여부를 가져온다.
+   · 도시(서울·진주·부산·대구·광주·제주·강릉)를 고르거나 현재 위치를 쓴다.
+   · 30분 동안 받은 값을 기억해 두고, 실패하면 안내 문구로 폴백한다.
+
+   쓰는 법 (실험 스크립트 안에서)
+     <script src="../../common/live-weather.js"></script>
+     SVLWeather.mount({
+         panel: '#side-ctrl',          // 위젯을 붙일 패널(선택). 없으면 화면 우하단에 띄운다
+         defaultCity: 'jinju',
+         onApply: function (w) { ... } // w.temp, w.pressure, w.windSpeed, w.windDirText ...
+     });
+   ============================================================ */
+(function (global) {
+    'use strict';
+    if (global.SVLWeather) return;
+
+    var CITIES = [
+        { id: 'jinju', name: '진주', lat: 35.1800, lon: 128.0800 },
+        { id: 'seoul', name: '서울', lat: 37.5665, lon: 126.9780 },
+        { id: 'busan', name: '부산', lat: 35.1796, lon: 129.0756 },
+        { id: 'daegu', name: '대구', lat: 35.8714, lon: 128.6014 },
+        { id: 'gwangju', name: '광주', lat: 35.1595, lon: 126.8526 },
+        { id: 'jeju', name: '제주', lat: 33.4996, lon: 126.5312 },
+        { id: 'gangneung', name: '강릉', lat: 37.7519, lon: 128.8761 }
+    ];
+    var DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+    var CACHE_KEY = 'svl_live_weather_v1';
+    var CACHE_MS = 30 * 60 * 1000;
+
+    function dirText(deg) {
+        if (typeof deg !== 'number' || isNaN(deg)) return '—';
+        return DIRS[Math.round(((deg % 360) + 360) % 360 / 45) % 8] + '풍';
+    }
+
+    function skyText(code) {
+        if (code === 0) return '맑음';
+        if (code === 1) return '대체로 맑음';
+        if (code === 2) return '구름 조금';
+        if (code === 3) return '흐림';
+        if (code === 45 || code === 48) return '안개';
+        if (code >= 51 && code <= 57) return '이슬비';
+        if (code >= 61 && code <= 67) return '비';
+        if (code >= 71 && code <= 77) return '눈';
+        if (code >= 80 && code <= 82) return '소나기';
+        if (code >= 85 && code <= 86) return '눈 소나기';
+        if (code >= 95) return '뇌우';
+        return '날씨 정보';
+    }
+
+    function hhmm(iso) {
+        if (!iso || iso.length < 16) return '';
+        return iso.slice(11, 16);
+    }
+
+    function buildUrl(lat, lon) {
+        return 'https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(4) +
+            '&longitude=' + lon.toFixed(4) +
+            '&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m' +
+            '&timezone=Asia%2FSeoul&wind_speed_unit=ms';
+    }
+
+    function fetchWeather(lat, lon) {
+        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+        var opts = { cache: 'no-store' };
+        if (ctrl) opts.signal = ctrl.signal;
+        return fetch(buildUrl(lat, lon), opts).then(function (r) {
+            if (r.ok) return r.json();
+            throw new Error('http ' + r.status);
+        }).then(function (j) {
+            if (timer) clearTimeout(timer);
+            var c = j && j.current;
+            if (!c || typeof c.temperature_2m !== 'number') throw new Error('no data');
+            return {
+                temp: c.temperature_2m,
+                feelsLike: c.apparent_temperature,
+                humidity: c.relative_humidity_2m,
+                pressure: c.pressure_msl,
+                windSpeed: c.wind_speed_10m,
+                windDir: c.wind_direction_10m,
+                windDirText: dirText(c.wind_direction_10m),
+                isDay: c.is_day === 1,
+                precip: c.precipitation,
+                code: c.weather_code,
+                sky: skyText(c.weather_code),
+                time: c.time
+            };
+        }).catch(function (e) {
+            if (timer) clearTimeout(timer);
+            throw e;
+        });
+    }
+
+    function readCache(id) {
+        try {
+            var raw = sessionStorage.getItem(CACHE_KEY);
+            if (!raw) return null;
+            var all = JSON.parse(raw) || {};
+            var hit = all[id];
+            if (!hit || !hit.at || (Date.now() - hit.at) > CACHE_MS) return null;
+            return hit.data;
+        } catch (e) { return null; }
+    }
+
+    function writeCache(id, data) {
+        try {
+            var raw = sessionStorage.getItem(CACHE_KEY);
+            var all = raw ? (JSON.parse(raw) || {}) : {};
+            all[id] = { at: Date.now(), data: data };
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(all));
+        } catch (e) { }
+    }
+
+    function summary(w, cityName) {
+        return cityName + ' ' + w.temp.toFixed(1) + '℃ · ' + Math.round(w.pressure) + ' hPa · ' +
+            w.windDirText + ' ' + w.windSpeed.toFixed(1) + ' m/s';
+    }
+
+    function detail(w, cityName) {
+        return summary(w, cityName) + ' · 습도 ' + Math.round(w.humidity) + '% · ' + w.sky +
+            ' · ' + hhmm(w.time) + ' 기준';
+    }
+
+    var styleDone = false;
+    function ensureStyle() {
+        if (styleDone) return;
+        styleDone = true;
+        var st = document.createElement('style');
+        st.textContent =
+            '.lwv-block .lwv-btn{width:100%;padding:7px 8px;border-radius:10px;border:1px solid #0a84ff;' +
+            'background:#0a84ff;color:#fff;font-family:inherit;font-size:11.5px;font-weight:900;line-height:1.25;' +
+            'cursor:pointer;transition:filter .15s ease,transform .15s ease;-webkit-appearance:none;appearance:none}' +
+            '.lwv-block .lwv-btn:hover{filter:brightness(1.06)}' +
+            '.lwv-block .lwv-btn:active{transform:scale(.98)}' +
+            '.lwv-block .lwv-btn:disabled{opacity:.62;cursor:default}' +
+            '.lwv-block .lwv-city{font-family:inherit;font-size:11px;font-weight:800;border-radius:8px;' +
+            'border:1px solid #cbd5e1;background:#fff;color:#0f172a;padding:3px 5px;max-width:104px}' +
+            'body.dark-mode .lwv-block .lwv-city{background:#182434;color:#e2e8f0;border-color:rgba(255,255,255,.2)}' +
+            '.lwv-block .lwv-status{display:block !important}' +
+            '@media (max-width:520px){.lwv-block .lwv-btn{font-size:10.5px;padding:6px 7px}' +
+            '.lwv-block .lwv-city{font-size:10px;max-width:92px}}';
+        document.head.appendChild(st);
+    }
+
+    function mount(opts) {
+        opts = opts || {};
+        ensureStyle();
+        var panel = typeof opts.panel === 'string' ? document.querySelector(opts.panel) : opts.panel;
+        var popup = false;
+        if (!panel) { panel = document.body; popup = true; }
+
+        var wrap = document.createElement('div');
+        wrap.className = 'lwv-block ctrl-block';
+        wrap.innerHTML =
+            '<div class="ctrl-row">' +
+            '  <div class="ctrl-row-header"><span class="ctrl-label">🛰️ 오늘 실제 날씨</span>' +
+            '    <span class="ctrl-val lwv-city-wrap"></span></div>' +
+            '  <button class="lwv-btn" type="button">🛰️ 오늘 실제 날씨 불러오기</button>' +
+            '  <div class="panel-note lwv-status">지역을 고르고 버튼을 누르면 오늘의 실제 기온·기압·바람이 실험에 반영됩니다.</div>' +
+            '</div>';
+
+        var sel = document.createElement('select');
+        sel.className = 'lwv-city';
+        sel.setAttribute('aria-label', '지역 선택');
+        var html = '';
+        CITIES.forEach(function (c) { html += '<option value="' + c.id + '">' + c.name + '</option>'; });
+        html += '<option value="geo">📍 현재 위치</option>';
+        sel.innerHTML = html;
+        sel.value = opts.defaultCity || 'jinju';
+        wrap.querySelector('.lwv-city-wrap').appendChild(sel);
+
+        if (popup) {
+            wrap.style.cssText = 'position:fixed;right:10px;bottom:64px;z-index:850;max-width:230px;' +
+                'padding:8px 10px;border-radius:14px;background:rgba(255,255,255,.94);' +
+                'box-shadow:0 8px 22px rgba(15,23,42,.18);';
+            sel.style.cssText = 'font:inherit;font-size:10px;border-radius:8px;border:1px solid #cbd5e1;padding:2px 4px;';
+        }
+        if (popup) panel.appendChild(wrap);
+        else panel.insertBefore(wrap, panel.firstChild);
+
+        var btn = wrap.querySelector('.lwv-btn');
+        var status = wrap.querySelector('.lwv-status');
+
+        function setStatus(txt, color) {
+            status.textContent = txt;
+            status.style.color = color || '';
+        }
+
+        function locate() {
+            return new Promise(function (resolve, reject) {
+                if (!navigator.geolocation) return reject(new Error('no geo'));
+                navigator.geolocation.getCurrentPosition(function (p) {
+                    resolve({ lat: p.coords.latitude, lon: p.coords.longitude, name: '현재 위치' });
+                }, function () { reject(new Error('geo denied')); }, { timeout: 8000, maximumAge: 300000 });
+            });
+        }
+
+        function run() {
+            var id = sel.value;
+            var cityName = '현재 위치';
+            var target;
+            if (id === 'geo') {
+                target = locate();
+            } else {
+                var c = CITIES.filter(function (x) { return x.id === id; })[0] || CITIES[0];
+                cityName = c.name;
+                target = Promise.resolve({ lat: c.lat, lon: c.lon, name: c.name });
+            }
+
+            btn.disabled = true;
+            setStatus('🛰️ 오늘 날씨를 가져오는 중…');
+
+            target.then(function (t) {
+                cityName = t.name;
+                var cached = readCache(id + '@' + t.lat.toFixed(2) + ',' + t.lon.toFixed(2));
+                if (cached) return { data: cached, cached: true };
+                return fetchWeather(t.lat, t.lon).then(function (d) {
+                    writeCache(id + '@' + t.lat.toFixed(2) + ',' + t.lon.toFixed(2), d);
+                    return { data: d, cached: false };
+                });
+            }).then(function (res) {
+                var w = res.data;
+                w.city = cityName;
+                setStatus('🛰️ ' + summary(w, cityName) + ' · ' + w.sky);
+                status.title = detail(w, cityName) + (res.cached ? ' (30분 내 받은 값)' : '');
+                btn.disabled = false;
+                if (typeof opts.onApply === 'function') {
+                    try { opts.onApply(w); } catch (e) { }
+                }
+            }).catch(function () {
+                btn.disabled = false;
+                setStatus('날씨를 불러오지 못했어요. 인터넷 연결을 확인한 뒤 다시 눌러 주세요. (지금은 기본 설정으로 실험합니다)', '#dc2626');
+            });
+        }
+
+        btn.addEventListener('click', run);
+        return { run: run, element: wrap, select: sel };
+    }
+
+    global.SVLWeather = {
+        mount: mount,
+        cities: CITIES,
+        dirText: dirText,
+        skyText: skyText,
+        summary: summary
+    };
+})(window);

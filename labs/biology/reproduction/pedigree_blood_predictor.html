@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.92">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>가계도와 혈액형·형질 예측 3D</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<script src="../../common/lib/three.min.js"></script>
+<script>if(!window.THREE){document.write('<scr'+'ipt src="../../common/lib/three.min.js"><\/scr'+'ipt>');}</script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<script>if(!(window.THREE&&THREE.OrbitControls)){document.write('<scr'+'ipt src="../../common/lib/OrbitControls.js"><\/scr'+'ipt>');}</script>
+<link rel="stylesheet" href="../../common/ui-layout.css">
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<style>
+@font-face{
+  font-family:'SeoulNamsan';
+  src:local('SeoulNamsan M'),local('SeoulNamsanM'),local('서울남산체 M'),
+      url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+  font-weight:400;font-style:normal;font-display:swap;
+}
+*{box-sizing:border-box;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;overflow:hidden;
+  font-family:'SeoulNamsan',-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  color:#16202e;background:radial-gradient(120% 100% at 50% 0%,#fbfdff 0%,#e9f1fa 46%,#d6e3f2 100%);
+  touch-action:none;transition:background .35s ease,color .35s ease;
+}
+body.dark-mode{background:radial-gradient(120% 100% at 50% 0%,#17233a 0%,#0d1524 52%,#05080e 100%)}
+#canvas-container{position:fixed;inset:0;z-index:1;touch-action:none}
+#canvas-container canvas{display:block}
+
+.glass-panel{
+  background:rgba(255,255,255,.83);backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(255,255,255,.68);border-radius:18px;
+  box-shadow:0 10px 28px rgba(15,23,42,.10);transition:background .35s,border-color .35s,color .35s;
+}
+body.dark-mode .glass-panel{background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+
+/* ---------- 좌상단 ---------- */
+.top-left-bar{position:fixed;top:16px;left:18px;display:flex;align-items:center;gap:9px;z-index:40;max-width:calc(100vw - 120px)}
+.back-btn{
+  display:flex;align-items:center;gap:6px;padding:9px 16px;font-size:14px;font-weight:700;font-family:inherit;
+  color:#16202e;text-decoration:none;border:none;border-radius:999px;cursor:pointer;white-space:nowrap;
+  background:rgba(255,255,255,.83);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.68);box-shadow:0 10px 28px rgba(15,23,42,.10);transition:transform .18s,background .35s;
+}
+body.dark-mode .back-btn{color:#eef4ff;background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13)}
+.back-btn:active{transform:scale(.97)}
+.tag-badge{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:14px;font-weight:700;border-radius:999px;min-width:0;overflow:hidden}
+.tag-badge .title-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vision-badge{flex:0 0 auto;background:linear-gradient(135deg,#0a84ff,#5e5ce6);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;letter-spacing:.2px}
+
+/* ---------- 우상단 ---------- */
+.icon-btn{
+  width:38px;height:38px;min-width:38px;border-radius:50%;border:1px solid rgba(255,255,255,.68);
+  display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+  color:#16202e;background:rgba(255,255,255,.83);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 8px 22px rgba(15,23,42,.10);transition:background .35s,border-color .35s;
+}
+body.dark-mode .icon-btn{color:#eef4ff;background:rgba(18,28,46,.86);border-color:rgba(255,255,255,.13)}
+.data-card{display:flex;align-items:center;gap:13px;padding:9px 15px;border-radius:16px}
+.data-item{display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}
+.data-label{font-size:10.5px;font-weight:700;color:#64748b;white-space:nowrap;line-height:1.2}
+body.dark-mode .data-label{color:#9db0cb}
+.data-value{font-size:14px;font-weight:800;color:#16202e;white-space:nowrap;line-height:1.25}
+body.dark-mode .data-value{color:#eef4ff}
+
+/* ---------- 중앙 안내 ---------- */
+.center-tooltip{
+  position:fixed;top:78px;left:50%;transform:translateX(-50%);padding:8px 18px;border-radius:999px;
+  font-size:12.5px;font-weight:700;color:#475569;pointer-events:none;z-index:15;white-space:nowrap;
+  max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;
+  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+body.dark-mode .center-tooltip{color:#cbd5e1;background:rgba(18,28,46,.78);border-color:rgba(255,255,255,.12)}
+
+/* ---------- 좌측 확률 패널 ---------- */
+.prob-panel{position:fixed;left:18px;bottom:76px;width:258px;padding:11px 12px;z-index:20;border-radius:18px;display:flex;flex-direction:column;gap:7px}
+.pp-title{font-size:12px;font-weight:800;color:#334155;letter-spacing:-.2px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+body.dark-mode .pp-title{color:#cbd5e1}
+.pp-sub{font-size:9.5px;font-weight:800;color:#0a84ff;background:rgba(10,132,255,.12);padding:2px 7px;border-radius:999px;white-space:nowrap}
+.pun{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:100%}
+.pun div{
+  font-size:9.5px;font-weight:800;color:#475569;text-align:center;padding:4px 2px;border-radius:6px;
+  background:rgba(15,23,42,.05);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+body.dark-mode .pun div{color:#cbd5e1;background:rgba(255,255,255,.07)}
+.pun div.hd{background:transparent;color:#94a3b8;font-size:9px}
+.pun div.cell{color:#16202e;background:rgba(255,255,255,.9);border:1px solid rgba(15,23,42,.08)}
+body.dark-mode .pun div.cell{color:#eef4ff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.12)}
+.pb-row{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;color:#475569}
+body.dark-mode .pb-row{color:#cbd5e1}
+.pb-key{width:22px;flex:0 0 auto;text-align:center;font-weight:800}
+.pb-track{flex:1 1 auto;height:9px;border-radius:999px;background:rgba(15,23,42,.08);overflow:hidden;position:relative}
+body.dark-mode .pb-track{background:rgba(255,255,255,.12)}
+.pb-fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;transition:width .3s}
+.pb-val{width:38px;flex:0 0 auto;text-align:right;color:#0a84ff;font-weight:800}
+body.dark-mode .pb-val{color:#7cc0ff}
+.pp-note{font-size:9.5px;font-weight:700;color:#8fa0b8;line-height:1.45;word-break:keep-all}
+body.dark-mode .pp-note{color:#8fa4c2}
+.pp-trait{font-size:10px;font-weight:800;color:#334155;background:rgba(15,23,42,.05);border-radius:8px;padding:5px 7px;line-height:1.4}
+body.dark-mode .pp-trait{color:#cbd5e1;background:rgba(255,255,255,.07)}
+
+/* ---------- 우측 조절 패널 ---------- */
+body #side-ctrl.side-ctrl-panel{width:250px !important;padding:12px !important;gap:8px !important}
+.panel-header{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-bottom:6px;border-bottom:1px solid rgba(15,23,42,.08);width:100%}
+body.dark-mode .panel-header{border-bottom-color:rgba(255,255,255,.12)}
+.panel-title{font-size:12px !important;font-weight:800 !important;color:#475569 !important}
+body.dark-mode .panel-title{color:#94a3b8 !important}
+.ctrl-block{display:flex;flex-direction:column;gap:5px;width:100%}
+.ctrl-cap{font-size:10.5px;font-weight:800;color:#64748b;letter-spacing:-.1px;display:flex;justify-content:space-between;gap:6px}
+body.dark-mode .ctrl-cap{color:#9db0cb}
+.sel-name{font-size:11px;font-weight:800;color:#0a84ff}
+.type-row{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;width:100%}
+.t-btn{
+  padding:9px 2px;border-radius:11px;border:1px solid rgba(15,23,42,.09);background:rgba(255,255,255,.92);
+  color:#334155;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;transition:all .16s;white-space:nowrap;
+}
+body.dark-mode .t-btn{background:rgba(30,42,62,.9);border-color:rgba(255,255,255,.12);color:#cbd5e1}
+.t-btn.active{color:#fff;box-shadow:0 4px 12px rgba(10,132,255,.3)}
+.t-btn:disabled{opacity:.32;cursor:default}
+.geno-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;width:100%}
+.g-btn{
+  padding:7px 2px;border-radius:10px;border:1px solid rgba(15,23,42,.09);background:rgba(255,255,255,.92);
+  color:#334155;font-family:inherit;font-size:11px;font-weight:800;cursor:pointer;transition:all .16s;white-space:nowrap;
+}
+body.dark-mode .g-btn{background:rgba(30,42,62,.9);border-color:rgba(255,255,255,.12);color:#cbd5e1}
+.g-btn.active{background:#5e5ce6;border-color:#5e5ce6;color:#fff}
+.g-btn:disabled{opacity:.32;cursor:default}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+.mini-btn{
+  padding:9px 4px;border-radius:11px;border:1px solid rgba(15,23,42,.09);background:rgba(255,255,255,.92);
+  color:#334155;font-family:inherit;font-size:10.5px;font-weight:800;cursor:pointer;white-space:nowrap;transition:all .16s;
+}
+body.dark-mode .mini-btn{background:rgba(30,42,62,.9);border-color:rgba(255,255,255,.12);color:#cbd5e1}
+.mini-btn.wide{grid-column:1 / -1}
+.wide-btn{
+  width:100%;padding:10px 8px;border-radius:12px;border:none;background:linear-gradient(135deg,#ff9f0a,#ff375f);
+  color:#fff;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;transition:transform .18s;
+  box-shadow:0 4px 14px rgba(255,55,95,.3);white-space:nowrap;
+}
+.wide-btn:active{transform:scale(.98)}
+.panel-note{font-size:10px;font-weight:700;color:#64748b;line-height:1.45;word-break:keep-all}
+body.dark-mode .panel-note{color:#9db0cb}
+
+/* ---------- 하단 ---------- */
+.bottom-right-bar{position:fixed;right:18px;bottom:18px;display:flex;align-items:center;gap:10px;z-index:40}
+
+/* ---------- 모바일 세로 ---------- */
+@media (max-width:900px){
+  .top-left-bar{top:max(8px,env(safe-area-inset-top));left:8px;gap:6px;max-width:calc(100vw - 192px)}
+  .back-btn{padding:7px 11px;font-size:12px}
+  .tag-badge{padding:7px 11px;font-size:12px}
+  .vision-badge{display:none}
+  .icon-btn{width:32px;height:32px;min-width:32px;font-size:14px}
+  .data-card{gap:10px;padding:6px 10px;border-radius:14px}
+  .data-label{font-size:9px}
+  .data-value{font-size:12px}
+  .center-tooltip{display:none}
+  .prob-panel{
+    left:8px;right:8px;top:calc(max(8px,env(safe-area-inset-top)) + 104px);bottom:auto;
+    width:auto;padding:6px 9px;gap:4px;border-radius:14px;
+  }
+  .pp-title{font-size:10px}
+  .pun{grid-template-columns:repeat(3,1fr);gap:2px}
+  .pun div{font-size:8.5px;padding:2px}
+  .pb-row{font-size:8.5px}
+  .pb-track{height:6px}
+  .pb-key{width:18px}
+  .pb-val{width:30px;font-size:8.5px}
+  .pp-note{display:none}
+  .pp-trait{font-size:8.5px;padding:3px 5px}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(66px + env(safe-area-inset-bottom)) !important;
+    max-height:min(48vh,380px) !important;padding:9px !important;gap:6px !important;
+  }
+  .ctrl-cap{font-size:9.5px}
+  .t-btn{font-size:12px;padding:7px 2px}
+  .g-btn{font-size:10px;padding:6px 2px}
+  .mini-btn{font-size:9.5px;padding:7px 3px}
+  .wide-btn{padding:8px;font-size:11px}
+  .panel-note{font-size:9px}
+  .bottom-right-bar{right:8px;bottom:calc(8px + env(safe-area-inset-bottom))}
+  #fullscreenText{display:none}
+}
+/* ---------- 모바일 가로 ---------- */
+@media (max-height:520px) and (orientation:landscape){
+  .top-left-bar{top:max(6px,env(safe-area-inset-top));left:6px;gap:5px;max-width:46vw}
+  .back-btn{padding:5px 9px;font-size:11px}
+  .tag-badge{padding:5px 9px;font-size:11px}
+  .vision-badge{display:none}
+  .icon-btn{width:28px;height:28px;min-width:28px;font-size:13px}
+  .data-card{gap:8px;padding:4px 9px;border-radius:12px}
+  .data-label{font-size:8.5px}
+  .data-value{font-size:11px}
+  .center-tooltip{display:none}
+  .prob-panel{left:auto;right:calc(236px + 8px);top:auto;bottom:calc(44px + env(safe-area-inset-bottom));width:206px;padding:6px 8px;gap:3px}
+  .pp-note{display:none}
+  .pun div{font-size:8px;padding:2px}
+  body #side-ctrl.side-ctrl-panel{
+    right:8px !important;width:226px !important;
+    bottom:calc(44px + env(safe-area-inset-bottom)) !important;
+    max-height:calc(100vh - 92px) !important;padding:8px !important;gap:5px !important;
+  }
+  .panel-note{display:none}
+  .bottom-right-bar{right:8px;bottom:calc(6px + env(safe-area-inset-bottom))}
+}
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+  <a href="/index.html" class="back-btn" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+  <div class="glass-panel tag-badge">
+    <span class="title-text">가계도와 혈액형·형질 예측 3D</span>
+    <span class="vision-badge">visionOS</span>
+  </div>
+  <button class="back-btn qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기"><span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span></button>
+</div>
+
+<div class="top-right-bar">
+  <div class="tr-util">
+    <button class="icon-btn" id="theme-toggle" type="button" title="주간/야간 모드" aria-label="주간/야간 모드 전환">🌙</button>
+  </div>
+  <div class="glass-panel data-card">
+    <div class="data-item"><span class="data-label">자녀 수</span><span class="data-value" id="val-kids">0</span></div>
+    <div class="data-item"><span class="data-label">가장 많은 형</span><span class="data-value" id="val-top" style="color:#0a84ff">—</span></div>
+    <div class="data-item"><span class="data-label">시뮬레이션</span><span class="data-value" id="val-sim">0</span></div>
+  </div>
+</div>
+
+<div class="glass-panel center-tooltip" id="guide-tooltip">💡 블록을 눌러 혈액형·유전자형을 바꾸면 자녀에게 나타날 확률이 바로 계산됩니다</div>
+
+<div class="glass-panel bottom-control-bar">
+  <button class="control-tab-btn" id="btn-reset" type="button"><span>🔄</span><span>초기화</span></button>
+  <button class="control-tab-btn" id="btn-cam" type="button"><span>🎥</span><span>시점정렬</span></button>
+</div>
+
+<div class="glass-panel prob-panel" id="prob-panel">
+  <div class="pp-title"><span>🧬 자녀 혈액형 확률</span><span class="pp-sub" id="pp-couple">어머니 × 아버지</span></div>
+  <div class="pun" id="pun"></div>
+  <div id="pb-list"></div>
+  <div class="pp-trait" id="pp-trait">형질: —</div>
+  <div class="pp-note" id="pp-note">부모의 생식세포가 만나는 네 가지 경우를 똑같이 계산한 값입니다.</div>
+</div>
+
+<div class="glass-panel side-ctrl-panel" id="side-ctrl">
+  <div class="panel-header"><span class="panel-title">🧑‍🤝‍🧑 가족 설정</span></div>
+  <div class="ctrl-block">
+    <span class="ctrl-cap"><span>선택한 사람</span><span class="sel-name" id="sel-name">어머니</span></span>
+    <div class="type-row" id="type-row">
+      <button class="t-btn" type="button" data-type="A">A형</button>
+      <button class="t-btn" type="button" data-type="B">B형</button>
+      <button class="t-btn" type="button" data-type="AB">AB형</button>
+      <button class="t-btn" type="button" data-type="O">O형</button>
+    </div>
+    <div class="geno-row" id="geno-row">
+      <button class="g-btn" type="button" data-geno="AA">AA</button>
+      <button class="g-btn" type="button" data-geno="AO">AO</button>
+      <button class="g-btn" type="button" data-geno="BB">BB</button>
+      <button class="g-btn" type="button" data-geno="BO">BO</button>
+      <button class="g-btn" type="button" data-geno="AB">AB</button>
+      <button class="g-btn" type="button" data-geno="OO">OO</button>
+    </div>
+  </div>
+  <div class="ctrl-block">
+    <span class="ctrl-cap"><span>형질 (혀말기)</span><span class="sel-name" id="sel-trait">Tt</span></span>
+    <div class="geno-row" id="trait-row">
+      <button class="g-btn" type="button" data-trait="TT">TT</button>
+      <button class="g-btn" type="button" data-trait="Tt">Tt</button>
+      <button class="g-btn" type="button" data-trait="tt">tt</button>
+    </div>
+  </div>
+  <button class="wide-btn" id="btn-child" type="button">🎲 자녀 한 명 만들기</button>
+  <div class="row2">
+    <button class="mini-btn" id="btn-sim" type="button">📊 100회 시뮬</button>
+    <button class="mini-btn" id="btn-clear" type="button">🧹 자녀 지우기</button>
+  </div>
+  <div class="panel-note" id="panel-note">조부모의 유전자형에 따라 부모가 가질 수 있는 조합만 선택할 수 있습니다.</div>
+</div>
+
+<script>
+/* =====================================================================
+   가계도와 혈액형·형질 예측 3D — lab script
+   ===================================================================== */
+(function () {
+'use strict';
+var $ = function (s) { return document.querySelector(s); };
+var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+
+/* ---------------------------------------------------------------
+   1. 유전 모델
+   --------------------------------------------------------------- */
+var TYPE_ORDER = ['A', 'B', 'AB', 'O'];
+var TYPE_COLOR = { A: '#ef4444', B: '#3b82f6', AB: '#8b5cf6', O: '#10b981' };
+var TYPE_HEX = { A: 0xef4444, B: 0x3b82f6, AB: 0x8b5cf6, O: 0x10b981 };
+var GENOS = ['AA', 'AO', 'BB', 'BO', 'AB', 'OO'];
+function genoType(g) {
+  if (g === 'AA' || g === 'AO') return 'A';
+  if (g === 'BB' || g === 'BO') return 'B';
+  if (g === 'AB') return 'AB';
+  return 'O';
+}
+function alleles(g) {
+  if (g === 'OO') return ['O', 'O'];
+  if (g === 'AA') return ['A', 'A'];
+  if (g === 'BB') return ['B', 'B'];
+  return [g[0], g[1]];
+}
+function childGenos(g1, g2) {
+  var a = alleles(g1), b = alleles(g2);
+  var out = [];
+  for (var i = 0; i < 2; i++) {
+    for (var j = 0; j < 2; j++) {
+      var x = a[i], y = b[j];
+      var key = [x, y].sort().join('');
+      if (key === 'BA') key = 'AB';
+      out.push(key);
+    }
+  }
+  return out;
+}
+function traitOf(t) {
+  if (t === 'TT' || t === 'Tt') return '혀말기 가능';
+  return '혀말기 불가';
+}
+function childTraits(t1, t2) {
+  var a = [t1[0], t1[1]], b = [t2[0], t2[1]];
+  var out = [];
+  for (var i = 0; i < 2; i++) {
+    for (var j = 0; j < 2; j++) {
+      var x = a[i], y = b[j];
+      out.push(x === 'T' && y === 'T' ? 'TT' : ((x === 't' && y === 't') ? 'tt' : 'Tt'));
+    }
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------
+   2. 가족 데이터
+   --------------------------------------------------------------- */
+var PEOPLE = [
+  { id: 'gf1', name: '외할아버지', gen: 0, x: -4.3, y: 3.7 },
+  { id: 'gm1', name: '외할머니', gen: 0, x: -1.7, y: 3.7 },
+  { id: 'gf2', name: '친할아버지', gen: 0, x: 1.7, y: 3.7 },
+  { id: 'gm2', name: '친할머니', gen: 0, x: 4.3, y: 3.7 },
+  { id: 'mom', name: '어머니', gen: 1, x: -3.0, y: 0.8, p1: 'gf1', p2: 'gm1' },
+  { id: 'dad', name: '아버지', gen: 1, x: 3.0, y: 0.8, p1: 'gf2', p2: 'gm2' }
+];
+var state = {
+  people: {},
+  kids: [],
+  sel: 'mom',
+  sim: 0
+};
+
+function initPeople() {
+  state.people = {};
+  PEOPLE.forEach(function (p, i) {
+    var g = ['AO', 'BO', 'AB', 'OO', 'AA', 'BB'][i % 6];
+    state.people[p.id] = {
+      def: p, geno: g, trait: ['Tt', 'Tt', 'TT', 'tt', 'Tt', 'Tt'][i % 6]
+    };
+  });
+}
+
+function personById(id) { return state.people[id]; }
+
+/* 허용 유전자형 (조부모 조합) */
+function allowedGenos(id) {
+  var p = personById(id);
+  if (!p.def.p1) return GENOS.slice();
+  var a = personById(p.def.p1).geno, b = personById(p.def.p2).geno;
+  var out = [];
+  childGenos(a, b).forEach(function (g) { if (out.indexOf(g) < 0) out.push(g); });
+  return out;
+}
+function allowedTraits(id) {
+  var p = personById(id);
+  if (!p.def.p1) return ['TT', 'Tt', 'tt'];
+  var out = [];
+  childTraits(personById(p.def.p1).trait, personById(p.def.p2).trait).forEach(function (t) {
+    if (out.indexOf(t) < 0) out.push(t);
+  });
+  return out;
+}
+
+/* 조부모 변경 시 부모 유전자형 보정 */
+function normalizeParents() {
+  ['mom', 'dad'].forEach(function (id) {
+    var p = personById(id);
+    var ag = allowedGenos(id);
+    if (ag.indexOf(p.geno) < 0) p.geno = ag[0];
+    var at = allowedTraits(id);
+    if (at.indexOf(p.trait) < 0) p.trait = at[0];
+  });
+}
+
+/* ---------------------------------------------------------------
+   3. three.js
+   --------------------------------------------------------------- */
+var container = $('#canvas-container');
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+container.appendChild(renderer.domElement);
+var controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 6;
+controls.maxDistance = 40;
+controls.maxPolarAngle = Math.PI * 0.52;
+controls.minPolarAngle = Math.PI * 0.18;
+controls.target.set(0, 1.1, 0);
+
+var hemi = new THREE.HemisphereLight(0xffffff, 0xd2dfec, 0.9);
+scene.add(hemi);
+var keyL = new THREE.DirectionalLight(0xffffff, 0.8);
+keyL.position.set(4, 12, 10);
+scene.add(keyL);
+var backL = new THREE.DirectionalLight(0x9fc4ff, 0.35);
+backL.position.set(-6, 4, -8);
+scene.add(backL);
+
+/* ---------------------------------------------------------------
+   4. 라벨 · 블록
+   --------------------------------------------------------------- */
+var blocks = {};      // id -> {mesh, canvas, tex, draw}
+var linesGroup = new THREE.Group();
+scene.add(linesGroup);
+
+function drawBlockCanvas(cv, person, selected) {
+  var c = cv.getContext('2d');
+  var W = cv.width, H = cv.height;
+  var type = genoType(person.geno);
+  var col = TYPE_COLOR[type];
+  c.clearRect(0, 0, W, H);
+  var g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(1, '#eef4fb');
+  c.fillStyle = g;
+  c.fillRect(0, 0, W, H);
+  /* 색 띠 */
+  c.fillStyle = col;
+  c.fillRect(0, 0, W, 16);
+  /* 이름 */
+  c.font = '700 34px "SeoulNamsan", sans-serif';
+  c.fillStyle = '#64748b';
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(person.def.name, W / 2, 56);
+  /* 혈액형 */
+  c.font = '700 108px "SeoulNamsan", sans-serif';
+  c.fillStyle = col;
+  c.fillText(type + '형', W / 2, 138);
+  /* 유전자형 */
+  c.font = '700 34px "SeoulNamsan", sans-serif';
+  c.fillStyle = '#334155';
+  c.fillText(person.geno + '  ·  ' + person.trait, W / 2, 208);
+  /* 형질 */
+  c.font = '700 28px "SeoulNamsan", sans-serif';
+  c.fillStyle = person.trait === 'tt' ? '#94a3b8' : '#0f766e';
+  c.fillText(person.trait === 'tt' ? '혀말기 불가' : '혀말기 가능', W / 2, 250);
+  if (selected) {
+    c.lineWidth = 12;
+    c.strokeStyle = '#0a84ff';
+    c.strokeRect(6, 6, W - 12, H - 12);
+  }
+}
+
+function makeBlock(person, w, h) {
+  var cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 320;
+  var tex = new THREE.CanvasTexture(cv);
+  if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
+  drawBlockCanvas(cv, person);
+
+  var bodyMat = new THREE.MeshStandardMaterial({ color: 0xdbe6f2, roughness: 0.7, metalness: 0.05 });
+  var faceMat = new THREE.MeshBasicMaterial({ map: tex });
+  var mats = [bodyMat, bodyMat, bodyMat, bodyMat, faceMat, bodyMat];
+  var geo = new THREE.BoxGeometry(w, h, 0.42);
+  var mesh = new THREE.Mesh(geo, mats);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.position.set(person.def.x !== undefined ? person.def.x : 0, person.def.y, 0);
+
+  mesh.userData.id = person.def.id;
+  mesh.userData.selected = false;
+  scene.add(mesh);
+  blocks[person.def.id] = { mesh: mesh, cv: cv, tex: tex, person: person };
+  return mesh;
+}
+
+function redrawBlock(id) {
+  var b = blocks[id];
+  if (!b) return;
+  drawBlockCanvas(b.cv, b.person, !!b.mesh.userData.selected);
+  b.tex.needsUpdate = true;
+}
+
+/* 연결선 */
+function rebuildLines() {
+  while (linesGroup.children.length) {
+    var o = linesGroup.children.pop();
+    o.geometry.dispose();
+    o.material.dispose();
+  }
+  var mat = new THREE.LineBasicMaterial({ color: 0x8fa8c4, transparent: true, opacity: 0.75 });
+  function seg(x1, y1, x2, y2) {
+    var g = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(x1, y1, 0), new THREE.Vector3(x2, y2, 0)
+    ]);
+    linesGroup.add(new THREE.Line(g, mat));
+  }
+  /* 외조부모 → 어머니 */
+  seg(-4.3, 3.7, -1.7, 3.7);
+  seg(-3.0, 3.7, -3.0, 1.5);
+  /* 친조부모 → 아버지 */
+  seg(1.7, 3.7, 4.3, 3.7);
+  seg(3.0, 3.7, 3.0, 1.5);
+  /* 부모 → 자녀 */
+  seg(-3.0, 0.8, 3.0, 0.8);
+  seg(0, 0.8, 0, -0.6);
+  if (state.kids.length) {
+    var xs = state.kids.map(function (k) { return k.x; });
+    seg(Math.min.apply(null, xs), -0.6, Math.max.apply(null, xs), -0.6);
+    state.kids.forEach(function (k) { seg(k.x, -0.6, k.x, -1.15); });
+  }
+}
+
+/* ---------------------------------------------------------------
+   5. 자녀 블록
+   --------------------------------------------------------------- */
+var KID_Y = -2.0, MAX_KIDS = 5;
+function addKid(animate) {
+  if (state.kids.length >= MAX_KIDS) return null;
+  var mom = personById('mom'), dad = personById('dad');
+  var gs = childGenos(mom.geno, dad.geno);
+  var ts = childTraits(mom.trait, dad.trait);
+  var geno = gs[Math.floor(Math.random() * gs.length)];
+  var trait = ts[Math.floor(Math.random() * ts.length)];
+  var idx = state.kids.length;
+  var n = Math.max(idx + 1, 3);
+  var x = -((n - 1) * 1.7) / 2 + idx * 1.7;
+
+  var person = {
+    def: { id: 'kid' + idx, name: '자녀 ' + (idx + 1), x: x, y: KID_Y },
+    geno: geno, trait: trait
+  };
+  state.people[person.def.id] = person;
+  state.kids.push({ id: person.def.id, x: x });
+  var mesh = makeBlock(person, 1.6, 1.15);
+  if (animate) {
+    mesh.position.y = 1.4;
+    mesh.scale.setScalar(0.4);
+    mesh.userData.grow = { t: 0 };
+  }
+  /* 기존 자녀 재배치 */
+  state.kids.forEach(function (k, i) {
+    var nn = Math.max(state.kids.length, 3);
+    k.x = -((nn - 1) * 1.7) / 2 + i * 1.7;
+    var mm = blocks[k.id];
+    if (mm) mm.mesh.position.x = k.x;
+    state.people[k.id].def.x = k.x;
+  });
+  rebuildLines();
+  updateUI();
+  return mesh;
+}
+function clearKids() {
+  state.kids.forEach(function (k) {
+    var b = blocks[k.id];
+    if (b) {
+      scene.remove(b.mesh);
+      b.mesh.geometry.dispose();
+      delete blocks[k.id];
+    }
+    delete state.people[k.id];
+  });
+  state.kids = [];
+  rebuildLines();
+  updateUI();
+}
+
+/* ---------------------------------------------------------------
+   6. 확률 계산
+   --------------------------------------------------------------- */
+function coupleStats() {
+  var mom = personById('mom'), dad = personById('dad');
+  var gs = childGenos(mom.geno, dad.geno);
+  var counts = { A: 0, B: 0, AB: 0, O: 0 };
+  gs.forEach(function (g) { counts[genoType(g)]++; });
+  var ts = childTraits(mom.trait, dad.trait);
+  var canRoll = 0;
+  ts.forEach(function (t) { if (t === 'TT' || t === 'Tt') canRoll++; });
+  return {
+    counts: counts, total: gs.length,
+    alleles: { mom: alleles(mom.geno), dad: alleles(dad.geno) },
+    traitPct: Math.round(canRoll / ts.length * 100)
+  };
+}
+function renderPunnett() {
+  var st = coupleStats();
+  var mA = st.alleles.mom, dA = st.alleles.dad;
+  var html = '<div class="hd"></div><div class="hd">' + dA[0] + '</div><div class="hd">' + dA[1] + '</div>';
+  for (var i = 0; i < 2; i++) {
+    html += '<div class="hd">' + mA[i] + '</div>';
+    for (var j = 0; j < 2; j++) {
+      var key = [mA[i], dA[j]].sort().join('');
+      if (key === 'BA') key = 'AB';
+      html += '<div class="cell" style="color:' + TYPE_COLOR[genoType(key)] + '">' + key + '</div>';
+    }
+  }
+  $('#pun').innerHTML = html;
+
+  var list = '';
+  TYPE_ORDER.forEach(function (t) {
+    var pct = Math.round(st.counts[t] / st.total * 100);
+    list += '<div class="pb-row"><span class="pb-key" style="color:' + TYPE_COLOR[t] + '">' + t + '</span>' +
+      '<span class="pb-track"><span class="pb-fill" style="width:' + pct + '%;background:' + TYPE_COLOR[t] + '"></span></span>' +
+      '<span class="pb-val">' + pct + '%</span></div>';
+  });
+  $('#pb-list').innerHTML = list;
+  $('#pp-trait').innerHTML = '형질: 혀말기 가능 <span style="color:#0f766e">' + st.traitPct + '%</span> · 불가 <span style="color:#94a3b8">' + (100 - st.traitPct) + '%</span>';
+  var top = TYPE_ORDER.slice().sort(function (a, b) { return st.counts[b] - st.counts[a]; })[0];
+  $('#val-top').textContent = st.counts[top] ? top + '형' : '—';
+}
+
+/* ---------------------------------------------------------------
+   7. UI 갱신
+   --------------------------------------------------------------- */
+function updateUI() {
+  $('#val-kids').textContent = state.kids.length;
+  $('#val-sim').textContent = state.sim;
+  var sel = personById(state.sel);
+  if (!sel) { state.sel = 'mom'; sel = personById('mom'); }
+  $('#sel-name').textContent = sel.def.name;
+  $('#sel-trait').textContent = sel.trait;
+
+  var ag = allowedGenos(state.sel), at = allowedTraits(state.sel);
+  var curType = genoType(sel.geno);
+  $$('#type-row .t-btn').forEach(function (b) {
+    var t = b.getAttribute('data-type');
+    var ok = ag.some(function (g) { return genoType(g) === t; });
+    b.disabled = !ok;
+    b.classList.toggle('active', t === curType);
+    b.style.background = (t === curType) ? TYPE_COLOR[t] : '';
+    b.style.borderColor = (t === curType) ? TYPE_COLOR[t] : '';
+  });
+  $$('#geno-row .g-btn').forEach(function (b) {
+    var g = b.getAttribute('data-geno');
+    b.disabled = ag.indexOf(g) < 0;
+    b.classList.toggle('active', g === sel.geno);
+  });
+  $$('#trait-row .g-btn').forEach(function (b) {
+    var t = b.getAttribute('data-trait');
+    b.disabled = at.indexOf(t) < 0;
+    b.classList.toggle('active', t === sel.trait);
+  });
+  Object.keys(blocks).forEach(function (id) {
+    var b = blocks[id];
+    var isSel = id === state.sel;
+    if (b.mesh.userData.selected !== isSel) {
+      b.mesh.userData.selected = isSel;
+      drawBlockCanvas(b.cv, b.person, isSel);
+      b.tex.needsUpdate = true;
+    }
+    if (!b.mesh.userData.grow) b.mesh.scale.setScalar(isSel ? 1.045 : 1);
+  });
+  renderPunnett();
+}
+
+/* ---------------------------------------------------------------
+   8. 입력
+   --------------------------------------------------------------- */
+$$('#type-row .t-btn').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var t = b.getAttribute('data-type');
+    var p = personById(state.sel);
+    var ag = allowedGenos(state.sel);
+    var cand = ag.filter(function (g) { return genoType(g) === t; });
+    if (!cand.length) return;
+    p.geno = cand[0];
+    redrawBlock(state.sel);
+    updateUI();
+  });
+});
+$$('#geno-row .g-btn').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var g = b.getAttribute('data-geno');
+    var p = personById(state.sel);
+    if (allowedGenos(state.sel).indexOf(g) < 0) return;
+    p.geno = g;
+    redrawBlock(state.sel);
+    updateUI();
+  });
+});
+$$('#trait-row .g-btn').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var t = b.getAttribute('data-trait');
+    var p = personById(state.sel);
+    if (allowedTraits(state.sel).indexOf(t) < 0) return;
+    p.trait = t;
+    redrawBlock(state.sel);
+    updateUI();
+  });
+});
+$('#btn-child').addEventListener('click', function () {
+  if (state.kids.length >= MAX_KIDS) {
+    toast('자녀는 5명까지 만들 수 있어요 · 자녀를 지우고 다시 해 보세요');
+    return;
+  }
+  addKid(true);
+});
+$('#btn-sim').addEventListener('click', function () {
+  var mom = personById('mom'), dad = personById('dad');
+  var counts = { A: 0, B: 0, AB: 0, O: 0 };
+  for (var i = 0; i < 100; i++) {
+    var gs = childGenos(mom.geno, dad.geno);
+    counts[genoType(gs[Math.floor(Math.random() * gs.length)])]++;
+  }
+  state.sim += 100;
+  $('#val-sim').textContent = state.sim;
+  var parts = TYPE_ORDER.filter(function (t) { return counts[t]; })
+    .map(function (t) { return t + ' ' + counts[t]; }).join(' · ');
+  toast('100회 시뮬레이션 결과 → ' + parts);
+});
+$('#btn-clear').addEventListener('click', function () { clearKids(); });
+
+/* 블록 클릭 */
+var ray = new THREE.Raycaster();
+var ndc = new THREE.Vector2();
+var downPt = null;
+renderer.domElement.addEventListener('pointerdown', function (e) { downPt = { x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('pointerup', function (e) {
+  if (!downPt) return;
+  var moved = Math.hypot(e.clientX - downPt.x, e.clientY - downPt.y);
+  downPt = null;
+  if (moved > 8) return;
+  var rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  ray.setFromCamera(ndc, camera);
+  var meshes = Object.keys(blocks).map(function (k) { return blocks[k].mesh; });
+  var hits = ray.intersectObjects(meshes, false);
+  if (hits.length) {
+    state.sel = hits[0].object.userData.id;
+    updateUI();
+  }
+});
+
+/* ---------------------------------------------------------------
+   9. 카메라 · 토스트
+   --------------------------------------------------------------- */
+var FIT_W = 6.7, FIT_H = 5.0;
+function fitDistance() {
+  var vfov = camera.fov * Math.PI / 180;
+  var dH = FIT_H / Math.tan(vfov / 2);
+  var dW = FIT_W / (Math.tan(vfov / 2) * Math.max(camera.aspect, 0.26));
+  return Math.max(dH, dW) * 1.05;
+}
+function alignCamera(reset) {
+  if (reset) controls.target.set(0, 1.1, 0);
+  var dir = new THREE.Vector3(0, 0.12, 1).normalize();
+  camera.position.copy(controls.target).addScaledVector(dir, fitDistance());
+  controls.update();
+}
+window.__LAB_CAM__ = camera;
+
+var toastEl = null;
+function toast(msg) {
+  if (!toastEl) {
+    toastEl = document.createElement('div');
+    toastEl.id = 'pg-toast';
+    toastEl.style.cssText = 'position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+      'background:rgba(28,28,30,.9);color:#fff;font-size:12px;font-weight:700;line-height:1.4;padding:9px 15px;border-radius:14px;' +
+      'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .35s;font-family:inherit;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.25);word-break:keep-all';
+    document.body.appendChild(toastEl);
+  }
+  toastEl.textContent = msg;
+  toastEl.style.opacity = '1';
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(function () { toastEl.style.opacity = '0'; }, 3200);
+}
+
+/* ---------------------------------------------------------------
+   10. 초기화 · 루프
+   --------------------------------------------------------------- */
+function buildAll() {
+  Object.keys(blocks).forEach(function (k) {
+    scene.remove(blocks[k].mesh);
+    blocks[k].mesh.geometry.dispose();
+    delete blocks[k];
+  });
+  state.kids = [];
+  initPeople();
+  normalizeParents();
+  PEOPLE.forEach(function (p) { makeBlock(state.people[p.id], p.gen === 0 ? 2.0 : 2.2, p.gen === 0 ? 1.45 : 1.55); });
+  rebuildLines();
+  state.sel = 'mom';
+  state.sim = 0;
+  updateUI();
+}
+$('#btn-reset').addEventListener('click', function () { buildAll(); alignCamera(false); });
+$('#btn-cam').addEventListener('click', function () { alignCamera(false); });
+
+$('#theme-toggle').addEventListener('click', function (e) {
+  var dark = document.body.classList.toggle('dark-mode');
+  e.currentTarget.textContent = dark ? '☀️' : '🌙';
+  hemi.intensity = dark ? 0.55 : 0.9;
+  keyL.intensity = dark ? 0.5 : 0.8;
+});
+
+var clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  var dt = Math.min(clock.getDelta(), 0.05);
+  Object.keys(blocks).forEach(function (id) {
+    var m = blocks[id].mesh;
+    if (m.userData.grow) {
+      m.userData.grow.t += dt;
+      var k = Math.min(1, m.userData.grow.t / 0.55);
+      var e = 1 - Math.pow(1 - k, 3);
+      m.scale.setScalar(0.4 + 0.6 * e);
+      m.position.y = 1.4 - (1.4 - KID_Y) * e;
+      m.rotation.z = (1 - e) * 0.3;
+      if (k >= 1) { delete m.userData.grow; m.rotation.z = 0; updateUI(); }
+    }
+  });
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function resize() {
+  var w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  alignCamera(false);
+}
+window.addEventListener('resize', resize);
+
+buildAll();
+resize();
+animate();
+
+})();
+</script>
+
+<!-- Fullscreen / Windowed Mode Button -->
+<div class="bottom-right-bar">
+  <button id="fullscreenBtn" class="glass-panel back-btn" type="button" aria-label="전체화면으로 전환">
+    <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+  </button>
+</div>
+
+<script>
+/* ============ 전체화면 / 창모드 (표준 + 모바일 몰입 모드 폴백) ============ */
+(function () {
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                  document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+    }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) {
+            t = document.createElement('div');
+            t.id = 'ux-toast';
+            t.style.cssText = 'position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
+                'background:rgba(28,28,30,.88);color:#fff;font-size:12px;line-height:1.4;padding:9px 14px;border-radius:14px;' +
+                'z-index:9999;max-width:86vw;text-align:center;pointer-events:none;transition:opacity .3s;' +
+                'font-family:inherit;box-shadow:0 8px 24px rgba(0,0,0,.25)';
+            document.body.appendChild(t);
+        }
+        t.textContent = msg;
+        t.style.opacity = '1';
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.style.opacity = '0'; }, 2600);
+    }
+
+    if (btn) {
+        btn.addEventListener('click', function () {
+            var wasReal = realFs();
+            var wasPseudo = pseudo();
+            try {
+                if (!wasReal) {
+                    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen ||
+                              docEl.webkitRequestFullScreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
+                    if (req) req.call(docEl);
+                } else {
+                    var exit = document.exitFullscreen || document.webkitExitFullscreen ||
+                               document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen;
+                    if (exit) exit.call(document);
+                }
+            } catch (e) {}
+            setTimeout(function () {
+                if (wasReal) { setUI(); return; }
+                if (wasPseudo) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+                if (!realFs()) {
+                    docEl.classList.add('pseudo-fs');
+                    try { window.scrollTo(0, 1); } catch (e) {}
+                    toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+                }
+                setUI();
+            }, 420);
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, function () { setUI(); refit(); });
+    });
+
+    function theCam() {
+        try { if (window.__LAB_CAM__ && window.__LAB_CAM__.isPerspectiveCamera) return window.__LAB_CAM__; } catch (e) {}
+        return null;
+    }
+    function mobileFit() {
+        var cam = theCam();
+        if (!cam) return;
+        try {
+            if (!cam.userData) cam.userData = {};
+            if (!cam.userData.baseFov) cam.userData.baseFov = cam.fov;
+            var w = window.innerWidth, h = window.innerHeight, f = 1;
+            var k = 0.62;
+            var attr = docEl.getAttribute('data-mzoom');
+            if (attr) { var v = parseFloat(attr); if (!isNaN(v) && v > 0) k = v; }
+            if (w < h) f = 1 + (1 - w / h) * k;
+            else if (h <= 520) f = 1 + k * 0.18;
+            cam.fov = Math.min(88, cam.userData.baseFov * f);
+            cam.updateProjectionMatrix();
+        } catch (e) {}
+    }
+    mobileFit();
+
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            mobileFit();
+            try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+    setUI();
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+</body>
+</html>

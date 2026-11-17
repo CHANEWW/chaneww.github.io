@@ -258,6 +258,7 @@ body.dark-mode .am-name{color:#cbd5e1}
   </div>
 </div>
 
+<script src="../common/live-weather.js"></script>
 <script>
 /* =====================================================================
    기단과 우리나라 계절 3D  —  lab script
@@ -313,6 +314,9 @@ var PRESET_NOTE = {
 };
 
 var state = { si: 100, pa: 10, oh: 10, ya: 15, season: 'winter' };
+
+/* 오늘 실제 날씨를 불러오면 한반도 기온·습도를 실측값에 맞춰 보정한다 */
+var LIVE = { dT: 0, dRH: 0, w: null };
 
 /* ---------------- 렌더러 · 씬 ---------------- */
 var container = $('#canvas-container');
@@ -643,9 +647,11 @@ function applyState() {
         frontLbl.position.set(lx(131.5), 1.7, 0);
     }
 
+    var dispT = m.T + LIVE.dT;
+    var dispRH = Math.max(0, Math.min(100, m.RH + LIVE.dRH));
     $('#val-main').textContent = m.mainV > 0 ? m.main.short : '—';
-    $('#val-t').textContent = m.T.toFixed(1) + '℃';
-    $('#val-rh').textContent = m.RH.toFixed(0) + '%';
+    $('#val-t').textContent = dispT.toFixed(1) + '℃';
+    $('#val-rh').textContent = dispRH.toFixed(0) + '%';
     $('#val-front').textContent = on ? '형성' : '없음';
     $('#val-front').style.color = on ? '#7c3aed' : '#94a3b8';
 
@@ -706,6 +712,30 @@ function resetAll() {
     applyState();
 }
 $('#btn-reset').addEventListener('click', resetAll);
+
+/* ---------------- 🛰️ 오늘 실제 날씨 (Open-Meteo) ---------------- */
+SVLWeather.mount({
+    panel: '#side-ctrl',
+    defaultCity: 'jinju',
+    onApply: function (w) {
+        /* 오늘 날짜의 계절 프리셋을 고른 뒤, 한반도 기온·습도를 실측값에 맞춘다 */
+        var mon = new Date().getMonth() + 1;
+        var season = 'winter';
+        if (mon >= 3 && mon <= 5) season = 'spring';
+        else if (mon === 6 || mon === 8) season = 'summer';
+        else if (mon === 7) season = 'jangma';
+        else if (mon >= 9 && mon <= 11) season = 'autumn';
+        var pb = document.querySelector('#presets .preset-btn[data-season="' + season + '"]');
+        if (pb) pb.click();
+        var before = compute();
+        LIVE.dT = w.temp - before.T;
+        LIVE.dRH = w.humidity - before.RH;
+        applyState();
+        $('#note').textContent = '오늘 ' + w.city + ' ' + w.temp.toFixed(1) + '℃·습도 ' + Math.round(w.humidity) +
+            '%에 맞춰 ' + ({ spring: '봄', summer: '여름', jangma: '장마', autumn: '가을', winter: '겨울' }[season] || season) +
+            ' 프리셋으로 바꿨습니다.';
+    }
+});
 $('#btn-cam').addEventListener('click', function () { alignCamera(false); });
 
 /* ---------------- 카메라 ---------------- */

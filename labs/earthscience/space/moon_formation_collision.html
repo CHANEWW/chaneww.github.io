@@ -1,0 +1,1590 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.62">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>'행성 당구' 달 탄생 충돌 시뮬레이터 3D</title>
+<meta name="description" content="원시 지구와 테이아의 충돌 각도·속도·질량비·자전 속도를 바꾸며 파편 원반과 달의 탄생을 확인하는 3D 시뮬레이터">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+<script src="../../common/lib/three.min.js"></script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<style>
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: #eaf0f8; color: #1c1c1e;
+    transition: background-color 0.35s ease, color 0.35s ease;
+    -webkit-user-select: none; user-select: none;
+}
+#canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+#canvas-container canvas { display: block; touch-action: none; }
+
+/* ---------- visionOS 글래스모피즘 ---------- */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+body.dark-mode .glass-panel {
+    background: rgba(24, 30, 46, 0.82);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- 상단 좌측 ---------- */
+.top-left-bar { position: absolute; top: 16px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px;
+    text-decoration: none; color: #1c1c1e; font-weight: bold; font-size: 13.5px; cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease; border: none; font-family: inherit; white-space: nowrap;
+}
+.back-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+body.dark-mode .back-btn { color: #f1f5f9; }
+.tag-badge { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+.tag-pill { background: rgba(0, 122, 255, 0.14); color: #007aff; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 800; letter-spacing: 0.2px; }
+.qr-btn-icon { font-size: 14px; line-height: 1; }
+.qr-btn-label { font-size: 12.5px; }
+
+/* ---------- 상단 우측 ---------- */
+.top-right-bar { position: absolute; top: 16px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex: 0 0 40px;
+    border: none; color: #1c1c1e; font-family: inherit; transition: all 0.2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+body.dark-mode .icon-btn { color: #e2e8f0; }
+.data-card { display: inline-flex; align-items: center; gap: 14px; padding: 7px 16px; border-radius: 16px; }
+.data-item { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.data-label { font-size: 9.5px; color: #64748b; font-weight: bold; letter-spacing: -0.2px; white-space: nowrap; }
+.data-value { font-size: 13.5px; font-weight: 900; color: #0284c7; margin-top: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body.dark-mode .data-value { color: #38bdf8; }
+.data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.14); }
+
+/* ---------- 중앙 힌트 ---------- */
+.center-tooltip {
+    position: absolute; top: 84px; left: 46%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 16px; font-size: 11.5px; font-weight: bold; color: #334155;
+    pointer-events: none; z-index: 10; white-space: normal; text-align: center; line-height: 1.5;
+    letter-spacing: -0.2px; transition: opacity 0.35s ease; max-width: min(680px, calc(100vw - 470px)); word-break: keep-all;
+}
+.center-tooltip.hidden { opacity: 0; }
+body.dark-mode .center-tooltip { color: #cbd5e1; }
+
+/* ---------- 하단 중앙 ---------- */
+.bottom-ctrl-bar {
+    position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; z-index: 40;
+}
+.action-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.92); color: #1c1c1e;
+    font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+.action-btn:hover { background: #fff; transform: translateY(-1px); }
+body.dark-mode .action-btn { background: rgba(50, 50, 54, 0.92); color: #f2f2f7; border-color: rgba(255, 255, 255, 0.12); }
+
+/* ---------- 우측 하단 전체화면 ---------- */
+.bottom-right-bar { position: absolute; bottom: 22px; right: 20px; z-index: 45; }
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+    border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 800; color: #1c1c1e; white-space: nowrap;
+}
+body.dark-mode .fullscreen-btn { color: #e2e8f0; }
+
+/* ---------- 우측 조절 패널 ---------- */
+.side-ctrl-panel {
+    position: absolute; right: 20px; bottom: 76px; width: 234px; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px; z-index: 60; border-radius: 18px;
+    max-height: calc(100vh - 150px);
+}
+.panel-title {
+    font-size: 12px; font-weight: 800; color: #475569; letter-spacing: -0.2px; text-align: center;
+    padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); flex: 0 0 auto;
+}
+body.dark-mode .panel-title { color: #94a3b8; border-bottom-color: rgba(255, 255, 255, 0.1); }
+.panel-body { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.seg-btn {
+    padding: 8px 1px; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; letter-spacing: -0.3px; transition: all 0.2s ease;
+}
+.seg-btn:hover { background: #ffffff; }
+.seg-btn.active { background: #0f172a; border-color: #0f172a; color: #ffffff; }
+body.dark-mode .seg-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); color: #cbd5e1; }
+body.dark-mode .seg-btn.active { background: #38bdf8; border-color: #38bdf8; color: #06263d; }
+.btn-start {
+    width: 100%; padding: 11px 8px; border-radius: 14px; border: none;
+    background: linear-gradient(135deg, #f97316, #dc2626); color: #ffffff; font-family: inherit;
+    font-size: 12.5px; font-weight: 900; letter-spacing: -0.2px; cursor: pointer;
+    box-shadow: 0 5px 16px rgba(220, 38, 38, 0.3); transition: all 0.2s ease; white-space: nowrap;
+}
+.btn-start:hover { transform: translateY(-1px); }
+.btn-start:disabled { background: linear-gradient(135deg, #cbd5e1, #94a3b8); box-shadow: none; cursor: default; }
+.btn-ghost {
+    width: 100%; padding: 9px 8px; border-radius: 12px; border: 1px dashed rgba(37, 99, 235, 0.35);
+    background: rgba(37, 99, 235, 0.07); color: #1d4ed8; font-family: inherit; font-size: 11.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; transition: all 0.2s ease; letter-spacing: -0.3px;
+}
+.btn-ghost:hover { background: rgba(37, 99, 235, 0.14); }
+body.dark-mode .btn-ghost { color: #93c5fd; border-color: rgba(147, 197, 253, 0.4); background: rgba(59, 130, 246, 0.14); }
+.slider-row { display: flex; flex-direction: column; gap: 3px; }
+.slider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.slider-name { font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: -0.3px; white-space: nowrap; }
+.slider-val { font-size: 10.5px; font-weight: 900; color: #2563eb; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body.dark-mode .slider-name { color: #94a3b8; }
+body.dark-mode .slider-val { color: #7dd3fc; }
+input[type="range"].ctrl-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px;
+    background: #e2e8f0; outline: none; cursor: pointer; margin: 0;
+}
+input[type="range"].ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: #3b82f6; cursor: pointer; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4); border: 2px solid #fff;
+}
+input[type="range"].ctrl-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; background: #3b82f6; border: 2px solid #fff; cursor: pointer;
+}
+body.dark-mode input[type="range"].ctrl-slider { background: #334155; }
+.state-badge {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    padding: 7px 8px; border-radius: 12px; background: rgba(2, 132, 199, 0.09);
+    border: 1px dashed rgba(2, 132, 199, 0.28); font-size: 10.5px; font-weight: 800; color: #0369a1;
+    letter-spacing: -0.3px; text-align: center; overflow: hidden;
+}
+.state-badge .sb-note { font-size: 8.5px; font-weight: 700; opacity: 0.82; white-space: nowrap; }
+.state-badge.good { background: rgba(22, 163, 74, 0.11); border-color: rgba(22, 163, 74, 0.32); color: #15803d; }
+.state-badge.warn { background: rgba(234, 88, 12, 0.11); border-color: rgba(234, 88, 12, 0.32); color: #c2410c; }
+.state-badge.bad { background: rgba(220, 38, 38, 0.11); border-color: rgba(220, 38, 38, 0.32); color: #b91c1c; }
+body.dark-mode .state-badge { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.3); color: #7dd3fc; }
+body.dark-mode .state-badge.good { background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.34); color: #86efac; }
+body.dark-mode .state-badge.warn { background: rgba(249, 115, 22, 0.14); border-color: rgba(249, 115, 22, 0.34); color: #fdba74; }
+body.dark-mode .state-badge.bad { background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.34); color: #fca5a5; }
+
+/* ---------- 분석 패널 ---------- */
+.sub-panel {
+    position: absolute; right: 266px; bottom: 76px; width: 320px; max-height: 74vh; overflow-y: auto;
+    display: none; flex-direction: column; gap: 9px; padding: 13px 15px; border-radius: 18px; z-index: 55;
+    -webkit-overflow-scrolling: touch;
+}
+.sub-panel.show { display: flex; }
+.sub-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.sub-panel-title { font-size: 12.5px; font-weight: 800; color: #1e293b; letter-spacing: -0.3px; }
+body.dark-mode .sub-panel-title { color: #e2e8f0; }
+.sub-close { background: rgba(0, 0, 0, 0.06); border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 11px; font-weight: bold; color: #64748b; font-family: inherit; flex: 0 0 24px; }
+body.dark-mode .sub-close { background: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+.result-hero {
+    display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 14px;
+    background: rgba(15, 23, 42, 0.05); border: 1px solid rgba(15, 23, 42, 0.06);
+}
+body.dark-mode .result-hero { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); }
+.result-hero .rh-icon { font-size: 24px; line-height: 1; flex: 0 0 auto; }
+.result-hero .rh-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.result-hero .rh-title { font-size: 12.5px; font-weight: 900; color: #0f172a; letter-spacing: -0.3px; }
+.result-hero .rh-sub { font-size: 9.5px; font-weight: 700; color: #64748b; line-height: 1.4; word-break: keep-all; }
+body.dark-mode .result-hero .rh-title { color: #f1f5f9; }
+body.dark-mode .result-hero .rh-sub { color: #94a3b8; }
+.data-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 700; }
+.data-row .dr-name { color: #64748b; white-space: nowrap; }
+.data-row .dr-val { color: #0f172a; font-weight: 900; font-variant-numeric: tabular-nums; text-align: right; }
+body.dark-mode .data-row .dr-name { color: #94a3b8; }
+body.dark-mode .data-row .dr-val { color: #e2e8f0; }
+.bar-wrap { display: flex; flex-direction: column; gap: 3px; }
+.bar-label { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 800; color: #64748b; }
+.bar-track { height: 9px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; }
+.bar-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #f59e0b, #ef4444); transition: width 0.35s ease; }
+.note { font-size: 9.5px; color: #7c8899; line-height: 1.45; letter-spacing: -0.2px; }
+body.dark-mode .note { color: #94a3b8; }
+.hr { height: 1px; background: rgba(0, 0, 0, 0.06); margin: 1px 0; }
+body.dark-mode .hr { background: rgba(255, 255, 255, 0.1); }
+
+/* ---------- 토스트 ---------- */
+#ux-toast {
+    position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.9); color: #fff; font-size: 12.5px; font-weight: 800; line-height: 1.4;
+    padding: 10px 16px; border-radius: 14px; z-index: 9999; max-width: 86vw; text-align: center;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s ease; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+#ux-toast.show { opacity: 1; }
+
+/* ---------- 반응형: 모바일 세로 ---------- */
+@media (max-width: 900px) {
+    .top-left-bar { top: max(8px, env(safe-area-inset-top)) !important; left: 8px !important; right: 56px !important; gap: 6px !important; flex-wrap: nowrap !important; align-items: center !important; overflow: hidden; }
+    .top-left-bar .back-btn, .top-left-bar > a { flex: 0 0 auto; padding: 6px 10px !important; font-size: 12px !important; gap: 4px !important; white-space: nowrap; }
+    .top-left-bar .tag-badge { flex: 0 1 auto; min-width: 0; padding: 6px 10px !important; font-size: 12px !important; gap: 5px !important; }
+    .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+    .top-left-bar .qr-btn { display: none !important; }
+    .top-right-bar { top: calc(max(8px, env(safe-area-inset-top)) + 44px) !important; left: 8px !important; right: 8px !important; gap: 6px !important; justify-content: flex-end !important; flex-wrap: nowrap !important; }
+    .data-card { flex: 1 1 0%; min-width: 0; gap: 4px !important; padding: 6px 8px !important; justify-content: space-around !important; overflow: hidden; flex-direction: row !important; align-items: center !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-item > * { white-space: nowrap; }
+    .data-label { font-size: 9px !important; }
+    .data-value { font-size: 12.5px !important; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+    .bottom-right-bar { top: max(8px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 8px !important; left: auto !important; z-index: 20; }
+    .bottom-right-bar .fullscreen-btn { padding: 6px 9px !important; font-size: 14px !important; gap: 4px; line-height: 1; }
+    .bottom-right-bar #fullscreenText { display: none !important; }
+    .center-tooltip { top: calc(max(8px, env(safe-area-inset-top)) + 148px) !important; left: 8px !important; right: 8px !important; transform: none !important; width: auto !important; max-width: none !important; font-size: 11px !important; padding: 7px 12px !important; white-space: normal !important; line-height: 1.45; text-align: center; z-index: 15 !important; }
+    .bottom-ctrl-bar { left: 8px !important; right: 8px !important; bottom: calc(6px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; border-radius: 16px !important; padding: 6px !important; gap: 5px !important; justify-content: center !important; flex-wrap: nowrap !important; }
+    .action-btn { font-size: 11.5px !important; padding: 7px 12px !important; }
+    .side-ctrl-panel { right: 8px !important; bottom: calc(62px + env(safe-area-inset-bottom)) !important; width: 178px !important; padding: 9px !important; gap: 6px !important; max-height: calc(100vh - 190px) !important; }
+    .panel-title { font-size: 10.5px !important; padding-bottom: 4px !important; }
+    .slider-name { font-size: 9px !important; }
+    .slider-val { font-size: 9.5px !important; }
+    .btn-start { padding: 9px 6px; font-size: 11.5px; }
+    .btn-ghost { padding: 7px 6px; font-size: 10.5px; }
+    .state-badge { font-size: 9.5px; padding: 5px; }
+    .state-badge .sb-note { font-size: 8px; }
+    .sub-panel { left: 8px !important; right: 8px !important; bottom: calc(62px + env(safe-area-inset-bottom)) !important; width: auto !important; max-width: none !important; max-height: 44vh !important; padding: 11px 12px !important; gap: 7px !important; }
+    .sub-panel-title { font-size: 11px !important; }
+    .data-row { font-size: 10px; }
+    .result-hero { padding: 8px 9px; }
+    .result-hero .rh-title { font-size: 11.5px; }
+    .result-hero .rh-sub { font-size: 9px; }
+    .note { font-size: 9px; }
+}
+@media (max-width: 430px) {
+    .tag-pill { display: none !important; }
+}
+/* ---------- 모바일 가로 ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+    /* 가로 화면: 데이터 카드는 조절 패널과 겹치므로 숨기고 패널 값으로 확인 */
+    .top-right-bar .data-card { display: none !important; }
+
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)) !important; left: 6px !important; right: auto !important; max-width: 46vw; gap: 5px; }
+    .top-left-bar .back-btn, .top-left-bar > a, .top-left-bar .tag-badge { padding: 4px 9px !important; font-size: 11px !important; height: 30px; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)) !important; right: 88px !important; left: auto !important; gap: 5px !important; }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+    .bottom-right-bar { top: max(6px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 6px !important; z-index: 20; }
+    .bottom-right-bar .fullscreen-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText { display: none !important; }
+    .center-tooltip { top: auto !important; bottom: 54px !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; width: max-content !important; max-width: 44vw !important; font-size: 10px !important; padding: 4px 9px !important; line-height: 1.3; }
+    .side-ctrl-panel { top: 44px !important; right: 8px !important; bottom: auto !important; width: 200px !important; padding: 7px 9px !important; gap: 4px !important; max-height: calc(100vh - 56px) !important; }
+    .panel-title { font-size: 10px !important; padding-bottom: 2px !important; }
+    .slider-name { font-size: 8.5px !important; }
+    .slider-val { font-size: 9px !important; }
+    .btn-start { padding: 6px 6px; font-size: 10.5px; }
+    .btn-ghost { padding: 5px 6px; font-size: 9.5px; }
+    .bottom-ctrl-bar { left: 50% !important; right: auto !important; bottom: 4px !important; transform: translateX(-50%) !important; width: auto !important; max-width: calc(100vw - 12px); border-radius: 14px !important; padding: 4px 8px !important; gap: 3px !important; }
+    .action-btn { font-size: 10px !important; padding: 4px 9px !important; }
+    .sub-panel { left: 8px !important; right: auto !important; bottom: 40px !important; width: 230px !important; max-height: 52vh !important; padding: 8px 10px !important; gap: 5px !important; }
+    .data-row { font-size: 9px; }
+    .result-hero { padding: 6px 8px; }
+    .result-hero .rh-icon { font-size: 18px; }
+    .result-hero .rh-title { font-size: 10px; }
+    .result-hero .rh-sub { font-size: 8px; }
+    .note { font-size: 8px; }
+}
+/* ---------- 몰입(의사 전체화면) 모드 ---------- */
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .center-tooltip { display: none !important; }
+html.pseudo-fs .top-right-bar { display: flex !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
+</style>
+</head>
+<body class="is-3d">
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>'행성 당구' 달 탄생 충돌 시뮬레이터 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+        <div class="data-item"><span class="data-label">결과</span><span class="data-value" id="dResult">대기</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">지구 자전</span><span class="data-value" id="dSpin">5.0 h</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">달 공전</span><span class="data-value" id="dMoon">—</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip glass-panel" id="centerTooltip">🎱 각도·속도·질량을 맞춘 뒤 [테이아 발사]를 눌러 원시 지구와 충돌시켜 보세요.</div>
+
+<div class="bottom-ctrl-bar glass-panel">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+    <div class="panel-title">🎱 충돌 조건</div>
+    <div class="panel-body">
+        <div class="seg three">
+            <button class="seg-btn" data-preset="canonical" type="button">표준</button>
+            <button class="seg-btn" data-preset="headon" type="button">정면</button>
+            <button class="seg-btn" data-preset="graze" type="button">스침</button>
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">충돌 각도</span><span class="slider-val" id="vAngle">45°</span></div>
+            <input type="range" class="ctrl-slider" id="rAngle" min="0" max="80" step="1" value="45" aria-label="충돌 각도">
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">충돌 속도</span><span class="slider-val" id="vSpeed">12.0 km/s</span></div>
+            <input type="range" class="ctrl-slider" id="rSpeed" min="8" max="20" step="0.5" value="12" aria-label="충돌 속도">
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">테이아 질량비</span><span class="slider-val" id="vMass">0.10 M⊕</span></div>
+            <input type="range" class="ctrl-slider" id="rMass" min="0.05" max="0.35" step="0.01" value="0.10" aria-label="테이아 질량비">
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">원시 지구 자전</span><span class="slider-val" id="vSpin">5.0 h</span></div>
+            <input type="range" class="ctrl-slider" id="rSpin" min="2" max="24" step="0.5" value="5" aria-label="원시 지구 자전 주기">
+        </div>
+        <div class="state-badge" id="predBadge"><span id="predText">🌕 달 형성 예상</span><span class="sb-note" id="predNote">비스듬한 충돌</span></div>
+        <button class="btn-start" id="btnLaunch" type="button">🚀 테이아 발사!</button>
+        <button class="btn-ghost" id="btnData" type="button">📊 충돌 분석 보기</button>
+    </div>
+</div>
+
+<div class="sub-panel glass-panel" id="dataPanel">
+    <div class="sub-head"><span class="sub-panel-title">📊 충돌 분석</span><button class="sub-close" id="dataClose" type="button" aria-label="닫기">✕</button></div>
+    <div class="result-hero">
+        <span class="rh-icon" id="rhIcon">🌕</span>
+        <div class="rh-body">
+            <span class="rh-title" id="rhTitle">아직 충돌 전</span>
+            <span class="rh-sub" id="rhSub">발사하면 파편의 흐름과 결과를 여기에서 분석합니다.</span>
+        </div>
+    </div>
+    <div class="data-row"><span class="dr-name">테이아 질량</span><span class="dr-val" id="aMass">0.10 M⊕</span></div>
+    <div class="data-row"><span class="dr-name">충돌 에너지</span><span class="dr-val" id="aEnergy">—</span></div>
+    <div class="data-row"><span class="dr-name">튕겨 나간 파편</span><span class="dr-val" id="aDebris">—</span></div>
+    <div class="data-row"><span class="dr-name">지구로 재흡수</span><span class="dr-val" id="aAccrete">—</span></div>
+    <div class="data-row"><span class="dr-name">달 질량 (파편의)</span><span class="dr-val" id="aMoonMass">—</span></div>
+    <div class="data-row"><span class="dr-name">달 공전 주기</span><span class="dr-val" id="aMoonPeriod">—</span></div>
+    <div class="data-row"><span class="dr-name">자전 주기 변화</span><span class="dr-val" id="aSpin">—</span></div>
+    <div class="data-row"><span class="dr-name">자전축 기울기</span><span class="dr-val" id="aTilt">—</span></div>
+    <div class="hr"></div>
+    <div class="bar-wrap">
+        <div class="bar-label"><span>파편 원반 형성량</span><span id="barDiskTxt">0 %</span></div>
+        <div class="bar-track"><div class="bar-fill" id="barDisk"></div></div>
+    </div>
+    <div class="bar-wrap">
+        <div class="bar-label"><span>달로 응집되는 비율</span><span id="barMoonTxt">0 %</span></div>
+        <div class="bar-track"><div class="bar-fill" id="barMoon" style="background:linear-gradient(90deg,#38bdf8,#6366f1)"></div></div>
+    </div>
+    <div class="note" id="analysisNote">로슈 한계(약 2.9 R⊕) 안쪽 파편은 다시 지구로 떨어지고, 바깥쪽 파편만 원반을 이루어 달로 뭉칩니다. 화면 속 거리·속도는 눈으로 보기 쉽게 축소했습니다.</div>
+</div>
+
+<div id="ux-toast"></div>
+
+<script>
+/* ============ 공통 3D 기반 (씬·카메라·조명·테마·반응형) ============ */
+window.SVL = (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var LIGHT_BG = 0xe9eff8, DARK_BG = 0x05070f;
+
+    var container = $('canvas-container');
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(LIGHT_BG);
+    scene.fog = new THREE.Fog(LIGHT_BG, 40, 90);
+
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / Math.max(1, window.innerHeight), 0.1, 500);
+    camera.position.set(2, 10.5, 19);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = false;
+    controls.minDistance = 7;
+    controls.maxDistance = 46;
+    controls.minPolarAngle = Math.PI * 0.08;
+    controls.maxPolarAngle = Math.PI * 0.52;
+    controls.target.set(0, 0, 0);
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+    if (THREE.TOUCH) { controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE }; }
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0x9fb3cc, 0.72);
+    scene.add(hemi);
+    var key = new THREE.DirectionalLight(0xfff4e6, 1.35);
+    key.position.set(-10, 14, 10);
+    scene.add(key);
+    var rim = new THREE.DirectionalLight(0x8fb8ff, 0.42);
+    rim.position.set(9, -6, -9);
+    scene.add(rim);
+
+    /* ---- 라벨 스프라이트 ---- */
+    var labelList = [];
+    var LAB_DPR = 2, LAB_H = 128, LAB_FONT = 54, LAB_PAD = 46, LAB_MAXW = 1536;
+    function drawLabel(cv, text, color) {
+        var g = cv.getContext('2d');
+        var S = LAB_DPR, W = cv.width / S, H = cv.height / S;
+        g.setTransform(S, 0, 0, S, 0, 0);
+        g.clearRect(0, 0, W, H);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        var tw = Math.min(W - 12, g.measureText(text).width + LAB_PAD);
+        var x0 = (W - tw) / 2, r = 30;
+        g.fillStyle = 'rgba(255,255,255,0.94)';
+        g.beginPath();
+        g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
+        g.quadraticCurveTo(x0 + tw, 22, x0 + tw, 22 + r);
+        g.lineTo(x0 + tw, 106 - r);
+        g.quadraticCurveTo(x0 + tw, 106, x0 + tw - r, 106);
+        g.lineTo(x0 + r, 106);
+        g.quadraticCurveTo(x0, 106, x0, 106 - r);
+        g.lineTo(x0, 22 + r);
+        g.quadraticCurveTo(x0, 22, x0 + r, 22);
+        g.closePath();
+        g.fill();
+        g.fillStyle = color || '#123';
+        g.fillText(text, W / 2, 66);
+    }
+    function layoutLabel(spr) {
+        var L = spr.userData.label;
+        if (!L) return;
+        var cv = L.cv, g = cv.getContext('2d');
+        var f = (window.innerWidth < 900) ? 1.7 : 1;
+        g.setTransform(LAB_DPR, 0, 0, LAB_DPR, 0, 0);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
+        var tw = g.measureText(L.text).width;
+        var W = Math.max(LAB_FONT * 1.6 + LAB_PAD, Math.min(LAB_MAXW, tw + LAB_PAD + 14));
+        var pw = Math.round(W * LAB_DPR), ph = Math.round(LAB_H * LAB_DPR);
+        if (cv.width !== pw) cv.width = pw;
+        if (cv.height !== ph) cv.height = ph;
+        drawLabel(cv, L.text, L.color);
+        if (L.tex) L.tex.needsUpdate = true;
+        spr.scale.set(L.ww * (W / 512) * f, L.ww * 0.25 * f, 1);
+    }
+    function makeLabel(text, color, w) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = LAB_H;
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        try { tex.anisotropy = renderer.capabilities.getMaxAnisotropy(); } catch (e) { }
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+        var ww = w || 1.9;
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color, ww: ww };
+        spr.renderOrder = 20;
+        labelList.push(spr);
+        layoutLabel(spr);
+        return spr;
+    }
+    function relabelAll() { for (var i = 0; i < labelList.length; i++) layoutLabel(labelList[i]); }
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { setTimeout(relabelAll, 30); }).catch(function () { });
+    }
+    window.addEventListener('load', function () { setTimeout(relabelAll, 150); });
+
+    /* ---- 안내 문구 ---- */
+    var hintEl = $('centerTooltip');
+    var hintTimer = null;
+    function setHint(text, sticky) {
+        if (!hintEl) return;
+        hintEl.textContent = text;
+        hintEl.classList.remove('hidden');
+        if (hintTimer) clearTimeout(hintTimer);
+        if (!sticky) hintTimer = setTimeout(function () { hintEl.classList.add('hidden'); }, 5600);
+    }
+
+    /* ---- 테마 ---- */
+    var isDark = false;
+    var themeCbs = [];
+    function applyTheme() {
+        document.body.classList.toggle('dark-mode', isDark);
+        scene.background = new THREE.Color(isDark ? DARK_BG : LIGHT_BG);
+        scene.fog = new THREE.Fog(isDark ? DARK_BG : LIGHT_BG, 40, 90);
+        hemi.intensity = isDark ? 0.36 : 0.72;
+        key.intensity = isDark ? 1.1 : 1.35;
+        rim.intensity = isDark ? 0.5 : 0.42;
+        $('themeBtn').textContent = isDark ? '☀️' : '🌙';
+        $('themeBtn').title = isDark ? '주간 모드로 전환' : '야간 모드로 전환';
+        for (var i = 0; i < themeCbs.length; i++) { try { themeCbs[i](isDark); } catch (e) { } }
+    }
+    $('themeBtn').addEventListener('click', function () { isDark = !isDark; applyTheme(); });
+
+    /* ---- 크기/시점 ---- */
+    var svlFit = null;
+    function onResize() {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        camera.updateProjectionMatrix();
+        if (typeof svlFit === 'function') svlFit();
+    }
+    window.addEventListener('resize', onResize);
+
+    var hooks = { reset: null, align: null, fit: null };
+    $('btnReset').addEventListener('click', function () { if (hooks.reset) hooks.reset(); });
+    $('btnAlign').addEventListener('click', function () {
+        if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit();
+        setHint('🎥 시점을 정면으로 정렬했습니다.', false);
+    });
+
+    var frameCbs = [];
+    var last = performance.now();
+    function frame(now) {
+        requestAnimationFrame(frame);
+        var dt = Math.min(0.08, (now - last) / 1000);
+        last = now;
+        for (var i = 0; i < frameCbs.length; i++) { try { frameCbs[i](dt, now); } catch (e) { } }
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    requestAnimationFrame(frame);
+
+    return {
+        $: $, scene: scene, camera: camera, renderer: renderer, controls: controls,
+        hemi: hemi, key: key, rim: rim,
+        makeLabel: makeLabel, setHint: setHint, relabel: relabelAll,
+        onTheme: function (fn) { themeCbs.push(fn); },
+        onFrame: function (fn) { frameCbs.push(fn); },
+        isDark: function () { return isDark; },
+        hooks: hooks,
+        setFit: function (fn) { hooks.fit = fn; svlFit = fn; },
+        setReset: function (fn) { hooks.reset = fn; },
+        setAlign: function (fn) { hooks.align = fn; }
+    };
+})();
+</script>
+<script>
+/* ==========================================================================
+   '행성 당구' 달 탄생 충돌 시뮬레이터
+   · 원시 지구 + 테이아(화성 크기 원시 행성) 충돌
+   · 파편 입자 물리 → 로슈 한계 안팎의 원반 → 중력 응집으로 달 형성
+   ========================================================================== */
+(function () {
+    'use strict';
+    var S = window.SVL, $ = S.$, scene = S.scene, camera = S.camera;
+
+    var R_E = 2.2;                       /* 원시 지구 반지름(화면 단위) */
+    var GM = 26;                         /* 화면 단위 중력 상수 (궤도 눈금용) */
+    var ROCHE = R_E * 2.9;               /* 유체 로슈 한계 ≈ 2.9 R⊕ */
+    var MAX_PARTICLES = 1100;
+
+    var P = { angle: 45, speed: 12, mass: 0.10, spin: 5 };
+
+    /* ---------- 텍스처 (절차적 생성) ---------- */
+    function seeded(seed) {
+        var s = seed;
+        return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+    }
+    function earthTexture() {
+        var cv = document.createElement('canvas');
+        cv.width = 1024; cv.height = 512;
+        var g = cv.getContext('2d');
+        var grd = g.createLinearGradient(0, 0, 0, 512);
+        grd.addColorStop(0, '#0b2d5c');
+        grd.addColorStop(0.5, '#0f4c81');
+        grd.addColorStop(1, '#0b2d5c');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, 1024, 512);
+        /* 대륙 덩어리 */
+        var rnd = seeded(20261118);
+        for (var i = 0; i < 26; i++) {
+            var cx = rnd() * 1024, cy = 60 + rnd() * 392;
+            var baseR = 26 + rnd() * 78;
+            var blobs = 9 + Math.floor(rnd() * 8);
+            for (var j = 0; j < blobs; j++) {
+                var a = rnd() * Math.PI * 2, d = rnd() * baseR;
+                var x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.7;
+                var r = baseR * (0.28 + rnd() * 0.5);
+                /* 텍스처가 가로로 이어지므로 가장자리는 반대편에도 그려 이음매를 없앤다 */
+                [x, x - 1024, x + 1024].forEach(function (xx) {
+                    if (xx < -r || xx > 1024 + r) return;
+                    var lg = g.createRadialGradient(xx, y, 0, xx, y, r);
+                    lg.addColorStop(0, 'rgba(96,120,72,0.95)');
+                    lg.addColorStop(0.7, 'rgba(74,96,58,0.8)');
+                    lg.addColorStop(1, 'rgba(74,96,58,0)');
+                    g.fillStyle = lg;
+                    g.beginPath(); g.arc(xx, y, r, 0, Math.PI * 2); g.fill();
+                });
+            }
+        }
+        /* 사막·화산 지대 */
+        for (var k = 0; k < 90; k++) {
+            var x2 = rnd() * 1024, y2 = 40 + rnd() * 432, r2 = 3 + rnd() * 9;
+            g.fillStyle = 'rgba(' + (160 + Math.floor(rnd() * 40)) + ',' + (130 + Math.floor(rnd() * 40)) + ',86,' + (0.07 + rnd() * 0.11) + ')';
+            g.beginPath(); g.arc(x2, y2, r2, 0, Math.PI * 2); g.fill();
+        }
+        var tex = new THREE.CanvasTexture(cv);
+        tex.wrapS = THREE.RepeatWrapping;
+        return tex;
+    }
+    function rockTexture(base, seed) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = 256;
+        var g = cv.getContext('2d');
+        g.fillStyle = base; g.fillRect(0, 0, 512, 256);
+        var rnd = seeded(seed);
+        for (var i = 0; i < 330; i++) {
+            var x = rnd() * 512, y = rnd() * 256, r = 2 + rnd() * 13;
+            var v = 60 + Math.floor(rnd() * 110);
+            g.fillStyle = 'rgba(' + v + ',' + Math.floor(v * 0.9) + ',' + Math.floor(v * 0.84) + ',' + (0.1 + rnd() * 0.28) + ')';
+            g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+        }
+        for (var j = 0; j < 42; j++) {
+            var cx = rnd() * 512, cy = rnd() * 256, cr = 5 + rnd() * 15;
+            g.strokeStyle = 'rgba(140,120,104,0.5)';
+            g.lineWidth = 1.6;
+            g.beginPath(); g.arc(cx, cy, cr, 0, Math.PI * 2); g.stroke();
+            g.fillStyle = 'rgba(210,196,180,0.16)';
+            g.beginPath(); g.arc(cx, cy, cr * 0.92, 0, Math.PI * 2); g.fill();
+        }
+        var tex = new THREE.CanvasTexture(cv);
+        tex.wrapS = THREE.RepeatWrapping;
+        return tex;
+    }
+    function magmaTexture() {
+        var cv = document.createElement('canvas');
+        cv.width = 1024; cv.height = 512;
+        var g = cv.getContext('2d');
+        g.fillStyle = '#000000'; g.fillRect(0, 0, 1024, 512);
+        var rnd = seeded(777);
+        for (var i = 0; i < 150; i++) {
+            var x = rnd() * 1024, y = rnd() * 512, r = 3 + rnd() * 22;
+            var lg = g.createRadialGradient(x, y, 0, x, y, r);
+            var heat = 0.4 + rnd() * 0.6;
+            lg.addColorStop(0, 'rgba(255,' + Math.floor(150 + 90 * heat) + ',40,' + (0.6 + rnd() * 0.4) + ')');
+            lg.addColorStop(1, 'rgba(120,20,0,0)');
+            g.fillStyle = lg;
+            g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+        }
+        return new THREE.CanvasTexture(cv);
+    }
+    function glowSprite(color, size) {
+        var cv = document.createElement('canvas');
+        cv.width = 128; cv.height = 128;
+        var g = cv.getContext('2d');
+        var lg = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+        lg.addColorStop(0, 'rgba(255,255,255,0.95)');
+        lg.addColorStop(0.28, color);
+        lg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = lg;
+        g.fillRect(0, 0, 128, 128);
+        var t = new THREE.CanvasTexture(cv);
+        var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+        sp.scale.set(size, size, 1);
+        return sp;
+    }
+
+    /* ---------- 별 배경 ---------- */
+    (function stars() {
+        var n = 900, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+        var rnd = seeded(4242);
+        for (var i = 0; i < n; i++) {
+            var r = 70 + rnd() * 80;
+            var th = rnd() * Math.PI * 2, ph = Math.acos(2 * rnd() - 1);
+            pos[i * 3] = r * Math.sin(ph) * Math.cos(th);
+            pos[i * 3 + 1] = r * Math.cos(ph);
+            pos[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
+            var b = 0.55 + rnd() * 0.45;
+            col[i * 3] = b; col[i * 3 + 1] = b; col[i * 3 + 2] = Math.min(1, b * 1.05);
+        }
+        var geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        var mat = new THREE.PointsMaterial({ size: 0.5, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85, depthWrite: false });
+        var pts = new THREE.Points(geo, mat);
+        scene.add(pts);
+        S.onTheme(function (dark) { pts.visible = dark; mat.opacity = dark ? 0.9 : 0.35; });
+        pts.visible = false;
+    })();
+
+    /* ---------- 원시 지구 ---------- */
+    var earthGroup = new THREE.Group();
+    scene.add(earthGroup);
+    var earthMat = new THREE.MeshStandardMaterial({
+        map: earthTexture(), roughness: 0.86, metalness: 0.04,
+        emissive: new THREE.Color(0xff4d00), emissiveIntensity: 0, emissiveMap: magmaTexture()
+    });
+    var earth = new THREE.Mesh(new THREE.SphereGeometry(R_E, 56, 40), earthMat);
+    earthGroup.add(earth);
+    var atm = new THREE.Mesh(
+        new THREE.SphereGeometry(R_E * 1.055, 40, 28),
+        new THREE.MeshBasicMaterial({ color: 0x5aa9ff, transparent: true, opacity: 0.16, side: THREE.BackSide, depthWrite: false })
+    );
+    earthGroup.add(atm);
+    var axisLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -R_E * 1.55, 0), new THREE.Vector3(0, R_E * 1.55, 0)]),
+        new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5 })
+    );
+    earthGroup.add(axisLine);
+    var lblEarth = S.makeLabel('원시 지구', '#0b3a6b', 2.6);
+    lblEarth.position.set(0, R_E + 1.05, 0);
+    earthGroup.add(lblEarth);
+
+    /* ---------- 테이아 ---------- */
+    var theiaMat = new THREE.MeshStandardMaterial({ map: rockTexture('#8d7a6c', 991), roughness: 0.95, metalness: 0.06 });
+    var theia = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 28), theiaMat);
+    var theiaGlow = glowSprite('rgba(255,170,90,0.75)', 3.2);
+    theia.add(theiaGlow);
+    var lblTheia = S.makeLabel('테이아', '#7c2d12', 2.1);
+    theia.add(lblTheia);
+    lblTheia.position.set(0, 1.65, 0);
+    scene.add(theia);
+
+    /* ---------- 로슈 한계 고리 ---------- */
+    (function rocheRing() {
+        var pts = [], N = 160;
+        for (var i = 0; i <= N; i++) {
+            var a = i / N * Math.PI * 2;
+            pts.push(new THREE.Vector3(Math.cos(a) * ROCHE, 0, Math.sin(a) * ROCHE));
+        }
+        var geo = new THREE.BufferGeometry().setFromPoints(pts);
+        var mat = new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.35, gapSize: 0.28, transparent: true, opacity: 0.75 });
+        var line = new THREE.Line(geo, mat);
+        line.computeLineDistances();
+        scene.add(line);
+        var lbl = S.makeLabel('로슈 한계', '#475569', 2.2);
+        lbl.position.set(ROCHE * 0.72, 0.35, ROCHE * 0.72);
+        scene.add(lbl);
+    })();
+
+    /* ---------- 파편 입자 ---------- */
+    var partGeo = new THREE.BufferGeometry();
+    var pPos = new Float32Array(MAX_PARTICLES * 3);
+    var pCol = new Float32Array(MAX_PARTICLES * 3);
+    var pSize = new Float32Array(MAX_PARTICLES);
+    for (var i = 0; i < MAX_PARTICLES; i++) { pSize[i] = 0.2; pPos[i * 3 + 1] = 9999; }
+    partGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    partGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+    /* 파편 하나하나가 또렷한 색 점으로 보이도록 부드러운 원형 스프라이트를 쓴다 */
+    function dotTexture() {
+        var cv = document.createElement('canvas');
+        cv.width = 64; cv.height = 64;
+        var g = cv.getContext('2d');
+        var lg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        lg.addColorStop(0, 'rgba(255,255,255,1)');
+        lg.addColorStop(0.45, 'rgba(255,255,255,0.92)');
+        lg.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = lg;
+        g.beginPath(); g.arc(32, 32, 31, 0, Math.PI * 2); g.fill();
+        return new THREE.CanvasTexture(cv);
+    }
+    var partMat = new THREE.PointsMaterial({
+        size: 0.34, map: dotTexture(), vertexColors: true, sizeAttenuation: true, transparent: true,
+        opacity: 0.95, alphaTest: 0.06, depthWrite: false
+    });
+    var particles = new THREE.Points(partGeo, partMat);
+    particles.frustumCulled = false;
+    scene.add(particles);
+    var P_list = [];
+
+    /* ---------- 파편 원반(디스크) ---------- */
+    function diskTexture() {
+        var cv = document.createElement('canvas');
+        cv.width = 256; cv.height = 256;
+        var g = cv.getContext('2d');
+        g.clearRect(0, 0, 256, 256);
+        var lg = g.createRadialGradient(128, 128, 24, 128, 128, 126);
+        lg.addColorStop(0, 'rgba(255,120,40,0)');
+        lg.addColorStop(0.42, 'rgba(255,120,40,0.10)');
+        lg.addColorStop(0.66, 'rgba(255,150,60,0.55)');
+        lg.addColorStop(0.86, 'rgba(255,90,30,0.30)');
+        lg.addColorStop(1, 'rgba(255,60,10,0)');
+        g.fillStyle = lg;
+        g.beginPath(); g.arc(128, 128, 126, 0, Math.PI * 2); g.fill();
+        /* 원반의 결(얇은 궤도선) */
+        g.strokeStyle = 'rgba(255,200,150,0.20)';
+        for (var i = 0; i < 22; i++) {
+            g.beginPath();
+            g.arc(128, 128, 60 + i * 3, 0, Math.PI * 2);
+            g.stroke();
+        }
+        return new THREE.CanvasTexture(cv);
+    }
+    var diskMat = new THREE.MeshBasicMaterial({
+        map: diskTexture(), transparent: true, opacity: 0, side: THREE.DoubleSide,
+        color: 0xff8a3d, depthWrite: false
+    });
+    var debrisDisk = new THREE.Mesh(new THREE.CircleGeometry(1, 96), diskMat);
+    debrisDisk.rotation.x = -Math.PI / 2;
+    debrisDisk.visible = false;
+    scene.add(debrisDisk);
+
+    /* ---------- 충돌 섬광 ---------- */
+    var flash = glowSprite('rgba(255,220,150,0.95)', 1);
+    flash.visible = false;
+    scene.add(flash);
+
+    /* ---------- 달 ---------- */
+    var moonMat = new THREE.MeshStandardMaterial({ map: rockTexture('#c9c4bd', 313), roughness: 0.98, metalness: 0.02 });
+    var moon = new THREE.Mesh(new THREE.SphereGeometry(0.6, 40, 28), moonMat);
+    moon.visible = false;
+    scene.add(moon);
+    var moonGlow = glowSprite('rgba(255,240,210,0.5)', 2.6);
+    moon.add(moonGlow);
+    var lblMoon = S.makeLabel('달', '#334155', 1.6);
+    lblMoon.position.set(0, 0.85, 0);
+    lblMoon.visible = false;
+    moon.add(lblMoon);
+    var moonTrail = (function () {
+        var pts = [], N = 128;
+        for (var i = 0; i <= N; i++) {
+            var a = i / N * Math.PI * 2;
+            pts.push(new THREE.Vector3(Math.cos(a) * 4, 0, Math.sin(a) * 4));
+        }
+        var l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+            new THREE.LineBasicMaterial({ color: 0x60a5fa, transparent: true, opacity: 0.32 }));
+        l.visible = false;
+        scene.add(l);
+        return l;
+    })();
+
+    /* ---------- 궤적 안내선 ---------- */
+    var aimLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-9.6, 0, 0), new THREE.Vector3(R_E, 0, 0)]),
+        new THREE.LineDashedMaterial({ color: 0xf59e0b, dashSize: 0.5, gapSize: 0.35, transparent: true, opacity: 0.8 })
+    );
+    aimLine.computeLineDistances();
+    scene.add(aimLine);
+
+    /* ---------- 상태 ---------- */
+    var state = 'aim';
+    var clock = 0, flyT = 0, impactAt = 0, phaseT = 0;
+    var theiaR = 1;
+    var theiaVel = new THREE.Vector3();
+    var outcome = 'moon';
+    var derived = {};
+    var debrisAlive = 0, debrisEscaped = 0, debrisAccreted = 0, debrisTotal = 0;
+    var moonR = 4, moonAng = 0, moonMeshScale = 0;
+    var moonPhase = 0;
+
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+    /* ---------- 결과 판정 ---------- */
+    function classify() {
+        var rad = P.angle * Math.PI / 180;
+        var v = P.speed;
+        if (P.angle <= 11 && v >= 13.5) return 'destroy';
+        if (P.angle >= 64) return 'graze';
+        if (P.angle <= 14 && v >= 10.5 && v < 13.5) return 'destroy';
+        if (v <= 9.0) return 'merge';
+        if (v >= 18.0 && P.angle <= 22) return 'destroy';
+        if (P.angle >= 56 && v >= 16.5) return 'graze';
+        if (rad > 0) return 'moon';
+        return 'merge';
+    }
+
+    function derive() {
+        var rad = P.angle * Math.PI / 180;
+        var tan = Math.sin(rad);
+        var q = P.mass / 0.10;
+        var disk = clamp(0.42 * q * Math.sin(rad * 1.85) * (P.speed / 12), 0.03, 0.9);
+        var tilt = 0;
+        if (outcome === 'moon') tilt = 23.5 * clamp(tan * 1.45, 0, 1) * Math.pow(clamp(P.speed / 12, 0.7, 1.25), 0.5);
+        else if (outcome === 'merge') tilt = 4 + tan * 6;
+        else if (outcome === 'graze') tilt = 2 + tan * 8;
+        var L = P.mass * (P.speed / 12) * (tan + 0.12) * 6;
+        var spinAfter = clamp(P.spin / (1 + 1.35 * L), 3.0, 24);
+        var moonMassFrac = 0.62;
+        var orbitR = R_E * (2.9 + 2.1 * tan);
+        derived = {
+            rad: rad, tan: tan, disk: disk, tilt: tilt, spinAfter: spinAfter,
+            energy: 0.5 * (P.mass * 5.97e24) * Math.pow(P.speed * 1000, 2),   /* J */
+            moonMassFrac: moonMassFrac,
+            moonR: clamp(0.55 + 0.4 * q * tan, 0.5, 1.05),
+            orbitR: clamp(orbitR, R_E * 2.95, R_E * 5.2)
+        };
+        if (outcome === 'merge') { derived.disk = 0; }
+        if (outcome === 'graze') { derived.disk = Math.min(derived.disk, 0.12); }
+        if (outcome === 'destroy') { derived.disk = 0; derived.tilt = 0; derived.spinAfter = 0; }
+    }
+
+    function outcomeLabel() {
+        if (outcome === 'moon') return { icon: '🌕', title: '달 형성 · 원반 → 위성', sub: '비스듬한 충돌로 파편 원반이 생기고, 바깥쪽 파편이 뭉쳐 달이 만들어집니다.' };
+        if (outcome === 'destroy') return { icon: '💥', title: '두 행성 모두 파괴', sub: '정면에 가까운 빠른 충돌은 지구와 테이아를 모두 산산조각 냅니다. 달이 생길 원반이 남지 않습니다.' };
+        if (outcome === 'graze') return { icon: '🌠', title: '스침 · 테이아 탈출', sub: '빗겨 나가면 큰 충돌이 일어나지 않아 달이 만들어지지 않습니다. 지구에는 작은 흔적만 남습니다.' };
+        return { icon: '🪨', title: '저속 합체 · 달 없음', sub: '너무 느린 충돌은 파편을 거의 만들지 못하고 테이아가 지구에 그대로 붙어 버립니다.' };
+    }
+
+    /* ---------- UI ---------- */
+    function syncPrediction() {
+        outcome = classify();
+        derive();
+        var lab = outcomeLabel();
+        var badge = $('predBadge');
+        badge.className = 'state-badge' + (outcome === 'moon' ? ' good' : (outcome === 'destroy' ? ' bad' : ' warn'));
+        $('predText').textContent = lab.icon + ' ' + (outcome === 'moon' ? '달 형성 예상' : outcome === 'destroy' ? '파괴 예상' : outcome === 'graze' ? '스침 예상' : '합체 예상');
+        $('predNote').textContent = '각도 ' + P.angle + '° · 속도 ' + P.speed.toFixed(1) + ' km/s';
+        $('dResult').textContent = state === 'aim' ? '대기' : lab.icon;
+        $('vAngle').textContent = P.angle + '°';
+        $('vSpeed').textContent = P.speed.toFixed(1) + ' km/s';
+        $('vMass').textContent = P.mass.toFixed(2) + ' M⊕';
+        $('vSpin').textContent = P.spin.toFixed(1) + ' h';
+        $('dSpin').textContent = P.spin.toFixed(1) + ' h';
+        $('aMass').textContent = P.mass.toFixed(2) + ' M⊕';
+        $('aEnergy').textContent = (derived.energy / 1e30).toFixed(1) + ' ×10³⁰ J';
+        $('barDiskTxt').textContent = Math.round(derived.disk * 100) + ' %';
+        $('barDisk').style.width = Math.round(derived.disk * 100) + '%';
+        if (state === 'aim') {
+            $('rhIcon').textContent = lab.icon;
+            $('rhTitle').textContent = lab.title;
+            $('rhSub').textContent = '발사하면 ' + lab.sub;
+        }
+    }
+
+    function valueOf(id, v) { $(id).textContent = v; }
+
+    function bindSliders() {
+        $('rAngle').addEventListener('input', function () {
+            P.angle = parseFloat(this.value); syncPrediction(); layoutAim();
+        });
+        $('rSpeed').addEventListener('input', function () {
+            P.speed = parseFloat(this.value); syncPrediction(); layoutAim();
+        });
+        $('rMass').addEventListener('input', function () {
+            P.mass = parseFloat(this.value); syncPrediction(); layoutAim();
+        });
+        $('rSpin').addEventListener('input', function () {
+            P.spin = parseFloat(this.value); syncPrediction();
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (b) {
+            b.addEventListener('click', function () {
+                var k = b.getAttribute('data-preset');
+                if (k === 'canonical') { P.angle = 45; P.speed = 12; P.mass = 0.10; P.spin = 5; }
+                if (k === 'headon') { P.angle = 5; P.speed = 16; P.mass = 0.12; P.spin = 5; }
+                if (k === 'graze') { P.angle = 72; P.speed = 14; P.mass = 0.08; P.spin = 5; }
+                Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (x) { x.classList.remove('active'); });
+                b.classList.add('active');
+                $('rAngle').value = P.angle; $('rSpeed').value = P.speed; $('rMass').value = P.mass; $('rSpin').value = P.spin;
+                resetSim(); syncPrediction(); layoutAim();
+            });
+        });
+    }
+
+    /* ---------- 위치 배치 ---------- */
+    function layoutAim() {
+        if (state !== 'aim') return;
+        theiaR = R_E * Math.cbrt(P.mass);
+        theia.scale.setScalar(theiaR);
+        theiaGlow.scale.set(theiaR * 3.4, theiaR * 3.4, 1);
+        var b = (R_E + theiaR) * Math.sin(P.angle * Math.PI / 180);
+        theia.position.set(-9.6, b, 0);
+        theia.visible = true;
+        aimLine.geometry.setFromPoints([new THREE.Vector3(-9.6, b, 0), new THREE.Vector3(0, 0, 0)]);
+        aimLine.computeLineDistances();
+        aimLine.visible = true;
+        lblEarth.position.set(0, R_E + 1.05, 0);
+    }
+
+    /* ---------- 초기화 ---------- */
+    function resetSim() {
+        state = 'aim';
+        flyT = 0; phaseT = 0; clock = 0;
+        theia.visible = true;
+        theia.scale.setScalar(R_E * Math.cbrt(P.mass));
+        theiaMat.emissive = new THREE.Color(0x000000);
+        earthMat.emissiveIntensity = 0;
+        particles.visible = true;
+        for (var i = 0; i < MAX_PARTICLES; i++) { pPos[i * 3 + 1] = 9999; }
+        partGeo.attributes.position.needsUpdate = true;
+        partGeo.setDrawRange(0, 0);
+        P_list.length = 0;
+        debrisAlive = 0; debrisEscaped = 0; debrisAccreted = 0; debrisTotal = 0;
+        flash.visible = false;
+        debrisDisk.visible = false; diskMat.opacity = 0;
+        moon.visible = false; lblMoon.visible = false; moonTrail.visible = false; moonMeshScale = 0;
+        earthGroup.visible = true;
+        earth.scale.setScalar(1);
+        atm.visible = true;
+        axisLine.visible = true;
+        diskMat.opacity = 0;
+        earthGroup.rotation.set(0, 0, 0);
+        $('btnLaunch').disabled = false;
+        $('btnLaunch').textContent = '🚀 테이아 발사!';
+        $('dMoon').textContent = '—';
+        $('dResult').textContent = '대기';
+        $('rhIcon').textContent = '🌕';
+        $('rhTitle').textContent = '아직 충돌 전';
+        $('rhSub').textContent = '발사하면 파편의 흐름과 결과를 여기에서 분석합니다.';
+        $('aDebris').textContent = '—';
+        $('aAccrete').textContent = '—';
+        $('aMoonMass').textContent = '—';
+        $('aMoonPeriod').textContent = '—';
+        $('aSpin').textContent = '—';
+        $('aTilt').textContent = '—';
+        $('barMoonTxt').textContent = '0 %';
+        $('barMoon').style.width = '0%';
+        $('analysisNote').textContent = '로슈 한계(약 2.9 R⊕) 안쪽 파편은 다시 지구로 떨어지고, 바깥쪽 파편만 원반을 이루어 달로 뭉칩니다. 화면 속 거리·속도는 눈으로 보기 쉽게 축소했습니다.';
+        syncPrediction();
+        layoutAim();
+    }
+
+    /* ---------- 발사 → 충돌 ---------- */
+    function launch() {
+        if (state !== 'aim') return;
+        outcome = classify();
+        derive();
+        theiaR = R_E * Math.cbrt(P.mass);
+        theia.scale.setScalar(theiaR);
+        theiaGlow.scale.setScalar(theiaR * 3.4);
+        layoutAim();
+        state = 'fly';
+        flyT = 0;
+        theiaVel.set(0, 0, 0);
+        aimLine.visible = false;
+        $('btnLaunch').disabled = true;
+        $('btnLaunch').textContent = '💥 충돌 중…';
+        S.setHint('🚀 테이아가 원시 지구를 향해 날아갑니다. 화면을 돌려 옆에서 관찰해 보세요.', false);
+        $('dResult').textContent = '충돌!';
+    }
+
+    var tmpV = new THREE.Vector3();
+
+    function spawnImpact(impactPoint) {
+        var count = MAX_PARTICLES;
+        if (outcome === 'moon') count = Math.round(430 + 520 * derived.disk);
+        else if (outcome === 'destroy') count = 1050;
+        else if (outcome === 'graze') count = 160;
+        else count = 120;
+        count = Math.min(count, MAX_PARTICLES);
+
+        var impactDir = impactPoint.clone().normalize();
+        var speedBase = 1.3 + (P.speed - 8) * 0.13;
+        var rnd = seeded(Math.floor(Math.random() * 100000) + 11);
+
+        for (var i = 0; i < count; i++) {
+            /* 충돌면 주변 구형 캡에서 파편 방출 */
+            var u = rnd(), v = rnd();
+            var theta = 2 * Math.PI * u;
+            var phi = Math.acos(2 * v - 1);
+            var dir = new THREE.Vector3(Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi));
+            /* 충돌 방향 쪽으로 반구를 기울인다 */
+            var tangent = new THREE.Vector3().crossVectors(impactDir, new THREE.Vector3(0, 1, 0));
+            if (tangent.lengthSq() < 0.01) tangent.set(1, 0, 0);
+            tangent.normalize();
+            var bit = new THREE.Vector3().crossVectors(impactDir, tangent).normalize();
+            dir.multiplyScalar(0.55).addScaledVector(impactDir, 1.15)
+                .addScaledVector(tangent, (rnd() - 0.5) * 0.7)
+                .addScaledVector(bit, (rnd() - 0.5) * 0.45).normalize();
+
+            var pos = impactPoint.clone().addScaledVector(dir, R_E * (0.12 + rnd() * 0.5));
+            var sp = speedBase * (0.5 + rnd() * 1.35);
+            var vel = dir.clone().multiplyScalar(sp);
+            /* 전체 각운동량: 테이아의 접선 속도 성분을 더한다 */
+            var tanDir = new THREE.Vector3(-impactDir.z, 0, impactDir.x).normalize();
+            vel.addScaledVector(tanDir, speedBase * 0.55 * derived.tan * (0.4 + rnd() * 0.8));
+            vel.y += (rnd() - 0.5) * speedBase * 0.16;
+
+            /* 구성: 맨틀(주황) / 철 핵(백색-노랑) */
+            var isCore = rnd() < 0.32;
+            var color;
+            if (isCore) color = new THREE.Color(1.0, 0.82, 0.34);
+            else {
+                var t = rnd();
+                color = new THREE.Color(0.98, 0.24 + t * 0.3, 0.03 + t * 0.05);
+            }
+            P_list.push({ p: pos, v: vel, c: color, core: isCore, dead: false, life: 0 });
+        }
+        debrisTotal = P_list.length;
+
+        for (var k = 0; k < P_list.length; k++) {
+            var q = P_list[k];
+            pPos[k * 3] = q.p.x; pPos[k * 3 + 1] = q.p.y; pPos[k * 3 + 2] = q.p.z;
+            pCol[k * 3] = q.c.r; pCol[k * 3 + 1] = q.c.g; pCol[k * 3 + 2] = q.c.b;
+        }
+        partGeo.setDrawRange(0, P_list.length);
+        partGeo.attributes.position.needsUpdate = true;
+        partGeo.attributes.color.needsUpdate = true;
+
+        flash.position.copy(impactPoint).multiplyScalar(1.25);
+        flash.scale.setScalar(9);
+        flash.material.opacity = 1;
+        flash.visible = true;
+    }
+
+    function onImpact() {
+        state = 'impact';
+        phaseT = 0;
+        var ip = theia.position.clone();
+        theia.visible = false;
+        spawnImpact(ip);
+
+        if (outcome === 'moon') {
+            S.setHint('💥 충돌! 맨틀(주황)과 철 핵(흰색) 파편이 튀어 오르며 원반을 만듭니다.', false);
+            $('dResult').textContent = '파편';
+        } else if (outcome === 'destroy') {
+            S.setHint('💥 정면 충돌! 지구와 테이아가 함께 산산조각 났습니다.', false);
+            $('dResult').textContent = '파괴';
+        } else if (outcome === 'graze') {
+            S.setHint('🌠 스치는 충돌! 테이아는 거의 그대로 지나가고 작은 파편만 튑니다.', false);
+            $('dResult').textContent = '스침';
+        } else {
+            S.setHint('🪨 저속 충돌! 파편이 거의 생기지 않고 두 행성이 그대로 붙었습니다.', false);
+            $('dResult').textContent = '합체';
+        }
+    }
+
+    /* ---------- 파편 시뮬레이션 ---------- */
+    var accreteCount = 0, escapeCount = 0;
+
+    function stepParticles(dt) {
+        var n = P_list.length;
+        var damping = state === 'settle' ? 0.85 : 0.1;
+        var addToEarth = 0, gone = 0;
+        for (var i = 0; i < n; i++) {
+            var q = P_list[i];
+            if (q.dead) continue;
+            q.life += dt;
+            var r2 = q.p.lengthSq();
+            var r = Math.sqrt(r2);
+            if (r < 0.001) { q.dead = true; continue; }
+            /* 중력 */
+            var g = -GM / (r2 * r);
+            q.v.x += q.p.x * g * dt;
+            q.v.y += q.p.y * g * dt;
+            q.v.z += q.p.z * g * dt;
+
+            /* 원반으로 가라앉히기(속도 감쇠 + 수직 성분 억제) */
+            if (q.life > 0.55) {
+                q.v.y *= (1 - damping * dt * 2.4);
+                if (state === 'settle') {
+                    /* 원운동에 가깝게: 접선 속도를 원궤도 속도에 맞춘다 */
+                    var vc = Math.sqrt(GM / Math.max(0.8, r));
+                    var rad = new THREE.Vector3(q.p.x, 0, q.p.z);
+                    var rl = rad.length();
+                    if (rl > 0.001) {
+                        rad.multiplyScalar(1 / rl);
+                        var tangential = tmpV.set(-rad.z, 0, rad.x);
+                        var vt = q.v.dot(tangential);
+                        var target = vc * 0.98;
+                        q.v.addScaledVector(tangential, (target - vt) * Math.min(1, dt * 2.4));
+                        /* 반지름 방향 속도 줄이기 */
+                        var vr = q.v.dot(rad);
+                        q.v.addScaledVector(rad, -vr * Math.min(1, dt * 2.6));
+                    }
+                }
+            }
+
+            q.p.addScaledVector(q.v, dt);
+
+            var r2n = q.p.length();
+            if (r2n < R_E * 1.01) { q.dead = true; pPos[i * 3 + 1] = 9999; addToEarth++; continue; }
+            if (r2n > 34) { q.dead = true; pPos[i * 3 + 1] = 9999; gone++; continue; }
+            pPos[i * 3] = q.p.x; pPos[i * 3 + 1] = q.p.y; pPos[i * 3 + 2] = q.p.z;
+        }
+        if (addToEarth) debrisAccreted += addToEarth;
+        if (gone) debrisEscaped += gone;
+        partGeo.attributes.position.needsUpdate = true;
+    }
+
+    /* ---------- 달 응집 ---------- */
+    var clusterCenter = new THREE.Vector3();
+
+    function beginMoonClump() {
+        /* 살아 있는 파편의 평균 위치·속도 → 달의 시작점 */
+        var sum = new THREE.Vector3(), vsum = new THREE.Vector3(), cnt = 0;
+        for (var i = 0; i < P_list.length; i++) {
+            var q = P_list[i];
+            if (q.dead) continue;
+            var r = q.p.length();
+            if (r < ROCHE) continue;
+            sum.add(q.p); vsum.add(q.v); cnt++;
+        }
+        if (!cnt) {
+            /* 살아 있는 파편이 없으면 원반 자리에서 달을 만든다 */
+            sum.set(derived.orbitR, 0, 0);
+            vsum.set(0, 0, Math.sqrt(GM / derived.orbitR));
+        } else {
+            sum.multiplyScalar(1 / cnt);
+            vsum.multiplyScalar(1 / cnt);
+        }
+        /* 달은 로슈 한계 바깥의 원궤도에 놓는다 */
+        var dir = new THREE.Vector3(sum.x, 0, sum.z);
+        if (dir.lengthSq() < 0.01) dir.set(1, 0, 0);
+        dir.normalize();
+        var targetR = Math.max(ROCHE * 1.12, derived.orbitR);
+        clusterCenter.copy(dir.multiplyScalar(targetR));
+        moonR = targetR;
+        moonAng = Math.atan2(clusterCenter.z, clusterCenter.x);
+        moon.position.copy(clusterCenter);
+        moon.visible = true;
+        moonMeshScale = 0.001;
+        moon.scale.setScalar(moonMeshScale);
+        lblMoon.visible = true;
+        moonTrail.visible = true;
+        moonTrail.geometry.setFromPoints((function () {
+            var pts = [], N = 128;
+            for (var k = 0; k <= N; k++) {
+                var a = k / N * Math.PI * 2;
+                pts.push(new THREE.Vector3(Math.cos(a) * targetR, 0, Math.sin(a) * targetR));
+            }
+            return pts;
+        })());
+        moonPhase = 0.9 * Math.PI - moonAng;
+        state = 'moonform';
+        phaseT = 0;
+    }
+
+    function stepMoonForm(dt) {
+        phaseT += dt;
+        moonMeshScale = Math.min(derived.moonR, moonMeshScale + dt * 0.55);
+        moon.scale.setScalar(moonMeshScale);
+        /* 파편이 달로 빨려 들어가며 사라진다 */
+        var pull = Math.min(1, dt * 1.4);
+        for (var i = 0; i < P_list.length; i++) {
+            var q = P_list[i];
+            if (q.dead) continue;
+            if (q.p.length() < ROCHE) { q.dead = true; pPos[i * 3 + 1] = 9999; debrisAccreted++; continue; }
+            q.p.lerp(clusterCenter, pull * 0.5);
+            q.v.multiplyScalar(0.94);
+            pPos[i * 3] = q.p.x; pPos[i * 3 + 1] = q.p.y; pPos[i * 3 + 2] = q.p.z;
+            if (q.p.distanceTo(clusterCenter) < derived.moonR * 0.9) { q.dead = true; pPos[i * 3 + 1] = 9999; }
+        }
+        diskMat.opacity = Math.max(0, diskMat.opacity - dt * 0.35);
+        if (diskMat.opacity <= 0.01) debrisDisk.visible = false;
+        /* 달은 원궤도로 출발 */
+        moonAng += dt * Math.sqrt(GM / moonR) / moonR;
+        moon.position.set(Math.cos(moonAng) * moonR, 0, Math.sin(moonAng) * moonR);
+        moon.rotation.y += dt * 0.4;
+        partGeo.attributes.position.needsUpdate = true;
+        if (phaseT > 3.2) {
+            state = 'orbit';
+            phaseT = 0;
+            finishReport();
+        }
+    }
+
+    /* ---------- 결과 보고 ---------- */
+    function finishReport() {
+        var lab = outcomeLabel();
+        $('rhIcon').textContent = lab.icon;
+        $('rhTitle').textContent = lab.title;
+        $('rhSub').textContent = lab.sub;
+        $('dResult').textContent = outcome === 'moon' ? '달 형성' : outcome === 'destroy' ? '파괴' : outcome === 'graze' ? '스침' : '합체';
+        $('aDebris').textContent = debrisTotal ? (debrisTotal + '개 중 ' + debrisEscaped) : '—';
+        $('aAccrete').textContent = debrisTotal ? (debrisAccreted + '개') : '—';
+
+        if (outcome === 'moon') {
+            var mm = Math.round(derived.disk * derived.moonMassFrac * 100);
+            $('aMoonMass').textContent = '약 ' + Math.max(1, mm) + ' % (파편 원반 대비)';
+            $('aMoonPeriod').textContent = (27.3).toFixed(1) + ' 일';
+            $('dMoon').textContent = '27.3 d';
+            $('aSpin').textContent = P.spin.toFixed(1) + ' h → ' + derived.spinAfter.toFixed(1) + ' h';
+            $('dSpin').textContent = derived.spinAfter.toFixed(1) + ' h';
+            $('aTilt').textContent = '0° → ' + derived.tilt.toFixed(1) + '°';
+            $('barMoonTxt').textContent = mm + ' %';
+            $('barMoon').style.width = Math.min(100, mm) + '%';
+            $('analysisNote').textContent = '달은 로슈 한계 바깥(약 ' + (moonR / R_E).toFixed(1) + ' R⊕)에서 뭉쳤습니다. 실제 달은 지금도 1년에 3.8 cm씩 멀어지고 있으며, 그 조석력이 지구의 하루를 24시간으로 늦췄습니다.';
+            S.setHint('🌕 파편 원반에서 달이 만들어져 지구 둘레를 돌고 있습니다.', false);
+        } else if (outcome === 'destroy') {
+            $('aMoonMass').textContent = '0 %';
+            $('aMoonPeriod').textContent = '없음';
+            $('dMoon').textContent = '없음';
+            $('aSpin').textContent = '불규칙';
+            $('dSpin').textContent = '—';
+            $('aTilt').textContent = '불규칙';
+            $('analysisNote').textContent = '파편의 대부분이 로슈 한계 안쪽으로 떨어지거나 우주로 빠져나가, 뭉칠 만한 원반이 남지 않았습니다. 실제로는 수백만 년 뒤 파편이 다시 뭉쳐 지구가 됩니다.';
+            S.setHint('💥 달이 만들어지지 않았습니다. 각도나 속도를 줄여 다시 시도해 보세요.', false);
+        } else if (outcome === 'graze') {
+            $('aMoonMass').textContent = '0 %';
+            $('aMoonPeriod').textContent = '없음';
+            $('dMoon').textContent = '없음';
+            $('aSpin').textContent = P.spin.toFixed(1) + ' h → ' + derived.spinAfter.toFixed(1) + ' h';
+            $('aTilt').textContent = '0° → ' + derived.tilt.toFixed(1) + '°';
+            $('analysisNote').textContent = '충돌 매개변수가 커서 테이아가 지구를 스쳐 지나갔습니다. 지구의 자전축은 조금 기울었지만 달을 만들 만한 원반은 생기지 않았습니다.';
+            S.setHint('🌠 테이아가 스쳐 지나갔습니다. 각도를 줄이면 정면에 가까운 충돌이 됩니다.', false);
+        } else {
+            $('aMoonMass').textContent = '0 %';
+            $('aMoonPeriod').textContent = '없음';
+            $('dMoon').textContent = '없음';
+            $('aSpin').textContent = P.spin.toFixed(1) + ' h → ' + P.spin.toFixed(1) + ' h';
+            $('aTilt').textContent = '0° → ' + derived.tilt.toFixed(1) + '°';
+            $('analysisNote').textContent = '충돌 속도가 느려 파편이 거의 튀지 않았습니다. 테이아는 지구에 그대로 합쳐졌고 달은 생기지 않았습니다.';
+            S.setHint('🪨 두 행성이 합쳐졌습니다. 속도를 높이면 파편이 생깁니다.', false);
+        }
+        $('btnLaunch').disabled = false;
+        $('btnLaunch').textContent = '🔄 다시 발사';
+    }
+
+    /* ---------- 프레임 ---------- */
+    S.onFrame(function (dt) {
+        clock += dt;
+
+        if (state === 'aim') {
+            theia.rotation.y += dt * 0.35;
+            theiaGlow.material.opacity = 0.55 + Math.sin(clock * 2) * 0.18;
+            earthGroup.rotation.y += dt * (2 * Math.PI / (P.spin * 6));
+            flash.visible = false;
+            return;
+        }
+
+        if (state === 'fly') {
+            flyT += dt;
+            theiaR = R_E * Math.cbrt(P.mass);
+            var rad = P.angle * Math.PI / 180;
+            var b = (R_E + theiaR) * Math.sin(rad);
+            var vUnits = 7.5 + (P.speed - 8) * 0.62;
+            /* 중력에 의한 미세한 궤적 휨 */
+            var r = theia.position.length();
+            var gAcc = GM / (r * r * r);
+            theiaVel.x += -theia.position.x * gAcc * dt * 0.55;
+            theiaVel.y += (-theia.position.y * gAcc * dt * 0.55) + (b - theia.position.y) * 0.35 * dt;
+            theiaVel.x += (vUnits - theiaVel.x) * Math.min(1, dt * 6);
+            theia.position.addScaledVector(theiaVel, dt);
+            theia.rotation.y += dt * 0.6;
+            if (theia.position.distanceTo(new THREE.Vector3(0, 0, 0)) <= R_E + theiaR * 0.92) {
+                onImpact();
+            } else if (theia.position.x > R_E * 3.4) {
+                /* 완전히 빗나감 */
+                state = 'done';
+                theia.visible = false;
+                outcome = 'graze';
+                derive();
+                finishReport();
+            }
+            return;
+        }
+
+        if (state === 'impact' || state === 'settle') {
+            phaseT += dt;
+            stepParticles(dt);
+            /* 섬광 감쇠 */
+            if (flash.visible) {
+                flash.material.opacity = Math.max(0, flash.material.opacity - dt * 2.2);
+                flash.scale.setScalar(9 + (1 - flash.material.opacity) * 6);
+                if (flash.material.opacity <= 0.02) flash.visible = false;
+            }
+            /* 지구 발열 */
+            earthMat.emissiveIntensity = Math.max(0, 0.75 - phaseT * 0.16);
+            if (outcome === 'destroy') {
+                earth.scale.setScalar(Math.max(0.1, 1 - phaseT * 0.34));
+                earthMat.emissiveIntensity = Math.max(0, 1.2 - phaseT * 0.3);
+                atm.visible = false;
+                axisLine.visible = false;
+            }
+            earthGroup.rotation.y += dt * 0.25;
+            if (state === 'impact' && phaseT > 0.85) {
+                state = 'settle';
+                phaseT = 0;
+                if (outcome === 'moon') {
+                    debrisDisk.visible = true;
+                    debrisDisk.position.set(0, 0, 0);
+                    debrisDisk.scale.setScalar(2.6);
+                }
+            }
+            if (debrisDisk.visible) {
+                var grow = Math.min(1, (state === 'settle' ? phaseT : 1) / 1.3);
+                debrisDisk.scale.setScalar(2.6 + 3.2 * grow);
+                diskMat.opacity = (state === 'settle' ? 0.62 : 0.45) * grow;
+            }
+            if (state === 'settle' && phaseT > 3.6) {
+                if (outcome === 'moon') {
+                    beginMoonClump();
+                } else {
+                    state = 'done';
+                    finishReport();
+                }
+            }
+            return;
+        }
+
+        if (state === 'moonform') {
+            stepMoonForm(dt);
+            earthMat.emissiveIntensity = Math.max(0, earthMat.emissiveIntensity - dt * 0.2);
+            return;
+        }
+
+        if (state === 'orbit' || state === 'done') {
+            /* 파편 잔여물 정리 */
+            stepParticles(dt * 0.6);
+            if (outcome === 'moon') {
+                moonAng += dt * Math.sqrt(GM / moonR) / moonR;
+                moon.position.set(Math.cos(moonAng) * moonR, 0, Math.sin(moonAng) * moonR);
+                moon.rotation.y += dt * 0.25;
+                earthGroup.rotation.y += dt * (2 * Math.PI / (Math.max(3, derived.spinAfter) * 2.5));
+            }
+            if (flash.visible) {
+                flash.material.opacity = Math.max(0, flash.material.opacity - dt * 2.2);
+                if (flash.material.opacity <= 0.02) flash.visible = false;
+            }
+            return;
+        }
+    });
+
+    /* ---------- 버튼 ---------- */
+    $('btnLaunch').addEventListener('click', function () {
+        if (state === 'aim') launch();
+        else { resetSim(); }
+    });
+    $('dataClose').addEventListener('click', function () { $('dataPanel').classList.remove('show'); });
+    $('btnData').addEventListener('click', function () {
+        var p = $('dataPanel');
+        p.classList.toggle('show');
+        if (p.classList.contains('show')) $('btnData').textContent = '📊 충돌 분석 닫기';
+        else $('btnData').textContent = '📊 충돌 분석 보기';
+    });
+
+    /* ---------- 시점 ---------- */
+    function fitView() {
+        var aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        if (aspect < 1.02) {
+            /* 세로 화면: 지구를 화면 가운데 위쪽에 두고 여유를 준다 */
+            camera.position.set(0, 10.5, 27.5);
+            S.controls.target.set(0, 0, 0);
+        } else {
+            /* 가로 화면: 오른쪽 분석 패널을 피해 지구를 왼쪽에 둔다 */
+            camera.position.set(4.3, 9.6, 16.6);
+            S.controls.target.set(2.3, 0, 0);
+        }
+        S.controls.update();
+    }
+    S.setAlign(fitView);
+    S.setFit(fitView);
+    S.setReset(function () {
+        resetSim();
+        fitView();
+        S.setHint('🔄 충돌 조건과 화면을 처음 상태로 되돌렸습니다.', false);
+    });
+
+    /* ---------- 초기화 ---------- */
+    bindSliders();
+    document.querySelector('[data-preset="canonical"]').classList.add('active');
+    resetSim();
+    if (window.innerWidth > 900) $('dataPanel').classList.add('show');
+    if (window.innerWidth > 900) $('btnData').textContent = '📊 충돌 분석 닫기';
+    fitView();
+    S.setHint('🎱 각도·속도·질량을 맞춘 뒤 [테이아 발사]를 눌러 원시 지구와 충돌시켜 보세요.', true);
+
+    /* 테스트·검증용 핸들 */
+    window.__planetPool = {
+        get state() { return { state: state, outcome: outcome, particles: debrisTotal, tilt: +derived.tilt.toFixed(1), spin: +P.spin, spinAfter: +(derived.spinAfter || 0).toFixed(1) }; },
+        set: function (o) {
+            if (o.angle !== undefined) { P.angle = o.angle; $('rAngle').value = o.angle; }
+            if (o.speed !== undefined) { P.speed = o.speed; $('rSpeed').value = o.speed; }
+            if (o.mass !== undefined) { P.mass = o.mass; $('rMass').value = o.mass; }
+            if (o.spin !== undefined) { P.spin = o.spin; $('rSpin').value = o.spin; }
+            resetSim();
+        },
+        launch: launch
+    };
+})();
+</script>
+<script>
+/* ============ 전체화면 / 창모드 (공통) ============ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+            document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) return;
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(t._t);
+        t._t = setTimeout(function () { t.classList.remove('show'); }, 2600);
+    }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) {
+            btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+            btn.title = on ? '창모드로 전환' : '전체화면으로 전환';
+        }
+        document.body.classList.toggle('is-fullscreen', on);
+        setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) { }
+            if (window.SVL && window.SVL.hooks && window.SVL.hooks.fit) window.SVL.hooks.fit();
+        }, 160);
+    }
+    function onKey(e) {
+        if (e.key !== 'Escape' && e.key !== 'Esc') return;
+        if (pseudo() && !realFs()) { docEl.classList.remove('pseudo-fs'); setUI(); }
+    }
+    if (btn) {
+        btn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+                return;
+            }
+            if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var r = req.call(docEl);
+                    if (r && typeof r.catch === 'function') r.catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                } catch (err) { docEl.classList.add('pseudo-fs'); }
+            } else {
+                docEl.classList.add('pseudo-fs');
+                try { window.scrollTo(0, 1); } catch (e) { }
+                toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+            }
+            setUI();
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+    document.addEventListener('keydown', onKey);
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () {
+            try { window.dispatchEvent(new Event('resize')); } catch (e) { }
+        }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+    setUI();
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+</body>
+</html>

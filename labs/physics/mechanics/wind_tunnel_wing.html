@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="ko" data-mzoom="0.62">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>바람 터널 3D</title>
+<meta name="description" content="받음각·풍속·날개 모양·공기 밀도·무게중심을 바꾸며 유선과 압력 분포, 양력·항력, 실속과 활공 거리를 확인하는 3D 풍동 실험">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../../common/qr-modal.css">
+<link rel="stylesheet" href="../../common/ui-layout.css">
+<script src="../../common/lib/three.min.js"></script>
+<script src="../../common/lib/OrbitControls.js"></script>
+<style>
+@font-face {
+    font-family: 'SeoulNamsan';
+    src: local('SeoulNamsan M'), local('SeoulNamsanM'), local('서울남산체 M'),
+         url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff') format('woff');
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    font-family: 'SeoulNamsan', -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background: #eef4fb; color: #1c1c1e; -webkit-user-select: none; user-select: none;
+    transition: background-color 0.35s ease, color 0.35s ease;
+}
+#canvas-container { position: absolute; inset: 0; z-index: 1; }
+#canvas-container canvas { display: block; touch-action: none; }
+
+.glass-panel {
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+    border-radius: 18px;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+body.dark-mode .glass-panel {
+    background: rgba(20, 26, 34, 0.82);
+    border-color: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.top-left-bar { position: absolute; top: 16px; left: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.back-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; border-radius: 999px;
+    text-decoration: none; color: #1c1c1e; font-weight: bold; font-size: 13.5px; cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease; border: none; font-family: inherit; white-space: nowrap;
+}
+.back-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+body.dark-mode .back-btn { color: #f1f5f9; }
+.tag-badge { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 999px; font-weight: bold; font-size: 14px; white-space: nowrap; }
+.tag-pill { background: rgba(0, 122, 255, 0.14); color: #007aff; font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 800; }
+.qr-btn-icon { font-size: 14px; line-height: 1; }
+.qr-btn-label { font-size: 12.5px; }
+
+.top-right-bar { position: absolute; top: 16px; right: 20px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+.tr-util { display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%; cursor: pointer; font-size: 16px; padding: 0; line-height: 1; flex: 0 0 40px;
+    border: none; color: #1c1c1e; font-family: inherit; transition: all 0.2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); background: rgba(255, 255, 255, 0.95); }
+body.dark-mode .icon-btn { color: #e2e8f0; }
+.data-card { display: inline-flex; align-items: center; gap: 14px; padding: 7px 16px; border-radius: 16px; }
+.data-item { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.data-label { font-size: 9.5px; color: #64748b; font-weight: bold; white-space: nowrap; }
+.data-value { font-size: 13.5px; font-weight: 900; color: #0284c7; margin-top: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body.dark-mode .data-value { color: #38bdf8; }
+.data-sep { width: 1px; height: 22px; background: rgba(0, 0, 0, 0.08); }
+body.dark-mode .data-sep { background: rgba(255, 255, 255, 0.14); }
+
+.center-tooltip {
+    position: absolute; top: 84px; left: 46%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 16px; font-size: 11.5px; font-weight: bold; color: #334155;
+    pointer-events: none; z-index: 10; white-space: normal; text-align: center; line-height: 1.5;
+    max-width: min(680px, calc(100vw - 470px)); word-break: keep-all; transition: opacity 0.35s ease;
+}
+.center-tooltip.hidden { opacity: 0; }
+body.dark-mode .center-tooltip { color: #cbd5e1; }
+
+.bottom-ctrl-bar {
+    position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; z-index: 40;
+}
+.action-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08); background: rgba(255, 255, 255, 0.92); color: #1c1c1e;
+    font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    transition: all 0.2s ease; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+body.dark-mode .action-btn { background: rgba(50, 50, 54, 0.92); color: #f2f2f7; border-color: rgba(255, 255, 255, 0.12); }
+
+.bottom-right-bar { position: absolute; bottom: 22px; right: 20px; z-index: 45; }
+.fullscreen-btn {
+    display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+    border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 800; color: #1c1c1e; white-space: nowrap;
+}
+body.dark-mode .fullscreen-btn { color: #e2e8f0; }
+
+.side-ctrl-panel {
+    position: absolute; right: 20px; bottom: 76px; width: 234px; padding: 12px;
+    display: flex; flex-direction: column; gap: 8px; z-index: 60; border-radius: 18px;
+    max-height: calc(100vh - 150px);
+}
+.panel-title { font-size: 12px; font-weight: 800; color: #475569; text-align: center; padding-bottom: 6px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); flex: 0 0 auto; }
+body.dark-mode .panel-title { color: #94a3b8; border-bottom-color: rgba(255, 255, 255, 0.1); }
+.panel-body { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.seg-btn {
+    padding: 8px 1px; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.9); color: #334155; font-family: inherit; font-size: 10px;
+    font-weight: 800; cursor: pointer; white-space: nowrap; letter-spacing: -0.3px; transition: all 0.2s ease;
+}
+.seg-btn:hover { background: #fff; }
+.seg-btn.active { background: #0f172a; border-color: #0f172a; color: #fff; }
+body.dark-mode .seg-btn { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.14); color: #cbd5e1; }
+body.dark-mode .seg-btn.active { background: #38bdf8; border-color: #38bdf8; color: #06263d; }
+.slider-row { display: flex; flex-direction: column; gap: 3px; }
+.slider-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.slider-name { font-size: 10px; font-weight: 800; color: #64748b; white-space: nowrap; }
+.slider-val { font-size: 10.5px; font-weight: 900; color: #2563eb; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body.dark-mode .slider-name { color: #94a3b8; }
+body.dark-mode .slider-val { color: #7dd3fc; }
+input[type="range"].ctrl-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px; background: #e2e8f0; outline: none; cursor: pointer; margin: 0; }
+input[type="range"].ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+    background: #3b82f6; cursor: pointer; box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4); border: 2px solid #fff;
+}
+body.dark-mode input[type="range"].ctrl-slider { background: #334155; }
+.state-badge {
+    display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 8px; border-radius: 12px;
+    background: rgba(2, 132, 199, 0.09); border: 1px dashed rgba(2, 132, 199, 0.28);
+    font-size: 10.5px; font-weight: 800; color: #0369a1; text-align: center;
+}
+.state-badge .sb-note { font-size: 8.5px; font-weight: 700; opacity: 0.85; }
+.state-badge.good { background: rgba(22, 163, 74, 0.11); border-color: rgba(22, 163, 74, 0.32); color: #15803d; }
+.state-badge.warn { background: rgba(234, 88, 12, 0.11); border-color: rgba(234, 88, 12, 0.32); color: #c2410c; }
+.state-badge.bad { background: rgba(220, 38, 38, 0.11); border-color: rgba(220, 38, 38, 0.32); color: #b91c1c; }
+body.dark-mode .state-badge { background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.3); color: #7dd3fc; }
+body.dark-mode .state-badge.good { background: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.34); color: #86efac; }
+body.dark-mode .state-badge.warn { background: rgba(249, 115, 22, 0.14); border-color: rgba(249, 115, 22, 0.34); color: #fdba74; }
+body.dark-mode .state-badge.bad { background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.34); color: #fca5a5; }
+.btn-start {
+    width: 100%; padding: 11px 8px; border-radius: 14px; border: none; color: #fff;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb); font-family: inherit; font-size: 12.5px;
+    font-weight: 900; cursor: pointer; white-space: nowrap; box-shadow: 0 6px 16px rgba(37, 99, 235, 0.28);
+    transition: all 0.2s ease;
+}
+.btn-start:hover { transform: translateY(-1px); }
+.btn-ghost {
+    width: 100%; padding: 9px 8px; border-radius: 12px; border: 1px dashed rgba(37, 99, 235, 0.35);
+    background: rgba(37, 99, 235, 0.07); color: #1d4ed8; font-family: inherit; font-size: 11.5px;
+    font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+body.dark-mode .btn-ghost { color: #93c5fd; border-color: rgba(147, 197, 253, 0.4); background: rgba(59, 130, 246, 0.14); }
+
+.sub-panel {
+    position: absolute; right: 266px; bottom: 76px; width: 330px; max-height: 76vh; overflow-y: auto;
+    display: none; flex-direction: column; gap: 9px; padding: 13px 15px; border-radius: 18px; z-index: 55;
+    -webkit-overflow-scrolling: touch;
+}
+.sub-panel.show { display: flex; }
+.sub-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 5px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+.sub-panel-title { font-size: 12.5px; font-weight: 800; color: #1e293b; }
+body.dark-mode .sub-panel-title { color: #e2e8f0; }
+.sub-close { background: rgba(0, 0, 0, 0.06); border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-size: 11px; font-weight: bold; color: #64748b; font-family: inherit; flex: 0 0 24px; }
+body.dark-mode .sub-close { background: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+.graph-canvas { width: 100%; height: 168px; display: block; border-radius: 12px; background: rgba(248, 250, 252, 0.92); }
+body.dark-mode .graph-canvas { background: rgba(15, 23, 42, 0.55); }
+.legend { display: flex; flex-wrap: wrap; gap: 9px; font-size: 9px; font-weight: 800; color: #64748b; }
+.legend i { display: inline-block; width: 12px; height: 7px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.data-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; font-weight: 700; }
+.data-row .dr-name { color: #64748b; white-space: nowrap; }
+.data-row .dr-val { color: #0f172a; font-weight: 900; text-align: right; font-variant-numeric: tabular-nums; }
+body.dark-mode .data-row .dr-name { color: #94a3b8; }
+body.dark-mode .data-row .dr-val { color: #e2e8f0; }
+.note { font-size: 9.5px; color: #7c8899; line-height: 1.5; }
+body.dark-mode .note { color: #94a3b8; }
+.hr { height: 1px; background: rgba(0, 0, 0, 0.06); }
+body.dark-mode .hr { background: rgba(255, 255, 255, 0.1); }
+
+#ux-toast {
+    position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.9); color: #fff; font-size: 12.5px; font-weight: 800; line-height: 1.45;
+    padding: 10px 16px; border-radius: 14px; z-index: 9999; max-width: 86vw; text-align: center;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s ease;
+}
+#ux-toast.show { opacity: 1; }
+
+@media (max-width: 900px) {
+    .top-left-bar { top: max(8px, env(safe-area-inset-top)) !important; left: 8px !important; right: 56px !important; gap: 6px !important; align-items: center !important; overflow: hidden; }
+    .top-left-bar .back-btn, .top-left-bar > a { flex: 0 0 auto; padding: 6px 10px !important; font-size: 12px !important; gap: 4px !important; }
+    .top-left-bar .tag-badge { flex: 0 1 auto; min-width: 0; padding: 6px 10px !important; font-size: 12px !important; }
+    .top-left-bar .tag-badge > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+    .top-left-bar .qr-btn { display: none !important; }
+    .top-right-bar { top: calc(max(8px, env(safe-area-inset-top)) + 44px) !important; left: 8px !important; right: 8px !important; gap: 6px !important; justify-content: flex-end !important; flex-wrap: nowrap !important; }
+    .data-card { flex: 1 1 0%; min-width: 0; gap: 4px !important; padding: 6px 8px !important; justify-content: space-around !important; overflow: hidden; flex-direction: row !important; align-items: center !important; }
+    .data-item { min-width: 0; flex-direction: column !important; align-items: center !important; gap: 0 !important; }
+    .data-label { font-size: 9px !important; }
+    .data-value { font-size: 12.5px !important; }
+    .icon-btn { width: 34px !important; height: 34px !important; min-width: 34px; font-size: 15px !important; flex: 0 0 auto; }
+    .bottom-right-bar { top: max(8px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 8px !important; left: auto !important; z-index: 20; }
+    .bottom-right-bar .fullscreen-btn { padding: 6px 9px !important; font-size: 14px !important; line-height: 1; }
+    .bottom-right-bar #fullscreenText { display: none !important; }
+    .center-tooltip { top: calc(max(8px, env(safe-area-inset-top)) + 148px) !important; left: 8px !important; right: 8px !important; transform: none !important; max-width: none !important; font-size: 10.5px !important; padding: 6px 11px !important; white-space: normal !important; line-height: 1.45; text-align: center; z-index: 15 !important; }
+    .bottom-ctrl-bar { left: 8px !important; right: 8px !important; bottom: calc(6px + env(safe-area-inset-bottom)) !important; transform: none !important; width: auto !important; border-radius: 16px !important; padding: 6px !important; gap: 5px !important; justify-content: center !important; flex-wrap: nowrap !important; }
+    .action-btn { font-size: 11.5px !important; padding: 7px 12px !important; }
+    .side-ctrl-panel { right: 8px !important; bottom: calc(62px + env(safe-area-inset-bottom)) !important; width: 180px !important; padding: 9px !important; gap: 6px !important; max-height: calc(100vh - 200px) !important; }
+    .panel-title { font-size: 10.5px !important; padding-bottom: 4px !important; }
+    .slider-name { font-size: 9px !important; }
+    .slider-val { font-size: 9.5px !important; }
+    .seg-btn { font-size: 9px !important; padding: 6px 1px; }
+    .btn-start { padding: 9px 6px; font-size: 11.5px; }
+    .btn-ghost { padding: 7px 6px; font-size: 10.5px; }
+    .state-badge { font-size: 9.5px; padding: 5px; }
+    .state-badge .sb-note { font-size: 8px; }
+    .sub-panel { left: 8px !important; right: 8px !important; bottom: calc(62px + env(safe-area-inset-bottom)) !important; width: auto !important; max-width: none !important; max-height: 42vh !important; padding: 11px 12px !important; gap: 7px !important; }
+    .graph-canvas { height: 122px !important; }
+    .data-row { font-size: 10px; }
+    .legend { font-size: 8px; }
+}
+@media (max-width: 430px) { .tag-pill { display: none !important; } }
+@media (max-height: 500px) and (orientation: landscape) {
+    /* 가로 화면: 데이터 카드는 조절 패널과 겹치므로 숨기고 패널 값으로 확인 */
+    .top-right-bar .data-card { display: none !important; }
+
+    .top-left-bar { top: max(6px, env(safe-area-inset-top)) !important; left: 6px !important; max-width: 46vw; gap: 5px; }
+    .top-left-bar .back-btn, .top-left-bar > a, .top-left-bar .tag-badge { padding: 4px 9px !important; font-size: 11px !important; height: 30px; }
+    .tag-pill { display: none !important; }
+    .top-right-bar { top: max(6px, env(safe-area-inset-top)) !important; right: 88px !important; left: auto !important; gap: 5px !important; }
+    .data-card { padding: 4px 9px !important; gap: 9px !important; flex: 0 0 auto; }
+    .data-label { font-size: 8.5px !important; }
+    .data-value { font-size: 11.5px !important; }
+    .icon-btn { width: 28px !important; height: 28px !important; min-width: 28px; font-size: 13px !important; }
+    .bottom-right-bar { top: max(6px, env(safe-area-inset-top)) !important; bottom: auto !important; right: 6px !important; z-index: 20; }
+    .bottom-right-bar .fullscreen-btn { padding: 4px 8px !important; font-size: 13px !important; }
+    .bottom-right-bar #fullscreenText { display: none !important; }
+    .center-tooltip { top: auto !important; bottom: 52px !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; width: max-content !important; max-width: 44vw !important; font-size: 10px !important; padding: 4px 9px !important; }
+    .side-ctrl-panel { top: 44px !important; right: 8px !important; bottom: auto !important; width: 198px !important; padding: 7px 9px !important; gap: 4px !important; max-height: calc(100vh - 56px) !important; }
+    .panel-title { font-size: 10px !important; padding-bottom: 2px !important; }
+    .slider-name { font-size: 8.5px !important; }
+    .slider-val { font-size: 9px !important; }
+    .btn-start { padding: 6px 6px; font-size: 10.5px; }
+    .btn-ghost { padding: 5px 6px; font-size: 9.5px; }
+    .bottom-ctrl-bar { left: 50% !important; right: auto !important; bottom: 4px !important; transform: translateX(-50%) !important; width: auto !important; max-width: calc(100vw - 12px); border-radius: 14px !important; padding: 4px 8px !important; gap: 3px !important; }
+    .action-btn { font-size: 10px !important; padding: 4px 9px !important; }
+    .sub-panel { left: 8px !important; right: auto !important; bottom: 40px !important; width: 240px !important; max-height: 54vh !important; padding: 8px 10px !important; gap: 5px !important; }
+    .graph-canvas { height: 96px !important; }
+    .data-row { font-size: 9px; }
+    .note { display: none; }
+}
+html.pseudo-fs .top-left-bar .tag-badge,
+html.pseudo-fs .center-tooltip { display: none !important; }
+html.pseudo-fs .top-right-bar { display: flex !important; }
+html.pseudo-fs #fullscreenBtn,
+html.pseudo-fs .bottom-right-bar { display: flex !important; }
+body.is-fullscreen #canvas-container { width: 100vw !important; height: 100vh !important; }
+</style>
+</head>
+<body class="is-3d">
+<div id="canvas-container"></div>
+
+<div class="top-left-bar">
+    <a href="../../../index.html" class="back-btn glass-panel" aria-label="메인 페이지로 이동" onclick="var r=document.referrer;if(history.length>1&&r&&r.indexOf(location.origin+'/')===0&&/(\/|index(_3d)?\.html)(\?|#|$)/.test(r)){history.back();return false;}"><span>⬅</span> 메인</a>
+    <div class="tag-badge glass-panel">
+        <span>바람 터널 3D</span>
+        <span class="tag-pill">visionOS</span>
+    </div>
+    <button class="back-btn glass-panel qr-btn" id="qrBtn" type="button" title="QR 코드" aria-label="QR 코드 보기">
+        <span class="qr-btn-icon" aria-hidden="true">📱</span><span class="qr-btn-label">QR code</span>
+    </button>
+</div>
+
+<div class="top-right-bar">
+    <div class="tr-util">
+        <button class="icon-btn glass-panel svl-util" id="themeBtn" type="button" title="야간 모드 전환" aria-label="야간 모드 전환">🌙</button>
+    </div>
+    <div class="data-card glass-panel">
+        <div class="data-item"><span class="data-label">양력</span><span class="data-value" id="dLift">0.0 N</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">항력</span><span class="data-value" id="dDrag">0.0 N</span></div>
+        <div class="data-sep"></div>
+        <div class="data-item"><span class="data-label">양항비</span><span class="data-value" id="dLD">—</span></div>
+    </div>
+</div>
+
+<div class="center-tooltip glass-panel" id="centerTooltip">🌬️ 받음각을 올리면 윗면 공기가 빨라지고 압력이 낮아져 양력이 커집니다.</div>
+
+<div class="bottom-ctrl-bar glass-panel">
+    <button class="action-btn" id="btnReset" type="button" title="처음 상태로 되돌리기">🔄 초기화</button>
+    <button class="action-btn" id="btnAlign" type="button" title="정면 시점으로 정렬">🎥 시점정렬</button>
+</div>
+
+<div class="bottom-right-bar">
+    <button class="fullscreen-btn glass-panel" id="fullscreenBtn" type="button" aria-label="전체화면으로 전환">
+        <span id="fullscreenIcon">⛶</span><span id="fullscreenText">전체화면</span>
+    </button>
+</div>
+
+<div class="side-ctrl-panel glass-panel">
+    <div class="panel-title">🌬️ 풍동 조건</div>
+    <div class="panel-body">
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">받음각</span><span class="slider-val" id="vAoA">6°</span></div>
+            <input type="range" class="ctrl-slider" id="rAoA" min="-5" max="25" step="1" value="6" aria-label="받음각">
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">풍속</span><span class="slider-val" id="vWind">12 m/s</span></div>
+            <input type="range" class="ctrl-slider" id="rWind" min="4" max="40" step="1" value="12" aria-label="풍속">
+        </div>
+        <div class="seg">
+            <button class="seg-btn" data-shape="flat" type="button">평판</button>
+            <button class="seg-btn active" data-shape="airfoil" type="button">에어포일</button>
+            <button class="seg-btn" data-shape="paper" type="button">종이비행기</button>
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">공기 밀도</span><span class="slider-val" id="vRho">1.20 kg/m³</span></div>
+            <input type="range" class="ctrl-slider" id="rRho" min="0.6" max="1.4" step="0.02" value="1.2" aria-label="공기 밀도">
+        </div>
+        <div class="slider-row">
+            <div class="slider-head"><span class="slider-name">무게중심 위치</span><span class="slider-val" id="vCg">0.28 c</span></div>
+            <input type="range" class="ctrl-slider" id="rCg" min="0.12" max="0.45" step="0.01" value="0.28" aria-label="무게중심 위치">
+        </div>
+        <div class="state-badge" id="stBadge"><span id="stTitle">정상 비행</span><span class="sb-note" id="stNote">양력이 충분합니다</span></div>
+        <button class="btn-start" id="btnFly" type="button">🚀 비행 발사 테스트</button>
+        <button class="btn-ghost" id="btnCp" type="button">📊 압력 분포 보기</button>
+    </div>
+</div>
+
+<div class="sub-panel glass-panel" id="cpPanel">
+    <div class="sub-head"><span class="sub-panel-title">📊 압력 분포 (압력계수 Cp)</span><button class="sub-close" id="cpClose" type="button" aria-label="닫기">✕</button></div>
+    <canvas class="graph-canvas" id="cpCanvas" width="640" height="340"></canvas>
+    <div class="legend"><span><i style="background:#2563eb"></i>윗면(압력↓)</span><span><i style="background:#ef4444"></i>아랫면(압력↑)</span></div>
+    <div class="hr"></div>
+    <div class="data-row"><span class="dr-name">양력계수 CL</span><span class="dr-val" id="iCL">0.00</span></div>
+    <div class="data-row"><span class="dr-name">항력계수 CD</span><span class="dr-val" id="iCD">0.000</span></div>
+    <div class="data-row"><span class="dr-name">양력 L</span><span class="dr-val" id="iL">0.0 N</span></div>
+    <div class="data-row"><span class="dr-name">항력 D</span><span class="dr-val" id="iD">0.0 N</span></div>
+    <div class="data-row"><span class="dr-name">무게 W</span><span class="dr-val" id="iW">0.0 N</span></div>
+    <div class="data-row"><span class="dr-name">실속 각도</span><span class="dr-val" id="iStall">15°</span></div>
+    <div class="data-row"><span class="dr-name">무게중심 안정</span><span class="dr-val" id="iCg">안정</span></div>
+    <div class="data-row"><span class="dr-name">활공 거리 (6 m 높이)</span><span class="dr-val" id="iGlide">—</span></div>
+    <div class="note" id="cpNote">윗면 공기가 더 빨라지면 베르누이 법칙으로 압력이 낮아져 위로 들어올리는 힘(양력)이 생깁니다. 실속이 일어나면 양력이 급격히 줄어듭니다.</div>
+</div>
+
+<div id="ux-toast"></div>
+
+<script>
+/* ============ 공통 3D 기반 (씬·카메라·조명·테마·반응형) ============ */
+window.SVL = (function () {
+    'use strict';
+    var $ = function (id) { return document.getElementById(id); };
+    var LIGHT_BG = 0xe9f1fb, DARK_BG = 0x070d16;
+
+    var container = $('canvas-container');
+    var scene = new THREE.Scene();
+    scene.background = new THREE.Color(LIGHT_BG);
+    scene.fog = new THREE.Fog(LIGHT_BG, 30, 62);
+
+    var camera = new THREE.PerspectiveCamera(46, window.innerWidth / Math.max(1, window.innerHeight), 0.1, 300);
+    camera.position.set(3.6, 3.2, 14.5);
+
+    var renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
+
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = true;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 5;
+    controls.maxDistance = 34;
+    controls.minPolarAngle = Math.PI * 0.06;
+    controls.maxPolarAngle = Math.PI * 0.56;
+    controls.target.set(0, 0.4, 0);
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+    if (THREE.TOUCH) { controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; }
+
+    var hemi = new THREE.HemisphereLight(0xffffff, 0xc3d3e6, 0.85);
+    scene.add(hemi);
+    var key = new THREE.DirectionalLight(0xffffff, 1.15);
+    key.position.set(6, 12, 10);
+    scene.add(key);
+    var fill = new THREE.DirectionalLight(0xdfefff, 0.4);
+    fill.position.set(-8, 4, -6);
+    scene.add(fill);
+
+    var benchMat = new THREE.MeshStandardMaterial({ color: 0xdde8f4, roughness: 0.95, metalness: 0.02 });
+    var bench = new THREE.Mesh(new THREE.PlaneGeometry(80, 60), benchMat);
+    bench.rotation.x = -Math.PI / 2;
+    bench.position.y = -3.1;
+    bench.receiveShadow = true;
+    scene.add(bench);
+
+    /* ---- 라벨 ---- */
+    var labelList = [];
+    var LAB_DPR = 2, LAB_H = 128, LAB_FONT = 54, LAB_PAD = 46, LAB_MAXW = 1536;
+    function drawLabel(cv, text, color) {
+        var g = cv.getContext('2d');
+        var S = LAB_DPR, W = cv.width / S, H = cv.height / S;
+        g.setTransform(S, 0, 0, S, 0, 0);
+        g.clearRect(0, 0, W, H);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        var tw = Math.min(W - 12, g.measureText(text).width + LAB_PAD);
+        var x0 = (W - tw) / 2, r = 30;
+        g.fillStyle = 'rgba(255,255,255,0.94)';
+        g.beginPath();
+        g.moveTo(x0 + r, 22); g.lineTo(x0 + tw - r, 22);
+        g.quadraticCurveTo(x0 + tw, 22, x0 + tw, 22 + r);
+        g.lineTo(x0 + tw, 106 - r);
+        g.quadraticCurveTo(x0 + tw, 106, x0 + tw - r, 106);
+        g.lineTo(x0 + r, 106);
+        g.quadraticCurveTo(x0, 106, x0, 106 - r);
+        g.lineTo(x0, 22 + r);
+        g.quadraticCurveTo(x0, 22, x0 + r, 22);
+        g.closePath(); g.fill();
+        g.fillStyle = color || '#123';
+        g.fillText(text, W / 2, 66);
+    }
+    function layoutLabel(spr) {
+        var L = spr.userData.label;
+        if (!L) return;
+        var cv = L.cv, g = cv.getContext('2d');
+        var f = (window.innerWidth < 900) ? 1.6 : 1;
+        g.setTransform(LAB_DPR, 0, 0, LAB_DPR, 0, 0);
+        g.font = 'bold ' + LAB_FONT + "px 'SeoulNamsan', -apple-system, sans-serif";
+        var tw = g.measureText(L.text).width;
+        var W = Math.max(LAB_FONT * 1.6 + LAB_PAD, Math.min(LAB_MAXW, tw + LAB_PAD + 14));
+        var pw = Math.round(W * LAB_DPR), ph = Math.round(LAB_H * LAB_DPR);
+        if (cv.width !== pw) cv.width = pw;
+        if (cv.height !== ph) cv.height = ph;
+        drawLabel(cv, L.text, L.color);
+        if (L.tex) L.tex.needsUpdate = true;
+        spr.scale.set(L.ww * (W / 512) * f, L.ww * 0.25 * f, 1);
+    }
+    function makeLabel(text, color, w) {
+        var cv = document.createElement('canvas');
+        cv.width = 512; cv.height = LAB_H;
+        var tex = new THREE.CanvasTexture(cv);
+        tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+        var spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+        var ww = w || 1.5;
+        spr.userData.label = { cv: cv, tex: tex, text: text, color: color, ww: ww };
+        labelList.push(spr);
+        layoutLabel(spr);
+        return spr;
+    }
+    function relabelAll() { for (var i = 0; i < labelList.length; i++) layoutLabel(labelList[i]); }
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function () { setTimeout(relabelAll, 30); }).catch(function () { });
+    }
+    window.addEventListener('load', function () { setTimeout(relabelAll, 150); });
+
+    var hintEl = $('centerTooltip');
+    var hintTimer = null;
+    function setHint(text, sticky) {
+        if (!hintEl) return;
+        hintEl.textContent = text;
+        hintEl.classList.remove('hidden');
+        if (hintTimer) clearTimeout(hintTimer);
+        hintTimer = null;
+        if (!sticky) hintTimer = setTimeout(function () { hintEl.classList.add('hidden'); }, 5600);
+    }
+
+    var isDark = false;
+    var themeCbs = [];
+    function applyTheme() {
+        document.body.classList.toggle('dark-mode', isDark);
+        scene.background = new THREE.Color(isDark ? DARK_BG : LIGHT_BG);
+        scene.fog = new THREE.Fog(isDark ? DARK_BG : LIGHT_BG, 30, 62);
+        benchMat.color.setHex(isDark ? 0x1a2433 : 0xdde8f4);
+        hemi.intensity = isDark ? 0.42 : 0.85;
+        key.intensity = isDark ? 0.85 : 1.15;
+        fill.intensity = isDark ? 0.3 : 0.4;
+        $('themeBtn').textContent = isDark ? '☀️' : '🌙';
+        for (var i = 0; i < themeCbs.length; i++) { try { themeCbs[i](isDark); } catch (e) { } }
+    }
+    $('themeBtn').addEventListener('click', function () { isDark = !isDark; applyTheme(); });
+
+    var svlFit = null;
+    function onResize() {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        camera.updateProjectionMatrix();
+        if (typeof svlFit === 'function') svlFit();
+    }
+    window.addEventListener('resize', onResize);
+
+    var hooks = { reset: null, align: null, fit: null };
+    $('btnReset').addEventListener('click', function () { if (hooks.reset) hooks.reset(); });
+    $('btnAlign').addEventListener('click', function () {
+        if (hooks.align) hooks.align(); else if (hooks.fit) hooks.fit();
+        setHint('🎥 시점을 정면으로 정렬했습니다.', false);
+    });
+
+    var frameCbs = [];
+    var last = performance.now();
+    function frame(now) {
+        requestAnimationFrame(frame);
+        var dt = Math.min(0.06, (now - last) / 1000);
+        last = now;
+        for (var i = 0; i < frameCbs.length; i++) { try { frameCbs[i](dt, now); } catch (e) { } }
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    requestAnimationFrame(frame);
+
+    return {
+        $: $, scene: scene, camera: camera, renderer: renderer, controls: controls,
+        hemi: hemi, key: key, fill: fill,
+        makeLabel: makeLabel, setHint: setHint, relabel: relabelAll,
+        onTheme: function (fn) { themeCbs.push(fn); },
+        onFrame: function (fn) { frameCbs.push(fn); },
+        isDark: function () { return isDark; },
+        hooks: hooks,
+        setFit: function (fn) { hooks.fit = fn; svlFit = fn; },
+        setReset: function (fn) { hooks.reset = fn; },
+        setAlign: function (fn) { hooks.align = fn; }
+    };
+})();
+</script>
+<script>
+/* ==========================================================================
+   3D 바람 터널 — 날개 주위 유선·압력·양력
+   · 받음각·풍속·날개 모양·공기 밀도·무게중심 → 양력/항력/실속/활공거리
+   ========================================================================== */
+(function () {
+    'use strict';
+    var S = window.SVL, $ = S.$, scene = S.scene, camera = S.camera, controls = S.controls;
+
+    var P = { aoa: 6, wind: 12, rho: 1.2, cg: 0.28, shape: 'airfoil' };
+
+    var CHORD = 3.2, SPAN = 4.2, S_AREA = 0.0884;   /* 모형 날개: 코드 32cm, 폭 42cm → 넓이 0.0884 m² */
+    var MASS = 0.42;                                 /* kg */
+    var W = MASS * 9.8;
+
+    var SHAPES = {
+        flat: { t: 0.022, camber: 0.0, cd0: 0.022, stall: 12, name: '평판' },
+        airfoil: { t: 0.12, camber: 0.055, cd0: 0.012, stall: 15, name: '비대칭 에어포일' },
+        paper: { t: 0.035, camber: 0.028, cd0: 0.032, stall: 10, name: '종이비행기' }
+    };
+
+    var D = {};   /* 계산 결과 */
+
+    /* ---------- 날개 형상 ---------- */
+    function profilePoints(t, camber) {
+        var pts = [], N = 46;
+        for (var i = 0; i <= N; i++) {
+            var x = i / N;
+            var yt = 5 * t * (0.2969 * Math.sqrt(x) - 0.1260 * x - 0.3516 * x * x + 0.2843 * x * x * x - 0.1015 * x * x * x * x);
+            var yc = camber * (x < 0.4 ? (2 * 0.4 * x - x * x) / (0.4 * 0.4) : ((1 - 2 * 0.4) + 2 * 0.4 * x - x * x) / ((1 - 0.4) * (1 - 0.4)));
+            pts.push(new THREE.Vector2(x * CHORD, (yc + yt) * CHORD));
+        }
+        for (var j = N - 1; j >= 1; j--) {
+            var x2 = j / N;
+            var yt2 = 5 * t * (0.2969 * Math.sqrt(x2) - 0.1260 * x2 - 0.3516 * x2 * x2 + 0.2843 * x2 * x2 * x2 - 0.1015 * x2 * x2 * x2 * x2);
+            var yc2 = camber * (x2 < 0.4 ? (2 * 0.4 * x2 - x2 * x2) / (0.4 * 0.4) : ((1 - 2 * 0.4) + 2 * 0.4 * x2 - x2 * x2) / ((1 - 0.4) * (1 - 0.4)));
+            pts.push(new THREE.Vector2(x2 * CHORD, (yc2 - yt2) * CHORD));
+        }
+        return pts;
+    }
+    function upperY(x) {   /* x: 0..1 코드 비율 → 윗면 높이(코드 단위) */
+        var sh = SHAPES[P.shape];
+        var yt = 5 * sh.t * (0.2969 * Math.sqrt(Math.max(x, 0)) - 0.1260 * x - 0.3516 * x * x + 0.2843 * x * x * x - 0.1015 * x * x * x * x);
+        var yc = sh.camber * (x < 0.4 ? (2 * 0.4 * x - x * x) / (0.4 * 0.4) : ((1 - 2 * 0.4) + 2 * 0.4 * x - x * x) / ((1 - 0.4) * (1 - 0.4)));
+        return yc + yt;
+    }
+    function lowerY(x) {
+        var sh = SHAPES[P.shape];
+        var yt = 5 * sh.t * (0.2969 * Math.sqrt(Math.max(x, 0)) - 0.1260 * x - 0.3516 * x * x + 0.2843 * x * x * x - 0.1015 * x * x * x * x);
+        var yc = sh.camber * (x < 0.4 ? (2 * 0.4 * x - x * x) / (0.4 * 0.4) : ((1 - 2 * 0.4) + 2 * 0.4 * x - x * x) / ((1 - 0.4) * (1 - 0.4)));
+        return yc - yt;
+    }
+
+    var wingGroup = new THREE.Group();
+    scene.add(wingGroup);
+    var wingMesh = null;
+    var wingMat = new THREE.MeshStandardMaterial({ color: 0x5aa9e6, metalness: 0.55, roughness: 0.28, emissive: 0x0a2a4a, emissiveIntensity: 0.25 });
+    var wingEdgeMat = new THREE.LineBasicMaterial({ color: 0x0b4a7a, transparent: true, opacity: 0.65 });
+
+    function buildWing() {
+        if (wingMesh) { wingGroup.remove(wingMesh); wingMesh.geometry.dispose(); }
+        var sh = SHAPES[P.shape];
+        var pts = profilePoints(sh.t, sh.camber);
+        var shape = new THREE.Shape(pts);
+        var geo = new THREE.ExtrudeGeometry(shape, { depth: SPAN, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 1, steps: 1 });
+        geo.translate(-CHORD * 0.25, 0, -SPAN / 2);
+        wingMesh = new THREE.Mesh(geo, wingMat);
+        wingGroup.add(wingMesh);
+
+        var edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), wingEdgeMat);
+        wingGroup.add(edges);
+        wingMesh.userData.edges = edges;
+
+        /* 무게중심 표시 */
+        if (wingMesh.userData.cg) wingGroup.remove(wingMesh.userData.cg);
+        var cgMark = new THREE.Mesh(
+            new THREE.SphereGeometry(0.075, 14, 10),
+            new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0x7c3f00, emissiveIntensity: 0.6, metalness: 0.4, roughness: 0.4 })
+        );
+        cgMark.position.set((P.cg - 0.25) * CHORD, 0, SPAN / 2 + 0.12);
+        wingGroup.add(cgMark);
+        wingMesh.userData.cg = cgMark;
+    }
+
+    /* ---------- 풍동 터널 ---------- */
+    var tunnelMat = new THREE.MeshBasicMaterial({ color: 0x8ec5ef, transparent: true, opacity: 0.055, side: THREE.DoubleSide, depthWrite: false });
+    var tunnelEdgeMat = new THREE.LineBasicMaterial({ color: 0x7aa8cc, transparent: true, opacity: 0.35 });
+    (function tunnel() {
+        var L = 26, H = 5.4, Wd = 5.4;
+        var box = new THREE.Mesh(new THREE.BoxGeometry(L, H, Wd), tunnelMat);
+        box.position.set(0, 0, 0);
+        scene.add(box);
+        var edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(L, H, Wd)), tunnelEdgeMat);
+        scene.add(edges);
+        /* 입구 격자 */
+        for (var i = 0; i < 9; i++) {
+            var bar = new THREE.Mesh(new THREE.BoxGeometry(0.045, H - 0.2, 0.045),
+                new THREE.MeshBasicMaterial({ color: 0x8fb6d4, transparent: true, opacity: 0.5 }));
+            bar.position.set(-L / 2 + 0.06, 0, -Wd / 2 + 0.3 + i * (Wd - 0.6) / 8);
+            scene.add(bar);
+        }
+        /* 바닥 눈금 */
+        for (var t = -12; t <= 12; t += 2) {
+            var tick = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.4),
+                new THREE.MeshBasicMaterial({ color: 0x94a9bd, transparent: true, opacity: 0.4 }));
+            tick.position.set(t, -H / 2 + 0.02, Wd / 2 - 0.2);
+            scene.add(tick);
+        }
+    })();
+
+    /* ---------- 유선(공기 입자) ---------- */
+    var PN = 520;
+    var pGeo = new THREE.BufferGeometry();
+    var pPos = new Float32Array(PN * 3);
+    var pCol = new Float32Array(PN * 3);
+    var pSize = new Float32Array(PN);
+    var plist = [];
+    for (var i = 0; i < PN; i++) {
+        var lane = (i / PN);
+        var y = -2.1 + 4.2 * ((i % 40) / 39);
+        var z = -2.4 + 4.8 * (((i * 7) % 97) / 96);
+        plist.push({ x: -12 + Math.random() * 24, y: y, z: z, vx: 1, vy: 0, c: new THREE.Color(1, 1, 1) });
+        pSize[i] = 0.14;
+    }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+    var pMat = new THREE.PointsMaterial({
+        size: 0.19, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.95,
+        map: (function () {
+            var cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+            var g = cv.getContext('2d');
+            var lg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+            lg.addColorStop(0, 'rgba(255,255,255,1)');
+            lg.addColorStop(0.45, 'rgba(255,255,255,0.85)');
+            lg.addColorStop(1, 'rgba(255,255,255,0)');
+            g.fillStyle = lg; g.beginPath(); g.arc(32, 32, 31, 0, Math.PI * 2); g.fill();
+            return new THREE.CanvasTexture(cv);
+        })(),
+        depthWrite: false
+    });
+    var points = new THREE.Points(pGeo, pMat);
+    points.frustumCulled = false;
+    scene.add(points);
+
+    /* ---------- 정지 유선(연속된 흐름선) ---------- */
+    var streamlineGroup = new THREE.Group();
+    scene.add(streamlineGroup);
+    var SL_COUNT = 15;
+    function buildStreamlines() {
+        while (streamlineGroup.children.length) {
+            var old = streamlineGroup.children[0];
+            streamlineGroup.remove(old);
+            if (old.geometry) old.geometry.dispose();
+        }
+        var a = P.aoa * Math.PI / 180;
+        var cl = D.cl || 0;
+        for (var li = 0; li < SL_COUNT; li++) {
+            var y0 = -2.25 + (li / (SL_COUNT - 1)) * 4.5;
+            var xs = [], ys = [], cs = [];
+            var x = -12.2, y = y0;
+            for (var step = 0; step < 260; step++) {
+                var f = flowAt(x, y, a, cl, 1);
+                var sp = Math.sqrt(f[0] * f[0] + f[1] * f[1]);
+                xs.push(x); ys.push(y); cs.push(speedColor(sp));
+                var dx = 0.1;
+                x += f[0] * dx * 1.0;
+                y += f[1] * dx * 0.85;
+                if (y > 2.5) y = 2.5;
+                if (y < -2.5) y = -2.5;
+                if (x > 12.4) break;
+            }
+            var pos = new Float32Array(xs.length * 3);
+            var col = new Float32Array(xs.length * 3);
+            for (var k = 0; k < xs.length; k++) {
+                pos[k * 3] = xs[k]; pos[k * 3 + 1] = ys[k]; pos[k * 3 + 2] = -1.2 + (li % 3) * 1.2;
+                col[k * 3] = cs[k].r; col[k * 3 + 1] = cs[k].g; col[k * 3 + 2] = cs[k].b;
+            }
+            var geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+            var line = new THREE.Line(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 }));
+            streamlineGroup.add(line);
+        }
+    }
+
+    /* ---------- 힘 벡터 ---------- */
+    var arrowLift = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 2, 0x16a34a, 0.4, 0.26);
+    var arrowDrag = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 1.2, 0xef4444, 0.34, 0.22);
+    var arrowWeight = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 1.2, 0x64748b, 0.32, 0.2);
+    scene.add(arrowLift); scene.add(arrowDrag); scene.add(arrowWeight);
+
+    var lblLift = S.makeLabel('양력 L', '#15803d', 1.25);
+    var lblDrag = S.makeLabel('항력 D', '#b91c1c', 1.2);
+    var lblWeight = S.makeLabel('무게 W', '#475569', 1.2);
+    scene.add(lblLift); scene.add(lblDrag); scene.add(lblWeight);
+
+    var lblFast = S.makeLabel('빠른 공기 · 압력↓', '#1d4ed8', 1.6);
+    lblFast.position.set(-3.1, 2.3, 0);
+    scene.add(lblFast);
+    var lblSlow = S.makeLabel('느린 공기 · 압력↑', '#b45309', 1.6);
+    lblSlow.position.set(-3.1, -2.25, 0);
+    scene.add(lblSlow);
+
+    /* 압력 화살표 (윗면·아랫면) */
+    var pressArrows = [];
+    var pressGroup = new THREE.Group();
+    scene.add(pressGroup);
+    for (var pa = 0; pa < 9; pa++) {
+        var a1 = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.4, 0x2563eb, 0.16, 0.11);
+        var a2 = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(), 0.4, 0xef4444, 0.16, 0.11);
+        pressGroup.add(a1); pressGroup.add(a2);
+        pressArrows.push([a1, a2]);
+    }
+
+    /* ---------- 활공 시험용 종이비행기 ---------- */
+    var glider = new THREE.Group();
+    (function buildGlider() {
+        var gMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide, emissive: 0x223344, emissiveIntensity: 0.12 });
+        var shape = new THREE.Shape();
+        shape.moveTo(0, 0.22);
+        shape.lineTo(0.62, -0.3);
+        shape.lineTo(0, -0.1);
+        shape.lineTo(-0.62, -0.3);
+        shape.closePath();
+        var geo = new THREE.ShapeGeometry(shape);
+        for (var s = -1; s <= 1; s += 2) {
+            var half = new THREE.Mesh(geo, gMat);
+            half.scale.set(1, 0.55, 1);
+            half.rotation.x = Math.PI / 2;
+            half.rotation.z = s * 0.32;
+            half.position.z = s * 0.14;
+            glider.add(half);
+        }
+        glider.scale.setScalar(0.9);
+        glider.visible = false;
+        scene.add(glider);
+    })();
+    var glideLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+        new THREE.LineDashedMaterial({ color: 0x0ea5e9, dashSize: 0.4, gapSize: 0.3, transparent: true, opacity: 0.85 })
+    );
+    glideLine.visible = false;
+    scene.add(glideLine);
+
+    /* ---------- 계산 ---------- */
+    function calc() {
+        var sh = SHAPES[P.shape];
+        var a = P.aoa * Math.PI / 180;
+        var clLinear = 2 * Math.PI * (a + sh.camber);
+        var cl = clLinear;
+        var stalled = false;
+        var aDeg = P.aoa + sh.camber * 180 / Math.PI;
+        if (aDeg > sh.stall) {
+            stalled = true;
+            var over = (aDeg - sh.stall);
+            cl = Math.max(0.15, clLinear * Math.max(0.32, 1 - over * 0.11));
+        }
+        if (P.aoa < -5) cl = Math.min(0, cl);
+        var AR = (SPAN * SPAN) / (CHORD * SPAN);
+        var cd = sh.cd0 + (cl * cl) / (Math.PI * AR * 0.82);
+        if (stalled) cd += 0.05 + (aDeg - sh.stall) * 0.022;
+        var q = 0.5 * P.rho * P.wind * P.wind;
+        var L = q * S_AREA * cl;
+        var Dg = q * S_AREA * cd;
+        var cgStable = (P.cg <= 0.3);
+        var glideRatio = Dg > 0.001 ? (L / Dg) : 0;
+        var glideTime = 0;
+        var glideDist = 0;
+        var h0 = 6.0;                        /* 6 m 높이에서 발사 */
+        var v0 = Math.max(4, P.wind * 0.5);  /* 활공 속도 m/s */
+        if (!stalled && L > 0 && glideRatio > 0) {
+            var gamma = Math.atan(1 / glideRatio);
+            glideDist = h0 / Math.tan(gamma);            /* = h0 × 양항비 */
+            glideTime = glideDist / (v0 * Math.cos(gamma));
+        }
+        D = { cl: cl, cd: cd, L: L, D: Dg, q: q, stalled: stalled, stable: cgStable, ratio: glideRatio, glideTime: glideTime, glideDist: glideDist, aDeg: aDeg, eff: aDeg };
+    }
+
+    /* ---------- 압력계수(박막익 이론 근사) ----------
+       윗면: 앞전에서 흡입 피크(음의 Cp), 아랫면: 압축(양의 Cp), 앞전 정체점은 Cp=1 */
+    function cpUpper(xr, cl) {
+        var x = Math.max(xr, 0.0015);
+        var s = 1.35 - 0.95 * x;                 /* 앞전에서 크고 뒷전으로 갈수록 작아짐 */
+        var V = 1 + 0.62 * cl * s;
+        var cp = 1 - V * V;
+        var nose = Math.min(1, xr / 0.045);
+        return cp + (1 - cp) * (1 - nose);
+    }
+    function cpLower(xr, cl) {
+        var x = Math.max(xr, 0.0015);
+        var s = 0.55 + 0.5 * x;
+        var V = 1 - 0.30 * cl * s;
+        var cp = 1 - V * V;
+        var nose = Math.min(1, xr / 0.045);
+        return cp + (1 - cp) * (1 - nose);
+    }
+
+    /* ---------- 유선 속도장 ---------- */
+    var vortexX = 0.25 * CHORD;   /* 1/4 코드 */
+    function flowAt(x, y, a, cl, U) {
+        /* 날개 좌표계로 회전 */
+        var ca = Math.cos(a), sa = Math.sin(a);
+        var wx = x * ca + y * sa;
+        var wy = -x * sa + y * ca;
+
+        /* 날개 단면 안쪽으로 들어가면 표면을 따라 흐르도록 밀어낸다 */
+        var px = (wx + CHORD * 0.25) / CHORD;
+        var bodyY = 0, halfT = 0, inBody = false;
+        if (px > 0.005 && px < 1.0) {
+            var yu = upperY(px) * CHORD, yl = lowerY(px) * CHORD;
+            halfT = (yu - yl) / 2;
+            bodyY = (yu + yl) / 2;
+            if (wy < bodyY + halfT + 0.06 && wy > bodyY - halfT - 0.06) inBody = true;
+        }
+        if (inBody) {
+            var upSide = wy >= bodyY;
+            wy = bodyY + (upSide ? 1 : -1) * (halfT + 0.06);
+        }
+        var cx = vortexX, cy = 0.0;
+        var dx = wx - cx, dy = wy - cy;
+        var r2 = dx * dx + dy * dy + 0.06;
+        var r = Math.sqrt(r2);
+        var R = CHORD * 0.42;
+        /* 두께에 의한 밀어내기(원기둥 근사) */
+        var u = 1, v = 0;
+        if (r < R + 0.6) {
+            var k = Math.min(1, (R * R) / r2);
+            u = 1 - k * (dx * dx - dy * dy) / r2 * 1.35;
+            v = -k * (2 * dx * dy) / r2 * 1.35;
+        }
+        /* 순환 성분 */
+        var circ = cl * 0.55 * Math.max(-1, Math.min(1, 1.2)) * 2.2;
+        var inv = 1 / (r2);
+        u += circ * dy * inv * 0.9;
+        v += -circ * dx * inv * 0.9;
+        if (inBody) {
+            /* 표면을 따라 흐르며 살짝 가속 */
+            u *= 1.06;
+        }
+        /* 월드 좌표계로 되돌리기 */
+        var vx = u * ca - v * sa;
+        var vy = u * sa + v * ca;
+        return [vx, vy];
+    }
+
+    function speedColor(sp) {
+        /* sp: 국소 속도 / 자유흐름 */
+        var c = new THREE.Color();
+        var t = Math.max(0, Math.min(1, (sp - 0.55) / 0.9));
+        if (t < 0.34) {
+            var k = t / 0.34;
+            c.setRGB(0.18 + k * 0.1, 0.42 + k * 0.35, 0.95 - k * 0.2);
+        } else if (t < 0.68) {
+            var k2 = (t - 0.34) / 0.34;
+            c.setRGB(0.28 + k2 * 0.72, 0.77 + k2 * 0.16, 0.75 - k2 * 0.7);
+        } else {
+            var k3 = (t - 0.68) / 0.32;
+            c.setRGB(1.0, 0.93 - k3 * 0.55, 0.05 + k3 * 0.03);
+        }
+        return c;
+    }
+
+    function stepParticles(dt) {
+        var a = P.aoa * Math.PI / 180;
+        var U = 1.0;
+        var scale = 6.0;      /* 화면에서 보이는 이동 배율 */
+        for (var i = 0; i < PN; i++) {
+            var p = plist[i];
+            var f = flowAt(p.x, p.y, a, D.cl || 0, U);
+            var sp = Math.sqrt(f[0] * f[0] + f[1] * f[1]);
+            p.x += f[0] * scale * dt;
+            p.y += f[1] * scale * dt * 0.85;
+            /* 터널 밖으로 벗어나면 입구로 보낸다 */
+            if (p.x > 12.4) {
+                p.x = -12.3;
+                p.y = -2.1 + Math.random() * 4.2;
+            }
+            if (p.y > 2.55) p.y = 2.55;
+            if (p.y < -2.55) p.y = -2.55;
+            pPos[i * 3] = p.x;
+            pPos[i * 3 + 1] = p.y;
+            pPos[i * 3 + 2] = p.z;
+            var c = speedColor(sp);
+            pCol[i * 3] = c.r; pCol[i * 3 + 1] = c.g; pCol[i * 3 + 2] = c.b;
+        }
+        pGeo.attributes.position.needsUpdate = true;
+        pGeo.attributes.color.needsUpdate = true;
+    }
+
+    /* ---------- UI ---------- */
+    function syncUI() {
+        calc();
+        $('vAoA').textContent = P.aoa + '°';
+        $('vWind').textContent = P.wind + ' m/s';
+        $('vRho').textContent = P.rho.toFixed(2) + ' kg/m³';
+        $('vCg').textContent = P.cg.toFixed(2) + ' c';
+        $('dLift').textContent = D.L.toFixed(1) + ' N';
+        $('dDrag').textContent = D.D.toFixed(2) + ' N';
+        $('dLD').textContent = D.D > 0.001 ? (D.L / D.D).toFixed(1) : '—';
+        $('iCL').textContent = D.cl.toFixed(2);
+        $('iCD').textContent = D.cd.toFixed(3);
+        $('iL').textContent = D.L.toFixed(1) + ' N';
+        $('iD').textContent = D.D.toFixed(2) + ' N';
+        $('iW').textContent = W.toFixed(1) + ' N';
+        $('iStall').textContent = SHAPES[P.shape].stall + '° (α+캠버)';
+        $('iCg').textContent = D.stable ? '안정 (앞쪽)' : '불안정 (뒤쪽)';
+        $('iGlide').textContent = D.stalled ? '실속 — 활공 불가' : (D.glideDist.toFixed(1) + ' m · ' + D.glideTime.toFixed(1) + ' s');
+
+        var badge = $('stBadge');
+        var title = $('stTitle'), note = $('stNote');
+        if (D.stalled) {
+            badge.className = 'state-badge bad';
+            title.textContent = '⚠️ 실속(Stall) 발생';
+            note.textContent = '받음각 ' + D.eff.toFixed(0) + '° — 양력이 급감';
+        } else if (D.L < W * 0.7) {
+            badge.className = 'state-badge warn';
+            title.textContent = '양력 부족';
+            note.textContent = '무게 ' + W.toFixed(1) + ' N > 양력 ' + D.L.toFixed(1) + ' N';
+        } else if (!D.stable) {
+            badge.className = 'state-badge warn';
+            title.textContent = '무게중심이 뒤쪽';
+            note.textContent = '기수가 들려 불안정합니다';
+        } else {
+            badge.className = 'state-badge good';
+            title.textContent = '정상 비행';
+            note.textContent = '양항비 ' + (D.L / Math.max(0.001, D.D)).toFixed(1) + ' · 활공 ' + D.glideDist.toFixed(1) + ' m';
+        }
+
+        /* 날개 기울기 */
+        wingGroup.rotation.z = P.aoa * Math.PI / 180;
+        if (wingMesh && wingMesh.userData.cg) {
+            wingMesh.userData.cg.position.set((P.cg - 0.25) * CHORD, 0, SPAN / 2 + 0.12);
+            wingMesh.userData.cg.position.applyAxisAngle(new THREE.Vector3(0, 0, 1), P.aoa * Math.PI / 180);
+        }
+
+        updateForceArrows();
+        updatePressureArrows();
+        buildStreamlines();
+        drawCp();
+    }
+
+    function updateForceArrows() {
+        var ox = 0, oy = 0, oz = SPAN / 2 + 0.05;
+        var liftLen = Math.max(0.001, Math.min(5.0, D.L * 0.28));
+        var dragLen = Math.max(0.001, Math.min(2.4, D.D * 1.15));
+        var weightLen = Math.min(3.2, W * 0.55);
+        arrowLift.position.set(ox, oy, oz);
+        arrowLift.setDirection(new THREE.Vector3(0, 1, 0));
+        arrowLift.setLength(liftLen + 0.001, Math.min(0.4, liftLen * 0.3), Math.min(0.26, liftLen * 0.2));
+        arrowDrag.position.set(ox, oy, oz);
+        arrowDrag.setDirection(new THREE.Vector3(1, 0, 0));
+        arrowDrag.setLength(dragLen + 0.001, Math.min(0.34, dragLen * 0.3), Math.min(0.22, dragLen * 0.2));
+        arrowWeight.position.set(ox, oy, oz);
+        arrowWeight.setDirection(new THREE.Vector3(0, -1, 0));
+        arrowWeight.setLength(weightLen + 0.001, 0.3, 0.2);
+        arrowLift.visible = D.L > 0.05;
+        arrowDrag.visible = D.D > 0.01;
+        arrowWeight.visible = true;
+        lblLift.visible = D.L > 0.05;
+        lblLift.position.set(ox, oy + liftLen + 0.3, oz);
+        lblDrag.visible = D.D > 0.01;
+        lblDrag.position.set(ox + dragLen + 0.55, oy + 0.15, oz);
+        lblWeight.position.set(ox - 0.55, oy - weightLen - 0.3, oz);
+    }
+
+    function updatePressureArrows() {
+        var a = P.aoa * Math.PI / 180;
+        var ca = Math.cos(a), sa = Math.sin(a);
+        for (var i = 0; i < pressArrows.length; i++) {
+            var xr = 0.14 + (i / (pressArrows.length - 1)) * 0.74;
+            var x = xr * CHORD;
+            /* 윗면 */
+            var yu = upperY(xr) * CHORD - (P.cg - 0.25) * CHORD * 0;
+            var pu = new THREE.Vector3(x - CHORD * 0.25, yu, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), a);
+            var cpu = cpUpper(xr, D.cl);
+            var lenU = Math.max(0.12, Math.min(1.5, Math.abs(cpu) * 1.6));
+            var a1 = pressArrows[i][0];
+            a1.position.copy(pu);
+            a1.setDirection(new THREE.Vector3(-sa, ca, 0).multiplyScalar(cpu > 0 ? -1 : 1));
+            a1.setLength(lenU, Math.min(0.16, lenU * 0.35), Math.min(0.11, lenU * 0.25));
+            a1.visible = true;
+            /* 아랫면 */
+            var yl = lowerY(xr) * CHORD;
+            var pl = new THREE.Vector3(x - CHORD * 0.25, yl, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), a);
+            var cpl = cpLower(xr, D.cl);
+            var lenL = Math.max(0.12, Math.min(1.5, Math.abs(cpl) * 1.6));
+            var a2 = pressArrows[i][1];
+            a2.position.copy(pl);
+            a2.setDirection(new THREE.Vector3(sa, -ca, 0).multiplyScalar(cpl > 0 ? -1 : 1));
+            a2.setLength(lenL, Math.min(0.16, lenL * 0.35), Math.min(0.11, lenL * 0.25));
+            a2.visible = true;
+        }
+    }
+
+    /* ---------- Cp 그래프 ---------- */
+    function drawCp() {
+        var cv = $('cpCanvas');
+        if (!cv) return;
+        var g = cv.getContext('2d');
+        var W2 = cv.width, H2 = cv.height;
+        var dark = S.isDark();
+        g.clearRect(0, 0, W2, H2);
+        var padL = 42, padR = 14, padT = 16, padB = 34;
+        var x0 = padL, x1 = W2 - padR, y0 = padT, y1 = H2 - padB;
+        function X(v) { return x0 + v * (x1 - x0); }          /* 0..1 코드 */
+        function Y(cp) { return y0 + (1.0 - cp) / 3.5 * (y1 - y0); }
+        g.strokeStyle = dark ? 'rgba(148,163,184,0.28)' : 'rgba(100,116,139,0.28)';
+        g.lineWidth = 1;
+        for (var cp = -2; cp <= 1; cp += 1) {
+            g.beginPath(); g.moveTo(x0, Y(cp)); g.lineTo(x1, Y(cp)); g.stroke();
+            g.fillStyle = dark ? '#94a3b8' : '#94a3b8';
+            g.font = "700 9px 'SeoulNamsan', sans-serif";
+            g.textAlign = 'right';
+            g.fillText(cp.toFixed(1), x0 - 5, Y(cp) + 3);
+        }
+        g.strokeStyle = dark ? 'rgba(148,163,184,0.5)' : 'rgba(100,116,139,0.45)';
+        g.beginPath(); g.moveTo(x0, Y(0)); g.lineTo(x1, Y(0)); g.stroke();
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0, y1); g.stroke();
+        g.textAlign = 'center';
+        g.fillStyle = dark ? '#94a3b8' : '#94a3b8';
+        g.fillText('앞전', X(0) + 10, y1 + 16);
+        g.fillText('코드 위치', X(0.5), y1 + 30);
+        g.fillText('뒷전', X(1) - 10, y1 + 16);
+
+        var up = [], lo = [];
+        for (var i = 0; i <= 48; i++) {
+            var xr = i / 48;
+            up.push([xr, cpUpper(xr, D.cl)]);
+            lo.push([xr, cpLower(xr, D.cl)]);
+        }
+        function drawLine(arr, color) {
+            g.beginPath();
+            arr.forEach(function (p, i) {
+                var px = X(p[0]), py = Y(Math.max(-2.4, Math.min(1.0, p[1])));
+                if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+            });
+            g.strokeStyle = color;
+            g.lineWidth = 2.4;
+            g.stroke();
+        }
+        drawLine(up, '#2563eb');
+        drawLine(lo, '#ef4444');
+
+        g.textAlign = 'left';
+        g.font = "800 10px 'SeoulNamsan', sans-serif";
+        g.fillStyle = dark ? '#cbd5e1' : '#475569';
+        g.fillText('α = ' + P.aoa + '° · ' + SHAPES[P.shape].name + ' · U = ' + P.wind + ' m/s', x0, y0 - 3);
+    }
+
+    /* ---------- 활공 테스트 ---------- */
+    var glide = { active: false, t: 0, x: 0, y: 0, vx: 0, vy: 0, dist: 0 };
+
+    function startGlide() {
+        calc();
+        if (D.stalled) {
+            toast('⚠️ 실속 상태에서는 활공하지 못합니다. 받음각을 낮춰 보세요.');
+            return;
+        }
+        if (D.L <= 0.05) {
+            toast('양력이 0에 가까워 활공할 수 없습니다.');
+            return;
+        }
+        glide.active = true;
+        glide.t = 0;
+        glide.x = -10.5;
+        glide.y = 2.1;
+        glide.dist = 0;
+        var ratio = Math.max(0.4, D.L / Math.max(0.001, D.D));
+        var dur = Math.max(2.4, Math.min(6.0, D.glideTime));
+        glide.vx = 21.6 / dur;
+        glide.vy = -4.8 / dur;
+        glide.dur = dur;
+        glide.distM = D.glideDist;
+        glide.timeS = D.glideTime;
+        glider.position.set(glide.x, glide.y, 0);
+        glider.visible = true;
+        glideLine.visible = true;
+        glideLine.geometry.setFromPoints([new THREE.Vector3(glide.x, glide.y, 0), new THREE.Vector3(glide.x, glide.y, 0)]);
+        glideLine.computeLineDistances();
+        S.setHint('🚀 6 m 높이에서 발사! 양항비 ' + ratio.toFixed(1) + ' → 약 ' + D.glideDist.toFixed(1) + ' m 날아갑니다.', false);
+    }
+
+    function stepGlide(dt) {
+        if (!glide.active) return;
+        glide.t += dt;
+        glide.x += glide.vx * dt;
+        glide.y += glide.vy * dt;
+        glide.dist = glide.x + 10.5;
+        glider.position.set(glide.x, glide.y, 0);
+        glider.rotation.z = -Math.atan2(glide.vy, glide.vx);
+        glider.rotation.y = Math.sin(glide.t * 1.6) * 0.05;
+        glideLine.geometry.setFromPoints([new THREE.Vector3(-10.5, 2.1, 0), new THREE.Vector3(glide.x, glide.y, 0)]);
+        glideLine.computeLineDistances();
+        if (glide.y <= -2.7 || glide.x > 11.5) {
+            glide.active = false;
+            $('iGlide').textContent = glide.distM.toFixed(1) + ' m · ' + glide.timeS.toFixed(1) + ' s';
+            toast('🛬 활공 거리 ' + glide.distM.toFixed(1) + ' m · 체공 ' + glide.timeS.toFixed(1) + ' 초');
+            S.setHint('🛬 활공 거리 ' + glide.distM.toFixed(1) + ' m — 받음각을 바꾸면 거리가 달라집니다.', false);
+            setTimeout(function () { glider.visible = false; }, 900);
+        }
+    }
+
+    var toastTimer = null;
+    function toast(msg) {
+        var t = $('ux-toast');
+        if (!t) return;
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { t.classList.remove('show'); }, 3200);
+    }
+
+    /* ---------- 입력 ---------- */
+    $('rAoA').addEventListener('input', function () { P.aoa = parseInt(this.value, 10); syncUI(); });
+    $('rWind').addEventListener('input', function () { P.wind = parseInt(this.value, 10); syncUI(); });
+    $('rRho').addEventListener('input', function () { P.rho = parseFloat(this.value); syncUI(); });
+    $('rCg').addEventListener('input', function () { P.cg = parseFloat(this.value); syncUI(); });
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-shape]'), function (b) {
+        b.addEventListener('click', function () {
+            P.shape = b.getAttribute('data-shape');
+            Array.prototype.forEach.call(document.querySelectorAll('[data-shape]'), function (x) { x.classList.toggle('active', x === b); });
+            buildWing();
+            syncUI();
+            S.setHint('✈️ 날개 모양: ' + SHAPES[P.shape].name + ' — 캠버와 실속 각도가 달라졌습니다.', false);
+        });
+    });
+
+    $('btnFly').addEventListener('click', startGlide);
+    $('btnCp').addEventListener('click', function () {
+        var p = $('cpPanel');
+        p.classList.toggle('show');
+        $('btnCp').textContent = p.classList.contains('show') ? '📊 압력 분포 닫기' : '📊 압력 분포 보기';
+        if (p.classList.contains('show')) drawCp();
+    });
+    $('cpClose').addEventListener('click', function () {
+        $('cpPanel').classList.remove('show');
+        $('btnCp').textContent = '📊 압력 분포 보기';
+    });
+
+    /* ---------- 시점 ---------- */
+    function fitView() {
+        var aspect = window.innerWidth / Math.max(1, window.innerHeight);
+        if (aspect < 1.02) {
+            camera.position.set(0.7, 2.4, 20.6);
+            controls.target.set(0, 0.1, 0);
+        } else {
+            camera.position.set(6.0, 3.0, 15.2);
+            controls.target.set(2.75, 0.3, 0);
+        }
+        controls.update();
+    }
+    S.setAlign(fitView);
+    S.setFit(fitView);
+    S.setReset(function () {
+        P.aoa = 6; P.wind = 12; P.rho = 1.2; P.cg = 0.28; P.shape = 'airfoil';
+        $('rAoA').value = 6; $('rWind').value = 12; $('rRho').value = 1.2; $('rCg').value = 0.28;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-shape]'), function (x) {
+            x.classList.toggle('active', x.getAttribute('data-shape') === 'airfoil');
+        });
+        buildWing();
+        syncUI();
+        glide.active = false; glider.visible = false; glideLine.visible = false;
+        fitView();
+        S.setHint('🔄 풍동 조건을 처음 상태로 되돌렸습니다.', false);
+    });
+
+    /* ---------- 프레임 ---------- */
+    S.onFrame(function (dt) {
+        stepParticles(dt);
+        stepGlide(dt);
+    });
+
+    /* ---------- 시작 ---------- */
+    buildWing();
+    syncUI();
+    fitView();
+    if (window.innerWidth > 900) {
+        $('cpPanel').classList.add('show');
+        $('btnCp').textContent = '📊 압력 분포 닫기';
+    }
+    setTimeout(drawCp, 150);
+    S.setHint('🌬️ 받음각을 올리면 윗면 공기가 빨라지고 압력이 낮아져 양력이 커집니다.', true);
+
+    /* 검증용 */
+    window.__wind = {
+        get state() {
+            return {
+                aoa: P.aoa, wind: P.wind, rho: P.rho, cg: P.cg, shape: P.shape,
+                cl: +D.cl.toFixed(2), cd: +D.cd.toFixed(3), L: +D.L.toFixed(1), D: +D.D.toFixed(2),
+                ratio: +(D.L / Math.max(0.001, D.D)).toFixed(1), stalled: D.stalled,
+                glideDist: +D.glideDist.toFixed(1), gliding: glide.active,
+                badge: $('stTitle').textContent, cpPanel: $('cpPanel').classList.contains('show')
+            };
+        },
+        set: function (o) {
+            if (o.aoa !== undefined) { P.aoa = o.aoa; $('rAoA').value = o.aoa; }
+            if (o.wind !== undefined) { P.wind = o.wind; $('rWind').value = o.wind; }
+            if (o.rho !== undefined) { P.rho = o.rho; $('rRho').value = o.rho; }
+            if (o.cg !== undefined) { P.cg = o.cg; $('rCg').value = o.cg; }
+            if (o.shape) { P.shape = o.shape; buildWing(); }
+            syncUI();
+        },
+        fly: startGlide
+    };
+})();
+</script>
+<script>
+/* ============ 전체화면 / 창모드 (공통) ============ */
+(function () {
+    'use strict';
+    var docEl = document.documentElement;
+    var btn = document.getElementById('fullscreenBtn');
+    var icon = document.getElementById('fullscreenIcon');
+    var text = document.getElementById('fullscreenText');
+    function realFs() {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement ||
+            document.mozFullScreenElement || document.msFullscreenElement);
+    }
+    function pseudo() { return docEl.classList.contains('pseudo-fs'); }
+    function toast(msg) {
+        var t = document.getElementById('ux-toast');
+        if (!t) return;
+        t.textContent = msg; t.classList.add('show');
+        clearTimeout(t._t); t._t = setTimeout(function () { t.classList.remove('show'); }, 2600);
+    }
+    function setUI() {
+        var on = realFs() || pseudo();
+        if (icon) icon.textContent = on ? '🗗' : '⛶';
+        if (text) text.textContent = on ? '창모드' : '전체화면';
+        if (btn) btn.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+        document.body.classList.toggle('is-fullscreen', on);
+        setTimeout(function () { try { window.dispatchEvent(new Event('resize')); } catch (e) { } }, 160);
+    }
+    function onKey(e) {
+        if (e.key !== 'Escape' && e.key !== 'Esc') return;
+        if (pseudo() && !realFs()) { docEl.classList.remove('pseudo-fs'); setUI(); }
+    }
+    if (btn) {
+        btn.addEventListener('click', function () {
+            if (realFs()) {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                else if (document.msExitFullscreen) document.msExitFullscreen();
+                return;
+            }
+            if (pseudo()) { docEl.classList.remove('pseudo-fs'); setUI(); return; }
+            var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+            if (req) {
+                try {
+                    var r = req.call(docEl);
+                    if (r && typeof r.catch === 'function') r.catch(function () { docEl.classList.add('pseudo-fs'); setUI(); });
+                } catch (err) { docEl.classList.add('pseudo-fs'); }
+            } else {
+                docEl.classList.add('pseudo-fs');
+                try { window.scrollTo(0, 1); } catch (e) { }
+                toast('이 브라우저는 전체화면을 지원하지 않아 상단 정보를 숨긴 몰입 모드로 표시합니다');
+            }
+            setUI();
+        }, false);
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'].forEach(function (ev) {
+        document.addEventListener(ev, setUI);
+    });
+    document.addEventListener('keydown', onKey);
+    var rt = null;
+    function refit() {
+        clearTimeout(rt);
+        rt = setTimeout(function () { try { window.dispatchEvent(new Event('resize')); } catch (e) { } }, 240);
+    }
+    window.addEventListener('orientationchange', refit);
+    window.addEventListener('pageshow', refit);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) refit(); });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', refit);
+    setUI();
+})();
+</script>
+<script src="../../common/feedback.js" defer></script>
+<script src="../../common/lib/qrcode.min.js" defer></script>
+<script src="../../common/qr-modal.js" defer></script>
+<script src="../../common/ui-layout.js" defer></script>
+</body>
+</html>
