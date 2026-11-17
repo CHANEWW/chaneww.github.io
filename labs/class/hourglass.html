@@ -89,6 +89,25 @@
     .data-value { font-size: 14px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .data-value.big { font-size: 16px; color: #0a84ff; }
 
+    /* ---------- 화면 꺼짐 방지 배지 (Screen Wake Lock) ---------- */
+    /* 타이머가 도는 동안만 나타나며, 야간 모드 버튼을 밀지 않도록 절대 배치한다. */
+    .tr-util { position: relative; }
+    .wake-badge {
+        position: absolute; right: calc(100% + 8px); top: 50%; transform: translateY(-50%);
+        display: none; align-items: center; gap: 6px;
+        padding: 7px 12px; border-radius: 999px;
+        font-size: 11px; font-weight: 800; letter-spacing: -.2px; color: #067a3d;
+        white-space: nowrap;
+    }
+    .wake-badge.on { display: inline-flex; }
+    .wake-badge .wake-dot {
+        flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+        background: #34c759; box-shadow: 0 0 0 3px rgba(52,199,89,.18);
+        animation: wake-pulse 2.2s ease-in-out infinite;
+    }
+    body.dark .wake-badge { color: #86e8ab; }
+    @keyframes wake-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
     /* ---------- 중앙 안내 툴팁 ---------- */
     .center-tooltip {
         position: fixed; top: auto !important; bottom: 92px !important; left: 50%; transform: translateX(-50%);
@@ -226,6 +245,7 @@
         .data-value.big { font-size: 13.5px; }
         .center-tooltip { display: none; }
         .side-ctrl-panel { max-height: 44vh; }
+        .wake-badge { padding: 5px 9px; font-size: 10px; right: calc(100% + 6px); }
         #toast { top: auto; bottom: calc(96px + env(safe-area-inset-bottom)); }
     }
     @media (max-width: 430px) {
@@ -246,6 +266,7 @@
         .center-tooltip { display: none; }
         .side-ctrl-panel { max-height: calc(100vh - 120px); width: 200px !important; padding: 8px !important; }
         .start-btn { height: 36px; font-size: 12.5px; }
+        .wake-badge { padding: 4px 8px; font-size: 9.5px; right: calc(100% + 5px); }
         #toast { top: auto; bottom: 60px; font-size: 11.5px; }
     }
 </style>
@@ -271,6 +292,10 @@
 <!-- 우측 상단 유틸 + 데이터 카드 -->
 <div class="top-right-bar">
     <div class="tr-util">
+        <div class="glass wake-badge" id="wakeBadge" role="status" aria-live="polite"
+             title="타이머가 도는 동안 화면이 꺼지지 않도록 유지하고 있습니다">
+            <span class="wake-dot" aria-hidden="true"></span><span>화면 꺼짐 방지</span>
+        </div>
         <button class="glass icon-btn" id="theme-toggle" title="주간/야간 모드 전환" aria-label="주간/야간 모드 전환">🌙</button>
     </div>
     <div class="glass data-card">
@@ -1060,6 +1085,8 @@
         var rng = $('#rngTime');
         if (Number(rng.value) !== state.duration) rng.value = state.duration;
 
+        if (wake) wake.sync();
+
         updateClock(true);
     }
 
@@ -1213,6 +1240,98 @@
         setTimeout(function () { if (state.finished) chime(0); }, 1500);
         toast('⌛ 시간이 다 되었습니다!');
     }
+
+    /* =========================================================
+       8-1. 화면 꺼짐 방지 (Screen Wake Lock)
+       ---------------------------------------------------------
+       타이머가 도는 동안만 화면보호기·절전을 막고,
+       일시정지·완료·초기화·시간 변경 시에는 즉시 반납한다.
+       미지원 브라우저·권한 거부는 조용히 무시하여 타이머 동작을 지킨다.
+       ========================================================= */
+    var wake = (function () {
+        var sentinel = null;     /* 지금 잡고 있는 화면 잠금 */
+        var pending = false;     /* 요청 진행 중 */
+        var want = false;        /* 잡고 있어야 하는 상태(타이머 실행 중) */
+        var badgeEl = $('#wakeBadge');
+
+        /* 브라우저가 API를 늦게 붙이는 경우도 있어 호출 시점에 확인한다 */
+        function api() {
+            try {
+                var wl = navigator.wakeLock;
+                return (wl && typeof wl.request === 'function') ? wl : null;
+            } catch (e) { return null; }
+        }
+
+        function paint() {
+            if (!badgeEl) return;
+            badgeEl.classList.toggle('on', !!sentinel);
+        }
+
+        function acquire() {
+            if (sentinel || pending || !want) { paint(); return; }
+            var wl = api();
+            if (!wl) { paint(); return; }
+            if (document.visibilityState !== 'visible') { paint(); return; }
+            var req;
+            pending = true;
+            try { req = wl.request('screen'); } catch (e) { pending = false; paint(); return; }
+            if (!req || typeof req.then !== 'function') { pending = false; paint(); return; }
+            req.then(function (s) {
+                pending = false;
+                if (!want) {   /* 요청 중에 타이머가 멈췄으면 바로 반납 */
+                    try {
+                        var r0 = s.release();
+                        if (r0 && typeof r0.then === 'function') r0.then(null, function () { });
+                    } catch (e) { }
+                    paint();
+                    return;
+                }
+                sentinel = s;
+                try {
+                    s.addEventListener('release', function () {
+                        if (sentinel === s) sentinel = null;
+                        paint();
+                        /* 시스템이 잠금을 회수(탭 숨김·절전 전환 등)하면 다시 잡는다 */
+                        if (want && state.running && document.visibilityState === 'visible') acquire();
+                    });
+                } catch (e) { }
+                paint();
+            }, function () {
+                /* 권한 거부·미지원 정책 등: 표시 없이 조용히 포기 */
+                pending = false;
+                paint();
+            });
+        }
+
+        function drop() {
+            want = false;
+            var s = sentinel;
+            sentinel = null;
+            if (s) {
+                try {
+                    var r = s.release();
+                    if (r && typeof r.then === 'function') r.then(null, function () { });
+                } catch (e) { }
+            }
+            paint();
+        }
+
+        function sync() {
+            if (state.running) { want = true; acquire(); }
+            else if (want || sentinel) { drop(); }
+        }
+
+        /* 탭으로 돌아오면(visibilitychange) 타이머가 계속 도는 동안 자동 재획득 */
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible' && want && state.running) acquire();
+        });
+        /* 뒤로가기 캐시에서 복원된 경우 */
+        window.addEventListener('pageshow', function (e) {
+            if (e && e.persisted && want && state.running) acquire();
+        });
+
+        return { sync: sync, acquire: acquire, drop: drop };
+    })();
 
     /* =========================================================
        9. 렌더 루프
