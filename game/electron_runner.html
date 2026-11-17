@@ -451,8 +451,10 @@ html.pseudo-fs #hint { display: none !important; }
     /* ---------- 설정 ---------- */
     var CFG = { volt: 6, temp: 20, width: 1.5, len: 40 };
     var LANES = [-1.05, 0, 1.05];
-    var CORRIDOR = 1.32;
+    var CORRIDOR = 1.44;
     var R_ION = 0.3, R_E = 0.25;
+    /* 충돌 판정 반경(보이는 크기보다 작게 — 스치는 건 통과) */
+    var HIT_R_ION = 0.40, HIT_R_IMP = 0.50, HIT_Z = 0.48;
 
     var G = {
         state: 'ready',          /* ready | play | pause | over */
@@ -605,16 +607,22 @@ html.pseudo-fs #hint { display: none !important; }
 
         bulbGroup.position.set(0, 0, G.zEnd - 2.6);
 
-        /* 이온 슬라이스: 약 1.1 간격 */
-        var slices = Math.max(6, Math.round(G.span / 1.15));
-        var prevFree = LANES[1];
+        /* 이온 슬라이스: 약 1.6 간격 (통로 사이 여유 확보) */
+        var slices = Math.max(5, Math.round(G.span / 1.6));
+        var prevFree = 1;
         for (var s = 0; s < slices; s++) {
             var z = G.zStart - 2.2 - (s / slices) * (G.span - 1.0);
-            var freeIdx = Math.floor(Math.random() * 3);
+            /* 통로는 앞 구간과 같거나 한 칸 옆으로만 옮겨 간다 (두 칸 급이동 요구 없음) */
+            var freeIdx;
+            if (Math.random() < 0.45) {
+                freeIdx = prevFree;
+            } else {
+                freeIdx = Math.max(0, Math.min(2, prevFree + (Math.random() < 0.5 ? -1 : 1)));
+            }
             var blocked = [0, 1, 2].filter(function (k) { return k !== freeIdx; });
-            /* 너무 자주 막지 않도록 가끔 한 칸만 막는다 */
+            /* 너무 자주 막지 않도록 절반 이상은 한 칸만 막는다(두 칸이 열려 있음) */
             /* 굵은 도선일수록 이온이 덜 빽빽해 한 칸만 막는 경우가 늘어난다 */
-            if (Math.random() < 0.28 + (1.5 - CFG.width) * 0.12) blocked = [blocked[Math.floor(Math.random() * 2)]];
+            if (Math.random() < 0.55 + (1.2 - CFG.width) * 0.1) blocked = [blocked[Math.floor(Math.random() * 2)]];
             for (var b = 0; b < blocked.length; b++) {
                 var lane = LANES[blocked[b]];
                 var m = new THREE.Mesh(ionGeo, ionMat);
@@ -679,7 +687,8 @@ html.pseudo-fs #hint { display: none !important; }
         return 1.55 * (CFG.volt / 6) * tempK * thick;
     }
     function vibration() {
-        return 0.05 + (CFG.temp - 20) / 300 * 0.28;
+        /* 온도가 높을수록 크게 진동하는 원리는 유지, 진폭은 완만하게 */
+        return 0.045 + (CFG.temp - 20) / 300 * 0.20;
     }
 
     /* ---------- 게임 흐름 ---------- */
@@ -913,10 +922,10 @@ html.pseudo-fs #hint { display: none !important; }
 
         /* 좌우 이동 — 프레임률과 무관하게 바로 반응하도록 목표 속도로 수렴 */
         var targetVx = 0;
-        if (keys.left) targetVx -= 3.4;
-        if (keys.right) targetVx += 3.4;
+        if (keys.left) targetVx -= 3.8;
+        if (keys.right) targetVx += 3.8;
         if (touchTarget !== null) {
-            targetVx = Math.max(-3.8, Math.min(3.8, (touchTarget - G.x) * 10));
+            targetVx = Math.max(-4.2, Math.min(4.2, (touchTarget - G.x) * 11));
         }
         G.vx += (targetVx - G.vx) * Math.min(1, dt * 13);
         G.x += G.vx * dt;
@@ -951,15 +960,15 @@ html.pseudo-fs #hint { display: none !important; }
         for (var n = 0; G.grace <= 0 && n < ions.length; n++) {
             var q = ions[n];
             var ddx = q.mesh.position.x - ex, ddz = q.mesh.position.z - ez;
-            if (Math.abs(ddz) > 0.55) continue;
-            var rr = R_ION + R_E - 0.02;
+            if (Math.abs(ddz) > HIT_Z) continue;
+            var rr = HIT_R_ION;
             if (ddx * ddx + ddz * ddz < rr * rr) { registerHit(false); break; }
         }
         for (var m = 0; G.grace <= 0 && m < impurities.length; m++) {
             var im = impurities[m];
             var ax = im.x - ex, az = im.z - ez;
-            if (Math.abs(az) > 0.7) continue;
-            var rr2 = im.r + R_E - 0.02;
+            if (Math.abs(az) > 0.6) continue;
+            var rr2 = HIT_R_IMP;
             if (ax * ax + az * az < rr2 * rr2) { registerHit(true); break; }
         }
 
@@ -1088,8 +1097,15 @@ html.pseudo-fs #hint { display: none !important; }
                 state: G.state, score: G.score, progress: +G.progress.toFixed(1), hits: G.hits,
                 energy: +G.energy.toFixed(1), x: +electron.position.x.toFixed(2), z: +electron.position.z.toFixed(2),
                 ions: ions.length, impurities: impurities.length, speed: +gameSpeed().toFixed(2),
-                hof: !!(window.HOF && window.HOF.games.electron_runner)
+                hof: !!(window.HOF && window.HOF.games.electron_runner),
+                corridor: CORRIDOR, hitR: HIT_R_ION, hitZ: HIT_Z, amp: +vibration().toFixed(3),
+                zEnd: +G.zEnd.toFixed(2)
             };
+        },
+        /* 검증용: 장애물 격자 배치(기준 위치) */
+        layout: function () {
+            return ions.map(function (q) { return { x: q.bx, z: q.bz }; })
+                .concat(impurities.map(function (m) { return { x: m.x, z: m.z, imp: true }; }));
         },
         start: startRun,
         set: function (o) {
