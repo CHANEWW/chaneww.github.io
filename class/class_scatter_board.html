@@ -159,6 +159,20 @@ canvas#board { display: block; width: 100%; height: 100%; border-radius: 12px; }
 .stat.big { flex: 1.7 1 190px; }
 .stat.big .v { font-size: 18px; color: var(--accent); white-space: nowrap; }
 
+/* ---------- 연동 상태 ---------- */
+.sync-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 11px; border-radius: 999px; background: var(--chip); color: var(--sub); font-size: 11px; font-weight: 800; white-space: nowrap; }
+.sync-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+.sync-badge.ok { color: var(--ok); }
+.sync-badge.ok .dot { animation: syncPulse 1.9s ease-out infinite; }
+.sync-badge.wait { color: var(--warn); }
+.sync-badge.err { color: var(--danger); }
+@keyframes syncPulse { 0% { box-shadow: 0 0 0 0 rgba(15,157,107,.5); } 70% { box-shadow: 0 0 0 7px rgba(15,157,107,0); } 100% { box-shadow: 0 0 0 0 rgba(15,157,107,0); } }
+.conn-line { margin-top: 11px; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; color: var(--sub); }
+.conn-line::before { content: '\25CF'; font-size: 9px; line-height: 1; }
+.conn-line.ok { color: var(--ok); }
+.conn-line.wait { color: var(--warn); }
+.conn-line.err { color: var(--danger); }
+
 /* ---------- 토스트 ---------- */
 #ux-toast { position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 300; background: rgba(16,22,36,.94); color: #fff; font-size: 12.5px; padding: 10px 16px; border-radius: 14px; max-width: 88vw; text-align: center; pointer-events: none; opacity: 0; transition: opacity .3s ease; box-shadow: 0 10px 30px rgba(0,0,0,.35); line-height: 1.5; }
 
@@ -255,11 +269,13 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
                 <h3>🆕 새 방 만들기</h3>
                 <p>4자리 PIN이 자동으로 만들어집니다. 칠판 화면에 이 보드를 띄워 두고 모둠 대표가 값을 입력합니다.</p>
                 <button class="big-action" id="createBtn" type="button">방 만들기 · PIN 발급</button>
+                <div class="conn-line" id="lobbyConn">서버 연결 확인 중…</div>
                 <div class="lobby-note">
-                    <b>같은 브라우저의 탭끼리</b> 실시간으로 공유됩니다. 다른 기기로 옮길 때는 보드에서 <b>CSV 내보내기</b> 후 가져오세요.
+                    같은 PIN을 입력한 <b>모든 기기(태블릿·휴대폰)</b>가 실시간으로 함께 봅니다. 교실 와이파이만 있으면 바로 참여할 수 있어요.
                 </div>
                 <div class="feat-list">
                     <span>📈 산점도 · 최소제곱 추세선 · R² 실시간</span>
+                    <span>🌐 여러 기기 실시간 공유 (구글 시트 저장)</span>
                     <span>👥 모둠별 입력 / 모둠 일괄 시뮬레이션</span>
                     <span>🖥 칠판 모드 + CSV 저장·가져오기</span>
                 </div>
@@ -357,6 +373,7 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         <div class="panel stage-panel glass">
             <div class="stage-tools">
                 <div class="title" id="boardTitle">우리 반 산점도</div>
+                <span class="sync-badge" id="syncBadge"><span class="dot"></span><span id="syncText">연결 확인 중</span></span>
                 <div class="spacer"></div>
                 <button class="small-btn" id="boardModeBtn" type="button">🖥 칠판 모드</button>
             </div>
@@ -418,12 +435,13 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         preset: 'ohm'
     };
     var presetTouched = false;
+    var lastEdit = {};
 
     function keyFor(pin) { return 'svl_scatter_room_' + pin; }
 
     function saveRoom(silent) {
         try { localStorage.setItem(keyFor(room.pin), JSON.stringify(room)); } catch (e) {}
-        if (!silent && bc) { try { bc.postMessage({ pin: room.pin }); } catch (e) {} }
+        if (!silent && !SYNC_ON && bc) { try { bc.postMessage({ pin: room.pin }); } catch (e) {} }
     }
     function loadRoom(pin) {
         var raw = null;
@@ -447,15 +465,166 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
     try { if ('BroadcastChannel' in window) bc = new BroadcastChannel('svl-scatter-sync'); } catch (e) { bc = null; }
     if (bc) {
         bc.onmessage = function (e) {
+            if (SYNC_ON) return;
             if (!e.data || e.data.pin !== room.pin) return;
             if (loadRoom(room.pin)) renderAll();
         };
     }
     window.addEventListener('storage', function (e) {
+        if (SYNC_ON) return;
         if (!room.pin) return;
         if (e.key !== keyFor(room.pin)) return;
         if (loadRoom(room.pin)) renderAll();
     });
+
+    /* ============================================================
+       서버 연동 (Apps Script 웹앱 · JSONP)
+       ============================================================ */
+    var SCATTER_BOARD_WEBAPP_URL = (function () {
+        var U = 'https://script.google.com/macros/s/AKfycbwPms0RrBvw2Ylf3lfFUj2sRheIiBV09H6NlkmtOWtJPJv1xueXyB5ZNBigjTKT6IqDrA/exec';
+        try {
+            var q = new URLSearchParams(location.search).get('webapp');
+            if (q && /^https?:\/\//.test(q.trim())) return q.trim();
+        } catch (e) {}
+        return U;
+    })();
+    var SYNC_ON = !!SCATTER_BOARD_WEBAPP_URL;
+    var SYNC = { timer: null, period: 0, busy: false, fails: 0, lastOk: 0 };
+    var POLL_MS = 8000, POLL_MS_SLOW = 20000, API_TIMEOUT_MS = 15000;
+
+    var jsonpSeq = 0;
+    function apiCall(params, done) {
+        if (!SYNC_ON) { setTimeout(function () { done(new Error('no-url')); }, 0); return; }
+        var name = '__svlBoardCb' + (++jsonpSeq) + '_' + Date.now().toString(36);
+        var script = document.createElement('script');
+        var settled = false, timer = null;
+        function finish(err, data) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { delete window[name]; } catch (e) { window[name] = undefined; }
+            if (script.parentNode) script.parentNode.removeChild(script);
+            done(err, data);
+        }
+        window[name] = function (data) { finish(null, data); };
+        script.onerror = function () { finish(new Error('network')); };
+        var q = [];
+        for (var k in params) {
+            if (!Object.prototype.hasOwnProperty.call(params, k)) continue;
+            var v = params[k];
+            if (v === undefined || v === null) continue;
+            if (typeof v === 'object') v = JSON.stringify(v);
+            q.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+        }
+        q.push('callback=' + name);
+        script.src = SCATTER_BOARD_WEBAPP_URL + (SCATTER_BOARD_WEBAPP_URL.indexOf('?') >= 0 ? '&' : '?') + q.join('&');
+        script.async = true;
+        timer = setTimeout(function () { finish(new Error('timeout')); }, API_TIMEOUT_MS);
+        document.head.appendChild(script);
+    }
+
+    function syncSet(state, text) {
+        var badge = $('syncBadge'), tx = $('syncText'), line = $('lobbyConn');
+        if (badge) badge.className = 'sync-badge' + (state ? ' ' + state : '');
+        if (tx) tx.textContent = text;
+        if (line) { line.className = 'conn-line' + (state ? ' ' + state : ''); line.textContent = text; }
+    }
+
+    function roomSig(r) {
+        if (!r) return '';
+        var pts = r.points || [];
+        return [r.updatedAt || '', pts.length, r.xLabel, r.xUnit, r.yLabel, r.yUnit, r.preset].join('\u00a7');
+    }
+
+    function applyServerRoom(sr) {
+        if (!sr) return;
+        room.pin = sr.pin || room.pin;
+        room.xLabel = sr.xLabel || '전압';
+        room.xUnit = sr.xUnit == null ? '' : String(sr.xUnit);
+        room.yLabel = sr.yLabel || '전류';
+        room.yUnit = sr.yUnit == null ? '' : String(sr.yUnit);
+        room.preset = sr.preset || 'custom';
+        room.updatedAt = sr.updatedAt || '';
+        room.points = (sr.points || []).map(function (p) {
+            return { id: String(p.id == null ? '' : p.id), team: p.team || '모둠', x: Number(p.x) || 0, y: Number(p.y) || 0 };
+        });
+        saveRoom(true);
+        renderAll();
+    }
+
+    function pollSchedule(ms) {
+        if (SYNC.timer) { clearInterval(SYNC.timer); SYNC.timer = null; }
+        SYNC.period = ms;
+        SYNC.timer = setInterval(function () { pollRoom(false); }, ms);
+    }
+    function pollStop() {
+        if (SYNC.timer) { clearInterval(SYNC.timer); SYNC.timer = null; }
+        SYNC.period = 0;
+    }
+    function pollRoom(force) {
+        if (!SYNC_ON || !room.pin || SYNC.busy) return;
+        if (!force) {
+            if (document.hidden) return;
+            if (!$('sBoard').classList.contains('show')) return;
+        }
+        SYNC.busy = true;
+        apiCall({ action: 'room', pin: room.pin }, function (err, res) {
+            SYNC.busy = false;
+            if (err) {
+                SYNC.fails += 1;
+                syncSet('err', SYNC.fails > 2 ? '연결 지연 · 다시 시도 중' : '연결 확인 중…');
+                if (SYNC.fails === 3 && SYNC.timer) pollSchedule(POLL_MS_SLOW);
+                return;
+            }
+            if (!res || !res.ok) {
+                SYNC.fails += 1;
+                syncSet('err', (res && res.reason) ? String(res.reason) : '연동 오류');
+                return;
+            }
+            if (res.exists === false) { syncSet('err', '방이 서버에 없어요'); return; }
+            if (SYNC.fails >= 3) pollSchedule(POLL_MS);
+            SYNC.fails = 0; SYNC.lastOk = Date.now();
+            syncSet('ok', '실시간 연동');
+            if (res.room && roomSig(res.room) !== roomSig(room)) applyServerRoom(res.room);
+        });
+    }
+
+    /* 서버 요청 한 번 + 결과 반영. 실패해도 로컬에 임의로 넣지 않고, 폴링이 실제 상태로 맞춘다. */
+    function apiMutate(params, opts) {
+        opts = opts || {};
+        syncSet('wait', opts.busyText || '저장 중…');
+        apiCall(params, function (err, res) {
+            if (err) {
+                syncSet('err', '전송 확인 실패');
+                toast(opts.failText || '서버 응답을 확인하지 못했어요. 잠시 뒤 자동으로 맞춰집니다.', 3600);
+                if (opts.onFail) opts.onFail(err, null);
+                setTimeout(function () { pollRoom(true); }, 1500);
+                return;
+            }
+            if (!res || !res.ok) {
+                syncSet('err', '저장 실패');
+                toast('⚠ ' + ((res && res.reason) ? res.reason : '요청을 처리하지 못했습니다.'), 3800);
+                if (opts.onFail) opts.onFail(null, res || {});
+                return;
+            }
+            SYNC.fails = 0; SYNC.lastOk = Date.now();
+            syncSet('ok', '실시간 연동');
+            if (res.room) applyServerRoom(res.room);
+            if (opts.onDone) opts.onDone(res);
+        });
+    }
+
+    function localId() { return 'p' + Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e6).toString(36); }
+
+    /* 첫 연결 확인 (ping) */
+    if (SYNC_ON) {
+        apiCall({ action: 'ping' }, function (err, res) {
+            if (!err && res && res.ok && res.action === 'ping') { syncSet('ok', '실시간 연동'); return; }
+            syncSet('err', err ? '서버 연결 실패' : '서버 응답 이상');
+        });
+    } else {
+        syncSet('', '이 브라우저에만 저장');
+    }
 
     /* ============================================================
        통계
@@ -494,10 +663,11 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
        ============================================================ */
     function renderAll() {
         $('pinView').textContent = room.pin || '0000';
-        $('xLabel').value = room.xLabel;
-        $('xUnit').value = room.xUnit;
-        $('yLabel').value = room.yLabel;
-        $('yUnit').value = room.yUnit;
+        var nowMs = Date.now();
+        ['xLabel', 'xUnit', 'yLabel', 'yUnit'].forEach(function (id) {
+            if (lastEdit[id] && nowMs - lastEdit[id] < 1600) return;   /* 방금 입력한 값은 건드리지 않음 */
+            $(id).value = room[id] == null ? '' : room[id];
+        });
         $('xFldLabel').textContent = room.xLabel || 'X';
         $('yFldLabel').textContent = room.yLabel || 'Y';
         $('boardTitle').textContent = room.xLabel + '–' + room.yLabel + ' 산점도';
@@ -705,14 +875,65 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
     /* ============================================================
        데이터 조작
        ============================================================ */
-    function addPoint(team, x, y, quiet) {
+    function nextTeamHint(team) {
+        var m = /(\d+)/.exec(team || '');
+        if (m) $('teamName').value = (parseInt(m[1], 10) + 1) + '모둠';
+    }
+
+    function addPointLocal(team, x, y, quiet) {
         room.points.push({ id: 'p' + Date.now() + '_' + Math.floor(Math.random() * 999), team: team, x: x, y: y });
         saveRoom();
         renderAll();
         if (!quiet) toast('➕ ' + team + ' 값 추가됨');
-        /* 다음 모둠 이름 자동 제안 */
-        var m = /(\d+)/.exec(team || '');
-        if (m) $('teamName').value = (parseInt(m[1], 10) + 1) + '모둠';
+        nextTeamHint(team);
+    }
+
+    function addPointServer(team, x, y, quiet) {
+        apiMutate({ action: 'add', pin: room.pin, team: team, x: x, y: y, id: localId() }, {
+            busyText: '값 보내는 중…',
+            failText: '값을 서버에 보내지 못했습니다. 연결을 확인하고 다시 눌러 주세요.',
+            onDone: function () {
+                if (!quiet) toast('➕ ' + team + ' 값 추가됨');
+                nextTeamHint(team);
+            }
+        });
+    }
+
+    function addPoint(team, x, y, quiet) {
+        if (SYNC_ON && room.pin) { addPointServer(team, x, y, quiet); return; }
+        addPointLocal(team, x, y, quiet);
+    }
+
+    /* 여러 점을 50개씩 나누어 서버에 보낸다 (서버 MAX_BATCH = 50) */
+    function uploadMany(list, onDone, failText) {
+        var chunks = [], i, total = 0, idx = 0;
+        for (i = 0; i < list.length; i += 50) chunks.push(list.slice(i, i + 50));
+        (function step() {
+            if (idx >= chunks.length) { if (onDone) onDone(total); return; }
+            var chunk = chunks[idx++];
+            apiMutate({ action: 'addMany', pin: room.pin, points: chunk }, {
+                busyText: '데이터 보내는 중… (' + total + '/' + list.length + ')',
+                failText: failText || '데이터를 서버에 보내지 못했습니다.',
+                onDone: function () { total += chunk.length; step(); }
+            });
+        })();
+    }
+
+    /* 축 이름·단위·프리셋을 서버에 반영 (입력 중 연속 요청 방지용 디바운스) */
+    var axisTimer = null;
+    function pushAxisSoon() {
+        if (!SYNC_ON || !room.pin) return;
+        clearTimeout(axisTimer);
+        axisTimer = setTimeout(pushAxis, 700);
+    }
+    function pushAxis() {
+        if (!SYNC_ON || !room.pin) return;
+        apiMutate({
+            action: 'axis', pin: room.pin,
+            xLabel: room.xLabel, xUnit: room.xUnit,
+            yLabel: room.yLabel, yUnit: room.yUnit,
+            preset: room.preset
+        }, { busyText: '축 설정 저장 중…' });
     }
 
     function nextTeamNo() {
@@ -745,16 +966,22 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
             var text = String(reader.result || '').replace(/^\ufeff/, '');
             var rows = text.split(/\r?\n/).filter(function (r) { return r.trim(); });
             var added = 0;
+            var newPts = [];
             rows.forEach(function (row, i) {
                 var cells = row.split(',').map(function (c) { return c.replace(/^"|"$/g, '').replace(/""/g, '"').trim(); });
                 if (i === 0 && /모둠|team|x/i.test(cells[0])) return;
                 if (cells.length < 3) return;
                 var x = parseFloat(cells[1]), y = parseFloat(cells[2]);
                 if (!isFinite(x) || !isFinite(y)) return;
-                room.points.push({ id: 'p' + Date.now() + '_' + added, team: cells[0] || ('모둠' + (room.points.length + 1)), x: x, y: y });
+                newPts.push({ id: localId(), team: cells[0] || ('모둠' + (room.points.length + newPts.length + 1)), x: x, y: y });
                 added += 1;
             });
             if (!added) { toast('가져올 값을 찾지 못했습니다. “모둠,x,y” 형식인지 확인하세요.', 3200); return; }
+            if (SYNC_ON && room.pin) {
+                uploadMany(newPts, function () { toast('⬆ ' + added + '개 값을 가져왔습니다.'); }, 'CSV 값을 서버에 저장하지 못했습니다.');
+                return;
+            }
+            room.points = room.points.concat(newPts);
             saveRoom();
             renderAll();
             toast('⬆ ' + added + '개 값을 가져왔습니다.');
@@ -778,6 +1005,7 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         renderAll();
         resize(); draw();
         setTimeout(function () { resize(); draw(); }, 120);
+        if (SYNC_ON) pollSchedule(POLL_MS);
     }
 
     function makePin() {
@@ -813,17 +1041,55 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         }
     }
 
+    var joining = false;
+    function enterRoomFromServer(pin, roomData, msg) {
+        if (roomData) applyServerRoom(roomData);
+        openRoom(pin);
+        if (msg) toast(msg, 2800);
+    }
+
     function doJoin() {
         var pin = pinValue();
         if (pin.length !== 4) { toast('PIN 4자리를 모두 입력하세요.'); return; }
-        var existed = loadRoom(pin);
-        if (!existed) {
-            room = { pin: pin, xLabel: '전압', xUnit: 'V', yLabel: '전류', yUnit: 'A', points: [], preset: 'ohm' };
-            toast('새 방 ' + pin + '을(를) 열었습니다.');
-        } else {
-            toast('방 ' + pin + '에 입장했습니다 · 데이터 ' + room.points.length + '개');
+        if (pin === '0000') { toast('0000은 쓸 수 없습니다. 다른 PIN을 입력하세요.'); return; }
+        if (!SYNC_ON) {
+            var existed = loadRoom(pin);
+            if (!existed) {
+                room = { pin: pin, xLabel: '전압', xUnit: 'V', yLabel: '전류', yUnit: 'A', points: [], preset: 'ohm' };
+                toast('새 방 ' + pin + '을(를) 열었습니다.');
+            } else {
+                toast('방 ' + pin + '에 입장했습니다 · 데이터 ' + room.points.length + '개');
+            }
+            openRoom(pin);
+            return;
         }
-        openRoom(pin);
+        if (joining) return;
+        joining = true;
+        syncSet('wait', 'PIN 확인 중…');
+        apiCall({ action: 'room', pin: pin }, function (err, res) {
+            if (err || !res || !res.ok) {
+                joining = false;
+                syncSet('err', 'PIN 확인 실패');
+                toast('PIN을 확인하지 못했어요. ' + ((res && res.reason) ? res.reason : '연결을 확인해 주세요.'), 3800);
+                return;
+            }
+            if (res.exists) {
+                joining = false;
+                syncSet('ok', '실시간 연동');
+                enterRoomFromServer(pin, res.room, '방 ' + pin + '에 입장했습니다 · 데이터 ' + (res.count || 0) + '개');
+                return;
+            }
+            apiCall({ action: 'create', pin: pin }, function (err2, res2) {
+                joining = false;
+                if (err2 || !res2 || !res2.ok) {
+                    syncSet('err', '방 만들기 실패');
+                    toast('방 ' + pin + '을(를) 열지 못했어요. ' + ((res2 && res2.reason) ? res2.reason : ''), 3800);
+                    return;
+                }
+                syncSet('ok', '실시간 연동');
+                enterRoomFromServer(pin, res2.room, '새 방 ' + pin + '을(를) 열었습니다.');
+            });
+        });
     }
 
     qsa('.pin-digit').forEach(function (inp, i) {
@@ -845,8 +1111,15 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         var del = t.closest ? t.closest('[data-del]') : null;
         if (del) {
             var id = del.getAttribute('data-del');
-            room.points = room.points.filter(function (p) { return p.id !== id; });
-            saveRoom(); renderAll();
+            if (SYNC_ON && room.pin) {
+                apiMutate({ action: 'delete', pin: room.pin, id: id }, {
+                    busyText: '삭제 중…',
+                    failText: '삭제 결과를 확인하지 못했습니다. 잠시 뒤 자동으로 맞춰집니다.'
+                });
+            } else {
+                room.points = room.points.filter(function (p) { return p.id !== id; });
+                saveRoom(); renderAll();
+            }
             return;
         }
         var pre = t.closest ? t.closest('[data-preset]') : null;
@@ -860,16 +1133,37 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
                 $('bulkX1').value = pr.x1; $('bulkX2').value = pr.x2;
             }
             saveRoom(); renderAll();
+            pushAxis();
             return;
         }
     });
 
     $('createBtn').addEventListener('click', function () {
-        var pin = makePin();
-        room = { pin: pin, xLabel: '전압', xUnit: 'V', yLabel: '전류', yUnit: 'A', points: [], preset: 'ohm' };
-        saveRoom(true);
-        openRoom(pin);
-        toast('🔑 방 ' + pin + '을(를) 만들었습니다.', 2600);
+        var btn = this;
+        if (!SYNC_ON) {
+            var pin = makePin();
+            room = { pin: pin, xLabel: '전압', xUnit: 'V', yLabel: '전류', yUnit: 'A', points: [], preset: 'ohm' };
+            saveRoom(true);
+            openRoom(pin);
+            toast('🔑 방 ' + pin + '을(를) 만들었습니다.', 2600);
+            return;
+        }
+        if (btn.disabled) return;
+        btn.disabled = true;
+        var label = btn.textContent;
+        btn.textContent = '방 만드는 중…';
+        syncSet('wait', '방 만드는 중…');
+        apiCall({ action: 'create', preset: 'ohm' }, function (err, res) {
+            btn.disabled = false;
+            btn.textContent = label;
+            if (err || !res || !res.ok) {
+                syncSet('err', '방 만들기 실패');
+                toast('방을 만들지 못했어요. ' + ((res && res.reason) ? res.reason : '연결을 확인해 주세요.'), 3800);
+                return;
+            }
+            syncSet('ok', '실시간 연동');
+            enterRoomFromServer(res.pin, res.room, '🔑 방 ' + res.pin + '을(를) 만들었습니다. PIN을 칠판에 적어 주세요.');
+        });
     });
     $('joinBtn').addEventListener('click', doJoin);
 
@@ -892,17 +1186,23 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
             toast('기울기·절편·X 범위를 숫자로 입력하세요.'); return;
         }
         var base = room.points.length;
+        var list = [];
         for (var i = 0; i < n; i++) {
             var xv = x1 + (x2 - x1) * i / (n - 1);
             var noise = (Math.random() * 2 - 1) * err;
             var yv = (a * xv + b) * (1 + noise);
-            room.points.push({
-                id: 'p' + Date.now() + '_' + i + '_' + Math.floor(Math.random() * 999),
+            list.push({
+                id: localId(),
                 team: (base + i + 1) + '모둠',
                 x: Math.round(xv * 1000) / 1000,
                 y: Math.round(yv * 1000) / 1000
             });
         }
+        if (SYNC_ON && room.pin) {
+            uploadMany(list, function () { toast('🎲 ' + n + '개 모둠 데이터를 만들었습니다.'); }, '모둠 데이터를 서버에 저장하지 못했습니다.');
+            return;
+        }
+        room.points = room.points.concat(list);
         saveRoom(); renderAll();
         toast('🎲 ' + n + '개 모둠 데이터를 만들었습니다.');
     });
@@ -916,6 +1216,14 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
     $('clearAll').addEventListener('click', function () {
         if (!room.points.length) { toast('비울 데이터가 없습니다.'); return; }
         if (!window.confirm('이 방의 데이터 ' + room.points.length + '개를 모두 지울까요?')) return;
+        if (SYNC_ON && room.pin) {
+            apiMutate({ action: 'clear', pin: room.pin }, {
+                busyText: '비우는 중…',
+                failText: '비우기 결과를 확인하지 못했습니다. 잠시 뒤 자동으로 맞춰집니다.',
+                onDone: function () { toast('🧹 데이터를 비웠습니다.'); }
+            });
+            return;
+        }
         room.points = [];
         saveRoom(); renderAll();
         toast('🧹 데이터를 비웠습니다.');
@@ -925,7 +1233,9 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         $(id).addEventListener('input', function () {
             room[id] = this.value;
             room.preset = 'custom';
+            lastEdit[id] = Date.now();
             saveRoom(); renderAll();
+            pushAxisSoon();
         });
     });
 
@@ -935,7 +1245,12 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         $('sBoard').classList.remove('show');
         $('sLobby').classList.add('show');
         clearPin();
+        pollStop();
         room.pin = '';
+    });
+
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && SYNC_ON && room.pin) pollRoom(true);
     });
 
     $('boardModeBtn').addEventListener('click', function () {
