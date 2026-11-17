@@ -28,7 +28,10 @@ var PRECACHE = [
     '/labs/common/qr-modal.css',
     '/labs/common/qr-modal.js',
     '/labs/common/hall-of-fame.js',
-    '/labs/common/game-core.js'
+    '/labs/common/game-core.js',
+    '/labs/common/live-weather.js',
+    /* 서울남산체 (jsDelivr CORS 허용) — 오프라인에서도 같은 글꼴로 보이게 */
+    'https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff'
 ];
 
 self.addEventListener('install', function (event) {
