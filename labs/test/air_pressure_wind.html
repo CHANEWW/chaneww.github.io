@@ -251,7 +251,7 @@ body.dark-mode .temp-chip{color:#cbd5e1}
 
 var $ = function (s) { return document.querySelector(s); };
 
-var state = { night: false, heat: 80 };
+var state = { night: false, heat: 80, bias: 0 };   // bias: 실측 날씨를 불러올 때 기온 전체를 평행 이동시키는 값(℃)
 
 /* ---------------- 렌더러 · 씬 ---------------- */
 var container = $('#canvas-container');
@@ -670,6 +670,8 @@ function model() {
         TL = 18 - 11.5 * h;
         TS = 18 - 3.3 * h;
     }
+    TL += state.bias;
+    TS += state.bias;
     var dT = Math.abs(TL - TS);
     var dP = 0.52 * dT;
     var wind = 0.4 + 0.62 * dT;
@@ -823,6 +825,7 @@ $('#sld-heat').addEventListener('input', function (e) {
 function resetAll() {
     state.night = false;
     state.heat = 80;
+    state.bias = 0;
     $('#sld-heat').value = 80;
     $('#txt-heat').textContent = '80%';
     document.querySelectorAll('#daynight .seg-btn').forEach(function (x) {
@@ -845,10 +848,16 @@ SVLWeather.mount({
             x.classList.toggle('active', (x.getAttribute('data-mode') === 'night') === state.night);
         });
         var heat = state.night ? (18 - w.temp) / 11.5 * 100 : (w.temp - 18) / 12.5 * 100;
-        heat = Math.max(5, Math.min(100, Math.round(heat / 5) * 5));
+        /* 모델 범위를 벗어나는 기온은 30%를 바닥으로 두고(바람 세기가 0이 되지 않게) 남는 차이는 아래 bias 로 맞춘다 */
+        heat = Math.max(30, Math.min(100, Math.round(heat / 5) * 5));
         state.heat = heat;
         $('#sld-heat').value = heat;
         $('#txt-heat').textContent = heat + '%';
+
+        /* 가열 세기만으로 표현되지 않는 기온 차이는 평행 이동(bias)으로 맞춰 육지 온도가 실측값이 되게 한다 */
+        var prevBias = state.bias; state.bias = 0;
+        var baseLand = model().TL;
+        state.bias = w.temp - baseLand;
         applyState();
         var m = model();
         $('#note').textContent = '오늘 ' + w.city + ' ' + w.temp.toFixed(1) + '℃에 맞춰 ' +
