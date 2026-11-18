@@ -55,3 +55,21 @@
         });
     }
 })();
+
+/* ------------------------------------------------------------
+   햅틱(진동) 공용 헬퍼 자동 로드 (2026-11-18)
+   ui-layout.js 를 쓰는 모든 실험·게임 페이지가 같은 햅틱을 쓴다.
+   ------------------------------------------------------------ */
+(function () {
+    if (window.SVLHaptic) return;
+    var src = '';
+    try {
+        src = (document.currentScript && document.currentScript.src) || '';
+        src = src.replace(/ui-layout\.js([?#].*)?$/, 'haptics.js');
+    } catch (e) { src = ''; }
+    if (!src) return;
+    var s = document.createElement('script');
+    s.src = src;
+    s.async = true;
+    document.head.appendChild(s);
+})();
