@@ -5,6 +5,7 @@
      습도·낮/밤 여부를 가져온다.
    · 1차 서버가 막히거나 8초 안에 응답하지 않으면, 자동으로 2차 대체
      서버(wttr.in)에 다시 요청해 같은 값으로 실험에 반영한다.
+     (wttr.in 응답의 WWO 날씨 코드·kmph·UTC 관측 시각을 변환해 쓴다)
    · 도시(서울·진주·부산·대구·광주·제주·강릉)를 고르거나 현재 위치를 쓴다.
    · 30분 동안 받은 값을 기억해 두고, 두 서버 모두 실패하면 원인별
      안내 문구로 폴백한다(위치 권한 / 네트워크 구분).
@@ -21,7 +22,7 @@
     'use strict';
     if (global.SVLWeather) return;
 
-    var VERSION = '2026-11-18-fallback';
+    var VERSION = '2026-11-18-fallback2';
     var CITIES = [
         { id: 'jinju', name: '진주', lat: 35.1800, lon: 128.0800 },
         { id: 'seoul', name: '서울', lat: 37.5665, lon: 126.9780 },
@@ -100,18 +101,26 @@
 
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
-    /* wttr.in은 '12:10 AM' 같은 현지 시각 문자열을 준다 → 오늘 날짜 + HH:MM */
-    function wttrTime(obs, now) {
-        var d = now || new Date();
-        var h = d.getHours(), mi = d.getMinutes();
-        var m = /(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(String(obs || ''));
-        if (m) {
-            h = parseInt(m[1], 10) % 12;
-            if (/PM/i.test(m[3])) h += 12;
-            mi = parseInt(m[2], 10);
-        }
+    function isoAt(base, minutes) {
+        var d = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, minutes);
         return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
-            'T' + pad2(h) + ':' + pad2(mi);
+            'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+    }
+
+    /* wttr.in은 '12:10 AM' 같은 관측 시각 문자열을 준다.
+       실측해 보니 한국 지점에서는 UTC 기준으로 오는 경우가 많아(예: 09:10 KST → '12:10 AM'),
+       현지 시각으로 그대로 오는 서버도 있어서 지금 시각에 더 가까운 해석을 골라 표기한다. */
+    function wttrTime(obs, now) {
+        var base = now || new Date();
+        var nowMin = base.getHours() * 60 + base.getMinutes();
+        var m = /(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(String(obs || ''));
+        if (!m) return isoAt(base, nowMin);
+        var obsMin = (parseInt(m[1], 10) % 12) * 60 + parseInt(m[2], 10);
+        if (/PM/i.test(m[3])) obsMin += 720;
+        function gap(a) { var d = ((a - nowMin) % 1440 + 1440) % 1440; return d > 720 ? 1440 - d : d; }
+        var asUtc = obsMin + 9 * 60;   // UTC로 보고 한국 표준시(+9)로 환산
+        var best = gap(asUtc) <= gap(obsMin) ? asUtc : obsMin;
+        return isoAt(base, best);
     }
 
     /* 실패 원인을 구분해 담는 오류 객체: code 'geo'(위치) / 'net'(네트워크·차단·시간초과) */
