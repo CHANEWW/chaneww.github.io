@@ -1867,30 +1867,92 @@ function removePart(p){
 }
 
 /* MNA 기반 회로망 해석 */
+const NODE_MERGE_R = 0.16;   // 끝점을 같은 접점으로 묶는 반경
+const TAP_R = 0.10;          // 도선 중간(T자)에 닿은 끝점을 접속으로 보는 오차
+const TAP_TMIN = 0.04;       // 도선 끝에서 이 비율 안쪽은 끝점 접속으로 처리
+
 function simulate(){
   const pts=[];
   const id=(x,z)=>{
-    for(let i=0;i<pts.length;i++)if(Math.hypot(pts[i][0]-x,pts[i][1]-z)<.16)return i;
+    for(let i=0;i<pts.length;i++)if(Math.hypot(pts[i][0]-x,pts[i][1]-z)<NODE_MERGE_R)return i;
     pts.push([x,z]);return pts.length-1;
   };
   parts.forEach(p=>{
     p.n0=id(p.x[0],p.z[0]);
     p.n1=id(p.x[1],p.z[1]);
     p.I=0; p.dv=0; p.closed=false; p.isShort=false;
+    p._taps=null;
+  });
+
+  /* 도선 중간에 다른 부품의 끝점이 닿아 있으면(T자 접속) 그 지점을 접점 노드로 삼아
+     도선을 그 지점에서 두 토막으로 나눈다. 끝점끼리만 접점으로 보던 예전 방식에서는
+     병렬연결에서 전구 다리가 긴 도선 가운데에 닿으면 연결되지 않아
+     같은 10Ω 전구인데도 한쪽만 켜지고 밝기가 달라 보였다. */
+  parts.forEach(p=>{
+    if(p.type!=='wire') return;
+    const dx=p.x[1]-p.x[0], dz=p.z[1]-p.z[0], L2=dx*dx+dz*dz;
+    if(L2<1e-12) return;
+    const list=[];
+    parts.forEach(q=>{
+      if(q===p) return;
+      for(let k=0;k<2;k++){
+        const qx=q.x[k], qz=q.z[k];
+        const t=((qx-p.x[0])*dx+(qz-p.z[0])*dz)/L2;
+        if(t<=TAP_TMIN||t>=1-TAP_TMIN) continue;
+        const px=p.x[0]+t*dx, pz=p.z[0]+t*dz;
+        if(Math.hypot(qx-px,qz-pz)>TAP_R) continue;
+        list.push({t, n:id(qx,qz)});
+      }
+    });
+    if(!list.length) return;
+    list.sort((a,b)=>a.t-b.t);
+    const uniq=[];
+    list.forEach(e=>{
+      if(e.n===p.n0||e.n===p.n1) return;
+      if(uniq.length && Math.abs(e.t-uniq[uniq.length-1].t)<0.02) return;
+      uniq.push(e);
+    });
+    if(uniq.length) p._taps=uniq;
   });
 
   const numNodes = pts.length;
   if(numNodes === 0) return;
-  
+
+  /* 도선·전류계·닫힌 스위치의 기생 저항.
+     1e-4 Ω는 1.5V + 1Ω 직렬 회로에서 총저항을 1.0003~1.0004 Ω으로 만들어
+     전류가 1.4995 A로 계산되는 0.05% 오차를 냈다. 1 μΩ(1e-6)으로 낮춰
+     도선 6개까지 붙여도 오차를 0.001% 미만으로 유지한다.
+     (전압계 R=1e8 Ω, 대각 1e-9 항과 함께 쓰는 MNA 정밀도는 단락·개방·직병렬·내부저항
+      조건에서 검증했다: 최대 상대오차 8e-6, 전압계 지시값 오차 없음) */
+  const WIRE_R = 1e-6;
+  const effR = p => (p.type==='wire'||p.type==='iMeter'||p.type==='sw') ? WIRE_R : p.R;
+  const batteries = parts.filter(p=>p.type==='batt');
+
+  /* 해석용 분기 목록(도선은 T자 접점에서 나뉜 토막별로) */
+  const branches=[];
+  parts.forEach(p=>{
+    if(p.type==='batt') return;
+    if(p.type==='sw' && p.open) return;
+    if(p._taps){
+      const seq=[[0,p.n0]].concat(p._taps.map(e=>[e.t,e.n])).concat([[1,p.n1]]);
+      for(let i=0;i<seq.length-1;i++){
+        const f=Math.max(seq[i+1][0]-seq[i][0],1e-3);
+        if(seq[i][1]!==seq[i+1][1]) branches.push({p,a:seq[i][1],b:seq[i+1][1],R:WIRE_R*f});
+      }
+    } else if(p.n0!==p.n1){
+      branches.push({p,a:p.n0,b:p.n1,R:effR(p)});
+    }
+  });
+
   const nodeDegree = new Array(numNodes).fill(0);
-  parts.forEach(p=>{ nodeDegree[p.n0]++; nodeDegree[p.n1]++; });
+  branches.forEach(br=>{ nodeDegree[br.a]++; nodeDegree[br.b]++; });
+  batteries.forEach(b=>{ nodeDegree[b.n0]++; nodeDegree[b.n1]++; });
   parts.forEach(p=>{
     p.conn0 = nodeDegree[p.n0] > 1;
     p.conn1 = nodeDegree[p.n1] > 1;
     p.fullyConnected = p.conn0 && p.conn1; 
   });
 
-  const batteries = parts.filter(p=>p.type==='batt');
   const numBatts = batteries.length;
   
   if(numBatts === 0) {
@@ -1909,21 +1971,9 @@ function simulate(){
 
   for(let j=0; j<N; j++){ A[j][j] += 1e-9; }
 
-  /* 도선·전류계·닫힌 스위치의 기생 저항.
-     1e-4 Ω는 1.5V + 1Ω 직렬 회로에서 총저항을 1.0003~1.0004 Ω으로 만들어
-     전류가 1.4995 A로 계산되는 0.05% 오차를 냈다. 1 μΩ(1e-6)으로 낮춰
-     도선 6개까지 붙여도 오차를 0.001% 미만으로 유지한다.
-     (전압계 R=1e8 Ω, 대각 1e-9 항과 함께 쓰는 MNA 정밀도는 단락·개방·직병렬·내부저항
-      조건에서 검증했다: 최대 상대오차 8e-6, 전압계 지시값 오차 없음) */
-  const WIRE_R = 1e-6;
-
-  parts.forEach(p=>{
-    if(p.type === 'batt') return; 
-    if(p.type === 'sw' && p.open) return;
-    let R = p.R;
-    if(p.type === 'wire' || p.type === 'iMeter' || p.type === 'sw') R = WIRE_R;
-    const G = 1 / R;
-    const u = p.n0, v = p.n1;
+  branches.forEach(br=>{
+    const G = 1 / br.R;
+    const u = br.a, v = br.b;
 
     if(isFinite(G) && G > 0){
       A[u][u] += G; A[v][v] += G;
@@ -1977,12 +2027,18 @@ function simulate(){
         const v1 = nodeV[p.n1];
         p.dv = v0 - v1;
         
-        let R = p.R;
-        if(p.type === 'wire' || p.type === 'iMeter' || p.type === 'sw') R = WIRE_R;
-        
         if(p.type === 'vMeter') p.I = 0;
         else if(p.type === 'sw' && p.open) p.I = 0;
-        else p.I = p.dv / R;
+        else {
+          /* 도선이 T자 접점에서 나뉜 경우 토막 중 가장 큰 전류를 그 도선의 대표 전류로 쓴다 */
+          let best = 0;
+          branches.forEach(br=>{
+            if(br.p !== p) return;
+            const cur = (nodeV[br.a] - nodeV[br.b]) / br.R;
+            if(Math.abs(cur) > Math.abs(best)) best = cur;
+          });
+          p.I = best;
+        }
       }
       p.closed = Math.abs(p.I) > 1e-4;
     }
@@ -2371,6 +2427,7 @@ cv.addEventListener('pointermove',e=>{
 
 function magnetSnap(){
   const SNAP_RADIUS=.72;
+  const TAP_SNAP=.30;   // 도선 중간(T자)에 붙는 반경(접점 구 반지름 0.15 두 개가 닿는 거리)
   parts.forEach(p=>{
     for(let i=0;i<2;i++){
       const x=p.x[i],z=p.z[i];
@@ -2382,7 +2439,23 @@ function magnetSnap(){
           if(d<best){best=d;target=[q,j];}
         }
       });
-      if(target){p.x[i]=target[0].x[target[1]];p.z[i]=target[0].z[target[1]];}
+      if(target){p.x[i]=target[0].x[target[1]];p.z[i]=target[0].z[target[1]];continue;}
+      /* 가까운 끝점이 없으면 도선 중간에 정확히 붙여서 T자 접속을 만든다 */
+      let tapBest=TAP_SNAP,seg=null,tapT=0;
+      parts.forEach(q=>{
+        if(q===p||q.type!=='wire')return;
+        const dx=q.x[1]-q.x[0],dz=q.z[1]-q.z[0],L2=dx*dx+dz*dz;
+        if(L2<1e-12)return;
+        const t=((x-q.x[0])*dx+(z-q.z[0])*dz)/L2;
+        if(t<=.05||t>=.95)return;
+        const px=q.x[0]+t*dx,pz=q.z[0]+t*dz;
+        const d=Math.hypot(x-px,z-pz);
+        if(d<tapBest){tapBest=d;seg=q;tapT=t;}
+      });
+      if(seg){
+        p.x[i]=seg.x[0]+tapT*(seg.x[1]-seg.x[0]);
+        p.z[i]=seg.z[0]+tapT*(seg.z[1]-seg.z[0]);
+      }
     }
   });
 }
