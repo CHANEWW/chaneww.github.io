@@ -86,7 +86,7 @@ body.light-mode .data-label{color:#64748b}
 .data-value{font-size:14px;font-weight:800;color:#f4f8ff;white-space:nowrap;line-height:1.25;display:flex;align-items:center;gap:5px}
 body.light-mode .data-value{color:#0f172a}
 .data-value .dot{width:10px;height:10px;border-radius:50%;display:inline-block;border:1px solid rgba(255,255,255,.35);flex:0 0 auto}
-body.light-mode .data-value .dot{border-color:rgba(0,0,0,.2)}
+body.light-mode .data-value .dot{border-color:rgba(15,23,42,.35)}
 
 /* ---------- 중앙 안내 ---------- */
 .center-tooltip{
@@ -203,6 +203,8 @@ body.light-mode .panel-note{color:#64748b}
 }
 body.light-mode .star-chip{background:rgba(0,0,0,.04);border-color:rgba(15,23,42,.1);color:#334155}
 .star-chip i{width:9px;height:9px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 6px currentColor}
+/* 라이트 모드 : 태양(연노랑)·시리우스(연하늘) 점이 흰 패널에 묻히지 않도록 점 테두리를 준다 */
+body.light-mode .star-chip i{box-shadow:0 0 6px currentColor,0 0 0 1.5px rgba(15,23,42,.45)}
 .star-chip.active{background:#0a84ff;border-color:#0a84ff;color:#fff;box-shadow:0 2px 8px rgba(10,132,255,.4)}
 .temp-ruler{position:relative;height:9px;border-radius:5px;margin:14px 2px 30px;border:1px solid rgba(255,255,255,.18);
   background:linear-gradient(90deg,#7a1c00 0%,#ff5a00 10%,#ffa500 26%,#ffe08a 46%,#ffffff 62%,#cfe2ff 80%,#9dc0ff 100%)}
@@ -254,6 +256,8 @@ body.light-mode .q-ask b{color:#b45309}
 }
 .q-disc:active{transform:scale(.96)}
 .q-disc .orb{width:88px;height:88px;border-radius:50%;position:relative;transition:box-shadow .2s,transform .2s}
+/* 라이트 모드 : 흰 카드 위 흰 별(태양)도 윤곽이 보이게 */
+body.light-mode .q-disc .orb{outline:1.5px solid rgba(15,23,42,.32);outline-offset:-1px}
 .q-disc .num{
   position:absolute;top:0;left:0;min-width:22px;height:22px;border-radius:999px;display:none;align-items:center;justify-content:center;
   font-size:12px;font-weight:800;color:#08111f;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.35);z-index:3;
@@ -578,6 +582,44 @@ function kelvinRGB(K) {
 }
 function rgbCss(rgb, a) {
     return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + (a === undefined ? 1 : a) + ')';
+}
+function hslCss(h, s, l) {
+    var c = (1 - Math.abs(2 * l - 1)) * s;
+    var x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    var m = l - c / 2, r, g, b;
+    if (h < 60) { r = c; g = x; b = 0; }
+    else if (h < 120) { r = x; g = c; b = 0; }
+    else if (h < 180) { r = 0; g = c; b = x; }
+    else if (h < 240) { r = 0; g = x; b = c; }
+    else if (h < 300) { r = x; g = 0; b = c; }
+    else { r = c; g = 0; b = x; }
+    return 'rgb(' + Math.round((r + m) * 255) + ',' + Math.round((g + m) * 255) + ',' + Math.round((b + m) * 255) + ')';
+}
+/* 글자색 : 다크 모드는 별 색 그대로, 라이트 모드는 색조는 살리고 밝기만 낮춰 흰 패널에서도 읽히게 */
+function nameTextColor(rgb) {
+    if (state.dark !== false) return rgbCss(rgb);
+    var r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var l = (max + min) / 2, s = 0, h = 0, d = max - min;
+    if (d > 0) {
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+    }
+    /* 노랑·호박 계열(태양)은 같은 밝기에서도 대비가 낮아 조금 더 어둡게 */
+    l = Math.min(l, (h >= 35 && h <= 75) ? 0.30 : 0.34);
+    s = Math.max(s, 0.55);
+    return hslCss(h, s, l);
+}
+/* 현재 선택한 별(모드 B)의 이름 글자색을 테마에 맞춰 다시 칠한다 */
+function applyStarNameColor() {
+    var el = $('#b-name');
+    if (!el) return;
+    if (state.star < 0) { el.style.color = ''; return; }
+    el.style.color = nameTextColor(rodRGB(STARS[state.star].temp));
 }
 /* 화면 표시용 색 램프 — 실제 흑체색보다 채도를 살려 눈으로 구분되게 조정 */
 var ROD_STOPS = [
@@ -1475,7 +1517,7 @@ function selectStar(idx, noFly) {
     $('#b-spec').textContent = sd.spec;
     var pk = peakNm(sd.temp);
     $('#b-peak').textContent = Math.round(pk) + ' nm';
-    $('#b-name').style.color = rgbCss(rgb);
+    $('#b-name').style.color = nameTextColor(rgb);
     document.querySelectorAll('.star-chip').forEach(function (b) {
         b.classList.toggle('active', Number(b.getAttribute('data-star')) === idx);
     });
@@ -1848,6 +1890,7 @@ function applyTheme(dark) {
     bgStars.material.opacity = dark ? 0.8 : 0.5;
     applyForge(state.temp);
     updateLeftGraph();
+    applyStarNameColor();
     try { localStorage.setItem('svlLabTheme', dark ? 'dark' : 'light'); } catch (err) {}
 }
 $('#theme-toggle').addEventListener('click', function () { applyTheme(!state.dark); });
