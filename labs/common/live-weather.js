@@ -1,10 +1,13 @@
 /* ============================================================
-   Science Virtual LAB — 오늘 실제 날씨 (Open-Meteo 연동 공용 모듈)
+   Science Virtual LAB — 오늘 실제 날씨 (공용 모듈)
    ------------------------------------------------------------
-   · Open-Meteo 무료 API(키 불필요)로 오늘의 기온·해면기압·풍속·풍향·
+   · 1차 Open-Meteo 무료 API(키 불필요)로 오늘의 기온·해면기압·풍속·풍향·
      습도·낮/밤 여부를 가져온다.
+   · 1차 서버가 막히거나 8초 안에 응답하지 않으면, 자동으로 2차 대체
+     서버(wttr.in)에 다시 요청해 같은 값으로 실험에 반영한다.
    · 도시(서울·진주·부산·대구·광주·제주·강릉)를 고르거나 현재 위치를 쓴다.
-   · 30분 동안 받은 값을 기억해 두고, 실패하면 안내 문구로 폴백한다.
+   · 30분 동안 받은 값을 기억해 두고, 두 서버 모두 실패하면 원인별
+     안내 문구로 폴백한다(위치 권한 / 네트워크 구분).
 
    쓰는 법 (실험 스크립트 안에서)
      <script src="../../common/live-weather.js"></script>
@@ -18,6 +21,7 @@
     'use strict';
     if (global.SVLWeather) return;
 
+    var VERSION = '2026-11-18-fallback';
     var CITIES = [
         { id: 'jinju', name: '진주', lat: 35.1800, lon: 128.0800 },
         { id: 'seoul', name: '서울', lat: 37.5665, lon: 126.9780 },
@@ -30,6 +34,13 @@
     var DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
     var CACHE_KEY = 'svl_live_weather_v1';
     var CACHE_MS = 30 * 60 * 1000;
+    var TIMEOUT_MS = 8000;
+
+    /* 원인별 안내 문구 */
+    var MSG_GEO = '위치 권한이 허용되지 않았어요. 위 목록에서 도시(진주·서울 등)를 직접 고르거나 위치 권한을 켜 주세요.';
+    var MSG_NET = '날씨 서버에 연결하지 못했어요. 학교 보안망이나 인터넷 연결을 확인한 뒤 다시 눌러 주세요. (지금은 기본 설정으로 실험합니다)';
+    var MSG_WAIT = '🛰️ 오늘 날씨를 가져오는 중…';
+    var MSG_RETRY = '🛰️ 날씨 서버 응답이 없어 대체 서버로 다시 시도하는 중…';
 
     function dirText(deg) {
         if (typeof deg !== 'number' || isNaN(deg)) return '—';
@@ -51,9 +62,77 @@
         return '날씨 정보';
     }
 
+    /* 대체 서버(wttr.in)는 WMO가 아닌 WWO 날씨 코드를 쓴다 */
+    function wwoSkyText(code) {
+        if (typeof code !== 'number' || isNaN(code)) return '날씨 정보';
+        if (code === 113) return '맑음';
+        if (code === 116) return '구름 조금';
+        if (code === 119 || code === 122) return '흐림';
+        if (code === 143 || code === 248 || code === 260) return '안개';
+        if (code === 176 || code === 263 || code === 266 || code === 281 || code === 284 ||
+            (code >= 293 && code <= 308) || code === 311 || code === 314) return '비';
+        if (code >= 353 && code <= 359) return '소나기';
+        if (code === 317 || code === 320 || code === 362 || code === 365) return '진눈깨비';
+        if ((code >= 179 && code <= 185) || code === 227 || code === 230 ||
+            (code >= 323 && code <= 338) || (code >= 371 && code <= 377)) return '눈';
+        if (code === 350 || code === 374) return '얼음 입자';
+        if (code === 200 || (code >= 386 && code <= 395)) return '뇌우';
+        return '날씨 정보';
+    }
+
     function hhmm(iso) {
         if (!iso || iso.length < 16) return '';
         return iso.slice(11, 16);
+    }
+
+    function fmt1(v) {
+        return (typeof v === 'number' && !isNaN(v)) ? v.toFixed(1) : '—';
+    }
+
+    function fmt0(v) {
+        return (typeof v === 'number' && !isNaN(v)) ? String(Math.round(v)) : '—';
+    }
+
+    function num(v) {
+        var n = parseFloat(v);
+        return isNaN(n) ? null : n;
+    }
+
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+    /* wttr.in은 '12:10 AM' 같은 현지 시각 문자열을 준다 → 오늘 날짜 + HH:MM */
+    function wttrTime(obs, now) {
+        var d = now || new Date();
+        var h = d.getHours(), mi = d.getMinutes();
+        var m = /(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(String(obs || ''));
+        if (m) {
+            h = parseInt(m[1], 10) % 12;
+            if (/PM/i.test(m[3])) h += 12;
+            mi = parseInt(m[2], 10);
+        }
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+            'T' + pad2(h) + ':' + pad2(mi);
+    }
+
+    /* 실패 원인을 구분해 담는 오류 객체: code 'geo'(위치) / 'net'(네트워크·차단·시간초과) */
+    function netError(reason) {
+        var e = new Error(reason || 'network');
+        e.code = 'net';
+        e.reason = reason || 'network';
+        return e;
+    }
+
+    function geoError(reason) {
+        var e = new Error(reason || 'geo');
+        e.code = 'geo';
+        e.reason = reason || 'geo';
+        return e;
+    }
+
+    function toNetError(e) {
+        if (e && e.code === 'net') return e;
+        var reason = (e && e.name === 'AbortError') ? 'timeout' : ((e && e.message) || 'network');
+        return netError(reason);
     }
 
     function buildUrl(lat, lon) {
@@ -63,35 +142,97 @@
             '&timezone=Asia%2FSeoul&wind_speed_unit=ms';
     }
 
-    function fetchWeather(lat, lon) {
+    function buildWttrUrl(lat, lon) {
+        return 'https://wttr.in/' + lat.toFixed(4) + ',' + lon.toFixed(4) + '?format=j1';
+    }
+
+    function timedFetch(url) {
         var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 8000) : null;
+        var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS) : null;
         var opts = { cache: 'no-store' };
         if (ctrl) opts.signal = ctrl.signal;
-        return fetch(buildUrl(lat, lon), opts).then(function (r) {
-            if (r.ok) return r.json();
-            throw new Error('http ' + r.status);
+        function clear() {
+            if (timer) { clearTimeout(timer); timer = null; }
+        }
+        return fetch(url, opts).then(function (r) {
+            if (!r.ok) throw netError('http ' + r.status);
+            return r.json();
         }).then(function (j) {
-            if (timer) clearTimeout(timer);
-            var c = j && j.current;
-            if (!c || typeof c.temperature_2m !== 'number') throw new Error('no data');
-            return {
-                temp: c.temperature_2m,
-                feelsLike: c.apparent_temperature,
-                humidity: c.relative_humidity_2m,
-                pressure: c.pressure_msl,
-                windSpeed: c.wind_speed_10m,
-                windDir: c.wind_direction_10m,
-                windDirText: dirText(c.wind_direction_10m),
-                isDay: c.is_day === 1,
-                precip: c.precipitation,
-                code: c.weather_code,
-                sky: skyText(c.weather_code),
-                time: c.time
-            };
-        }).catch(function (e) {
-            if (timer) clearTimeout(timer);
-            throw e;
+            clear();
+            return j;
+        }, function (e) {
+            clear();
+            throw toNetError(e);
+        });
+    }
+
+    function parseOpenMeteo(j) {
+        var c = j && j.current;
+        if (!c || typeof c.temperature_2m !== 'number') throw netError('no data');
+        return {
+            temp: c.temperature_2m,
+            feelsLike: c.apparent_temperature,
+            humidity: c.relative_humidity_2m,
+            pressure: c.pressure_msl,
+            windSpeed: c.wind_speed_10m,
+            windDir: c.wind_direction_10m,
+            windDirText: dirText(c.wind_direction_10m),
+            isDay: c.is_day === 1,
+            precip: c.precipitation,
+            code: c.weather_code,
+            sky: skyText(c.weather_code),
+            time: c.time,
+            source: 'open-meteo'
+        };
+    }
+
+    function parseWttr(j, now) {
+        var cc = j && j.current_condition && j.current_condition[0];
+        if (!cc || typeof num(cc.temp_C) !== 'number') throw netError('no data (wttr)');
+        var kmph = num(cc.windspeedKmph);
+        var dir = num(cc.winddirDegree);
+        var code = num(cc.weatherCode);
+        var d = now || new Date();
+        return {
+            temp: num(cc.temp_C),
+            feelsLike: num(cc.FeelsLikeC),
+            humidity: num(cc.humidity),
+            pressure: num(cc.pressure),
+            windSpeed: (kmph === null) ? null : kmph / 3.6,
+            windDir: dir,
+            windDirText: dirText(dir),
+            isDay: d.getHours() >= 6 && d.getHours() < 18,
+            precip: num(cc.precipMM),
+            code: code,
+            sky: wwoSkyText(code),
+            time: wttrTime(cc.observation_time, d),
+            source: 'wttr.in'
+        };
+    }
+
+    function fetchOpenMeteo(lat, lon) {
+        return timedFetch(buildUrl(lat, lon)).then(parseOpenMeteo);
+    }
+
+    function fetchWttr(lat, lon) {
+        return timedFetch(buildWttrUrl(lat, lon)).then(function (j) { return parseWttr(j); });
+    }
+
+    /* 1차 Open-Meteo → 실패/시간초과(8초)면 2차 wttr.in 자동 재시도 */
+    function fetchWeather(lat, lon, onRetry) {
+        return fetchOpenMeteo(lat, lon).catch(function (primaryErr) {
+            if (typeof onRetry === 'function') {
+                try { onRetry(primaryErr); } catch (e) { }
+            }
+            return fetchWttr(lat, lon).then(function (w) {
+                w.fallback = true;
+                return w;
+            }, function (backupErr) {
+                var e = netError((primaryErr && primaryErr.reason) || 'network');
+                e.primary = primaryErr && primaryErr.reason;
+                e.backup = backupErr && backupErr.reason;
+                throw e;
+            });
         });
     }
 
@@ -116,12 +257,12 @@
     }
 
     function summary(w, cityName) {
-        return cityName + ' ' + w.temp.toFixed(1) + '℃ · ' + Math.round(w.pressure) + ' hPa · ' +
-            w.windDirText + ' ' + w.windSpeed.toFixed(1) + ' m/s';
+        return cityName + ' ' + fmt1(w.temp) + '℃ · ' + fmt0(w.pressure) + ' hPa · ' +
+            w.windDirText + ' ' + fmt1(w.windSpeed) + ' m/s';
     }
 
     function detail(w, cityName) {
-        return summary(w, cityName) + ' · 습도 ' + Math.round(w.humidity) + '% · ' + w.sky +
+        return summary(w, cityName) + ' · 습도 ' + fmt0(w.humidity) + '% · ' + w.sky +
             ' · ' + hhmm(w.time) + ' 기준';
     }
 
@@ -192,10 +333,12 @@
 
         function locate() {
             return new Promise(function (resolve, reject) {
-                if (!navigator.geolocation) return reject(new Error('no geo'));
+                if (!navigator.geolocation) return reject(geoError('no geo'));
                 navigator.geolocation.getCurrentPosition(function (p) {
                     resolve({ lat: p.coords.latitude, lon: p.coords.longitude, name: '현재 위치' });
-                }, function () { reject(new Error('geo denied')); }, { timeout: 8000, maximumAge: 300000 });
+                }, function (err) {
+                    reject(geoError((err && err.code === 1) ? 'geo denied' : 'geo failed'));
+                }, { timeout: 8000, maximumAge: 300000 });
             });
         }
 
@@ -212,13 +355,15 @@
             }
 
             btn.disabled = true;
-            setStatus('🛰️ 오늘 날씨를 가져오는 중…');
+            setStatus(MSG_WAIT, '');
 
             target.then(function (t) {
                 cityName = t.name;
                 var cached = readCache(id + '@' + t.lat.toFixed(2) + ',' + t.lon.toFixed(2));
                 if (cached) return { data: cached, cached: true };
-                return fetchWeather(t.lat, t.lon).then(function (d) {
+                return fetchWeather(t.lat, t.lon, function () {
+                    setStatus(MSG_RETRY, '');
+                }).then(function (d) {
                     writeCache(id + '@' + t.lat.toFixed(2) + ',' + t.lon.toFixed(2), d);
                     return { data: d, cached: false };
                 });
@@ -226,14 +371,16 @@
                 var w = res.data;
                 w.city = cityName;
                 setStatus('🛰️ ' + summary(w, cityName) + ' · ' + w.sky);
-                status.title = detail(w, cityName) + (res.cached ? ' (30분 내 받은 값)' : '');
+                status.title = detail(w, cityName) + (res.cached ? ' (30분 내 받은 값)' : '') +
+                    (w.source ? ' · ' + w.source : '');
                 btn.disabled = false;
                 if (typeof opts.onApply === 'function') {
                     try { opts.onApply(w); } catch (e) { }
                 }
-            }).catch(function () {
+            }).catch(function (e) {
                 btn.disabled = false;
-                setStatus('날씨를 불러오지 못했어요. 인터넷 연결을 확인한 뒤 다시 눌러 주세요. (지금은 기본 설정으로 실험합니다)', '#dc2626');
+                if (e && e.code === 'geo') setStatus(MSG_GEO, '#dc2626');
+                else setStatus(MSG_NET, '#dc2626');
             });
         }
 
@@ -242,10 +389,12 @@
     }
 
     global.SVLWeather = {
+        version: VERSION,
         mount: mount,
         cities: CITIES,
         dirText: dirText,
         skyText: skyText,
+        wwoSkyText: wwoSkyText,
         summary: summary
     };
 })(window);
