@@ -1652,6 +1652,24 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         });
             })();
 
+    /* ---------- 1인칭('지구에서') 지면 ----------
+       눈높이 지평면에 깔아 지평선 아래 하늘(별)을 가린다.
+       (지구 반지름을 과장해 그린 모형이라 지구 표면만으로는 지평선이 15°나 낮게 보인다) */
+    const groundGroup = new THREE.Group();
+    groundGroup.position.copy(localU).multiplyScalar(R_E + 0.055);
+    groundGroup.quaternion.copy(horizonGroup.quaternion);
+    earthSpin.add(groundGroup);
+    // 반구(지평면 아래)로 깔아 지평선 가장자리가 지평면과 정확히 맞닿게 한다
+    const groundGeo = new THREE.SphereGeometry(1, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+    groundGeo.rotateX(-Math.PI / 2);
+    const groundDisc = new THREE.Mesh(
+        groundGeo,
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(0x101f2b).convertSRGBToLinear(), side: THREE.BackSide })
+    );
+    groundDisc.scale.setScalar(R_S * 0.98);
+    groundGroup.add(groundDisc);
+    groundGroup.visible = false;
+
     // 관측자의 지평면을 천구까지 늘린 큰 원 (이 선 위쪽 별만 보인다)
     const horizonRing = new THREE.Group();
     earthSpin.add(horizonRing);
@@ -1730,6 +1748,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         n.crossVectors(u, e).normalize();
     }
 
+    const _lblDir = new THREE.Vector3();
+
     function updateFrame() {
         if (state.rotateMode === 'sky') {
             earthSpin.rotation.y = hourToTheta(state.refHour);
@@ -1752,6 +1772,39 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         setObsBasis(hourToTheta(frameHour()), bU, bE, bN);
         // 지평선 뷰(2D): 두 모드 모두 실제 시각의 관측자 좌표계를 쓴다(별이 계속 움직여 보임)
         setObsBasis(hourToTheta(state.hour), uVec, eVec, nVec);
+
+        /* 천구의 중심 옮김
+           - '지구에서'(1인칭)에서는 천구·일주권·지평선 고리를 관측자의 눈 위치로 옮긴다.
+             그래야 눈에서 본 별의 방향이 지평선 뷰의 고도·방위와 정확히 일치한다.
+             (중심을 지구 중심에 두면 눈이 지구 반지름만큼 떨어져 있어 별이 최대 16° 어긋남)
+           - 바깥 시점(정면·북극 위)에서는 천구를 지구 중심에 두어 별이 지구 둘레에 고정되어 보이게 한다. */
+        if (state.preset === 'earth') {
+            const ex = bU.x * (R_E + 0.055), ey = bU.y * (R_E + 0.055), ez = bU.z * (R_E + 0.055);
+            skyGroup.position.set(ex, ey, ez);
+            skyGrid.position.set(ex, ey, ez);
+            diurnalGroup.position.set(ex, ey, ez);
+            horizonRing.position.copy(localU).multiplyScalar(R_E + 0.055);
+        } else {
+            skyGroup.position.set(0, 0, 0);
+            skyGrid.position.set(0, 0, 0);
+            diurnalGroup.position.set(0, 0, 0);
+            horizonRing.position.set(0, 0, 0);
+        }
+
+        /* 1인칭에서는 지평선 아래로 진 별자리 이름표를 지면 위에 띄우지 않는다 */
+        if (state.preset === 'earth') {
+            conLabels.children.forEach(sp => {
+                _lblDir.copy(sp.position).normalize().applyQuaternion(skyGroup.quaternion);
+                const op = Math.max(0, Math.min(1, _lblDir.dot(bU) / 0.06));
+                sp.material.opacity = op;
+                sp.visible = op > 0.05;
+            });
+        } else {
+            conLabels.children.forEach(sp => {
+                sp.material.opacity = 1;
+                sp.visible = true;
+            });
+        }
     }
 
     // 별의 길(관측자 기준 하루 경로) 미리 계산
@@ -2218,6 +2271,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         state.showHorizon = !state.showHorizon;
         horizonGroup.visible = state.showHorizon;
         horizonRing.visible = state.showHorizon;
+        groundGroup.visible = state.showHorizon && (state.preset === 'earth');
         e.target.textContent = state.showHorizon ? '보기' : '숨기기';
         e.target.classList.toggle('on', state.showHorizon);
     });
@@ -2241,9 +2295,11 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         skyGroup.visible = v;
         horizonGroup.visible = v && state.showHorizon;
         horizonRing.visible = v && state.showHorizon;
+        groundGroup.visible = v && state.showHorizon && (state.preset === 'earth');
     }
     function applyPreset(name) {
         state.preset = name;
+        groundGroup.visible = (name === 'earth') && state.showHorizon;
         const az0 = DIRS[state.dir].az * DEG;
         if (name !== 'earth') {
             camLight.intensity = 0;
@@ -2270,7 +2326,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         } else if (name === 'earth') {
             // 관측자 1인칭 (지구 표면에서 하늘 바라보기)
             controls.enabled = false;
-            earthMesh.visible = true;
+            earthMesh.visible = false;
             obsGroup.visible = false;
             skyGrid.visible = false;
             camLight.intensity = 0.16;
@@ -2483,6 +2539,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
                 skyRotDeg: +skyDeg.toFixed(3),
                 diurnalRotDeg: +diDeg.toFixed(3),
                 starWorld: starWorld.toArray().map(f4),
+                starWorldPos: starWorld.clone().multiplyScalar(R_S).add(skyGroup.position).toArray().map(f4),
+                skyPos: skyGroup.position.toArray().map(f4),
                 starRel3D: rel3,
                 starRel2D: rel2,
                 obsWorld: obsWorld.toArray().map(f4),
