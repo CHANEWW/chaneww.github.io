@@ -1380,9 +1380,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     <div class="glass-panel side-ctrl-panel">
         <div class="panel-title" data-i18n="ctrlTitle">🎛 실험 조절</div>
         <div class="ctrl-grid">
-        <button class="control-tab-btn active" id="btn-play">
-            <span id="icon-play">⏸</span>
-            <span id="lbl-play">일시정지</span>
+        <button class="control-tab-btn" id="btn-play">
+            <span id="icon-play">▶</span>
+            <span id="lbl-play">시작</span>
         </button>
         <button class="control-tab-btn" id="btn-toggle-physics">
             <span>⚙️</span>
@@ -1577,8 +1577,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
         /* 값이 바뀌는 문구만 지금 상태에 맞춰 다시 쓴다 */
         function refreshDynamic() {
-            var running = true, energyShown = true;
-            try { running = (typeof isRunning === 'undefined') ? true : isRunning; } catch (e) { running = true; }
+            var running = false, energyShown = true;
+            try { running = (typeof isRunning === 'undefined') ? false : isRunning; } catch (e) { running = false; }
             try { energyShown = (typeof energyOn === 'undefined') ? true : energyOn; } catch (e) { energyShown = true; }
             var lblPlay = document.getElementById('lbl-play');
             if (lblPlay) lblPlay.textContent = running ? T('pause') : T('start');
@@ -1747,7 +1747,7 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         let angularAcceleration = 0;
         let gravity = 9.8;
         let mass = 1.0;
-        let isRunning = true;
+        let isRunning = false;   /* 처음에는 정지 상태 — ▶ 시작 버튼을 눌러야 운동을 시작한다 */
         let isDragging = false;
 
         const clock = new THREE.Clock();
@@ -1866,11 +1866,26 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
         // 7. Event Listeners
         const btnPlay = document.getElementById('btn-play');
+
+        /* 실행 상태 버튼(▶ 시작 / ⏸ 일시정지) 표시를 현재 상태에 맞춘다 */
+        function setRunning(on) {
+            isRunning = on;
+            document.getElementById('icon-play').innerText = on ? '⏸' : '▶';
+            document.getElementById('lbl-play').innerText = on ? T('pause') : T('start');
+            btnPlay.classList.toggle('active', on);
+        }
+
+        /* 정지 상태에서도 진자 그림·수치가 현재 각도/길이와 일치하도록 맞춘다 */
+        function syncStaticState() {
+            angularVelocity = 0;
+            pivotGroup.rotation.z = angle;
+            document.getElementById('val-angle').innerText = (angle * (180 / Math.PI)).toFixed(1) + '°';
+            document.getElementById('val-period').innerText = (2 * Math.PI * Math.sqrt(rodLength / gravity)).toFixed(2) + 's';
+            document.getElementById('val-speed').innerText = '0.00m/s';
+        }
+
         btnPlay.addEventListener('click', () => {
-            isRunning = !isRunning;
-            document.getElementById('icon-play').innerText = isRunning ? '⏸' : '▶';
-            document.getElementById('lbl-play').innerText = isRunning ? T('pause') : T('start');
-            btnPlay.classList.toggle('active', isRunning);
+            setRunning(!isRunning);
         });
 
         const btnTogglePhysics = document.getElementById('btn-toggle-physics');
@@ -1905,7 +1920,9 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         document.getElementById('btn-reset').addEventListener('click', () => {
             angle = Math.PI / 6;
             angularVelocity = 0;
-            pivotGroup.rotation.z = angle;
+            /* 초기화도 처음 화면과 같은 '정지 상태'로 돌린다 (조정 후 ▶ 시작) */
+            setRunning(false);
+            syncStaticState();
             energyRef = 0.001;
             updateEnergy();
         });
@@ -1940,7 +1957,11 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         }
 
         animate();
-    
+
+        /* 첫 화면: 정지 상태를 그림·수치·버튼 모두에 반영 */
+        setRunning(false);
+        syncStaticState();
+
         /* ---------- Fullscreen / Safari Handling Logic ---------- */
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         const fullscreenIcon = document.getElementById('fullscreenIcon');
