@@ -1121,6 +1121,125 @@ AREA_PANELS.forEach(function(panel){
   sectionsOf(panel).forEach(function(sec){ sec.dataset.total = cardsOf(sec).length; });
 });
 function searchQuery(){ return document.getElementById('searchInput').value.trim().toLowerCase(); }
+
+/* ============================================================
+   초성·동의어 검색 (2026-11-18)
+   · 한글 초성만 입력해도 찾는다  (ㅇㅇㅂㅊ → 옴의 법칙, ㄱㄸㄱㅅㅈ → 그때 그 시절의 실험)
+   · 뜻이 같은 낱말을 사전으로 이어 준다  (전압 → 옴의 법칙·전기 회로)
+   · 다국어 전환과 충돌하지 않도록 한국어 제목 + 현재 언어 문구를 함께 본다
+   ============================================================ */
+var CHO_LIST = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+function toChosung(str){
+  var out = '';
+  for (var i = 0; i < str.length; i++){
+    var ch = str.charAt(i), c = str.charCodeAt(i);
+    if (c >= 0xAC00 && c <= 0xD7A3) out += CHO_LIST[Math.floor((c - 0xAC00) / 588)];
+    else if (CHO_LIST.indexOf(ch) !== -1) out += ch;
+  }
+  return out;
+}
+var CHOSUNG_ONLY = /^[\u3131-\u314E\s]+$/;
+
+/* 동의어·핵심 키워드 사전: 열쇠말 → 카드에서 찾을 낱말들 */
+var SYN = {
+  '전압': ['옴의 법칙','전기 회로','전기에너지'],
+  '전류': ['옴의 법칙','전기 회로','전류에 의한 자기장','전자기력'],
+  '저항': ['옴의 법칙','전기 회로'],
+  '옴': ['옴의 법칙'],
+  '회로': ['전기 회로','옴의 법칙'],
+  '무지개': ['프리즘','빛의 합성','이중 슬릿','빛의 굴절','그때 그 시절의 실험'],
+  '빛': ['프리즘','빛의 합성','이중 슬릿','빛의 굴절','오목렌즈','볼록 렌즈','거리에 따른 빛의 세기','물체를 보는 과정','광전 효과'],
+  '프리즘': ['빛의 합성','그때 그 시절의 실험'],
+  '분산': ['프리즘','그때 그 시절의 실험'],
+  '산성': ['중화','염기','중화 적정'],
+  '염기': ['중화','산성','중화 적정'],
+  '중화': ['중화 적정','산·염기'],
+  'ph': ['중화 적정','산·염기'],
+  '별자리': ['별의 일주운동','별의 연주운동','별의 등급','항성의 연주시차','성단과 성운','우리 은하'],
+  '은하': ['우리 은하','성단과 성운','우주의 크기'],
+  '우주': ['우주의 크기','태양계','우리 은하','별의 등급','행성 당구'],
+  '원소': ['주기율표','불꽃 반응','원자','이온'],
+  '주기율표': ['주기율표'],
+  '불꽃': ['불꽃 반응'],
+  '세포': ['세포','세포 분열','현미경','DNA'],
+  '피': ['혈액','혈액형','순환','심장'],
+  '혈액': ['혈액','순환','가계도'],
+  '유전': ['멘델','가계도','세포 분열','DNA'],
+  '힘': ['마찰력','힘의 평형','전자기력','무게와 질량','부력'],
+  '중력': ['무게와 질량','자유 낙하','우주 체육대회','행성 당구','케플러'],
+  '열': ['열평형','열의 이동','상태 변화','비열'],
+  '파동': ['줄에서의 파동','이중 슬릿','소리의 3요소'],
+  '소리': ['소리의 3요소','파동'],
+  '압력': ['접촉 면적','기압','풍동','바람 터널'],
+  '날씨': ['기압과 풍','전선','기단','습도','오늘 실제 날씨','대기'],
+  '기압': ['기압과 풍','전선','기단','그때 그 시절의 실험'],
+  '지진': ['지진파','판','지구의 내부'],
+  '화산': ['화산','화성암','지권'],
+  '달': ['달의 위상','일식과 월식','행성 당구','우주 체육대회'],
+  '행성': ['태양계','행성 당구','케플러'],
+  '타이머': ['모래시계','스톱워치'],
+  '초시계': ['스톱워치','모래시계'],
+  '과학사': ['그때 그 시절의 실험','갈릴레이','토리첼리','뉴턴','파스퇴르','러더퍼드'],
+  '고전': ['그때 그 시절의 실험'],
+  '실험': ['그때 그 시절의 실험','가상실험'],
+  '갈릴레이': ['그때 그 시절의 실험'],
+  '토리첼리': ['그때 그 시절의 실험'],
+  '뉴턴': ['그때 그 시절의 실험','빛의 합성'],
+  '파스퇴르': ['그때 그 시절의 실험'],
+  '러더퍼드': ['그때 그 시절의 실험'],
+  '진공': ['그때 그 시절의 실험','기압'],
+  '수은': ['그때 그 시절의 실험','기압'],
+  '산란': ['그때 그 시절의 실험','원자'],
+  '원자': ['주기율표','원자','광전 효과','수소 원자','그때 그 시절의 실험'],
+  '게임': ['게임 명예의 전당','원소 닌자','에어 튕기기','학교생활']
+};
+var SYN_CHO = [];
+for (var _k in SYN){ if (SYN.hasOwnProperty(_k)) SYN_CHO.push({ cho: toChosung(_k), key: _k, terms: SYN[_k] }); }
+
+var labIndex = null, labIndexLang = null;
+function buildLabIndex(){
+  labIndex = [];
+  AREA_PANELS.forEach(function(panel){
+    cardsOf(panel).forEach(function(card){
+      var h3 = card.querySelector('h3'), p = card.querySelector('p');
+      var koT = (h3 && h3.dataset.ko) ? h3.dataset.ko : (h3 ? h3.textContent : '');
+      var koD = (p && p.dataset.ko) ? p.dataset.ko : (p ? p.textContent : '');
+      card._ko = koT + ' ' + koD;
+      card._cho = toChosung(koT);   /* 초성은 제목만 본다(설명까지 보면 엉뚱한 결과가 쏟아진다) */
+      labIndex.push(card);
+    });
+  });
+  labIndexLang = cur;
+}
+function ensureLabIndex(){ if (!labIndex || labIndexLang !== cur) buildLabIndex(); }
+
+function searchHits(card, q, chOnly){
+  if (!q) return true;
+  var blob = (card._ko + ' ' + card.textContent).toLowerCase();
+  if (chOnly){
+    var cc = card._cho;
+    if (cc.indexOf(q) !== -1) return true;
+    for (var a = 0; a < SYN_CHO.length; a++){
+      if (SYN_CHO[a].cho === q){
+        for (var b = 0; b < SYN_CHO[a].terms.length; b++){
+          if (blob.indexOf(SYN_CHO[a].terms[b].toLowerCase()) !== -1) return true;
+        }
+      }
+    }
+    return false;
+  }
+  if (blob.indexOf(q) !== -1) return true;
+  for (var i = 0; i < SYN_CHO.length; i++){
+    var key = SYN_CHO[i].key;
+    if (q.length >= 1 && (key.indexOf(q) !== -1 || q.indexOf(key) !== -1)){
+      for (var j = 0; j < SYN_CHO[i].terms.length; j++){
+        if (blob.indexOf(SYN_CHO[i].terms[j].toLowerCase()) !== -1) return true;
+      }
+    }
+  }
+  return false;
+}
+
 function tpl(key, fallback){ return cur === 'ko' ? fallback : (I18N[cur] && I18N[cur][key] ? I18N[cur][key] : fallback); }
 function scrollToListTop(anchor){
   const bar = document.querySelector('.area-tabs-wrap');
@@ -1148,6 +1267,7 @@ function renderChips(){
 
 /* 활성 영역 · 세부 영역 · 검색어를 반영해 목록 표시 */
 function filterLabs(){
+  ensureLabIndex();
   const q = searchQuery();
   const searching = q !== '';
   let totalVisible = 0;
@@ -1161,7 +1281,7 @@ function filterLabs(){
     sections.forEach(function(sec){
       let secVisible = 0;
       cardsOf(sec).forEach(function(card){
-        const hit = !searching || card.textContent.toLowerCase().indexOf(q) !== -1;
+        const hit = !searching || searchHits(card, q, CHOSUNG_ONLY.test(q));
         card.style.display = hit ? 'flex' : 'none';
         if(hit) secVisible++;
       });
