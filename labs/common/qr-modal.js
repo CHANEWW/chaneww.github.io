@@ -22,6 +22,14 @@
     var HINT_TEXT = '교실 칠판에 띄우거나 학습지에 인쇄하여 바로 활용할 수 있습니다.';
     var SVG_NS = 'http://www.w3.org/2000/svg';
 
+    /* 공용 다국어(i18n.js)가 있으면 문구를 현재 언어로 바꿔 쓴다 */
+    function T(s) {
+        try {
+            if (window.SVL_I18N && window.SVL_I18N.tr) return window.SVL_I18N.tr(s) || s;
+        } catch (e) {}
+        return s;
+    }
+
     var overlay = null;
     var card = null;
     var qrBox = null;
@@ -84,7 +92,7 @@
         svg.setAttribute('height', '100%');
         svg.setAttribute('shape-rendering', 'crispEdges');
         svg.setAttribute('role', 'img');
-        svg.setAttribute('aria-label', '실험실 접속 QR 코드');
+        svg.setAttribute('aria-label', T('실험실 접속 QR 코드'));
 
         var bg = document.createElementNS(SVG_NS, 'rect');
         bg.setAttribute('width', String(total));
@@ -136,33 +144,33 @@
         closeX = document.createElement('button');
         closeX.type = 'button';
         closeX.className = 'svl-qr-close';
-        closeX.setAttribute('aria-label', 'QR 코드 창 닫기');
+        closeX.setAttribute('aria-label', T('QR 코드 창 닫기'));
         closeX.textContent = '✕';
         closeX.addEventListener('click', close);
 
         var titleEl = document.createElement('h2');
         titleEl.className = 'svl-qr-title';
         titleEl.id = 'svlQrTitle';
-        titleEl.textContent = TITLE_TEXT;
+        titleEl.textContent = T(TITLE_TEXT);
 
         nameEl = document.createElement('div');
         nameEl.className = 'svl-qr-name';
 
         qrBox = document.createElement('div');
         qrBox.className = 'svl-qr-canvas';
-        qrBox.setAttribute('aria-label', 'QR 코드');
+        qrBox.setAttribute('aria-label', T('QR 코드'));
 
         urlEl = document.createElement('p');
         urlEl.className = 'svl-qr-url';
 
         var hintEl = document.createElement('p');
         hintEl.className = 'svl-qr-hint';
-        hintEl.textContent = HINT_TEXT;
+        hintEl.textContent = T(HINT_TEXT);
 
         var doneBtn = document.createElement('button');
         doneBtn.type = 'button';
         doneBtn.className = 'svl-qr-done';
-        doneBtn.textContent = '닫기';
+        doneBtn.textContent = T('닫기');
         doneBtn.addEventListener('click', close);
 
         card.appendChild(closeX);
@@ -190,7 +198,7 @@
         if (typeof window.QRCode !== 'function') {
             var fail = document.createElement('p');
             fail.className = 'svl-qr-hint';
-            fail.textContent = 'QR 코드를 만들 수 없습니다. 아래 주소를 직접 입력해 주세요.';
+            fail.textContent = T('QR 코드를 만들 수 없습니다. 아래 주소를 직접 입력해 주세요.');
             qrBox.appendChild(fail);
             return;
         }
@@ -228,7 +236,7 @@
         if (made) {
             made.style.width = size + 'px';
             made.style.height = size + 'px';
-            made.setAttribute('alt', '실험실 접속 QR 코드');
+            made.setAttribute('alt', T('실험실 접속 QR 코드'));
             made.setAttribute('role', 'img');
         }
     }

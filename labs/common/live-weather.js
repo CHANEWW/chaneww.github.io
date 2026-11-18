@@ -33,6 +33,17 @@
         { id: 'gangneung', name: '강릉', lat: 37.7519, lon: 128.8761 }
     ];
     var DIRS = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+    /* 공용 다국어(i18n.js)가 있으면 현재 언어로 바꾼다. {0}{1}… 자리에 값을 채운다. */
+    function T(k) {
+        var args = [], i;
+        for (i = 1; i < arguments.length; i++) args.push(arguments[i]);
+        try {
+            if (window.SVL_I18N && window.SVL_I18N.tr) return window.SVL_I18N.tr.apply(null, [k].concat(args));
+        } catch (e) {}
+        if (!args.length) return k;
+        return String(k).replace(/\{(\d+)\}/g, function (m, n) { return args[+n] == null ? m : args[+n]; });
+    }
+
     var CACHE_KEY = 'svl_live_weather_v1';
     var CACHE_MS = 30 * 60 * 1000;
     var TIMEOUT_MS = 8000;
@@ -45,66 +56,42 @@
 
     function dirText(deg) {
         if (typeof deg !== 'number' || isNaN(deg)) return '—';
-        return DIRS[Math.round(((deg % 360) + 360) % 360 / 45) % 8] + '풍';
+        return T(DIRS[Math.round(((deg % 360) + 360) % 360 / 45) % 8] + '풍');
     }
 
     function skyText(code) {
-        if (code === 0) return '맑음';
-        if (code === 1) return '대체로 맑음';
-        if (code === 2) return '구름 조금';
-        if (code === 3) return '흐림';
-        if (code === 45 || code === 48) return '안개';
-        if (code >= 51 && code <= 57) return '이슬비';
-        if (code >= 61 && code <= 67) return '비';
-        if (code >= 71 && code <= 77) return '눈';
-        if (code >= 80 && code <= 82) return '소나기';
-        if (code >= 85 && code <= 86) return '눈 소나기';
-        if (code >= 95) return '뇌우';
-        return '날씨 정보';
+        var t = '날씨 정보';
+        if (code === 0) t = '맑음';
+        else if (code === 1) t = '대체로 맑음';
+        else if (code === 2) t = '구름 조금';
+        else if (code === 3) t = '흐림';
+        else if (code === 45 || code === 48) t = '안개';
+        else if (code >= 51 && code <= 57) t = '이슬비';
+        else if (code >= 61 && code <= 67) t = '비';
+        else if (code >= 71 && code <= 77) t = '눈';
+        else if (code >= 80 && code <= 82) t = '소나기';
+        else if (code >= 85 && code <= 86) t = '눈 소나기';
+        else if (code >= 95) t = '뇌우';
+        return T(t);
     }
 
     /* 대체 서버(wttr.in)는 WMO가 아닌 WWO 날씨 코드를 쓴다 */
     function wwoSkyText(code) {
-        if (typeof code !== 'number' || isNaN(code)) return '날씨 정보';
-        if (code === 113) return '맑음';
-        if (code === 116) return '구름 조금';
-        if (code === 119 || code === 122) return '흐림';
-        if (code === 143 || code === 248 || code === 260) return '안개';
-        if (code === 176 || code === 263 || code === 266 || code === 281 || code === 284 ||
-            (code >= 293 && code <= 308) || code === 311 || code === 314) return '비';
-        if (code >= 353 && code <= 359) return '소나기';
-        if (code === 317 || code === 320 || code === 362 || code === 365) return '진눈깨비';
-        if ((code >= 179 && code <= 185) || code === 227 || code === 230 ||
-            (code >= 323 && code <= 338) || (code >= 371 && code <= 377)) return '눈';
-        if (code === 350 || code === 374) return '얼음 입자';
-        if (code === 200 || (code >= 386 && code <= 395)) return '뇌우';
-        return '날씨 정보';
-    }
-
-    function hhmm(iso) {
-        if (!iso || iso.length < 16) return '';
-        return iso.slice(11, 16);
-    }
-
-    function fmt1(v) {
-        return (typeof v === 'number' && !isNaN(v)) ? v.toFixed(1) : '—';
-    }
-
-    function fmt0(v) {
-        return (typeof v === 'number' && !isNaN(v)) ? String(Math.round(v)) : '—';
-    }
-
-    function num(v) {
-        var n = parseFloat(v);
-        return isNaN(n) ? null : n;
-    }
-
-    function pad2(n) { return (n < 10 ? '0' : '') + n; }
-
-    function isoAt(base, minutes) {
-        var d = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 0, minutes);
-        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
-            'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+        var t = '날씨 정보';
+        if (typeof code !== 'number' || isNaN(code)) return T(t);
+        if (code === 113) t = '맑음';
+        else if (code === 116) t = '구름 조금';
+        else if (code === 119 || code === 122) t = '흐림';
+        else if (code === 143 || code === 248 || code === 260) t = '안개';
+        else if (code === 176 || code === 263 || code === 266 || code === 281 || code === 284 ||
+            (code >= 293 && code <= 308) || code === 311 || code === 314) t = '비';
+        else if (code >= 353 && code <= 359) t = '소나기';
+        else if (code === 317 || code === 320 || code === 362 || code === 365) t = '진눈깨비';
+        else if ((code >= 179 && code <= 185) || code === 227 || code === 230 ||
+            (code >= 323 && code <= 338) || (code >= 371 && code <= 377)) t = '눈';
+        else if (code === 350 || code === 374) t = '얼음 입자';
+        else if (code === 200 || (code >= 386 && code <= 395)) t = '뇌우';
+        return T(t);
     }
 
     /* wttr.in은 '12:10 AM' 같은 관측 시각 문자열을 준다.
@@ -266,13 +253,13 @@
     }
 
     function summary(w, cityName) {
-        return cityName + ' ' + fmt1(w.temp) + '℃ · ' + fmt0(w.pressure) + ' hPa · ' +
-            w.windDirText + ' ' + fmt1(w.windSpeed) + ' m/s';
+        return T('{0} {1}℃ · {2} hPa · {3} {4} m/s',
+            T(cityName), fmt1(w.temp), fmt0(w.pressure), w.windDirText, fmt1(w.windSpeed));
     }
 
     function detail(w, cityName) {
-        return summary(w, cityName) + ' · 습도 ' + fmt0(w.humidity) + '% · ' + w.sky +
-            ' · ' + hhmm(w.time) + ' 기준';
+        return summary(w, cityName) +
+            T(' · 습도 {0}% · {1} · {2} 기준', fmt0(w.humidity), w.sky, hhmm(w.time));
     }
 
     var styleDone = false;
@@ -307,18 +294,18 @@
         wrap.className = 'lwv-block ctrl-block';
         wrap.innerHTML =
             '<div class="ctrl-row">' +
-            '  <div class="ctrl-row-header"><span class="ctrl-label">🛰️ 오늘 실제 날씨</span>' +
+            '  <div class="ctrl-row-header"><span class="ctrl-label">' + T('🛰️ 오늘 실제 날씨') + '</span>' +
             '    <span class="ctrl-val lwv-city-wrap"></span></div>' +
-            '  <button class="lwv-btn" type="button">🛰️ 오늘 실제 날씨 불러오기</button>' +
-            '  <div class="panel-note lwv-status">지역을 고르고 버튼을 누르면 오늘의 실제 기온·기압·바람이 실험에 반영됩니다.</div>' +
+            '  <button class="lwv-btn" type="button">' + T('🛰️ 오늘 실제 날씨 불러오기') + '</button>' +
+            '  <div class="panel-note lwv-status">' + T('지역을 고르고 버튼을 누르면 오늘의 실제 기온·기압·바람이 실험에 반영됩니다.') + '</div>' +
             '</div>';
 
         var sel = document.createElement('select');
         sel.className = 'lwv-city';
-        sel.setAttribute('aria-label', '지역 선택');
+        sel.setAttribute('aria-label', T('지역 선택'));
         var html = '';
-        CITIES.forEach(function (c) { html += '<option value="' + c.id + '">' + c.name + '</option>'; });
-        html += '<option value="geo">📍 현재 위치</option>';
+        CITIES.forEach(function (c) { html += '<option value="' + c.id + '">' + T(c.name) + '</option>'; });
+        html += '<option value="geo">' + T('📍 현재 위치') + '</option>';
         sel.innerHTML = html;
         sel.value = opts.defaultCity || 'jinju';
         wrap.querySelector('.lwv-city-wrap').appendChild(sel);
@@ -344,7 +331,7 @@
             return new Promise(function (resolve, reject) {
                 if (!navigator.geolocation) return reject(geoError('no geo'));
                 navigator.geolocation.getCurrentPosition(function (p) {
-                    resolve({ lat: p.coords.latitude, lon: p.coords.longitude, name: '현재 위치' });
+                    resolve({ lat: p.coords.latitude, lon: p.coords.longitude, name: T('현재 위치') });
                 }, function (err) {
                     reject(geoError((err && err.code === 1) ? 'geo denied' : 'geo failed'));
                 }, { timeout: 8000, maximumAge: 300000 });
@@ -353,7 +340,7 @@
 
         function run() {
             var id = sel.value;
-            var cityName = '현재 위치';
+            var cityName = T('현재 위치');
             var target;
             if (id === 'geo') {
                 target = locate();
@@ -380,7 +367,7 @@
                 var w = res.data;
                 w.city = cityName;
                 setStatus('🛰️ ' + summary(w, cityName) + ' · ' + w.sky);
-                status.title = detail(w, cityName) + (res.cached ? ' (30분 내 받은 값)' : '') +
+                status.title = detail(w, cityName) + (res.cached ? T(' (30분 내 받은 값)') : '') +
                     (w.source ? ' · ' + w.source : '');
                 btn.disabled = false;
                 if (typeof opts.onApply === 'function') {

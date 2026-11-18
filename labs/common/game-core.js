@@ -125,13 +125,20 @@
                 document.mozFullScreenElement || document.msFullscreenElement);
         }
         function isPseudo() { return document.body.classList.contains(PSEUDO); }
+        /* 공용 다국어(i18n.js)가 있으면 라벨을 현재 언어로 바꿔 쓴다 */
+        function T(s) {
+            try {
+                if (window.SVL_I18N && window.SVL_I18N.tr) return window.SVL_I18N.tr(s) || s;
+            } catch (e) {}
+            return s;
+        }
         function sync() {
             var on = isReal() || isPseudo();
             if (ic) ic.textContent = on ? '🗗' : '⛶';
-            if (tx) tx.textContent = on ? '창모드' : '전체화면';
+            if (tx) tx.textContent = T(on ? '창모드' : '전체화면');
             if (b) {
                 b.setAttribute('aria-pressed', on ? 'true' : 'false');
-                b.setAttribute('aria-label', on ? '창모드로 전환' : '전체화면으로 전환');
+                b.setAttribute('aria-label', T(on ? '창모드로 전환' : '전체화면으로 전환'));
             }
         }
         function enterPseudo() {
