@@ -177,7 +177,10 @@ window.SVL_I18N_TPL = {"가전제품에 적힌 {0}은 그 제품이 {1}예요. �
         if (!el || el.nodeType !== 1) return;
         /* textarea·input 자신의 placeholder/title은 번역하되, 스크립트·코드 블록 안은 건너뛴다 */
         var self = (el.tagName || '').toLowerCase();
-        if (self !== 'textarea' && self !== 'input' && skipped(el)) return;
+        /* SVG(QR 코드 그림 등)의 aria-label·title도 번역한다. 글자 노드는 건드리지 않는다 */
+        var inSvg = false;
+        try { inSvg = !!(el.ownerSVGElement || (self === 'svg')); } catch (e) {}
+        if (!inSvg && self !== 'textarea' && self !== 'input' && skipped(el)) return;
         if (el.id === 'svlCodeSrc') return;
         var st = attrState.get(el) || {};
         for (var i = 0; i < ATTRS.length; i++) {
