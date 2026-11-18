@@ -376,9 +376,10 @@ window.SVL_I18N_TPL = {"가전제품에 적힌 {0}은 그 제품이 {1}예요. �
        스페인어·일본어처럼 긴 번역이 들어가면 고정 폭 캡슐(.tag-badge·.chip·버튼 등)에서
        글자가 잘려 보인다. 잘림이 감지되면 (1) 폭을 늘려 보고 (2) 안 되면 글자 크기를
        조금씩 줄여 모든 글자가 보이게 한다. 한국어 원문에서도 같은 규칙을 적용한다. */
-    var FIT_SEL = '.tag-badge,.page-title,.page-title .t,.tag-pill,.chip,.badge,.tag,' +
+    var FIT_SEL = '.tag-badge,.tag-badge .title-text,.title-capsule,.title-capsule .title-text,' +
+        '.page-title,.page-title .t,.page-title span,.tag-pill,.chip,.badge,.tag,' +
         '.data-item,.data-label,.data-value,.lp-k,.lp-v,.lp-title,.lp-note,.stat-label,' +
-        'button,.seg-btn,.control-tab-btn,.tab-btn,.sw-btn,.btn,.qr-btn .qr-btn-label,.back-btn span';
+        'button,.seg-btn,.control-tab-btn,.ctrl-tab-btn,.tab-btn,.sw-btn,.btn,.qr-btn .qr-btn-label,.back-btn span';
     var CAP_RE = /(^|\s)(tag-badge|chip|badge|tag|seg-btn|control-tab-btn|tab-btn|sw-btn|btn|tag-pill|data-label|data-value|lp-k|lp-v)(\s|$)/;
     function isCapsule(el) {
         var tag = (el.tagName || '').toLowerCase();
@@ -408,7 +409,7 @@ window.SVL_I18N_TPL = {"가전제품에 적힌 {0}은 그 제품이 {1}예요. �
             el.style.setProperty('flex-wrap', 'nowrap', 'important');
             el.__svlNw = true;
         }
-        if (el.scrollWidth - el.clientWidth <= 1) {
+        if (el.scrollWidth <= el.clientWidth) {
             if (el.style.textOverflow === 'clip') {
                 el.style.removeProperty('text-overflow');
             }
@@ -423,12 +424,12 @@ window.SVL_I18N_TPL = {"가전제품에 적힌 {0}은 그 제품이 {1}예요. �
         }
         var baseEl = bases[0];
         /* 제목 캡슐은 정보성 문구라 조금 더 작게 줄여 끝까지 보이게 한다 (버튼은 8.5px 하한) */
-        var isTitle = /tag-badge|page-title/.test((el.className || '').toString()) ||
-            (el.closest && !!el.closest('.page-title,.tag-badge'));
+        var isTitle = /tag-badge|page-title|title-text|title-capsule/.test((el.className || '').toString()) ||
+            (el.closest && !!el.closest('.page-title,.tag-badge,.title-capsule'));
         var floor = isTitle ? 6.8 : 8.5;
         var minScale = Math.max(isTitle ? 0.45 : 0.6, floor / baseEl);
         var scale = 1, guard = 0;
-        while (el.scrollWidth - el.clientWidth > 1 && scale > minScale && guard < 22) {
+        while (el.scrollWidth > el.clientWidth && scale > minScale && guard < 22) {
             scale -= 0.04;
             for (i = 0; i < nodes.length; i++) {
                 nodes[i].style.setProperty('font-size', (bases[i] * scale).toFixed(2) + 'px', 'important');
@@ -438,14 +439,14 @@ window.SVL_I18N_TPL = {"가전제품에 적힌 {0}은 그 제품이 {1}예요. �
             guard++;
         }
         /* 제목 캡슐은 마지막으로 자간을 살짝 줄여 끝까지 보이게 한다 */
-        if (el.scrollWidth - el.clientWidth > 1 && isTitle) {
+        if (el.scrollWidth > el.clientWidth && isTitle) {
             var ls = [-0.15, -0.3, -0.45];
-            for (var li = 0; li < ls.length && el.scrollWidth - el.clientWidth > 1; li++) {
+            for (var li = 0; li < ls.length && el.scrollWidth > el.clientWidth; li++) {
                 el.style.setProperty('letter-spacing', ls[li] + 'px', 'important');
             }
         }
         /* 최소 크기에서도 넘치면 접히게 두고 잘림을 푼다 (글자가 사라지는 것보다 낫다) */
-        if (el.scrollWidth - el.clientWidth > 1) {
+        if (el.scrollWidth > el.clientWidth) {
             if (isCap) {
                 el.style.removeProperty('white-space');
                 el.style.removeProperty('flex-wrap');
