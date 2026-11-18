@@ -730,12 +730,23 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     return new THREE.CanvasTexture(c);
   };
 
-  window.LabUI.makeLabel = function (text, size) {
-    var fs = 48, pad = 30;
+  /* 3D 라벨 캡슐: 번역문(en·ja·zh·es)을 먼저 구한 뒤 실제 글자 폭을 재서
+     캡슐 폭을 넉넉히 만든다. (한국어 폭으로 재면 긴 번역문이 캡슐 밖으로 잘린다) */
+  var LABEL_FONT = '800 48px "SeoulNamsan", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif';
+  function labelText(text) {
+    var s = (text == null ? '' : String(text));
+    try { if (window.SVL_I18N && window.SVL_I18N.tr) s = window.SVL_I18N.tr(s) || s; } catch (e) {}
+    return s;
+  }
+  window.LabUI.tr = labelText;
+
+  window.LabUI.paintLabel = function (sp, text, size) {
+    var fs = 48, pad = 32;
+    var label = labelText(text);
     var c = document.createElement('canvas');
     var g0 = c.getContext('2d');
-    g0.font = '800 ' + fs + 'px "SeoulNamsan", sans-serif';
-    var w = Math.ceil(g0.measureText(text).width) + pad * 2;
+    g0.font = LABEL_FONT;
+    var w = Math.max(120, Math.ceil(g0.measureText(label).width) + pad * 2);
     var h_px = 96;
     c.width = w; c.height = h_px;
     var g = c.getContext('2d');
@@ -750,16 +761,30 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
     g.lineWidth = 3;
     g.stroke();
     g.fillStyle = '#ffffff';
-    g.font = '800 ' + fs + 'px "SeoulNamsan", sans-serif';
+    g.font = LABEL_FONT;
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(text, w / 2, h_px / 2 + 2);
+    g.fillText(label, w / 2, h_px / 2 + 2);
     var t = new THREE.CanvasTexture(c);
     t.minFilter = THREE.LinearFilter;
-    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false }));
+    if (sp.material.map) sp.material.map.dispose();
+    sp.material.map = t;
+    sp.material.needsUpdate = true;
     var h = size || 0.22;
     sp.scale.set(w / h_px * h, h, 1);
+  };
+
+  window.LabUI.makeLabel = function (text, size) {
+    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false }));
     sp.renderOrder = 10;
+    sp.userData = { ko: text, size: size };
+    window.LabUI.paintLabel(sp, text, size);
     return sp;
+  };
+
+  /* 언어를 바꾸면 새 언어 폭으로 캡슐을 다시 그린다 */
+  window.LabUI.repaintLabel = function (sp) {
+    if (!sp || !sp.userData) return;
+    window.LabUI.paintLabel(sp, sp.userData.ko, sp.userData.size);
   };
 
   window.LabUI.wavelengthToRGB = function (nm) {
@@ -782,6 +807,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
 
 <script>
 /* ===== 광전 효과 3D ===== */
+/* 3D 라벨·전원 화면·그래프를 언어 전환 때 직접 다시 그리므로 새로고침하지 않는다 */
+window.SVL_NO_RELOAD = true;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -956,8 +983,16 @@ function drawPsuScreen() {
   c.fillStyle = ok ? '#4ade80' : '#64748b';
   c.font = 'bold 54px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText((state.volt >= 0 ? '+' : '') + state.volt.toFixed(1) + ' V', 128, 56);
-  c.fillStyle = '#cbd5e1'; c.font = 'bold 28px "SeoulNamsan", sans-serif';
-  c.fillText('전압 공급 장치', 128, 102);
+  c.fillStyle = '#cbd5e1';
+  var psuLabel = window.LabUI.tr('전압 공급 장치');
+  var psuFs = 28;
+  c.font = 'bold ' + psuFs + 'px "SeoulNamsan", sans-serif';
+  var psuW = c.measureText(psuLabel).width;
+  if (psuW > 236) {
+    psuFs = Math.max(15, Math.floor(psuFs * 236 / psuW));
+    c.font = 'bold ' + psuFs + 'px "SeoulNamsan", sans-serif';
+  }
+  c.fillText(psuLabel, 128, 102);
   psuTex.needsUpdate = true;
 }
 
@@ -987,6 +1022,18 @@ scene.add(labelTube);
 const labelPsu = window.LabUI.makeLabel('전원 장치 (전압계)');
 labelPsu.position.set(0, 0.76, 1.05);
 scene.add(labelPsu);
+
+/* 언어 전환·웹폰트 로드 후 3D 라벨 캡슐을 새 글자 폭으로 다시 그린다 */
+function repaintLabels() {
+  [labelMetal, labelAnode, labelLamp, labelTube, labelPsu].forEach(window.LabUI.repaintLabel);
+  try { drawPsuScreen(); } catch (e) {}
+  try { drawGraph(); } catch (e) {}
+}
+document.addEventListener('svl:lang', repaintLabels);
+try {
+  if (document.fonts && document.fonts.load) document.fonts.load('800 48px "SeoulNamsan"').then(repaintLabels, function () {});
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(repaintLabels, function () {});
+} catch (e) {}
 
 /* ---------- 상태 ---------- */
 const METALS = {
@@ -1070,8 +1117,10 @@ function updateReadouts() {
   el('f-int').textContent = state.intensity + ' %';
   el('f-volt').textContent = (state.volt >= 0 ? '+' : '') + state.volt.toFixed(1) + ' V';
   el('btn-stop-val').textContent = stopVolt().toFixed(1);
+  /* 강조(<b>)가 낱말 하나에만 걸리면 그 낱말만 따로 번역돼 어순이 깨지므로,
+     조건 구절 전체를 <b>로 묶어 한 문장 단위로 번역되게 한다 */
   el('note-limit').innerHTML = '한계 파장 λ₀ = <b>' + limitLambda().toFixed(0) + ' nm</b> · 지금 빛은 ' +
-    (isEmitting() ? '한계진동수보다 <b>큰</b> 진동수' : '한계진동수보다 <b>작은</b> 진동수');
+    (isEmitting() ? '<b>한계진동수보다 큰 진동수</b>' : '<b>한계진동수보다 작은 진동수</b>');
   drawPsuScreen();
 }
 

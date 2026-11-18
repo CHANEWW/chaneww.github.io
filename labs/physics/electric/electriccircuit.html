@@ -888,6 +888,8 @@ renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
 const cv=renderer.domElement;
+/* 3D 부품 라벨을 언어 전환 때 직접 다시 그리므로 새로고침하지 않는다 */
+window.SVL_NO_RELOAD = true;
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(38,1,.1,100);
 let yaw=0,pitch=.82,dist=15;
@@ -1079,6 +1081,10 @@ function createLabel(){
 function drawLabel(sprite,text,colorStr){
   const canvas=sprite.material.map.image;
   const ctx=canvas.getContext('2d');
+  /* 번역문을 먼저 구한 뒤 폭을 잰다 — 한국어 폭으로 재면 Open/Abierto 같은
+     긴 번역문이 캡슐 밖으로 넘진다 */
+  let label=text;
+  try{ if(window.SVL_I18N&&window.SVL_I18N.tr) label=window.SVL_I18N.tr(text)||text; }catch(e){}
   ctx.clearRect(0,0,256,96);
   const x=6,y=8,w=244,h=80,r=26;
   ctx.beginPath();
@@ -1094,15 +1100,15 @@ function drawLabel(sprite,text,colorStr){
   let size=46;
   const LABEL_FONT='"SeoulNamsan",-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif';
   ctx.font='bold '+size+'px '+LABEL_FONT;
-  const wd=ctx.measureText(text).width;
+  const wd=ctx.measureText(label).width;
   if(wd>210){
-    size=Math.floor(size*210/wd);
+    size=Math.max(18,Math.floor(size*210/wd));
     ctx.font='bold '+size+'px '+LABEL_FONT;
   }
   ctx.fillStyle=colorStr;
   ctx.textAlign='center';
   ctx.textBaseline='middle';
-  ctx.fillText(text,128,50);
+  ctx.fillText(label,128,50);
   sprite.material.map.needsUpdate=true;
 }
 function labelInfo(p){
@@ -2067,6 +2073,8 @@ frame();
             if (document.fonts.ready) document.fonts.ready.then(refreshAllLabels, function () {});
         }
         window.addEventListener('load', function () { setTimeout(refreshAllLabels, 400); });
+        /* 언어를 바꾸면 3D 부품 라벨(열림/닫힘 등)을 새 언어로 다시 그린다 */
+        document.addEventListener('svl:lang', function () { refreshAllLabels(); });
     </script>
 
 <!-- @@MOBILE-JS v1@@ -->
