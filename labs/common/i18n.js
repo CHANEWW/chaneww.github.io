@@ -5,7 +5,7 @@ window.SVL_I18N_TPL = {"1초에 몇 번 진동하는지가 {0}이고, 진동수�
 /* ============================================================================
    Science Virtual LAB — 공용 다국어 모듈 (labs/common/i18n.js)
    ----------------------------------------------------------------------------
-   · 상단 우측 바에 [🌙 야간모드] → [🌐 언어] → [💡 제안하기] 순서로 언어 캡슐을 넣는다.
+   · 상단 우측 바에 [💡 제안하기] → [🌐 언어] → [🌙 야간모드] 순서로 언어 캡슐을 넣는다.
    · 언어 코드(ko/en/ja/zh/es)와 저장 키(localStorage 'svlLang')는 메인 index.html과 같다.
    · 화면 문구는 한국어 원문을 사전 키로 쓴다. 페이지 HTML은 한국어 그대로 두면 되고,
      이 모듈이 텍스트 노드·title/aria/placeholder·canvas fillText 문자열을 사전으로 바꾼다.
@@ -358,16 +358,17 @@ window.SVL_I18N_TPL = {"1초에 몇 번 진동하는지가 {0}이고, 진동수�
         'body.dark-mode .svl-lang-menu{background:rgba(32,32,36,0.96);border-color:rgba(255,255,255,0.14);}',
         'body.dark-mode .svl-lang-menu button{color:#f2f2f7;}',
         'body.dark-mode .svl-lang-menu button.active{background:rgba(0,122,255,0.28);color:#8fc6ff;}',
-        '.top-right-bar > .tr-util > #theme-toggle,.top-right-bar > .tr-util > #themeBtn,.top-right-bar > .tr-util > #bTheme,.top-right-bar > .tr-util > #btnTheme{order:1;}',
-        '.top-right-bar > .tr-util > .svl-lang-wrap{order:2;}',
-        '.top-right-bar > .tr-util > #feedback-btn{order:3;}',
+        /* 우측 상단 순서(좌→우): [💡 제안하기] → [🌐 다국어] → [🌙 야간 모드] */
+        '.tr-util > #feedback-btn,.tr-util > .svl-fb-btn{order:1;}',
+        '.tr-util > .svl-lang-wrap,.tr-util > .lang-wrap{order:2;}',
+        '.tr-util > #theme-toggle,.tr-util > #themeBtn,.tr-util > #bTheme,.tr-util > #btnTheme{order:3;}',
         '@media (max-width:900px){',
         '.svl-lang-btn{height:34px;width:34px;min-width:34px;padding:0;border-radius:50%;gap:0;}',
         '.svl-lang-btn .svl-lang-name{display:none;}',
         '.svl-lang-btn .svl-lang-globe{font-size:15px;}',
         '.svl-lang-menu{top:calc(100% + 6px);min-width:132px;}',
         '.svl-lang-menu button{padding:7px 9px;font-size:12.5px;}}',
-        /* 좁은 화면: 제목이 길어도 우측 [🌙][🌐][💡]와 겹치지 않게 자리를 나눈다 */
+        /* 좁은 화면: 제목이 길어도 우측 [💡][🌐][🌙]와 겹치지 않게 자리를 나눈다 */
         '@media (max-width:600px){',
         '#feedback-btn .fb-open-label{display:none !important;}',
         '.top-left-bar{max-width:calc(100% - 148px) !important;}',
@@ -422,10 +423,17 @@ window.SVL_I18N_TPL = {"1초에 몇 번 진동하는지가 {0}이고, 진동수�
             '<button type="button" role="option" data-code="zh">\u4E2D\u6587</button>' +
             '<button type="button" role="option" data-code="es">Espa\u00F1ol</button>' +
             '</div>';
-        /* 야간 모드 버튼 바로 뒤에 넣어 [🌙][🌐][💡] 순서를 만든다 */
+        /* 순서는 좌→우 [💡 제안하기] → [🌐 다국어] → [🌙 야간 모드].
+           야간 모드 버튼 '앞'에 끼워 넣고, 그 버튼이 없는 페이지는
+           제안하기 버튼 바로 뒤에 붙인다. */
         var theme = row.querySelector('#theme-toggle,#themeBtn,#bTheme,#btnTheme');
-        if (theme && theme.nextSibling) row.insertBefore(wrap, theme.nextSibling);
-        else row.appendChild(wrap);
+        if (theme && theme.parentNode === row) {
+            row.insertBefore(wrap, theme);
+        } else {
+            var fbNow = row.querySelector('#feedback-btn');
+            if (fbNow && fbNow.parentNode === row) row.insertBefore(wrap, fbNow.nextSibling);
+            else row.appendChild(wrap);
+        }
         btn = wrap.querySelector('#svl-lang-btn');
         menu = wrap.querySelector('#svl-lang-menu');
         nameEl = wrap.querySelector('#svl-lang-name');

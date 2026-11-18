@@ -3,7 +3,7 @@
    ------------------------------------------------------------
    모든 실험실 페이지에서 아래 한 줄만 넣으면 동작합니다.
      <script src="../common/feedback.js" defer></script>
-   - 💡 제안하기 버튼을 야간모드(🌙) 버튼 왼쪽에 자동 배치
+   - 💡 제안하기 버튼을 우측 상단 맨 왼쪽([💡] → [🌐 다국어] → [🌙])에 자동 배치
      (테마 버튼이 없으면 우측 상단에 고정 배치)
    - 제출: Google Forms 실시간 전송(fetch no-cors, 실패 시 숨김 iframe)
      + localStorage('svl_pending_feedbacks') 이중 보관
@@ -70,20 +70,25 @@
        자리가 없으면 예전처럼 떠 있는(fixed) 버튼으로 배치한다. */
     function mountInline() {
         var bar = document.querySelector('.top-right-bar');
-        if (!bar) return false;
-        var row = bar.querySelector('.tr-util');
+        var row = bar ? bar.querySelector('.tr-util') : null;
         if (!row) {
-            // 예전 구조: 야간 모드 버튼이 바의 바로 아래 자식인 경우
-            var theme = themeBtn();
-            row = document.createElement('div');
-            row.className = 'tr-util';
-            if (theme && theme.parentElement === bar) {
-                bar.insertBefore(row, theme);
-                row.appendChild(theme);
-            } else if (theme && bar.contains(theme)) {
-                theme.parentElement.insertBefore(row, theme);
+            if (bar) {
+                // 예전 구조: 야간 모드 버튼이 바의 바로 아래 자식인 경우
+                var theme = themeBtn();
+                row = document.createElement('div');
+                row.className = 'tr-util';
+                if (theme && theme.parentElement === bar) {
+                    bar.insertBefore(row, theme);
+                    row.appendChild(theme);
+                } else if (theme && bar.contains(theme)) {
+                    theme.parentElement.insertBefore(row, theme);
+                } else {
+                    bar.insertBefore(row, bar.firstChild);
+                }
             } else {
-                bar.insertBefore(row, bar.firstChild);
+                /* 우측 상단 바 클래스가 없는 페이지(예: 세포 분열 3D)는 이미 있는 .tr-util에 붙인다 */
+                row = document.querySelector('#top-nav .tr-util, header .tr-util, .tr-util');
+                if (!row) return false;
             }
         }
         row.insertBefore(btn, row.firstChild);
