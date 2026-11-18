@@ -45,7 +45,7 @@
         ox_speed_quiz: { name: '과학 오개념 OX 스피드 퀴즈', icon: '⏱️', unit: '점', tab: '과학 오개념 OX 스피드 퀴즈' },
         digital_escape_room: { name: '디지털 과학 방탈출', icon: '🔐', unit: '초', tab: '디지털 과학 방탈출' },
         festival_booth: { name: '과학 축제 부스', icon: '🎪', unit: '점', tab: '과학 축제 부스' },
-        electron_runner: { name: '내가 전자다!', icon: '⚡', unit: '점', tab: '내가 전자다!' }
+        electron_runner: { name: '내가 전자다', icon: '⚡', unit: '점', tab: '내가 전자다' }
     };
     var ORDER = ['element_ninja', 'air_bounce', 'finger_shooting', 'red_light_green_light',
         'silhouette_pose', 'school_challenge', 'ox_speed_quiz', 'digital_escape_room', 'festival_booth',
