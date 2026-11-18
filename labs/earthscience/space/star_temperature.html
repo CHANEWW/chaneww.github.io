@@ -90,14 +90,26 @@ body.light-mode .data-value .dot{border-color:rgba(0,0,0,.2)}
 
 /* ---------- 중앙 안내 ---------- */
 .center-tooltip{
-  position:fixed;top:80px;left:50%;transform:translateX(-50%);padding:8px 18px;border-radius:999px;
-  font-size:12.5px;font-weight:700;color:#c7d5e8;pointer-events:none;z-index:15;white-space:nowrap;
-  max-width:calc(100vw - 40px);overflow:hidden;text-overflow:ellipsis;
+  position:fixed;top:80px;left:50%;transform:translateX(-50%);padding:8px 14px 8px 18px;border-radius:999px;
+  display:flex;align-items:center;gap:8px;
+  font-size:12.5px;font-weight:700;color:#c7d5e8;pointer-events:auto;cursor:pointer;z-index:15;white-space:nowrap;
+  max-width:calc(100vw - 40px);overflow:hidden;
   background:rgba(12,20,34,.76);border:1px solid rgba(255,255,255,.12);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  transition:opacity .3s ease;
+  transition:opacity .3s ease,background .2s ease,border-color .2s ease;
 }
+.center-tooltip:hover,.center-tooltip:focus-visible{background:rgba(22,34,56,.9);border-color:rgba(255,255,255,.3)}
+.center-tooltip:focus-visible{outline:2px solid rgba(125,180,255,.7);outline-offset:2px}
+.center-tooltip .center-hint-text{overflow:hidden;text-overflow:ellipsis}
+.center-tooltip .hint-close{
+  flex:0 0 auto;font-size:10.5px;font-weight:800;line-height:1;color:#9db2cc;
+  padding:3px 5px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);
+}
+.center-tooltip:hover .hint-close{color:#e8f1ff;background:rgba(255,255,255,.16)}
+.center-tooltip.dismissed{opacity:0;pointer-events:none;visibility:hidden}
 body.light-mode .center-tooltip{color:#334155;background:rgba(255,255,255,.8);border-color:rgba(0,0,0,.08)}
+body.light-mode .center-tooltip:hover,body.light-mode .center-tooltip:focus-visible{background:rgba(255,255,255,.95);border-color:rgba(0,0,0,.16)}
+body.light-mode .center-tooltip .hint-close{color:#5b6b80;background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1)}
 
 /* ---------- 좌측 그래프 패널 ---------- */
 .side-left-panel{
@@ -410,7 +422,7 @@ body.light-mode #fullscreenBtn{background:rgba(255,255,255,.92);border-color:rgb
 </div>
 
 <!-- 중앙 안내 -->
-<div class="center-tooltip" id="center-hint">🔥 쇠막대를 위아래로 드래그하거나 슬라이더로 불의 세기를 바꿔 보세요</div>
+<div class="center-tooltip" id="center-hint" role="button" tabindex="0" title="누르면 이 안내가 닫힙니다" aria-label="안내 닫기"><span class="center-hint-text" id="center-hint-text">🔥 쇠막대를 위아래로 드래그하거나 슬라이더로 불의 세기를 바꿔 보세요</span><span class="hint-close" aria-hidden="true">✕ 닫기</span></div>
 
 <!-- 좌측 그래프 패널 (데스크톱) -->
 <div class="glass-panel side-left-panel" id="spec-left">
@@ -1650,6 +1662,22 @@ $('#q-close').addEventListener('click', function () { closeQuiz(); setMode('A');
 /* ============================================================
    14. 모드 전환
    ============================================================ */
+/* 상단 안내 : 누르면 닫힌다 (별 이름 라벨을 가리지 않도록) */
+var centerHint = $('#center-hint');
+var centerHintText = $('#center-hint-text');
+var hintDismissed = false;
+function dismissCenterHint() {
+    if (hintDismissed) return;
+    hintDismissed = true;
+    centerHint.classList.add('dismissed');
+    centerHint.setAttribute('aria-hidden', 'true');
+    centerHint.setAttribute('tabindex', '-1');
+}
+centerHint.addEventListener('click', dismissCenterHint);
+centerHint.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); dismissCenterHint(); }
+});
+
 var TITLES = { A: '🔥 가스불 세기', B: '🌟 별 선택', C: '🎯 온도 맞히기' };
 var HINTS = {
     A: '🔥 쇠막대를 위아래로 드래그하거나 슬라이더로 불의 세기를 바꿔 보세요',
@@ -1665,7 +1693,7 @@ function setMode(m) {
         t.classList.toggle('active', t.id === 'tab-' + m);
     });
     $('#panel-main-title').textContent = TITLES[m];
-    $('#center-hint').textContent = HINTS[m];
+    centerHintText.textContent = HINTS[m];
     forge.visible = (m === 'A');
     starField.visible = (m === 'B' || m === 'C');
     selRing.visible = (m === 'B' && state.star >= 0);
