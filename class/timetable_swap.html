@@ -258,6 +258,35 @@ body.dark .chip.tgt{color:#6ee7b7}
 
 /* ---------- 추천 카드 ---------- */
 .reclist{display:flex; flex-direction:column; gap:9px}
+/* 추천 순위 스크롤 영역 — 약 3순위 카드 높이만 보이고 4~7순위는 이 안에서 오르내린다 */
+.recwrap{position:relative}
+.recscroll{
+    overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain; touch-action:pan-y;
+    scrollbar-width:thin; scrollbar-color:rgba(100,116,139,.55) transparent;
+    padding-right:2px; outline:none;
+}
+.recscroll.can-scroll{padding-right:6px}
+.recscroll::-webkit-scrollbar{width:9px; height:9px}
+.recscroll::-webkit-scrollbar-track{background:transparent}
+.recscroll::-webkit-scrollbar-thumb{
+    background:rgba(100,116,139,.45); border-radius:9px; border:2px solid transparent; background-clip:content-box;
+}
+.recscroll::-webkit-scrollbar-thumb:hover{background:rgba(100,116,139,.72); background-clip:content-box}
+body.dark .recscroll{scrollbar-color:rgba(148,163,184,.55) transparent}
+body.dark .recscroll::-webkit-scrollbar-thumb{background:rgba(148,163,184,.45); background-clip:content-box}
+.recfade{
+    position:absolute; left:0; right:7px; bottom:0; height:34px; pointer-events:none; opacity:0;
+    transition:opacity .18s ease;
+    background:linear-gradient(to bottom, rgba(255,255,255,0), var(--card) 88%);
+}
+body.dark .recfade{background:linear-gradient(to bottom, rgba(26,32,45,0), var(--card) 88%)}
+.recfade.on{opacity:1}
+.recscroll-hint{
+    display:none; align-items:center; gap:4px; margin:0 0 6px; font-size:10.5px; font-weight:800;
+    color:var(--muted); letter-spacing:-.2px; line-height:1.4;
+}
+.recscroll-hint.on{display:flex}
 .rec{
     border-radius:16px; border:1px solid var(--line); background:var(--card-solid); padding:11px 12px;
     cursor:pointer; transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease;
@@ -329,6 +358,7 @@ body.dark .cum-head{color:#6ee7b7}
 .cum-head .cum-sub{font-size:11.5px; font-weight:800; color:var(--muted)}
 .cum-acts{display:flex; gap:6px; flex-wrap:wrap; margin-left:auto}
 .cum-acts .mini{background:var(--card-solid); border-color:rgba(16,185,129,.4); color:#0b7a52}
+.cum-acts .mini[hidden]{display:none}
 body.dark .cum-acts .mini{color:#6ee7b7}
 .cum .chips{margin-top:0}
 .cum .cumchip{font-size:11px}
@@ -557,6 +587,7 @@ body.dark .cell.opp-swap{color:#c4b5fd}
     .rec-main{font-size:12.5px}
     .rec-why{font-size:11.5px}
     .rec-steps{gap:2px; font-size:11.5px}
+    .recfade{height:28px}
     .situ-out{font-size:11px}
     .bar{padding:8px 9px; gap:7px}
     select.tt-sel{max-width:150px; font-size:12px}
@@ -625,6 +656,7 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         <div class="dgrow">
             <button class="fchip on" id="clPast" type="button" aria-pressed="true">지난 요일 제외</button>
             <button class="fchip on" id="clCross" type="button" aria-pressed="true">다음 주 교차 교체</button>
+            <button class="fchip on" id="clSubj" type="button" aria-pressed="true">동아·스포츠·보건 제외</button>
             <span class="pastnote" id="clPastNote"></span>
         </div>
     </div>
@@ -657,6 +689,7 @@ body.dark .cell.opp-swap{color:#c4b5fd}
             <div class="cum-acts">
                 <button class="mini" id="cumUndo" type="button">↩️ 직전 취소</button>
                 <button class="mini" id="cumReset" type="button">🔄 전체 초기화</button>
+                <button class="mini" id="cumSms" type="button" hidden>✉️ 누적 요청 문자</button>
                 <button class="mini" id="cumCopy" type="button">📋 전체 변경 요약 복사</button>
             </div>
         </div>
@@ -712,7 +745,11 @@ body.dark .cell.opp-swap{color:#c4b5fd}
                 </div>
                 <div class="situ-out" id="situOut">이번 주·다음 주, 요일, 교시(1교시 · 2~3교시 · 오전 · 오후 · 하루 종일)를 적으면 그 교시를 자동으로 골라 추천합니다. ‘금요일 연가’, ‘다음 주 월요일 출장’, ‘오후 반차’처럼 적어도 알아듣습니다.</div>
             </div>
-            <div class="reclist" id="recList"></div>
+            <div class="recscroll-hint" id="recHint">⇅ 순위 목록 — 위아래로 밀면 4~7순위까지 볼 수 있어요</div>
+            <div class="recwrap">
+                <div class="recscroll" id="recScroll" role="region" aria-label="교체 추천 순위 목록"><div class="reclist" id="recList"></div></div>
+                <div class="recfade" id="recFade" aria-hidden="true"></div>
+            </div>
         </section>
     </div>
 
@@ -1033,6 +1070,20 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     var PAST = { on: true };
     var CROSS = { on: true };
 
+    /* 문산중 과목 제외 — 동아리·스포츠·보건 (컴시간 약칭: 동2·동3, 스1~스3, 스포츠 모두 인식) */
+    var CLEX = { subj: true };
+    function clSubjExcluded(name) {
+        var n = String(name || '').replace(/\s+/g, '');
+        if (!n) return false;
+        if (n.indexOf('보건') > -1 || n.indexOf('동아') > -1 || n.indexOf('스포') > -1) return true;
+        if (/^동[0-9]*$/.test(n)) return true;      // 동아리 약칭(동2·동3)
+        if (/^스[0-9]*$/.test(n)) return true;      // 스포츠 약칭(스1·스2·스3)
+        return false;
+    }
+    function clExcludedCell(D, cell) {
+        return !!(CLEX.subj && cell && clSubjExcluded(D.subjectOf(cell.s)));
+    }
+
     /* 학교 레지스트리 — 문산중은 기존 로직(classic), 대곡중은 별도 엔진(dg) */
     var SCHOOLS = {
         munsan: { key: 'munsan', name: '경남 문산중학교', short: '문산중', code: '61208', mode: 'classic', defTeacher: MY_DEFAULT, snapshot: function () { return typeof SNAPSHOT !== 'undefined' ? SNAPSHOT : null; } },
@@ -1294,6 +1345,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         if (isPastDay(w0, d0)) return [];
         var cell0 = D.week(w0).cells[cls].days[d0][p0];
         if (!cell0 || cell0.t !== me) return [];
+        if (clExcludedCell(D, cell0)) return [];   // 동아리·스포츠·보건 수업은 교체 대상에서 뺀다
         var cellsC = D.week(w0).cells[cls], same = [], cross = [];
 
         // ---- 1:1 맞교체: 같은 주, 같은 반의 다른 시간 ----
@@ -1303,6 +1355,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 if (d2 === d0 && p2 === p0) continue;
                 var v = cellsC.days[d2][p2];
                 if (!v || v.t === me) continue;
+                if (clExcludedCell(D, v)) continue;    // 상대 수업이 제외 과목이면 후보에서 뺀다
                 if (!dgFree(D, w0, v.t, d0, p0)) continue;   // 상대가 그 교시에 비어야
                 if (!dgFree(D, w0, me, d2, p2)) continue;    // 내가 옮길 교시에 비어야
                 if (absOff(w0, d2, p2)) continue;            // 연가·부재 시간은 후보에서 뺀다
@@ -1325,6 +1378,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                     if (d2b === d0 && p2b === p0) continue;
                     var v2 = cellsC.days[d2b][p2b];
                     if (!v2 || v2.t === me) continue;
+                    if (clExcludedCell(D, v2)) continue;
                     if (dgFree(D, w0, v2.t, d0, p0)) continue;      // 1:1이 되는 경우는 위에서 처리
                     if (!dgFree(D, w0, me, d2b, p2b)) continue;
                     if (absOff(w0, d2b, p2b)) continue;
@@ -1338,6 +1392,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                             var v3 = xCells.days[d3][p3];
                             if (!v3) continue;
                             if (v3.t === me || v3.t === v2.t) continue;
+                            if (clExcludedCell(D, v3)) continue;
                             if (!dgFree(D, w0, v3.t, d0, p0)) continue;   // T3가 내 교시에 비어야
                             if (!dgFree(D, w0, v2.t, d3, p3)) continue;   // T2가 T3 교시에 비어야
                             same.push(evaluate(D, {
@@ -1368,6 +1423,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 for (var p2c = 0; p2c < MAXP; p2c++) {
                     var vx = cellsX.days[d2c][p2c];
                     if (!vx || vx.t === me) continue;
+                    if (clExcludedCell(D, vx)) continue;
                     if (!dgFree(D, w0, vx.t, d0, p0)) continue;   // 상대 B가 이번 주 내 교시에 공강
                     if (!dgFree(D, w2, me, d2c, p2c)) continue;   // 내가 다음 주 그 교시에 공강
                     if (absOff(w2, d2c, p2c)) continue;
@@ -1393,12 +1449,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         cross.sort(byScore);
 
         /* 이번 주 후보를 먼저 보여 주고, 남는 자리에 다음 주 교차 후보를 붙인다.
-           이번 주 후보가 8건 넘개라도 교차 후보를 최소 1건은 보여 줘 토글이 일한 것을 알 수 있게 한다. */
-        var out = same.slice(0, 8);
+           순위는 최대 7순위까지 — 이번 주 후보가 7건을 넘어도 교차 후보를 최소 1건은 넣어 토글이 일한 것을 알 수 있게 한다. */
+        var out = same.slice(0, 7);
         if (cross.length) {
-            var room = 8 - out.length;
+            var room = 7 - out.length;
             if (room > 0) out = out.concat(cross.slice(0, room));
-            else out = out.slice(0, 7).concat(cross.slice(0, 1));
+            else out = out.slice(0, 6).concat(cross.slice(0, 1));
         }
         return out;
     }
@@ -1408,11 +1464,13 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var me = ST.teacher, cls = sel.cls, d0 = sel.d, p0 = sel.p;
         var cell0 = D.classAt(cls, d0, p0);
         if (!cell0 || cell0.t !== me) return [];
+        if (clExcludedCell(D, cell0)) return [];   // 제외 과목 수업은 옮기지 않는다
         if (tgt.d === d0 && tgt.p === p0) return [];
         if (isPastDay(ST.week, d0) || isPastDay(ST.week, tgt.d)) return [];   // 지난 요일은 목표가 될 수 없다
         if (absOff(ST.week, tgt.d, tgt.p)) return [];   // 연가·부재 시간으로는 옮기지 않는다
         var v2 = D.classAt(cls, tgt.d, tgt.p);
         if (!v2 || v2.t === me) return [];      // 그 교시에 같은 반 수업이 없으면 맞바꿀 상대가 없다
+        if (clExcludedCell(D, v2)) return [];    // 상대 수업이 제외 과목이면 비울 수 없다
         var out = [];
 
         // 1:1 — 상대 교사가 내 원래 교시에 비어 있으면 바로 맞교체
@@ -1436,6 +1494,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                         var v3 = xCells.days[d3][p3];
                         if (!v3) continue;
                         if (v3.t === me || v3.t === v2.t) continue;
+                        if (clExcludedCell(D, v3)) continue;
                         if (!D.isFree(v3.t, d0, p0)) continue;   // T3가 내 교시에 비어야
                         if (!D.isFree(v2.t, d3, p3)) continue;   // T2가 T3 교시에 비어야
                         out.push(evaluate(D, {
@@ -1458,7 +1517,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             return b.score - a.score || (b.sameDay ? 1 : 0) - (a.sameDay ? 1 : 0) ||
                 (a.d3 == null ? a.d2 : a.d3) - (b.d3 == null ? b.d2 : b.d3) || a.p2 - b.p2;
         });
-        return out.slice(0, 8);
+        return out.slice(0, 7);   // 목표 교시 추천도 최대 7순위까지
     }
 
     /* ============================================================
@@ -1513,6 +1572,14 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         ST.applied.forEach(function (st) { applyDeltasTo(D, st.deltas); });
         ST.data = D;
         D.busyCache = {}; D.bwCache = {};
+    }
+
+    /* 학교별 누적 이력 — 문산중·대곡중의 확정 단계가 서로 섞이지 않게 따로 보관한다 */
+    function histOf(k) {
+        if (!ST.hist) ST.hist = { munsan: [], daegok: [] };
+        k = k || ST.school;
+        if (!ST.hist[k]) ST.hist[k] = [];
+        return ST.hist[k];
     }
 
     /* 지금 보는 선생님의 시간표에서 누적 확정으로 바뀐 교시: true=내가 들어옴, false=내가 비움 */
@@ -1584,7 +1651,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function resetApplied() {
         if (!ST.applied.length) return;
         var n = ST.applied.length;
-        ST.applied = [];
+        ST.applied.length = 0;
         rebuildWork();
         ST.sel = []; ST.target = null; ST.recs = []; ST.altRecs = [];
         clearOpp();
@@ -1594,12 +1661,131 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         toast('🔄 누적 ' + n + '단계를 모두 지우고 원래 시간표로 돌아왔습니다');
     }
 
+    /* ============================================================
+       2-D. 대곡중 누적 교체 시뮬레이션
+         고른 조합(1:1·3자 연쇄·여러 교시 동시·주간 교차)을 가상 시간표에 반영하고,
+         바뀐 시간표를 기준으로 다음 교체를 이어 추천한다.
+       ============================================================ */
+    /* 대곡중 조합의 이동을 반·과목까지 확정한 deltas로 바꿈 (가상 시간표 반영용) */
+    function dgStepDeltas(ev) {
+        var A = ST.teacher, out = [];
+        ev.picks.forEach(function (pk) {
+            out.push({ w: pk.w0, t: A, d: pk.d0, p: pk.p0, on: false });
+            out.push({ w: pk.w2, t: A, d: pk.d2, p: pk.p2, on: true, cls: pk.cls });
+            out.push({ w: pk.w0, t: pk.t2, d: pk.d0, p: pk.p0, on: true, cls: pk.cls });
+            out.push({ w: pk.w2, t: pk.t2, d: pk.d2, p: pk.p2, on: false });
+            if (pk.type === 'chain') {
+                out.push({ w: pk.w0, t: pk.t2, d: pk.d3, p: pk.p3, on: true, cls: pk.xCls });
+                out.push({ w: pk.w0, t: pk.t3, d: pk.d0, p: pk.p0, on: true, cls: pk.xCls });
+                out.push({ w: pk.w0, t: pk.t3, d: pk.d3, p: pk.p3, on: false });
+            }
+        });
+        return out;
+    }
+
+    /* 누적 칩에 쓸 짧은 제목 */
+    function dgStepShort(ev) {
+        var pk = ev.picks[0], parts = [weekShort(pk.w0) + ' ' + dayLabel(pk.w0, pk.d0) + ' ' + perLabel(pk.p0)];
+        if (ev.picks.length > 1) parts.push(ev.picks.length + '교시 동시');
+        parts.push(ev.chain ? '3자 연쇄' : '1:1 맞교환');
+        if (ev.picks.some(function (x) { return x.w2 !== x.w0; })) parts.push('주간 교차');
+        return parts.join(' · ');
+    }
+
+    /* 누적 요약·칩 상세에 쓰는 이동 설명(줄바꿈 텍스트) */
+    function dgStepLines(D, ev) {
+        var A = ST.teacher, out = [];
+        ev.picks.forEach(function (pk, k) {
+            var clsName = D.week(pk.w0).cells[pk.cls].name;
+            var v0 = dgCellAt(D, pk.w0, pk.cls, pk.d0, pk.p0);
+            var xw = pk.w2 !== pk.w0;
+            var at = function (w, d, p) { return (xw ? weekShort(w) + ' ' : '') + dayLabel(w, d) + ' ' + perLabel(p); };
+            if (ev.picks.length > 1) out.push((k + 1) + ') ' + clsName + ' ' + D.subjectOf(v0 ? v0.s : 0));
+            out.push('· ' + (D.teacherOf(A) || '나') + ': ' + at(pk.w0, pk.d0, pk.p0) + '(' + clsName + ' ' + D.subjectOf(v0 ? v0.s : 0) + ') → ' + at(pk.w2, pk.d2, pk.p2));
+            out.push('· ' + dgName(D, pk.t2) + ': ' + at(pk.w2, pk.d2, pk.p2) + '(' + clsName + ' ' + D.subjectOf(pk.s2) + ') → ' + at(pk.w0, pk.d0, pk.p0));
+            if (pk.type === 'chain') {
+                var xName = D.week(pk.w0).cells[pk.xCls].name;
+                out.push('· ' + dgName(D, pk.t2) + ': ' + at(pk.w0, pk.d0, pk.p0) + '(' + xName + ' ' + D.subjectOf(pk.s3) + ') → ' + at(pk.w0, pk.d3, pk.p3));
+                out.push('· ' + dgName(D, pk.t3) + ': ' + at(pk.w0, pk.d3, pk.p3) + '(' + xName + ' ' + D.subjectOf(pk.s3) + ') → ' + at(pk.w0, pk.d0, pk.p0));
+            }
+        });
+        return out.join('\n');
+    }
+
+    /* 대곡중: 고른 조합을 확정해 가상 시간표에 반영하고, 그 시간표로 다음 교체를 다시 추천한다 */
+    function commitDG(i) {
+        if (!isDG() || !DG.res) return;
+        var res = DG.res, list = res.combos.length ? res.combos : res.partial;
+        var ev = list[i];
+        if (!ev) return;
+        var D = ST.data;
+        var step = {
+            school: ST.school,
+            w: ev.picks[0].w0,
+            teacher: ST.teacher,
+            who: D.teacherOf(ST.teacher),
+            kind: ev.chain ? 'chain' : 'swap',
+            picks: ev.picks.map(function (pk) {
+                return {
+                    t2: pk.t2, s2: pk.s2, type: pk.type, cls: pk.cls,
+                    w0: pk.w0, d0: pk.d0, p0: pk.p0, w2: pk.w2, d2: pk.d2, p2: pk.p2,
+                    xCls: pk.xCls, d3: pk.d3, p3: pk.p3, t3: pk.t3, s3: pk.s3
+                };
+            }),
+            short: dgStepShort(ev),
+            text: dgStepLines(D, ev),
+            deltas: dgStepDeltas(ev)
+        };
+        ST.applied.push(step);
+        rebuildWork();
+        ST.sel = []; ST.target = null; DG.res = null;
+        clearOpp();
+        compute();
+        renderMySub();
+        buzz(20);
+        scrollCumIntoView();
+        toast('✅ ' + ST.applied.length + '단계 교체를 확정 반영했습니다 · 바뀐 시간표에서 다음 교체를 이어가세요');
+    }
+
+    /* 대곡중: 누적 확정한 모든 단계로 상대 선생님별 요청 문자 초안을 만든다 */
+    function dgAppliedSms() {
+        var D = ST.data, A = ST.teacher, me = D.teacherOf(A);
+        var sch = (SCHOOLS[ST.school] || {}).name || '';
+        var groups = {}, order = [];
+        ST.applied.forEach(function (st) {
+            (st.picks || []).forEach(function (pk) {
+                if (!groups[pk.t2]) { groups[pk.t2] = []; order.push(pk.t2); }
+                groups[pk.t2].push(pk);
+            });
+        });
+        if (!order.length) return '누적 확정한 대곡중 교체가 없습니다.';
+        var blocks = [];
+        order.forEach(function (t) {
+            var out = [];
+            out.push('안녕하세요, ' + (D.teacherOf(t) || '선생님') + ' 선생님. ' + sch + ' ' + me + '입니다.');
+            groups[t].forEach(function (pk) {
+                var clsName = D.week(pk.w0).cells[pk.cls].name;
+                var v0 = dgCellAt(D, pk.w0, pk.cls, pk.d0, pk.p0);
+                var s0 = D.subjectOf(v0 ? v0.s : 0);
+                out.push(weekShort(pk.w0) + ' ' + dayLabel(pk.w0, pk.d0) + ' ' + perLabel(pk.p0) + ' ' + clsName + ' ' + s0 + ' 수업을 ' +
+                    weekShort(pk.w2) + ' ' + dayLabel(pk.w2, pk.d2) + ' ' + perLabel(pk.p2) + '로 옴겨야 해서 연락드립니다.');
+                out.push('선생님께서 ' + weekShort(pk.w0) + ' ' + dayLabel(pk.w0, pk.d0) + ' ' + perLabel(pk.p0) + '에 공강이시고, 제가 ' +
+                    weekShort(pk.w2) + ' ' + dayLabel(pk.w2, pk.d2) + ' ' + perLabel(pk.p2) + '에 공강이라 1:1로 맞바꿀 수 있을 것 같습니다.');
+            });
+            out.push('혹시 어려우시면 편하게 말씀해 주세요. 감사합니다.');
+            blocks.push(out.join('\n'));
+        });
+        return blocks.join('\n\n─────────\n\n');
+    }
+
     function appliedText() {
         var sch = (SCHOOLS[ST.school] || {}).name || '경남 문산중학교';
         var out = ['[누적 교체 시뮬레이션] ' + sch];
         ST.applied.forEach(function (st, i) {
             out.push('');
-            out.push((i + 1) + '단계 · ' + weekShort(st.w) + ' · ' + (st.kind === 'chain' ? '3인 연쇄 교체' : '1:1 맞교체'));
+            out.push((i + 1) + '단계 · ' + (st.school === 'daegok'
+                ? st.short
+                : (weekShort(st.w) + ' · ' + (st.kind === 'chain' ? '3인 연쇄 교체' : '1:1 맞교체'))));
             out.push(st.text);
         });
         out.push('');
@@ -1610,14 +1796,17 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function renderApplied() {
         var panel = $('#cumPanel');
         if (!panel) return;
-        var show = !isDG() && ST.applied.length > 0;
+        var show = ST.applied.length > 0;
         panel.hidden = !show;
+        var sms = $('#cumSms');
+        if (sms) sms.hidden = !isDG();
         if (!show) return;
         $('#cumSub').textContent = '지금 시간표는 ' + ST.applied.length + '단계까지 반영된 상태입니다';
         var html = '';
         ST.applied.forEach(function (st, i) {
             html += '<button type="button" class="chip cumchip' + (st.w === ST.week ? ' on' : '') + '" data-cumi="' + i + '"' +
-                ' title="' + h(st.text) + '">' + (i + 1) + '단계 · ' + h(weekShort(st.w)) + ' · ' + h(st.short) + '</button>';
+                ' title="' + h(st.text) + '">' + (i + 1) + '단계 · ' +
+                h(st.school === 'daegok' ? st.short : (weekShort(st.w) + ' · ' + st.short)) + '</button>';
         });
         $('#cumChips').innerHTML = html;
         $('#cumNote').innerHTML = '● 표시 = 누적 반영으로 바뀐 교시 · 다음에 바꿀 <b>내 수업</b>을 누르면 이 바뀐 시간표를 기준으로 다시 추천합니다.';
@@ -1625,7 +1814,10 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             el.addEventListener('click', function () {
                 var i = +el.dataset.cumi, st = ST.applied[i];
                 if (!st) return;
-                alert((i + 1) + '단계 · ' + weekShort(st.w) + ' · ' + (st.kind === 'chain' ? '3인 연쇄 교체' : '1:1 맞교체') + '\n\n' + st.text);
+                var head = st.school === 'daegok'
+                    ? (i + 1) + '단계 · ' + st.short
+                    : (i + 1) + '단계 · ' + weekShort(st.w) + ' · ' + (st.kind === 'chain' ? '3인 연쇄 교체' : '1:1 맞교체');
+                alert(head + '\n\n' + st.text);
             });
         });
     }
@@ -1666,10 +1858,11 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     }
 
     function initCum() {
-        var u = $('#cumUndo'), r = $('#cumReset'), c = $('#cumCopy');
+        var u = $('#cumUndo'), r = $('#cumReset'), c = $('#cumCopy'), s = $('#cumSms');
         if (u) u.addEventListener('click', undoApplied);
         if (r) r.addEventListener('click', resetApplied);
         if (c) c.addEventListener('click', function () { copyText(appliedText(), c); });
+        if (s) s.addEventListener('click', function () { copyText(dgAppliedSms(), s); });
     }
 
     /* ============================================================
@@ -2027,6 +2220,9 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
 
     // 목표 교시로 옮길 수 없을 때 이유 + 가능한 다른 교시 안내
     function targetReason(D, s0, tgt) {
+        if (s0 && clExcludedCell(D, D.classAt(s0.cls, s0.d, s0.p))) {
+            return '고른 수업이 <b>제외 과목(동아·스포츠·보건)</b>이라 교체 후보에서 뺐습니다.<br>위의 ‘동아·스포츠·보건 제외’를 끄면 다시 계산합니다.';
+        }
         if (isPastDay(ST.week, s0.d)) {
             return h(wdLabel(s0.d)) + '요일은 이미 지나 교체 대상에서 제외됩니다.<br>‘지난 요일 제외’를 끄면 다시 계산합니다.';
         }
@@ -2091,6 +2287,58 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         return out;
     }
 
+    /* ============================================================
+       2-A-1. 추천 순위 스크롤 영역
+         카드가 몇 장이든 ‘3순위 카드 높이’만큼만 보이게 하고,
+         나머지 순위는 이 영역 안에서 마우스 휠·터치로 오르내린다.
+       ============================================================ */
+    function recFadeUpdate() {
+        var wrap = $('#recScroll'), fade = $('#recFade'), hint = $('#recHint');
+        if (!wrap) return;
+        var gapY = wrap.scrollHeight - wrap.clientHeight;
+        var can = gapY > 4;
+        var manyCards = document.querySelectorAll('#recList .rec').length > 3;
+        wrap.classList.toggle('can-scroll', can);
+        if (fade) fade.classList.toggle('on', can && (wrap.scrollTop < gapY - 4));
+        if (hint) hint.classList.toggle('on', can && manyCards);
+    }
+
+    function fitRecScroll() {
+        var wrap = $('#recScroll'), box = $('#recList');
+        if (!wrap || !box) return;
+        var cards = box.querySelectorAll('.rec');
+        if (!cards.length) {
+            wrap.style.maxHeight = '';
+            wrap.scrollTop = 0;
+            recFadeUpdate();
+            return;
+        }
+        /* 3순위 카드가 끝나는 지점까지의 실제 높이 — 데스크톱·모바일 카드 높이가 달라 직접 잰다 */
+        var nth = Math.min(3, cards.length), last = cards[nth - 1];
+        var sum = Math.round(last.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top + wrap.scrollTop) + 2;
+        /* 화면이 낮으면 3장이 화면을 다 먹지 않도록 화면 높이의 86%까지만 */
+        var cap = Math.max(430, Math.round((window.innerHeight || 800) * 0.86));
+        wrap.style.maxHeight = Math.round(Math.min(sum, cap)) + 'px';
+        var hint = $('#recHint');
+        if (hint && cards.length > 3) {
+            hint.textContent = '▸ 순위 목록 — 위아래로 밀면 ' +
+                (cards.length > 4 ? '4~' + cards.length : String(cards.length)) + '순위까지 볼 수 있어요';
+        }
+        if (wrap.scrollTop > 0) wrap.scrollTop = Math.min(wrap.scrollTop, Math.max(0, wrap.scrollHeight - wrap.clientHeight));
+        recFadeUpdate();
+    }
+
+    function initRecScroll() {
+        var wrap = $('#recScroll');
+        if (!wrap) return;
+        wrap.addEventListener('scroll', recFadeUpdate, { passive: true });
+        var t = 0;
+        window.addEventListener('resize', function () {
+            clearTimeout(t);
+            t = setTimeout(fitRecScroll, 120);
+        });
+    }
+
     function renderRecs() {
         if (isDG()) { dgRenderRecs(); return; }
         var D = ST.data, box = $('#recList'), sub = $('#recSub');
@@ -2099,6 +2347,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             box.innerHTML = '<div class="emptyrec"><b>🔍 비울 교시를 먼저 고르세요</b>' +
                 '왼쪽 시간표에서 파란 내 수업을 누르면,<br>그 교시를 비울 수 있는 맞교체 순위를 계산합니다.<br>' +
                 '내 수업을 누른 뒤 <b>공강 칸</b>을 누르면 그 교시로 옮기는 방법을 찾아 줍니다.</div>';
+            fitRecScroll();
             return;
         }
         var s0 = ST.sel[0];
@@ -2123,6 +2372,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                     compute();
                 });
             });
+            fitRecScroll();
             return;
         }
         var meName = D.teacherOf(ST.teacher);
@@ -2189,6 +2439,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         box.querySelectorAll('[data-chain]').forEach(function (el) {
             el.addEventListener('click', function (ev) { ev.stopPropagation(); chainSteps(+el.dataset.chain); });
         });
+        fitRecScroll();
     }
 
     /* ============================================================
@@ -2453,7 +2704,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         full.sort(function (a, b) { return b.score - a.score; });
         var part = best.filter(function (b) { return b.picks.length < slots.length && b.picks.length === bestCover; });
         part.sort(function (a, b) { return b.score - a.score; });
-        return { slots: slots, cands: cands, combos: full.slice(0, 6), partial: part.slice(0, 3), bestCover: bestCover, full: full.length, capped: Math.max(0, sel.length - slots.length) };
+        return { slots: slots, cands: cands, combos: full.slice(0, 7), partial: part.slice(0, 7), bestCover: bestCover, full: full.length, partTotal: part.length, capped: Math.max(0, sel.length - slots.length) };
     }
 
     function dgCompute() {
@@ -2497,9 +2748,10 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 '왼쪽 시간표에서 파란 내 수업을 누르면, 그 교시를 비울 수 있는 맞교환을 순위대로 계산합니다.<br>' +
                 '여러 교시를 차례로 누르면 <b>비중복 조합</b>과 <b>부분 조합</b>까지 함께 찾아 줍니다.<br>' +
                 '<span style="font-size:11px">위의 <b>1·7교시 제외</b>·<b>제외 과목</b>·<b>다음 주 포함</b>·<b>제외 요일</b> 조건이 적용됩니다.</span></div>';
+            fitRecScroll();
             return;
         }
-        if (!res) { box.innerHTML = ''; return; }
+        if (!res) { box.innerHTML = ''; fitRecScroll(); return; }
         var s0 = ST.sel[0];
         var cond = [];
         if (DG.last) cond.push('1·7교시 제외');
@@ -2513,6 +2765,9 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var head = N + '개 교시 비우기' + (res.capped ? '(외 ' + res.capped + '교시는 다음 계산)' : '') + ' · ';
         if (res.full) head += '<b>' + N + '개 모두 가능한 조합 ' + res.full + '가지</b>';
         else head += '<b>' + res.bestCover + '개까지만 가능</b> (부분 조합)';
+        var shownN = res.combos.length ? res.combos.length : res.partial.length;
+        var totalN = res.combos.length ? res.full : (res.partTotal || res.partial.length);
+        if (totalN > shownN) head += ' · 상위 ' + shownN + '순위까지 표시';
         sub.innerHTML = head;
 
         var html = '<div class="rec-sum">' + (cond.length ? '적용 조건: ' + h(cond.join(' · ')) : '적용 조건: 없음(전체 탐색)') +
@@ -2522,6 +2777,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             html += '<div class="emptyrec"><b>😥 이 교시는 맞교체·연쇄가 모두 어려워요</b>' + dgBlockedHTML(D, res) + '</div>';
             box.innerHTML = html;
             bindDGActions(box);
+            fitRecScroll();
             return;
         }
         if (!res.combos.length) html += '<div class="rec-sum">⚠ 전체를 한 번에 바꾸는 조합은 없어 <b>부분 조합</b>을 보여줍니다.</div>';
@@ -2531,6 +2787,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         if (!res.combos.length) html += dgBlockedHTML(D, res, shown[0]);
         box.innerHTML = html;
         bindDGActions(box);
+        fitRecScroll();
     }
 
     function dgBlockedHTML(D, res, ev) {
@@ -2607,6 +2864,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             (ev.warn.length ? '<div class="rec-why">⚠ ' + h(ev.warn.join(' · ')) + '</div>' : '') +
             '<div class="rec-acts"><button class="mini" type="button" data-dgcmp="' + i + '">👥 시간표 비교</button>' +
             '<button class="mini" type="button" data-dgcopy="' + i + '">📋 요청 문자 복사</button></div>' +
+            '<button class="go-commit" type="button" data-dgapply="' + i + '">✅ 이 교체 확정 반영 <span>— 바뀐 시간표로 다음 교체 이어가기</span></button>' +
             '</div>';
         return html;
     }
@@ -2645,8 +2903,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             el.addEventListener('click', function (ev2) {
                 if (ev2.target.closest('[data-dgcopy]')) return;
                 if (ev2.target.closest('[data-dgcmp]')) return;
+                if (ev2.target.closest('[data-dgapply]')) return;
                 selectDGCard(+el.dataset.dgi);
             });
+        });
+        box.querySelectorAll('[data-dgapply]').forEach(function (el) {
+            el.addEventListener('click', function (ev2) { ev2.stopPropagation(); commitDG(+el.dataset.dgapply); });
         });
         box.querySelectorAll('[data-dgcmp]').forEach(function (el) {
             el.addEventListener('click', function (ev2) { ev2.stopPropagation(); selectDGCard(+el.dataset.dgcmp); });
@@ -2743,15 +3005,19 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             el.classList.toggle('on', !!on);
             el.setAttribute('aria-pressed', on ? 'true' : 'false');
         };
-        var a = $('#clPast'), b = $('#clCross');
+        var a = $('#clPast'), b = $('#clCross'), c = $('#clSubj');
         if (a) a.addEventListener('click', function () {
             PAST.on = !PAST.on; setChip('#clPast', PAST.on); compute(); buzz();
         });
         if (b) b.addEventListener('click', function () {
             CROSS.on = !CROSS.on; setChip('#clCross', CROSS.on); compute(); buzz();
         });
+        if (c) c.addEventListener('click', function () {
+            CLEX.subj = !CLEX.subj; setChip('#clSubj', CLEX.subj); compute(); buzz();
+        });
         setChip('#clPast', PAST.on);
         setChip('#clCross', CROSS.on);
+        setChip('#clSubj', CLEX.subj);
         if ($('#dgPast')) setChip('#dgPast', PAST.on);
         if ($('#dgNext')) setChip('#dgNext', DG.next);
     }
@@ -3172,8 +3438,13 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         ST.teacher = defaultTeacher(ST.data);
         ST.abs = null;
         ST.absAuto = [];
-        var hadCum = ST.applied.length;
-        ST.applied = [];
+        /* 학교별 누적 이력 — 다른 학교 탭으로 바꾸면 그 학교의 단계를 다시 얹고,
+           같은 학교 자료가 새로 들어와도(실시간·스냅샷 재적재) 그 학교의 단계는
+           새 시간표 위에 그대로 다시 반영한다. 초기화는 '전체 초기화' 버튼으로만. */
+        var hist = histOf(ST.school), switched = ST.applied !== hist;
+        var keptCum = hist.length;
+        ST.applied = hist;
+        if (keptCum) rebuildWork();
         renderTeacherSelect();
         ST.sel = [];
         ST.target = null;
@@ -3184,9 +3455,9 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         if (isDG()) dgRenderCheck();
         compute();
         renderMySub();
-        if (hadCum) toast('🔄 시간표를 새로 받아 누적 ' + hadCum + '단계 변경을 초기화했습니다');
+        if (switched && keptCum) toast('↩️ ' + ((SCHOOLS[ST.school] || {}).short || '') + ' 탭에서 누적 ' + keptCum + '단계 바꾼 시간표를 그대로 이어서 보여 드립니다');
+        else if (!switched && keptCum) toast('🔄 시간표를 새로 받아 누적 ' + keptCum + '단계를 바뀐 시간표 위에 다시 반영했습니다');
     }
-
     function renderMySub() {
         var D = ST.data, w = D.week(ST.week), cnt = D.mySlots(ST.teacher).length;
         var who = isDG() ? (optLabel(D, ST.teacher)) : D.teacherLabel(ST.teacher);
@@ -3801,7 +4072,6 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function setSchool(k) {
         if (!SCHOOLS[k]) k = 'munsan';
         if (ST.school === k && ST.data) return;
-        var had = ST.applied.length;
         ST.school = k;
         try { localStorage.setItem(SCHOOL_KEY, k); } catch (e) {}
         markSchoolTabs();
@@ -3812,7 +4082,6 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var sn = currentSnapshot();
         if (sn) applyData(sn, false);
         loadLive(false);
-        if (had) toast('🔄 ' + ((SCHOOLS[k] || {}).short || '') + ' 탭으로 바꿔 누적 ' + had + '단계 변경을 초기화했습니다');
         buzz();
     }
 
@@ -3845,6 +4114,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         initDG();
         initClassicFilters();
         initCum();
+        initRecScroll();
         initSchools();
         if (!currentSnapshot()) {
             $('#lock').classList.remove('hide');
