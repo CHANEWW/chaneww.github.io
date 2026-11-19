@@ -1320,6 +1320,31 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         return D.teacherLabel(t);
     }
 
+    /* 교사 본인 과목 — 시간표 교체에서는 들어가는 반이 바뀌어도 교사의 담당 과목은 그대로다.
+       그 주에 그 선생님이 가르치는 수업 중 가장 많은 과목을 본인 과목으로 본다. */
+    function teacherMainSubject(D, t, w) {
+        var cells = D.week(w == null ? ST.week : w).cells, cnt = {}, best = 0, n = -1;
+        for (var i = 0; i < cells.length; i++) {
+            for (var d = 0; d < DAYS; d++) {
+                for (var p = 0; p < MAXP; p++) {
+                    var v = cells[i].days[d][p];
+                    if (v && v.t === t) cnt[v.s] = (cnt[v.s] || 0) + 1;
+                }
+            }
+        }
+        for (var s in cnt) if (cnt[s] > n) { n = cnt[s]; best = +s; }
+        return best;
+    }
+
+    /* 내가 옮겨가는 수업의 과목(내 과목). 내가 비우는 반의 그 수업 과목을 쓰고,
+       비우는 교시가 없으면 내 대표 과목을 쓴다. */
+    function myLessonSubject(D, mk, d, p) {
+        var c = (mk && mk.b != null) ? D.week(ST.week).cells[mk.b] : null;
+        var v = c ? c.days[d][p] : null;
+        if (v && v.s) return v.s;
+        return D.mainSubject(ST.teacher);
+    }
+
     // 같은 이름을 쓰는 교사 번호 목록(동명이인)
     function sameNameIds(D, t) {
         var nm = D.teacherOf(t), out = [];
@@ -1381,9 +1406,10 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 '<span class="txt">' + h(D.subjectOf(mine.s)) + '</span><small>' + sub2 + '</small></button>';
         }
         if (isDst || isSwap) {
-            var aCls = mk.a, aCell = W.cells[aCls] ? W.cells[aCls].days[d][p] : null;
+            /* 들어가는 반은 바뀌어도 내 과목은 내 과목 — 그 반에 있던 상대 과목을 쓰지 않는다 */
+            var aCls = mk.a, myS = myLessonSubject(D, mk, d, p);
             return '<div class="cell dst"><span class="tag">들어옴</span><span class="txt">' +
-                h(D.subjectOf(aCell ? aCell.s : 0)) + '</span><small>' + h(W.cells[aCls].name) + '</small></div>';
+                h(D.subjectOf(myS)) + '</span><small>' + h(W.cells[aCls].name) + '</small></div>';
         }
         // 내 공강 칸 — 내 수업을 고른 상태에서는 눌러서 '옮길 목표 교시'로 지정할 수 있다 (문산중 전용)
         var canPick = ST.sel.length && !isDG();
@@ -2316,16 +2342,19 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             return D.subjectOf(c.days[d][p].s);
         };
         var nameOf = function (cls) { return cells[cls] ? cells[cls].name : ''; };
+        /* 상대 선생님 본인 과목 — 대신 들어가는 반이 바뀌어도 그 선생님 과목은 유지된다 */
+        var tSubj = D.subjectOf(teacherMainSubject(D, t, w));
+        var ownSubj = function (cls) { return subjOf(cls) || tSubj; };
         if (b != null && a == null) {
-            return '<div class="cell src opp-out"><span class="tag">나감</span><span class="txt">' + h(subjOf(b)) +
+            return '<div class="cell src opp-out"><span class="tag">나감</span><span class="txt">' + h(ownSubj(b)) +
                 '</span><small>' + h(nameOf(b)) + '</small></div>';
         }
         if (b == null && a != null) {
-            return '<div class="cell dst opp-in"><span class="tag">들어옴</span><span class="txt">' + h(subjOf(a)) +
+            return '<div class="cell dst opp-in"><span class="tag">들어옴</span><span class="txt">' + h(tSubj || '') +
                 '</span><small>' + h(nameOf(a)) + '</small></div>';
         }
         if (b != null && a != null && b !== a) {
-            return '<div class="cell opp-swap"><span class="tag">교체</span><span class="txt">' + h(subjOf(a)) +
+            return '<div class="cell opp-swap"><span class="tag">교체</span><span class="txt">' + h(ownSubj(b)) +
                 '</span><small>' + h(nameOf(b)) + '→' + h(nameOf(a)) + '</small></div>';
         }
         if (b != null) {
