@@ -432,6 +432,40 @@ body.dark .rec-meta .down{color:#6ee7b7}
 }
 body.dark .rec-sum{color:#8fc2ff}
 
+/* ---------- 상대 선생님 시간표 비교 ---------- */
+.colL{display:flex; flex-direction:column; gap:12px; min-width:0}
+.oppcard[hidden]{display:none}
+.oppcard{animation:oppIn .22s ease; scroll-margin-top:72px}
+@keyframes oppIn{from{opacity:0; transform:translateY(-5px)}to{opacity:1; transform:none}}
+.opp-x{margin-left:auto; flex:0 0 auto}
+.opp-chips{display:flex; gap:6px; flex-wrap:wrap; margin:0 0 10px}
+.opp-person{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin:0 0 3px}
+.opp-who{font-size:13.5px; font-weight:900; letter-spacing:-.2px; word-break:keep-all}
+.opp-sum{margin-bottom:8px; font-size:11.5px; font-weight:800; color:var(--muted); line-height:1.55; word-break:keep-all; overflow-wrap:anywhere}
+.opp-sum b{color:var(--ink); font-weight:900}
+.opp-week + .opp-week{margin-top:12px}
+.opp-wlab{display:flex; align-items:center; gap:6px; margin:0 0 5px; font-size:11px; font-weight:900; color:var(--muted)}
+.opp-wlab b{color:var(--ink); font-weight:900}
+.opp-wlab span{font-weight:800}
+.opptt .cell{min-height:50px; font-size:12.5px; padding:4px 3px; cursor:default}
+.opptt .cell .txt{overflow:hidden; text-overflow:ellipsis; max-width:100%; white-space:nowrap}
+.opptt .cell small{font-size:10px}
+.opptt .cell .tag + .txt{margin-top:10px}
+.cell.opp-free{border-style:dashed; background:transparent; opacity:.55; cursor:default}
+.cell.opp-free .ftxt{font-size:9.5px; font-weight:800; color:var(--muted); letter-spacing:0}
+.cell.mine.swap{border-color:rgba(139,92,246,.55); background:rgba(139,92,246,.14); color:#6d28d9; box-shadow:none}
+body.dark .cell.mine.swap{color:#c4b5fd}
+.cell.mine.swap .tag{background:#8b5cf6; color:#fff}
+.cell.opp-swap{background:rgba(139,92,246,.14); border-color:rgba(139,92,246,.45); color:#6d28d9}
+body.dark .cell.opp-swap{color:#c4b5fd}
+.cell.opp-swap .tag{background:#8b5cf6; color:#fff}
+.opp-legend{margin-top:10px}
+.legend .l-swap{background:#8b5cf6}
+.legend .l-free{background:transparent; border:1px dashed var(--muted)}
+.mysum{display:none; margin-top:9px; padding:7px 10px; border-radius:11px; background:var(--card-solid); border:1px solid var(--line); font-size:11.5px; font-weight:800; color:var(--muted); line-height:1.55; word-break:keep-all; overflow-wrap:anywhere}
+.mysum.on{display:block}
+.mysum b{color:var(--ink); font-weight:900}
+
 /* ---------- 반응형 ---------- */
 @media (max-width:900px){
     .cols{grid-template-columns:minmax(0,1fr)}
@@ -469,6 +503,10 @@ body.dark .rec-sum{color:#8fc2ff}
     .fchip{padding:5px 9px; font-size:11px}
     .dgcheck{margin-left:0; font-size:10px}
     .rec-meta{font-size:11px}
+    .opptt .cell{min-height:46px; font-size:11.5px; padding:4px 2px}
+    .opptt .cell small{font-size:9.5px}
+    .opp-who{font-size:12.5px}
+    .opp-sum{font-size:11px}
 }
 </style>
 </head>
@@ -536,6 +574,7 @@ body.dark .rec-sum{color:#8fc2ff}
     </div>
 
     <div class="cols">
+      <div class="colL">
         <section class="card">
             <div class="card-head">
                 <h2>🗓️ 내 시간표</h2>
@@ -548,14 +587,25 @@ body.dark .rec-sum{color:#8fc2ff}
             <div class="tt" id="ttGrid"></div>
             <div class="target-hint" id="targetHint">👉 이제 옮기고 싶은 <b>빈 교시(공강)</b>를 눌러 주세요 — 누른 칸으로 내 수업을 옮기는 교체를 순위대로 계산합니다.</div>
             <div class="chips" id="selChips"></div>
+            <div class="mysum" id="mySum"></div>
             <div class="legend">
                 <span><i class="l-mine"></i>내 수업 (눌러서 비울 교시 선택)</span>
                 <span><i class="l-other"></i>내 공강</span>
                 <span><i class="l-target"></i>옮길 목표 (공강 눌러 지정)</span>
-                <span><i class="l-src"></i>비우는 교시</span>
-                <span><i class="l-dst"></i>옮길 교시</span>
+                <span><i class="l-src"></i>나감 · 비우는 교시</span>
+                <span><i class="l-dst"></i>들어옴 · 옮겨가는 교시</span>
             </div>
         </section>
+
+        <section class="card oppcard" id="oppCard" hidden aria-live="polite">
+            <div class="card-head">
+                <h2>👥 상대 선생님 시간표</h2>
+                <span class="sub" id="oppSub"></span>
+                <button class="mini opp-x" id="oppClose" type="button" aria-label="상대 선생님 시간표 닫기">✕ 닫기</button>
+            </div>
+            <div id="oppBody"></div>
+        </section>
+      </div>
 
         <section class="card">
             <div class="card-head">
@@ -903,6 +953,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         recs: [],
         altRecs: [],
         preview: null,
+        marks: [],        // 고른 후보의 내 교시 변경 [{w,d,p,b,a}] — 내 시간표 나감·들어옴 표시
         workerUrl: '',
         liveData: null
     };
@@ -1313,23 +1364,26 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             any = true;
             if (v.t === me) { mine = { cls: i, s: v.s }; break; }
         }
-        var pv = ST.preview;
-        var isSrc = pv && pv.d0 === d && pv.p0 === p;
-        var isDst = pv && pv.d2 === d && pv.p2 === p;
+        /* 고른 후보의 변경(나감·들어옴)을 내 시간표에 그대로 표시 */
+        var mk = myMarkAt(d, p);
+        var isSrc = !!(mk && mk.b != null && mk.a == null);
+        var isDst = !!(mk && mk.b == null && mk.a != null);
+        var isSwap = !!(mk && mk.b != null && mk.a != null && mk.b !== mk.a);
         var sel = mine && ST.sel.some(function (x) { return x.d === d && x.p === p && x.cls === mine.cls; });
         var isTgt = !!(ST.target && ST.target.d === d && ST.target.p === p);
 
         if (mine) {
-            var cls = 'cell mine' + (sel ? ' sel' : '') + (isSrc ? ' src' : '');
-            var tag = isSrc ? '비움' : (sel ? '선택' : '');
+            var cls = 'cell mine' + (sel ? ' sel' : '') + (isSwap ? ' swap' : (isSrc ? ' src' : ''));
+            var tag = isSwap ? '교체' : (isSrc ? '나감' : (sel ? '선택' : ''));
+            var sub2 = isSwap ? (h(W.cells[mine.cls].name) + '→' + h(W.cells[mk.a].name)) : h(W.cells[mine.cls].name);
             return '<button type="button" class="' + cls + '" data-d="' + d + '" data-p="' + p + '" data-cls="' + mine.cls + '">' +
                 (tag ? '<span class="tag">' + tag + '</span>' : '') +
-                '<span class="txt">' + h(D.subjectOf(mine.s)) + '</span><small>' + h(W.cells[mine.cls].name) + '</small></button>';
+                '<span class="txt">' + h(D.subjectOf(mine.s)) + '</span><small>' + sub2 + '</small></button>';
         }
-        if (isDst) {
-            var myCell = D.classAt(pv.cls, pv.d0, pv.p0);
-            return '<div class="cell dst"><span class="tag">이동</span><span class="txt">' +
-                h(D.subjectOf(myCell ? myCell.s : 0)) + '</span><small>' + h(W.cells[pv.cls].name) + '</small></div>';
+        if (isDst || isSwap) {
+            var aCls = mk.a, aCell = W.cells[aCls] ? W.cells[aCls].days[d][p] : null;
+            return '<div class="cell dst"><span class="tag">들어옴</span><span class="txt">' +
+                h(D.subjectOf(aCell ? aCell.s : 0)) + '</span><small>' + h(W.cells[aCls].name) + '</small></div>';
         }
         // 내 공강 칸 — 내 수업을 고른 상태에서는 눌러서 '옮길 목표 교시'로 지정할 수 있다 (문산중 전용)
         var canPick = ST.sel.length && !isDG();
@@ -1413,6 +1467,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var D = ST.data;
         if (!D) return;
         if (isDG()) { dgCompute(); return; }
+        clearOpp();
         if (!ST.sel.length) ST.target = null;
         if (ST.target && !isFreeForMe(ST.target.d, ST.target.p)) ST.target = null;
         ST.recs = !ST.sel.length ? [] :
@@ -1539,7 +1594,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                     return '<div><span class="bl">•</span><span class="st"><b>' + h(st.who) + '</b>: ' + h(st.what) + '</span></div>';
                 }).join('') + '</div>' +
                 '<div class="rec-why">' + h(why) + '</div>' +
-                '<div class="rec-acts"><button class="mini" type="button" data-copy="' + i + '">📋 복사</button>' +
+                '<div class="rec-acts"><button class="mini" type="button" data-cmp="' + i + '">👥 시간표 비교</button>' +
+                '<button class="mini" type="button" data-copy="' + i + '">📋 복사</button>' +
                 (r.type === 'chain' ? '<button class="mini" type="button" data-chain="' + i + '">연쇄 단계 보기</button>' : '') +
                 '</div></div>';
         });
@@ -1549,8 +1605,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             el.addEventListener('click', function (ev) {
                 if (ev.target.closest('[data-copy]')) return;
                 if (ev.target.closest('[data-chain]')) return;
-                setPreview(+el.dataset.i);
+                if (ev.target.closest('[data-cmp]')) return;
+                selectRec(+el.dataset.i);
             });
+        });
+        box.querySelectorAll('[data-cmp]').forEach(function (el) {
+            el.addEventListener('click', function (ev) { ev.stopPropagation(); selectRec(+el.dataset.cmp); });
         });
         box.querySelectorAll('[data-copy]').forEach(function (el) {
             el.addEventListener('click', function (ev) { ev.stopPropagation(); copyRec(+el.dataset.copy, el); });
@@ -1814,6 +1874,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function dgCompute() {
         var D = ST.data;
         ST.target = null;
+        clearOpp();
         DG.res = ST.sel.length ? dgSolve(D, ST.sel) : null;
         renderTT();
         renderChips();
@@ -1956,12 +2017,52 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             }).join('') + '</div>' +
             dgRowsHTML(D, ev) +
             (ev.warn.length ? '<div class="rec-why">⚠ ' + h(ev.warn.join(' · ')) + '</div>' : '') +
-            '<div class="rec-acts"><button class="mini" type="button" data-dgcopy="' + i + '">📋 요청 문자 복사</button></div>' +
+            '<div class="rec-acts"><button class="mini" type="button" data-dgcmp="' + i + '">👥 시간표 비교</button>' +
+            '<button class="mini" type="button" data-dgcopy="' + i + '">📋 요청 문자 복사</button></div>' +
             '</div>';
         return html;
     }
 
+    /* 대곡중: 고른 조합의 상대 선생님(여러 명) 시간표를 비교한다 */
+    function selectDGCard(i) {
+        var res = DG.res;
+        if (!res) return;
+        var list = res.combos.length ? res.combos : res.partial;
+        var ev = list[i];
+        if (!ev) return;
+        if (OPP.kind === 'dg' && OPP.selI === i) { clearOpp(); renderTT(); return; }
+        OPP.kind = 'dg'; OPP.selI = i;
+        var weeks = {}, nT = {};
+        ev.picks.forEach(function (pk) {
+            weeks[pk.w0] = 1; weeks[pk.w2] = 1;
+            nT[pk.t2] = 1;
+            if (pk.t3) nT[pk.t3] = 1;
+        });
+        var wl = Object.keys(weeks).map(Number).sort(function (a, b) { return a - b; })
+            .map(function (w) { return weekShort(w); }).join('·');
+        $('#prevTxt').innerHTML = '<b>' + (i + 1) + '순위 미리보기</b> · ' +
+            h((ev.chain ? '3자 연쇄' : '1:1 맞교환') +
+                (ev.picks.length > 1 ? ' · ' + ev.picks.length + '교시 동시 교체' : '') +
+                ' · 상대 ' + Object.keys(nT).length + '명 · ' + wl) +
+            ' <span style="font-weight:800;opacity:.85">— 아래 상대 선생님 시간표와 비교하세요</span>';
+        $('#prevNote').classList.add('on');
+        applyOppModel(ST.data, ev.deltas,
+            '<b>' + (i + 1) + '순위</b> 후보 · ' + (ev.chain ? '3자 연쇄' : '1:1 맞교환') +
+            (ev.picks.length > 1 ? ' · ' + ev.picks.length + '교시 동시 교체' : ''));
+        buzz();
+    }
+
     function bindDGActions(box) {
+        box.querySelectorAll('.rec[data-dgi]').forEach(function (el) {
+            el.addEventListener('click', function (ev2) {
+                if (ev2.target.closest('[data-dgcopy]')) return;
+                if (ev2.target.closest('[data-dgcmp]')) return;
+                selectDGCard(+el.dataset.dgi);
+            });
+        });
+        box.querySelectorAll('[data-dgcmp]').forEach(function (el) {
+            el.addEventListener('click', function (ev2) { ev2.stopPropagation(); selectDGCard(+el.dataset.dgcmp); });
+        });
         box.querySelectorAll('[data-dgcopy]').forEach(function (el) {
             el.addEventListener('click', function (ev2) {
                 ev2.stopPropagation();
@@ -2050,19 +2151,296 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         document.body.classList.toggle('dg-mode', !!on);
     }
 
-    function setPreview(i) {
+    function setPreview(i, silent) {
         var r = ST.recs[i];
         if (!r) return;
         ST.preview = { i: i, cls: r.cls, d0: r.d0, p0: r.p0, d2: r.d2, p2: r.p2 };
-        renderTT();
-        var D = ST.data, sel = ST.sel[0];
+        if (!silent) renderTT();
+        var D = ST.data;
         var src = D.classAt(r.cls, r.d0, r.p0), dst = D.classAt(r.cls, r.d2, r.p2);
         var note = $('#prevNote');
         $('#prevTxt').innerHTML = '<b>' + h((i + 1) + '순위 미리보기') + '</b> · ' +
             h(dayLabel(ST.week, r.d0) + ' ' + perLabel(r.p0) + ' ' + D.subjectOf(src.s)) + ' → ' +
-            h(dayLabel(ST.week, r.d2) + ' ' + perLabel(r.p2) + ' ' + D.subjectOf(dst.s) + ' · ' + D.teacherOf(r.t2));
+            h(dayLabel(ST.week, r.d2) + ' ' + perLabel(r.p2) + ' ' + D.subjectOf(dst.s) + ' · ' + D.teacherOf(r.t2)) +
+            ' <span style="font-weight:800;opacity:.85">— 아래 상대 선생님 시간표와 비교하세요</span>';
         note.classList.add('on');
         buzz();
+    }
+
+    /* ============================================================
+       4-B. 상대 선생님 시간표 비교
+         후보 카드를 고르면 내 시간표에는 나감·들어옴,
+         오른쪽(아래)에는 상대 선생님 주간 시간표를 나란히 보여 준다.
+       ============================================================ */
+    var OPP = { model: null, teachers: [], t: 0, selI: null, kind: null, label: '' };
+
+    function weekShort(w) { return w === 2 ? '다음 주' : '이번 주'; }
+
+    /* 교시별 변경 전·후 반 배정을 확정한다.
+       deltas에 반 정보가 없는 항목은 같은 교시에 남는 반과 짝을 지어 채운다. */
+    function buildOppModel(D, deltas) {
+        var def = ST.week, dl = [], groups = {}, model = {};
+        (deltas || []).forEach(function (d) {
+            dl.push({ t: +d.t, w: d.w == null ? def : +d.w, d: +d.d, p: +d.p, on: !!d.on, cls: d.cls == null ? null : +d.cls });
+        });
+        dl.forEach(function (x) {
+            var k = x.w + '|' + x.d + '|' + x.p;
+            (groups[k] = groups[k] || []).push(x);
+        });
+        Object.keys(groups).forEach(function (k) {
+            var arr = groups[k], w = arr[0].w, d = arr[0].d, p = arr[0].p;
+            var bmap = dgBusyMap(D, w), before = [], seen = {};
+            arr.forEach(function (x) {
+                if (seen[x.t]) return;
+                seen[x.t] = 1;
+                var bk = bmap[x.t + '|' + d + '|' + p];
+                before.push({ t: x.t, cls: bk === undefined ? null : bk });
+            });
+            var want = {};
+            arr.forEach(function (x) { if (x.on && want[x.t] === undefined) want[x.t] = x.cls; });
+            var usedCls = {}, after = [];
+            Object.keys(want).forEach(function (tk) { if (want[tk] != null) usedCls[want[tk]] = 1; });
+            Object.keys(want).forEach(function (tk) {
+                var c = want[tk];
+                if (c != null) { after.push({ t: +tk, cls: c }); return; }
+                for (var i = 0; i < before.length; i++) {
+                    var b = before[i];
+                    if (b.cls == null || usedCls[b.cls] || b.t === +tk) continue;
+                    c = b.cls; usedCls[c] = 1; break;
+                }
+                after.push({ t: +tk, cls: c == null ? null : c });
+            });
+            var afterOf = {};
+            after.forEach(function (a) { afterOf[a.t] = a.cls; });
+            var put = function (t, b, a) {
+                var g = model[t] || (model[t] = {});
+                var wg = g[w] || (g[w] = {});
+                wg[d + '|' + p] = { d: d, p: p, b: b, a: a };
+            };
+            before.forEach(function (b) { put(b.t, b.cls, afterOf.hasOwnProperty(b.t) ? afterOf[b.t] : null); });
+            after.forEach(function (a) { if (!seen[a.t]) put(a.t, null, a.cls); });
+        });
+        return model;
+    }
+
+    function modelCells(model, t) {
+        var out = [], g = model[t] || {};
+        Object.keys(g).forEach(function (wk) {
+            var wg = g[wk];
+            Object.keys(wg).forEach(function (sk) {
+                var s = wg[sk];
+                out.push({ t: +t, w: +wk, d: s.d, p: s.p, b: s.b, a: s.a });
+            });
+        });
+        return out;
+    }
+
+    function runLen(arr) {
+        var m = 0, c = 0;
+        arr.forEach(function (x) { if (x) { c++; if (c > m) m = c; } else c = 0; });
+        return m;
+    }
+
+    /* 교사의 주간·요일별 시수 변화 */
+    function teacherStat(D, model, t) {
+        var g = model[t] || {}, out = [];
+        Object.keys(g).forEach(function (wk) {
+            var w = +wk, wg = g[wk], bmap = dgBusyMap(D, w), touched = {};
+            Object.keys(wg).forEach(function (sk) { var s = wg[sk]; (touched[s.d] = touched[s.d] || {})[s.p] = s; });
+            var rows = [], tb = 0, ta = 0;
+            for (var d = 0; d < DAYS; d++) {
+                var arrB = [], arrA = [];
+                for (var p = 0; p < MAXP; p++) {
+                    var bk = bmap[t + '|' + d + '|' + p];
+                    var b = bk !== undefined, a = b, s = touched[d] && touched[d][p];
+                    if (s) { b = s.b != null; a = s.a != null; }
+                    arrB.push(b); arrA.push(a);
+                }
+                var bn = 0, an = 0;
+                arrB.forEach(function (x) { if (x) bn++; });
+                arrA.forEach(function (x) { if (x) an++; });
+                tb += bn; ta += an;
+                rows.push({ d: d, bn: bn, an: an, bm: runLen(arrB), am: runLen(arrA) });
+            }
+            out.push({ w: w, b: tb, a: ta, rows: rows });
+        });
+        out.sort(function (x, y) { return x.w - y.w; });
+        return out;
+    }
+
+    function statText(st) {
+        var parts = [];
+        st.forEach(function (s) {
+            var head = st.length > 1
+                ? weekShort(s.w) + ' <b>' + s.b + '→' + s.a + '시간</b>'
+                : '주 <b>' + s.b + '→' + s.a + '시간</b>';
+            parts.push(head);
+            var ch = s.rows.filter(function (r) { return r.bn !== r.an; })
+                .map(function (r) { return wdLabel(r.d) + ' ' + r.bn + '→' + r.an; });
+            if (ch.length) parts.push(ch.join(' · '));
+            var rn = s.rows.filter(function (r) { return r.am > r.bm; })
+                .map(function (r) { return wdLabel(r.d) + '연강 ' + r.bm + '→' + r.am; });
+            if (rn.length) parts.push(rn.join(' · '));
+        });
+        return parts.join(' · ');
+    }
+
+    function oppCellHTML(D, t, w, d, p, s, bmap) {
+        var cells = D.week(w).cells;
+        var bk = bmap[t + '|' + d + '|' + p];
+        var b = bk === undefined ? null : bk, a = b;
+        if (s) { b = s.b; a = s.a; }
+        var subjOf = function (cls) {
+            var c = cells[cls];
+            if (!c || !c.days[d][p]) return '';
+            return D.subjectOf(c.days[d][p].s);
+        };
+        var nameOf = function (cls) { return cells[cls] ? cells[cls].name : ''; };
+        if (b != null && a == null) {
+            return '<div class="cell src opp-out"><span class="tag">나감</span><span class="txt">' + h(subjOf(b)) +
+                '</span><small>' + h(nameOf(b)) + '</small></div>';
+        }
+        if (b == null && a != null) {
+            return '<div class="cell dst opp-in"><span class="tag">들어옴</span><span class="txt">' + h(subjOf(a)) +
+                '</span><small>' + h(nameOf(a)) + '</small></div>';
+        }
+        if (b != null && a != null && b !== a) {
+            return '<div class="cell opp-swap"><span class="tag">교체</span><span class="txt">' + h(subjOf(a)) +
+                '</span><small>' + h(nameOf(b)) + '→' + h(nameOf(a)) + '</small></div>';
+        }
+        if (b != null) {
+            return '<div class="cell opp-cls"><span class="txt">' + h(subjOf(b)) + '</span><small>' + h(nameOf(b)) + '</small></div>';
+        }
+        return '<div class="cell empty opp-free"><span class="ftxt">공강</span></div>';
+    }
+
+    function oppWeekHTML(D, t, w, wg) {
+        var bmap = dgBusyMap(D, w);
+        var html = '<div class="opp-week"><div class="opp-wlab"><b>' + h(weekShort(w)) + '</b><span>' +
+            md(dateOf(w, 0)) + '~' + md(dateOf(w, 4)) + '</span></div>';
+        html += '<div class="tt opptt"><div class="ph" style="visibility:hidden"></div>';
+        for (var d = 0; d < DAYS; d++) {
+            html += '<div class="dh">' + wdLabel(d) + '<small>' + md(dateOf(w, d)) + '</small></div>';
+        }
+        for (var p = 0; p < MAXP; p++) {
+            html += '<div class="ph">' + (p + 1) + '<small>' + (D.periods[p] || '') + '</small></div>';
+            for (var dd = 0; dd < DAYS; dd++) html += oppCellHTML(D, t, w, dd, p, wg[dd + '|' + p], bmap);
+        }
+        return html + '</div></div>';
+    }
+
+    function myMarkAt(d, p) {
+        var out = null;
+        (ST.marks || []).forEach(function (m) { if (m.w === ST.week && m.d === d && m.p === p) out = m; });
+        return out;
+    }
+
+    function renderMySum() {
+        var el = $('#mySum');
+        if (!el) return;
+        if (!OPP.model) { el.classList.remove('on'); el.innerHTML = ''; return; }
+        var st = teacherStat(ST.data, OPP.model, ST.teacher);
+        if (!st.length) { el.classList.remove('on'); el.innerHTML = ''; return; }
+        el.innerHTML = '내 시수 변화 · ' + statText(st);
+        el.classList.add('on');
+    }
+
+    function markRecCards() {
+        document.querySelectorAll('#recList .rec').forEach(function (el) {
+            var i = el.dataset.i != null ? +el.dataset.i : (el.dataset.dgi != null ? +el.dataset.dgi : null);
+            el.classList.toggle('on', i != null && i === OPP.selI);
+        });
+    }
+
+    function renderOpp() {
+        var card = $('#oppCard');
+        if (!card) return;
+        var D = ST.data;
+        if (!OPP.model || !OPP.teachers.length || !D) { card.hidden = true; return; }
+        if (OPP.t >= OPP.teachers.length) OPP.t = 0;
+        var t = OPP.teachers[OPP.t];
+        var html = '';
+        if (OPP.teachers.length > 1) {
+            html += '<div class="chips opp-chips">' + OPP.teachers.map(function (tk, i) {
+                return '<button type="button" class="chip' + (i === OPP.t ? ' on' : '') + '" data-oppt="' + i + '">' +
+                    h(optLabel(D, tk)) + '</button>';
+            }).join('') + '</div>';
+        }
+        var st = teacherStat(D, OPP.model, t);
+        html += '<div class="opp-person"><span class="opp-who">' + h(optLabel(D, t)) + '</span></div>' +
+            '<div class="opp-sum">시수 변화 · ' + statText(st) + '</div>';
+        var g = OPP.model[t] || {};
+        Object.keys(g).map(Number).sort(function (a, b) { return a - b; }).forEach(function (w) {
+            html += oppWeekHTML(D, t, w, g[w]);
+        });
+        html += '<div class="legend opp-legend">' +
+            '<span><i class="l-src"></i>나감 · 내어주는 수업</span>' +
+            '<span><i class="l-dst"></i>들어옴 · 대신 들어가는 수업</span>' +
+            '<span><i class="l-swap"></i>교체 · 같은 교시 반 이동</span>' +
+            '<span><i class="l-free"></i>공강</span></div>';
+        $('#oppBody').innerHTML = html;
+        $('#oppSub').innerHTML = OPP.label || '';
+        card.hidden = false;
+        $('#oppBody').querySelectorAll('[data-oppt]').forEach(function (el) {
+            el.addEventListener('click', function () { OPP.t = +el.dataset.oppt; buzz(); renderOpp(); });
+        });
+    }
+
+    /* 처음 열릴 때, 또는 화면 밖으로 완전히 벗어났을 때만 카드로 이동한다 */
+    function scrollOppIntoView(wasHidden) {
+        var card = $('#oppCard');
+        if (!card || card.hidden) return;
+        requestAnimationFrame(function () {
+            var app = document.querySelector('.app');
+            var top = app ? app.getBoundingClientRect().top : 0;
+            var r = card.getBoundingClientRect();
+            var off = r.bottom < top + 8 || r.top > window.innerHeight - 8;
+            if (!wasHidden && !off) return;
+            try { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+            catch (e) { card.scrollIntoView(); }
+        });
+    }
+
+    function applyOppModel(D, deltas, label) {
+        OPP.model = buildOppModel(D, deltas || []);
+        OPP.teachers = Object.keys(OPP.model).map(Number)
+            .filter(function (t) { return t !== ST.teacher && OPP.model[t]; });
+        OPP.t = 0;
+        OPP.label = label || '';
+        ST.marks = modelCells(OPP.model, ST.teacher);
+        var card = $('#oppCard'), wasHidden = !card || card.hidden;
+        renderTT();
+        renderMySum();
+        renderOpp();
+        markRecCards();
+        scrollOppIntoView(wasHidden);
+    }
+
+    function clearOpp() {
+        OPP.model = null; OPP.teachers = []; OPP.t = 0; OPP.selI = null; OPP.kind = null; OPP.label = '';
+        ST.marks = [];
+        ST.preview = null;
+        var card = $('#oppCard');
+        if (card) card.hidden = true;
+        var el = $('#mySum');
+        if (el) { el.classList.remove('on'); el.innerHTML = ''; }
+        var pn = $('#prevNote');
+        if (pn) pn.classList.remove('on');
+        markRecCards();
+    }
+
+    function selectRec(i) {
+        var r = ST.recs[i];
+        if (!r) return;
+        if (OPP.kind === 'classic' && OPP.selI === i) { clearOpp(); renderTT(); return; }
+        OPP.kind = 'classic';
+        OPP.selI = i;
+        setPreview(i, true);
+        var tgt = ST.target;
+        applyOppModel(ST.data, r.deltas,
+            '<b>' + (i + 1) + '순위</b> 후보 · ' + (r.type === 'chain' ? '2단계 연쇄' : '1:1 맞교체') + ' · ' +
+            dayLabel(ST.week, r.d0) + ' ' + perLabel(r.p0) +
+            (tgt ? ' → ' + dayLabel(ST.week, r.d2) + ' ' + perLabel(r.p2) + ' 이동' : ' 비우기'));
     }
 
     function recText(r) {
@@ -2652,10 +3030,11 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         });
         $('#navLock').addEventListener('click', lockNow);
         $('#prevClose').addEventListener('click', function () {
-            ST.preview = null;
-            $('#prevNote').classList.remove('on');
+            clearOpp();
             renderTT();
         });
+        var ox = $('#oppClose');
+        if (ox) ox.addEventListener('click', function () { clearOpp(); renderTT(); buzz(); });
         /* 언어를 바꾸면 스크립트로 그린 시간표·추천 카드도 새 언어로 다시 그린다 */
         document.addEventListener('svl:lang', function () {
             if (!ST.data) return;
