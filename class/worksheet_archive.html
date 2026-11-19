@@ -181,6 +181,17 @@ input#search:focus { border-color: var(--accent); }
 .sheet.tight .q .lines i { height: 13px; }
 .sheet.tight .tip { font-size: 7.6pt; padding: 3px 6px; margin-top: 4px; }
 
+/* 남는 아래 여백 채우기 — 페이지마다 스크립트가 잰 값(--fill-*)을 더한다.
+   값이 없으면(0px) 위에서 정한 원래 간격·높이 그대로다. */
+.sheet section { margin-top: calc(6px + var(--fill-gap, 0px)); }
+.sheet .tip { margin-top: calc(5px + var(--fill-gap, 0px)); padding-bottom: calc(4px + var(--fill-tip, 0px)); }
+.sheet td.blank { height: calc(18px + var(--fill-blank, 0px)); }
+.sheet .q .lines i { height: calc(15px + var(--fill-line, 0px)); }
+.sheet.tight section { margin-top: calc(5px + var(--fill-gap, 0px)); }
+.sheet.tight .tip { margin-top: calc(4px + var(--fill-gap, 0px)); padding-bottom: calc(3px + var(--fill-tip, 0px)); }
+.sheet.tight td.blank { height: calc(15px + var(--fill-blank, 0px)); }
+.sheet.tight .q .lines i { height: calc(13px + var(--fill-line, 0px)); }
+
 /* ---------- 인쇄 ---------- */
 #printAll { display: none; }
 @page { size: A4; margin: 0; }
@@ -5068,6 +5079,119 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
     }
 
     /* ============================================================
+       남는 아래 여백 채우기
+       ------------------------------------------------------------
+       paginate()가 정한 쪽 나눔은 건드리지 않고, 화면에 실제로 그려진
+       각 쪽(.sheet.page)의 섹션 높이를 재서 남는 세로 여백을
+       ① 섹션 사이 간격(--fill-gap) ② 표의 빈 칸 높이(--fill-blank)
+       ③ 서술형 답안 줄 간격(--fill-line) ④ 도움말 패딩(--fill-tip)
+       순으로 고르게 나눠 준다. 어느 쪽도 page-body 높이를 넘지 않도록
+       아래에 여유(FILL_RESERVE)를 남기고 멈춘다.
+       ============================================================ */
+    var FILL_RESERVE = 10;      /* 인쇄는 종이 높이가 1mm(≈4px) 짧고 반올림도 있어 아래를 조금 남긴다 */
+    var FILL_GAP_MAX = 18;      /* 섹션 사이 간격 — 1차 상한 */
+    var FILL_BLANK_MAX = 24;    /* 표의 빈 칸(학생이 쓰는 줄) 높이 — 1차 상한 */
+    var FILL_LINE_MAX = 12;     /* 서술형 답안 줄 간격 — 1차 상한 */
+    var FILL_TIP_MAX = 16;      /* 도움말 상자 아래 여백 — 1차 상한 */
+    /* 1차 상한을 다 써도 자리가 남는(짧은) 학습지 — 한 번 더 조금씩 넓힌다 */
+    var FILL_GAP_HARD = 30;
+    var FILL_BLANK_HARD = 36;
+    var FILL_LINE_HARD = 20;
+    var FILL_TIP_HARD = 24;
+
+    /* page-body 안에서 마지막 블록이 차지한 높이(위에서부터) */
+    function fillBottom(body) {
+        var kids = body.children;
+        if (!kids.length) return 0;
+        var last = kids[kids.length - 1];
+        return (last.offsetTop + last.offsetHeight) - body.offsetTop;
+    }
+
+    function fillApply(page, f) {
+        f = f || {};
+        page.style.setProperty('--fill-gap', (f.gap || 0) + 'px');
+        page.style.setProperty('--fill-blank', (f.blank || 0) + 'px');
+        page.style.setProperty('--fill-line', (f.line || 0) + 'px');
+        page.style.setProperty('--fill-tip', (f.tip || 0) + 'px');
+    }
+
+    /* 남은 자리를 상한(caps)까지 나눠 넣는다. 넘치면 단위별로 깎아 target 이하로 맞춘다. */
+    function fillGrow(page, body, f, target, caps, n) {
+        var h = fillBottom(body);
+        var room = target - h;
+        if (room < 4) return h;
+        var groups = [
+            { k: 'gap', cnt: n.gap, cap: Math.max(0, caps.gap - f.gap), w: caps.w },
+            { k: 'blank', cnt: n.row, cap: Math.max(0, caps.blank - f.blank), w: 1 },
+            { k: 'line', cnt: n.line, cap: Math.max(0, caps.line - f.line), w: 1 },
+            { k: 'tip', cnt: n.tip, cap: Math.max(0, caps.tip - f.tip), w: 1 }
+        ];
+        var W = 0, i, g;
+        for (i = 0; i < groups.length; i++) W += groups[i].cnt * groups[i].cap * groups[i].w;
+        if (W <= 0) return h;
+        var use = Math.min(room, W);
+        for (i = 0; i < groups.length; i++) {
+            g = groups[i];
+            if (g.cnt > 0 && g.cap > 0) f[g.k] += Math.min(g.cap, Math.floor(use * g.cap * g.w / W));
+        }
+        fillApply(page, f);
+        h = fillBottom(body);
+        /* 넘치면 단위별로(1px 당 줄어드는 높이가 큰 곳부터) 깎아 맞춘다 */
+        var guard = 0;
+        while (h > target && guard++ < 12) {
+            var over = h - target, cut = false;
+            for (i = 0; i < groups.length; i++) {
+                g = groups[i];
+                if (g.cnt > 0 && f[g.k] > 0) {
+                    f[g.k] = Math.max(0, f[g.k] - Math.max(1, Math.ceil(over / g.cnt)));
+                    fillApply(page, f);
+                    h = fillBottom(body);
+                    cut = true;
+                    break;
+                }
+            }
+            if (!cut) break;
+        }
+        return h;
+    }
+
+    function fillPage(page) {
+        var body = page.querySelector('.page-body');
+        if (!body) return;
+        var avail = body.clientHeight;
+        if (!avail) return;
+        fillApply(page, null);
+        var base = fillBottom(body);
+        var target = avail - FILL_RESERVE;
+        if (target - base < 6) return;
+
+        /* 늘릴 수 있는 곳 — 첫 블록(머리글)은 그대로 두고 나머지 섹션·도움말 */
+        var gaps = 0, hasTip = false, kids = body.children, i, cls;
+        for (i = 1; i < kids.length; i++) {
+            cls = ' ' + (kids[i].className || '') + ' ';
+            if (kids[i].tagName === 'SECTION') gaps++;
+            else if (cls.indexOf(' tip ') >= 0) { gaps++; hasTip = true; }
+        }
+        var n = {
+            gap: gaps,
+            row: body.querySelectorAll('tbody tr').length,
+            line: body.querySelectorAll('.q .lines i').length,
+            tip: hasTip ? 1 : 0
+        };
+        var f = { gap: 0, blank: 0, line: 0, tip: 0 };
+        fillGrow(page, body, f, target,
+            { gap: FILL_GAP_MAX, blank: FILL_BLANK_MAX, line: FILL_LINE_MAX, tip: FILL_TIP_MAX, w: 1.4 }, n);
+        fillGrow(page, body, f, target,
+            { gap: FILL_GAP_HARD, blank: FILL_BLANK_HARD, line: FILL_LINE_HARD, tip: FILL_TIP_HARD, w: 1 }, n);
+    }
+
+    function fillSheets(root) {
+        var host = root || document;
+        var pages = host.querySelectorAll('.sheet.page');
+        for (var i = 0; i < pages.length; i++) fillPage(pages[i]);
+    }
+
+    /* ============================================================
        목록 · 선택
        ============================================================ */
     var state = { field: 'all', q: '', sel: 0 };
@@ -5125,6 +5249,8 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         renderList();
         fitSheet();
         $('previewScroll').scrollTop = 0;
+        /* 번역·폰트가 적용된 뒤 실제 높이를 재서 아래 여백을 채운다 */
+        setTimeout(function () { fillSheets($('sheetHost')); }, 0);
     }
 
     /* 미리보기 배율 */
@@ -5153,7 +5279,7 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         $('printAll').innerHTML = '';
         var pages = $('sheetHost').querySelectorAll('.sheet.page').length;
         toast('🖨 ' + pages + '쪽을 인쇄합니다. “PDF로 저장”을 고르면 파일로 받을 수 있습니다.', 2800);
-        setTimeout(function () { window.print(); }, 380);
+        setTimeout(function () { fillSheets($('sheetHost')); window.print(); }, 380);
     }
     function printAll() {
         $('printAll').innerHTML = SHEETS.map(function (s, i) { return stackHtml(s, i); }).join('');
@@ -5162,6 +5288,11 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
         var total = $('printAll').querySelectorAll('.sheet.page').length;
         toast('🖨 ' + SHEETS.length + '장 · ' + total + '쪽을 인쇄합니다. 인쇄 대화상자에서 페이지를 확인하세요.', 3000);
         setTimeout(function () {
+            /* #printAll은 화면에서 display:none이라 그대로는 높이를 잴 수 없다.
+               잠시 화면 밖에 펼쳐 놓고 아래 여백을 채운 뒤 인쇄한다. */
+            var pa = $('printAll');
+            pa.style.cssText = 'display:block;position:absolute;left:-20000px;top:0;width:210mm;visibility:hidden;';
+            try { fillSheets(pa); } finally { pa.style.cssText = ''; }
             window.print();
             setTimeout(function () { document.body.classList.remove('print-all'); }, 1200);
         }, 700);
@@ -5209,6 +5340,17 @@ html.pseudo-fs .fs-pill-wrap { display: flex !important; }
 
     renderList();
     selectSheet(0);
+
+    /* 언어를 바꾸면 한국어 원문으로 다시 그려 번역·여백을 새로 맞춘다
+       (같은 언어로 다시 알려 오는 경우는 그대로 둔다) */
+    var lastLang = (window.SVL_I18N && SVL_I18N.lang && SVL_I18N.lang()) || 'ko';
+    document.addEventListener('svl:lang', function () {
+        var cur = (window.SVL_I18N && SVL_I18N.lang && SVL_I18N.lang()) || 'ko';
+        if (cur === lastLang) return;
+        lastLang = cur;
+        stackCache = {};
+        selectSheet(state.sel);
+    });
 
     /* 웹폰트가 늦게 도착하면 줄 높이가 달라지므로 나눔을 다시 계산한다 */
     if (document.fonts && document.fonts.ready) {
