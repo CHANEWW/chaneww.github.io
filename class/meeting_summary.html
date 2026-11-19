@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head><script src="../labs/common/i18n.js"></script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>회의록 핵심 요약기 · Science Virtual LAB</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#f4f7f6">
+<meta name="robots" content="noindex,nofollow">
+<link rel="preload" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/SeoulNamsanM.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="../labs/common/work-tool.css">
+<link rel="stylesheet" href="../labs/common/feedback.css">
+</head>
+<body class="wt">
+
+<header class="wt-bar" data-svl-nofit>
+  <a class="wt-brand" href="../work.html">
+    <span class="wt-logo">⚡</span>
+    <span class="wt-name"><span class="wt-site">Science Virtual LAB <span class="wt-sep">·</span> </span><b>회의록 핵심 요약기</b></span>
+  </a>
+  <div class="wt-acts">
+    <button class="wt-pill" id="aiBtn" type="button"><span aria-hidden="true">⚙️</span> <span class="lbl">AI Worker</span></button>
+    <a class="wt-pill" id="navWork" href="../work.html"><span aria-hidden="true">←</span> <span class="lbl">업무</span></a>
+    <a class="wt-pill" id="navHome" href="../index.html"><span aria-hidden="true">🏠</span> <span class="lbl">메인</span></a>
+    <div class="top-right-bar"><div class="tr-util">
+      <button class="wt-pill" id="lockBtn" type="button"><span aria-hidden="true">🔒</span> <span class="lbl">잠금</span></button>
+    </div></div>
+  </div>
+</header>
+
+<main class="wt-main" data-svl-nofit>
+  <div class="wt-head">
+    <h1>📋 회의록 핵심 요약기</h1>
+    <p>회의 때 적어 둔 거친 메모를 그대로 붙여넣으면, 안건별 결정 사항과 추진 일정·담당자 표로 정리해 줍니다.</p>
+  </div>
+
+  <div class="wt-grid">
+    <form class="wt-card wt-form" id="f" autocomplete="off">
+      <h2><span class="num">1</span> 어떤 회의였나요?</h2>
+
+      <div class="wt-fld">
+        <label for="iTitle">회의명 <span class="req">*</span></label>
+        <input class="wt-in" id="iTitle" type="text" placeholder="예: 2학년 학년 협의회" required>
+      </div>
+
+      <div class="wt-fld">
+        <label for="iWhen">일시</label>
+        <input class="wt-in" id="iWhen" type="text" placeholder="예: 11월 19일(수) 15:30, 3층 교무회의실">
+      </div>
+
+      <div class="wt-fld">
+        <label for="iMemo">회의 메모 <span class="req">*</span></label>
+        <textarea class="wt-ta tall" id="iMemo" placeholder="구어체·조각 메모 그대로 붙여넣어도 됩니다.&#10;예)&#10;- 현장학습 준비: 버스 2대 확정, 인솔 교사 4명, 11/26까지 신청서 걷기&#10;- 수행평가 비율 조정... 담임들 의견 듣고 다음 주까지 확정&#10;- 급식 지도: 2학년은 목요일부터 4교시 후 바로"></textarea>
+        <p class="wt-hint">안건을 빈 줄로 나눠 두면 안건별로 더 정확하게 나뉩니다.</p>
+      </div>
+
+      <div class="wt-fld">
+        <label>출력 형식</label>
+        <div class="wt-chips" id="optChips" role="group" aria-label="출력 형식">
+          <button type="button" class="wt-chip on" data-v="decisions">안건별 결정 사항</button>
+          <button type="button" class="wt-chip on" data-v="schedule">추진 일정·담당자 표</button>
+        </div>
+      </div>
+
+      <div class="wt-run">
+        <button class="wt-btn primary" id="btnGen" type="submit">📋 요약하기</button>
+        <button class="wt-btn ghost" id="btnSample" type="button">예시 채우기</button>
+      </div>
+    </form>
+
+    <section class="wt-out" aria-live="polite">
+      <div class="wt-out-bar">
+        <span class="t">📋 회의록 요약</span>
+        <span class="wt-src" id="src" hidden></span>
+        <button class="wt-btn" id="btnCopy" type="button">📋 복사</button>
+        <button class="wt-btn" id="btnPrint" type="button">🖨️ A4 인쇄</button>
+        <button class="wt-btn ghost" id="btnReset" type="button">🔄 초기화</button>
+      </div>
+      <div class="wt-paper" id="paper">
+        <p class="placeholder">회의 메모를 붙여넣고 요약하기를 누르면 안건별 결정 사항과 추진 일정 표가 여기에 만들어집니다.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="../labs/common/work-tool.js"></script>
+<script src="../labs/common/feedback.js" defer></script>
+<script src="../labs/common/haptics.js" defer></script>
+<script>
+(function () {
+    'use strict';
+
+    var SYS = 'You turn rough Korean meeting notes from a school into a clean minutes summary. ' +
+        'Return ONLY plain text in this compact markdown: "# 제목", "## 안건별 요약", "### 안건 1. 이름", "- 결정 사항", "| 담당 | 할 일 | 기한 |" tables. ' +
+        'Never invent decisions, names, dates or amounts that are not in the notes; if something is unclear write 확인 필요. No preamble, no code fences.';
+
+    var LBL = {
+        ko: { agenda: '안건', decision: '결정 사항', task: '할 일', who: '담당', due: '기한', tbd: '미정', check: '확인 필요', none: '메모에서 결정 사항을 찾지 못했습니다. 회의록을 조금 더 적어 주세요.', sched: '추진 일정·담당자', note: '※ 규칙 기반 초안입니다. AI Worker를 연결하면 문장이 더 자연스러워집니다.' },
+        en: { agenda: 'Agenda', decision: 'Decisions', task: 'Task', who: 'Owner', due: 'Due', tbd: 'TBD', check: 'Needs confirmation', none: 'No decision could be found in the notes. Please add a little more.', sched: 'Action plan and owners', note: 'Note: this is a rule-based draft. Connect the AI worker for smoother wording.' },
+        ja: { agenda: '議題', decision: '決定事項', task: '作業', who: '担当', due: '期限', tbd: '未定', check: '要確認', none: 'メモから決定事項を見つけられませんでした。もう少し書き足してください。', sched: '実施予定・担当者', note: '※ ルールベースの下書きです。AI Workerを接続すると文が自然になります。' },
+        zh: { agenda: '议题', decision: '决定事项', task: '任务', who: '负责人', due: '期限', tbd: '待定', check: '待确认', none: '未能从笔记中找到决定事项，请再补充一些。', sched: '推进计划与负责人', note: '※ 这是基于规则的草稿。连接 AI Worker 后语句会更自然。' },
+        es: { agenda: 'Punto', decision: 'Decisiones', task: 'Tarea', who: 'Responsable', due: 'Plazo', tbd: 'Por definir', check: 'Por confirmar', none: 'No se han encontrado decisiones en las notas. Añade algo más.', sched: 'Plan de acción y responsables', note: 'Nota: borrador basado en reglas. Conecta el AI worker para una redacción más natural.' }
+    };
+    var HEAD = {
+        ko: { sum: '안건별 핵심 요약 및 결정 사항', sched: '추진 일정·담당자' },
+        en: { sum: 'Agenda summaries and decisions', sched: 'Action plan and owners' },
+        ja: { sum: '議題別の要約と決定事項', sched: '実施予定・担当者' },
+        zh: { sum: '议题摘要与决定事项', sched: '推进计划与负责人' },
+        es: { sum: 'Resúmenes por punto y decisiones', sched: 'Plan de acción y responsables' }
+    };
+
+    /* ---------- 규칙 기반 요약 (AI 없이) ---------- */
+    function cleanLine(s) {
+        return String(s || '')
+            .replace(/^\s*([-–—*•·●○■□▶►◆※]|\d+[.)]|[①-⑩]|[가-힣][.)])\s*/, '')
+            .replace(/^\s*\d+\s*(안건|의제)\s*[:：.]?\s*/, '')
+            .replace(/^\[(.*?)\]\s*/, '$1 ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+    function sentences(s) {
+        return String(s || '')
+            .split(/(?<=[.!?。])\s+|(?<=다\.)\s*|(?<=요\.)\s*|(?<=음\.)\s*/)
+            .map(function (x) { return x.trim(); })
+            .filter(Boolean);
+    }
+    function blocksOf(memo) {
+        return String(memo || '').replace(/\r\n?/g, '\n')
+            .split(/\n\s*\n/)
+            .map(function (b) { return b.split('\n').map(function (l) { return l.trim(); }).filter(Boolean); })
+            .filter(function (ls) { return ls.length; });
+    }
+    var DATE_RE = /(\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{1,2}\s*월\s*\d{1,2}\s*일|\d{1,2}\s*\/\s*\d{1,2}|이번\s*주|다음\s*주|금주|차주|월요일|화요일|수요일|목요일|금요일|월말|이달\s*말)\s*(까지|안으로|전까지)?/;
+    var WHO_RE = /([가-힣]{1,2}\s*(?:부장|교감|교장|주무|담임|선생님)|[가-힣]{2,4}\s*선생님|(?:교무부|연구부|인성부|안전부|학년부|행정실|보건실|급식실|도서관|상담실))/;
+    var DEC_RE = /(하기로|결정|승인|합의|확정|반영|진행하기|보류|검토하기|정리하기|마무리|요청|전달|취합|공지)/;
+
+    /* 한 줄 = 한 안건(콜론 앞부분을 제목으로). 줄이 3개 미만이면 빈 줄 묶음으로 나눈다. */
+    function splitItem(line) {
+        var s = cleanLine(line);
+        var m = /^(.{2,30}?)\s*[:：]\s*(.+)$/.exec(s);
+        if (m) return { title: m[1].trim(), body: m[2].trim() };
+        return { title: '', body: s };
+    }
+    function itemsOf(memo) {
+        var lines = String(memo || '').replace(/\r\n?/g, '\n').split('\n')
+            .map(function (l) { return l.trim(); }).filter(Boolean);
+        var items = [];
+        if (lines.length >= 3) {
+            lines.forEach(function (l) {
+                var it = splitItem(l);
+                if (!it.title && items.length && cleanLine(l).length < 12) {
+                    items[items.length - 1].body += ' ' + it.body;
+                    return;
+                }
+                items.push(it);
+            });
+        } else {
+            blocksOf(memo).forEach(function (ls) {
+                var it = splitItem(ls[0]);
+                var body = it.body;
+                for (var i = 1; i < ls.length; i++) body += ' ' + cleanLine(ls[i]);
+                items.push({ title: it.title, body: body });
+            });
+        }
+        return items.filter(function (x) { return x.body || x.title; });
+    }
+    function titleOf(item, i, lb) {
+        if (item.title) return item.title.replace(/[.…]+$/, '');
+        var b = String(item.body || '').replace(/^[-–—\s]+/, '');
+        /* 앞머리가 제목처럼 짧고 ' - '·'…'로 끊기면 그 앞을 제목으로 쓴다 */
+        var m = /^(.{3,26}?)\s*(?:-|–|—|…|\.{2,})\s/.exec(b);
+        if (m) return m[1].replace(/[,.]$/, '').trim();
+        if (b.length <= 24) return b;
+        var cut = b.slice(0, 24);
+        var sp = cut.lastIndexOf(' ');
+        if (sp > 10) cut = cut.slice(0, sp);
+        return cut.replace(/[,.]$/, '') + '…';
+    }
+    function whoOf(s) {
+        var w = WHO_RE.exec(s);
+        return w ? w[0].replace(/\s+/, ' ').trim() : '';
+    }
+    function parseMemo(memo, lb) {
+        return itemsOf(memo).map(function (it, i) {
+            var body = it.body;
+            var decs = sentences(body).filter(function (x) { return DEC_RE.test(x); });
+            if (!decs.length) decs = sentences(body).slice(0, 2);
+            var rows = [];
+            sentences(body).forEach(function (x) {
+                var md = DATE_RE.exec(x);
+                if (!md) return;
+                rows.push({ who: whoOf(x), task: x.length > 64 ? x.slice(0, 62) + '…' : x, due: md[0].trim() });
+            });
+            return { title: titleOf(it, i, lb), decs: decs.slice(0, 3), rows: rows };
+        });
+    }
+
+    function draftText(d) {
+        var WT = window.SVLWorkTool;
+        var lang = WT.lang();
+        var lb = LBL[lang] || LBL.ko, hd = HEAD[lang] || HEAD.ko;
+        var ag = parseMemo(d.memo, lb);
+        var out = [];
+        out.push('# ' + d.title + (d.when ? ' · ' + d.when : ''));
+        out.push('');
+        if (d.opt.decisions) {
+            out.push('## ① ' + hd.sum);
+            if (!ag.length) out.push('- ' + lb.none);
+            ag.forEach(function (a, i) {
+                out.push('### ' + (i + 1) + '. ' + a.title);
+                if (a.decs.length) a.decs.forEach(function (s) { out.push('- ' + s); });
+                else out.push('- ' + lb.check);
+            });
+            out.push('');
+        }
+        if (d.opt.schedule) {
+            out.push('## ② ' + hd.sched);
+            out.push('| ' + lb.who + ' | ' + lb.task + ' | ' + lb.due + ' |');
+            out.push('| --- | --- | --- |');
+            var any = false;
+            ag.forEach(function (a) {
+                a.rows.forEach(function (r) {
+                    any = true;
+                    out.push('| ' + (r.who || lb.tbd) + ' | ' + r.task + ' | ' + r.due + ' |');
+                });
+            });
+            if (!any) {
+                ag.forEach(function (a, i) {
+                    out.push('| ' + lb.tbd + ' | ' + a.title + ' | ' + lb.tbd + ' |');
+                });
+                if (!ag.length) out.push('| ' + lb.tbd + ' | ' + lb.tbd + ' | ' + lb.tbd + ' |');
+            }
+            out.push('');
+        }
+        out.push(lb.note);
+        return out.join('\n');
+    }
+
+    function $(s) { return document.querySelector(s); }
+    var lastText = '';
+
+    function readForm() {
+        var opt = { decisions: false, schedule: false };
+        $('#optChips').querySelectorAll('.wt-chip.on').forEach(function (b) { opt[b.dataset.v] = true; });
+        if (!opt.decisions && !opt.schedule) opt.decisions = true;
+        return { title: $('#iTitle').value.trim(), when: $('#iWhen').value.trim(), memo: $('#iMemo').value, opt: opt };
+    }
+
+    function promptFor(d) {
+        var WT = window.SVLWorkTool;
+        var L = { ko: 'Korean', en: 'English', ja: 'Japanese', zh: 'Chinese', es: 'Spanish' };
+        return [
+            'Summarise these school meeting notes in ' + L[WT.lang()] + '.',
+            'Meeting: ' + d.title + (d.when ? ' / ' + d.when : ''),
+            d.opt.decisions ? 'Part ①: one "###" block per agenda with decision bullets ("- ...").' : '',
+            d.opt.schedule ? 'Part ②: a markdown table of owner / task / due date ("| 담당 | 할 일 | 기한 |").' : '',
+            'Keep every concrete fact (names, dates, amounts, numbers) exactly as written. Mark anything unclear as 확인 필요.',
+            'Notes:',
+            d.memo.slice(0, 6000)
+        ].filter(Boolean).join('\n');
+    }
+
+    function run() {
+        var WT = window.SVLWorkTool;
+        var d = readForm();
+        if (!d.title) { WT.toast('회의명을 먼저 적어 주세요'); $('#iTitle').focus(); return; }
+        if (d.memo.trim().length < 10) { WT.toast('회의 메모를 붙여넣어 주세요'); $('#iMemo').focus(); return; }
+        var btn = $('#btnGen');
+        WT.busy(btn, true, '📋 정리 중…');
+        WT.badge('#src', 'busy');
+        WT.generate({ kind: 'meeting', system: SYS, prompt: promptFor(d), draft: function () { return draftText(d); } })
+            .then(function (r) {
+                lastText = r.text;
+                WT.paint('#paper', r.text);
+                WT.badge('#src', r.source);
+                WT.busy(btn, false);
+                if (r.source === 'draft') WT.toast(WT.P({ ko: 'AI 연결 없이 규칙 기반 초안으로 정리했습니다', en: 'Summarised with the rule-based draft (no AI worker)', ja: 'AI未接続のルールベース下書きです', zh: '已用规则草稿整理（未连接 AI）', es: 'Resumen con borrador por reglas (sin IA)' }));
+            });
+    }
+
+    window.SVLWorkTool.ready(function (WT) {
+        $('#f').addEventListener('submit', function (e) { e.preventDefault(); run(); });
+        $('#optChips').addEventListener('click', function (e) {
+            var b = e.target.closest('.wt-chip');
+            if (!b) return;
+            var on = $('#optChips').querySelectorAll('.wt-chip.on');
+            if (b.classList.contains('on') && on.length === 1) return;   /* 최소 하나는 켜 둔다 */
+            b.classList.toggle('on');
+        });
+        $('#btnCopy').addEventListener('click', function () {
+            if (!lastText) { WT.toast(WT.P({ ko: '먼저 요약해 주세요', en: 'Summarise first', ja: '先に要約してください', zh: '请先进行总结', es: 'Resume primero' })); return; }
+            WT.copy(lastText);
+        });
+        $('#btnPrint').addEventListener('click', function () { WT.print(); });
+        $('#btnReset').addEventListener('click', function () {
+            $('#f').reset();
+            $('#optChips').querySelectorAll('.wt-chip').forEach(function (x) { x.classList.add('on'); });
+            lastText = '';
+            $('#paper').innerHTML = '<p class="placeholder">회의 메모를 붙여넣고 요약하기를 누르면 안건별 결정 사항과 추진 일정 표가 여기에 만들어집니다.</p>';
+            WT.badge('#src', '');
+            $('#iTitle').focus();
+            WT.toast(WT.P({ ko: '초기화했습니다', en: 'Cleared', ja: '初期化しました', zh: '已清空', es: 'Borrado' }));
+        });
+        $('#btnSample').addEventListener('click', function () {
+            $('#iTitle').value = '2학년 학년 협의회';
+            $('#iWhen').value = '11월 19일(수) 15:30, 3층 교무회의실';
+            $('#iMemo').value = [
+                '현장체험학습 준비: 버스 2대 확정, 인솔 교사 4명, 11/26까지 신청서 걷기',
+                '수행평가 비율 조정 논의 - 담임들 의견 취합해서 다음 주 수요일까지 확정하기로',
+                '급식 지도: 2학년은 목요일부터 4교시 후 바로 이동, 김 부장 담당',
+                '교실 냉난방 점검 요청 - 행정실에 금요일까지 전달'
+            ].join('\n');
+        });
+    });
+})();
+</script>
+</body>
+</html>
