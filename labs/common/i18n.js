@@ -508,6 +508,38 @@ window.SVL_I18N_TPL = {"1초에 몇 번 진동하는지가 {0}이고, 진동수�
         '.step,.step-strip > *,.seg > *,.seg.four > *,.mode-grid > *,.grid > *';
     /* 탭 버튼(control-tab-btn)·모드 칩은 번역어가 길면 두 줄로 접히는 편이 낫다 → 캡슐로 보지 않는다 */
     var CAP_RE = /(^|\s)(tag-badge|chip|badge|tag|tab-btn|sw-btn|btn|tag-pill|data-label|data-value|lp-k|lp-v)(\s|$)/;
+    /* ---------------- 축소 미리보기 안쪽은 건드리지 않는다 --------------
+       transform: scale()로 줄여 보여 주는 상자(A4 학습지 미리보기 등) 안에서는
+       getBoundingClientRect()가 '줄어든 화면 좌표'를 돌려준다. 이 값을 max-width로
+       되쓰면 배치 폭이 실제보다 훨씬 좁아져(예: 794px A4를 0.43배로 보이면 68px이 159px로 읽힘)
+       한글 칸이 한 글자 폭이 되고 세로로 한 글자씩 깨진다. 그래서 이런 안쪽 요소는
+       폭·글자 크기를 재서 조정하지 않고, 앞서 넣었던 값만 되돌린다. */
+    var NOFIT_SEL = '.sheet-wrap,#sheetHost,#printAll,[data-svl-nofit]';
+    function inScaledBox(el) {
+        if (el.closest && el.closest(NOFIT_SEL)) return true;
+        /* 페이지 스크립트가 인라인 transform: scale()로 줄인 상자도 같은 문제가 생긴다 */
+        var a = el, d = 0;
+        while (a && a !== document.body && a !== document.documentElement && d < 8) {
+            var st = a.style && a.style.transform;
+            if (st && /scale/.test(st)) return true;
+            a = a.parentElement; d++;
+        }
+        return false;
+    }
+    /* 이 모듈이 넣었던 폭·글자 조정을 원래대로 되돌린다 */
+    function unfit(el) {
+        var i, tagged;
+        if (el.__svlSlot) { el.style.removeProperty('max-width'); el.__svlSlot = 0; }
+        if (el.__svlSet) { el.style.removeProperty('font-size'); el.__svlSet = false; }
+        if (el.__svlNw) { el.style.removeProperty('white-space'); el.style.removeProperty('flex-wrap'); el.__svlNw = false; }
+        if (el.__svlWrap) { el.style.removeProperty('overflow-wrap'); el.style.removeProperty('text-overflow'); el.__svlWrap = false; }
+        el.style.removeProperty('letter-spacing');
+        tagged = el.querySelectorAll('[data-svl-fit]');
+        for (i = 0; i < tagged.length; i++) {
+            tagged[i].style.removeProperty('font-size');
+            tagged[i].removeAttribute('data-svl-fit');
+        }
+    }
     function isCapsule(el) {
         var tag = (el.tagName || '').toLowerCase();
         var cls = (el.className || '').toString();
@@ -593,6 +625,8 @@ window.SVL_I18N_TPL = {"1초에 몇 번 진동하는지가 {0}이고, 진동수�
     function fitOne(el) {
         if (!el || el.nodeType !== 1) return;
         if (el.id === 'svl-lang-btn' || (el.closest && el.closest('#svl-lang-menu'))) return;
+        /* 축소 미리보기 안쪽: 화면 좌표 실측값으로 폭·글자를 정하면 세로로 깨진다 */
+        if (inScaledBox(el)) { unfit(el); return; }
         var cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') return;
         var txt = (el.innerText || el.textContent || '').trim();
@@ -698,6 +732,8 @@ window.SVL_I18N_TPL = {"1초에 몇 번 진동하는지가 {0}이고, 진동수�
             if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'LINK' || tag === 'CANVAS' || tag === 'SVG' ||
                 tag === 'VIDEO' || tag === 'IMG' || tag === 'INPUT' || tag === 'OPTION') continue;
             if (el.id === 'svl-lang-btn' || el.id === 'svl-lang-menu') continue;
+            /* 축소 미리보기(A4 학습지 등) 안쪽은 배율 때문에 실측값이 어긋난다 */
+            if (inScaledBox(el)) { unfit(el); continue; }
             if (el.children.length > 3) continue;
             var txt = (el.textContent || '').trim();
             if (!txt || txt.length > 400) continue;
