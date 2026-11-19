@@ -1254,8 +1254,8 @@ body.dark .cell.opp-swap{color:#c4b5fd}
     var CUM_TTL = 0;
 
     /* 한 단계의 deltas를 가상 시간표에 반영한다.
-       buildOppModel이 정한 교시별 '비는 반 → 들어올 반(b→a)' 배정을 그대로 쓴다.
-       과목은 그 선생님이 그 단계에서 떠나는 수업의 과목을 그대로 가져간다. */
+       buildOppModel이 정한 교시별 '비는 반 → 들어올 반(b→a)' 배정과 '가져가는 과목(s)'을 그대로 쓴다.
+       과목을 교사별로 한 번만 기억하면 여러 교시를 옮길 때 섞이므로 교시마다의 s를 쓴다. */
     function applyDeltasTo(D, deltas) {
         var model = buildOppModel(D, deltas), clears = [], fills = [], carry = {};
         Object.keys(model).forEach(function (tk) {
@@ -1273,7 +1273,7 @@ body.dark .cell.opp-swap{color:#c4b5fd}
                             if (carry[t] == null) carry[t] = cell.s;
                         }
                     }
-                    if (s.a != null) fills.push({ w: w, t: t, cls: s.a, d: s.d, p: s.p });
+                    if (s.a != null) fills.push({ w: w, t: t, cls: s.a, d: s.d, p: s.p, s: s.s });
                 });
             });
         });
@@ -1284,7 +1284,7 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         fills.forEach(function (f) {
             var cls = D.week(f.w).cells[f.cls];
             if (!cls) return;
-            var s = carry[f.t] != null ? carry[f.t] : teacherMainSubject(D, f.t, f.w);
+            var s = f.s != null ? f.s : (carry[f.t] != null ? carry[f.t] : teacherMainSubject(D, f.t, f.w));
             cls.days[f.d][f.p] = { t: f.t, s: s };
         });
         D.busyCache = {}; D.bwCache = {};
@@ -1430,7 +1430,10 @@ body.dark .cell.opp-swap{color:#c4b5fd}
             out.push('· ' + dgName(D, pk.t2) + ': ' + at(pk.w2, pk.d2, pk.p2) + '(' + clsName + ' ' + D.subjectOf(pk.s2) + ') → ' + at(pk.w0, pk.d0, pk.p0));
             if (pk.type === 'chain') {
                 var xName = D.week(pk.w0).cells[pk.xCls].name;
-                out.push('· ' + dgName(D, pk.t2) + ': ' + at(pk.w0, pk.d0, pk.p0) + '(' + xName + ' ' + D.subjectOf(pk.s3) + ') → ' + at(pk.w0, pk.d3, pk.p3));
+                /* T2가 xCls에서 내어주는 수업 과목 — 그 칸의 T2 수업 과목을 읽는다 */
+                var xv2 = dgCellAt(D, pk.w0, pk.xCls, pk.d0, pk.p0);
+                var xSubj2 = D.subjectOf(xv2 ? xv2.s : pk.s2);
+                out.push('· ' + dgName(D, pk.t2) + ': ' + at(pk.w0, pk.d0, pk.p0) + '(' + xName + ' ' + xSubj2 + ') → ' + at(pk.w0, pk.d3, pk.p3));
                 out.push('· ' + dgName(D, pk.t3) + ': ' + at(pk.w0, pk.d3, pk.p3) + '(' + xName + ' ' + D.subjectOf(pk.s3) + ') → ' + at(pk.w0, pk.d0, pk.p0));
             }
         });
@@ -1712,13 +1715,44 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         return best;
     }
 
-    /* 내가 옮겨가는 수업의 과목(내 과목). 내가 비우는 반의 그 수업 과목을 쓰고,
-       비우는 교시가 없으면 내 대표 과목을 쓴다. */
+    /* 그 주에 그 선생님이 그 반에서 가르치는 과목(교과 배정).
+       과목은 선생님 한 명이 아니라 (선생님, 반)에 붙는다 — 같은 반 수업이 여럿이면 가장 많은 과목을 쓴다.
+       그 반 수업이 없으면 null. */
+    function teacherClassSubject(D, w, t, cls) {
+        if (cls == null) return null;
+        var cells = D.week(w == null ? ST.week : w).cells, c = cells[cls];
+        if (!c) return null;
+        var cnt = {}, best = null, n = 0;
+        for (var d = 0; d < DAYS; d++) {
+            for (var p = 0; p < MAXP; p++) {
+                var v = c.days[d][p];
+                if (!v || v.t !== t || !v.s) continue;
+                cnt[v.s] = (cnt[v.s] || 0) + 1;
+            }
+        }
+        for (var s in cnt) if (cnt[s] > n) { n = cnt[s]; best = +s; }
+        return best;
+    }
+
+    /* 옮겨가는 수업의 과목 — ① 그 선생님이 들어가는 반에서 가르치는 과목(교과 배정)
+       ② 떠나는 교시의 그 수업 과목 ③ 그 선생님 대표 과목.
+       목적지 교시에 원래 있던 '다른 선생님'의 과목은 절대 쓰지 않는다. */
+    function lessonSubject(D, w, t, cls, fromCls, d, p) {
+        var s = teacherClassSubject(D, w, t, cls);
+        if (s != null) return s;
+        if (fromCls != null) {
+            var c = D.week(w == null ? ST.week : w).cells[fromCls];
+            var v = c && c.days[d] ? c.days[d][p] : null;
+            if (v && v.s) return v.s;
+        }
+        return D.mainSubject(t);
+    }
+
+    /* 내가 옮겨가는 수업의 과목(내 과목) — 표에 이미 계산해 둔 값을 우선 쓴다 */
     function myLessonSubject(D, mk, d, p) {
-        var c = (mk && mk.b != null) ? D.week(ST.week).cells[mk.b] : null;
-        var v = c ? c.days[d][p] : null;
-        if (v && v.s) return v.s;
-        return D.mainSubject(ST.teacher);
+        if (mk && mk.s != null) return mk.s;
+        return lessonSubject(D, mk && mk.w != null ? mk.w : ST.week, ST.teacher,
+            mk ? mk.a : null, mk ? mk.b : null, d, p);
     }
 
     /* 연가·출장 등으로 내가 학교에 없는 시간인가.
@@ -1830,9 +1864,11 @@ body.dark .cell.opp-swap{color:#c4b5fd}
                 (isSwap || isSrc || sel ? '' : apCls);
             var tag = isSwap ? '교체' : (isSrc ? '나감' : (sel ? '선택' : ''));
             var sub2 = isSwap ? (h(W.cells[mine.cls].name) + '→' + h(W.cells[mk.a].name)) : h(W.cells[mine.cls].name);
+            /* 반이 바뀌는 교체면 그 반에서 가르치는 내 과목을, 아니면 내가 내어주는 수업 과목을 쓴다 */
+            var myTxt = isSwap ? D.subjectOf(myLessonSubject(D, mk, d, p)) : D.subjectOf(mine.s);
             return '<button type="button" class="' + cls + '" data-d="' + d + '" data-p="' + p + '" data-cls="' + mine.cls + '">' +
                 (tag ? '<span class="tag">' + tag + '</span>' : '') +
-                '<span class="txt">' + h(D.subjectOf(mine.s)) + '</span><small>' + sub2 + '</small></button>';
+                '<span class="txt">' + h(myTxt) + '</span><small>' + sub2 + '</small></button>';
         }
         if (isDst || isSwap) {
             /* 들어가는 반은 바뀌어도 내 과목은 내 과목 — 그 반에 있던 상대 과목을 쓰지 않는다 */
@@ -2563,7 +2599,10 @@ body.dark .cell.opp-swap{color:#c4b5fd}
             steps.push({ who: dgName(D, pk.t2), what: at(pk.w2, pk.d2, pk.p2) + '(' + clsName + ' ' + D.subjectOf(pk.s2) + ') → ' + at(pk.w0, pk.d0, pk.p0) });
             if (pk.type === 'chain') {
                 var xName = D.week(pk.w0).cells[pk.xCls].name;
-                steps.push({ who: dgName(D, pk.t2), what: at(pk.w0, pk.d0, pk.p0) + '(' + xName + ' ' + D.subjectOf(pk.s3) + ') → ' + at(pk.w0, pk.d3, pk.p3) });
+                /* T2가 xCls에서 내어주는 수업의 과목은 그 교시 칸에 있는 T2 수업 과목이다(T3 과목이 아니다) */
+                var xv = dgCellAt(D, pk.w0, pk.xCls, pk.d0, pk.p0);
+                var xSubj = D.subjectOf(xv ? xv.s : pk.s2);
+                steps.push({ who: dgName(D, pk.t2), what: at(pk.w0, pk.d0, pk.p0) + '(' + xName + ' ' + xSubj + ') → ' + at(pk.w0, pk.d3, pk.p3) });
                 steps.push({ who: dgName(D, pk.t3), what: at(pk.w0, pk.d3, pk.p3) + '(' + xName + ' ' + D.subjectOf(pk.s3) + ') → ' + at(pk.w0, pk.d0, pk.p0) });
             }
         });
@@ -2841,10 +2880,12 @@ body.dark .cell.opp-swap{color:#c4b5fd}
             });
             var matched = arrivers.length ? (matchClasses(arrivers, freed) || {}) : {};
             arrivers.forEach(function (a) { afterOf[a.t] = matched[a.t] === undefined ? null : matched[a.t]; });
+            /* s = 그 선생님이 이 교시로 가져가는 수업의 과목 — 바뀐 시간표·미리보기·비교 표가
+               모두 이 값 하나를 쓴다(목적지 교시에 있던 남의 과목이 섞이지 않게). */
             var put = function (t, b, a) {
                 var g = model[t] || (model[t] = {});
                 var wg = g[w] || (g[w] = {});
-                wg[d + '|' + p] = { d: d, p: p, b: b, a: a };
+                wg[d + '|' + p] = { d: d, p: p, b: b, a: a, s: lessonSubject(D, w, +t, a, b, d, p) };
             };
             before.forEach(function (b) { put(b.t, b.cls, afterOf.hasOwnProperty(b.t) ? afterOf[b.t] : null); });
         });
@@ -2927,16 +2968,18 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         /* 상대 선생님 본인 과목 — 대신 들어가는 반이 바뀌어도 그 선생님 과목은 유지된다 */
         var tSubj = D.subjectOf(teacherMainSubject(D, t, w));
         var ownSubj = function (cls) { return subjOf(cls) || tSubj; };
+        /* 그 교시로 가져가는 수업의 과목(교과 배정) — 목적지에 있던 남의 과목을 쓰지 않는다 */
+        var keepSubj = (s && s.s != null) ? D.subjectOf(s.s) : '';
         if (b != null && a == null) {
-            return '<div class="cell src opp-out"><span class="tag">나감</span><span class="txt">' + h(ownSubj(b)) +
+            return '<div class="cell src opp-out"><span class="tag">나감</span><span class="txt">' + h(keepSubj || ownSubj(b)) +
                 '</span><small>' + h(nameOf(b)) + '</small></div>';
         }
         if (b == null && a != null) {
-            return '<div class="cell dst opp-in"><span class="tag">들어옴</span><span class="txt">' + h(tSubj || '') +
+            return '<div class="cell dst opp-in"><span class="tag">들어옴</span><span class="txt">' + h(keepSubj || tSubj || '') +
                 '</span><small>' + h(nameOf(a)) + '</small></div>';
         }
         if (b != null && a != null && b !== a) {
-            return '<div class="cell opp-swap"><span class="tag">교체</span><span class="txt">' + h(ownSubj(b)) +
+            return '<div class="cell opp-swap"><span class="tag">교체</span><span class="txt">' + h(keepSubj || ownSubj(b)) +
                 '</span><small>' + h(nameOf(b)) + '→' + h(nameOf(a)) + '</small></div>';
         }
         if (b != null) {
