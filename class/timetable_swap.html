@@ -189,6 +189,17 @@ body.dark .cell.target{color:#6ee7b7}
 body.dark .cell.applied::before{box-shadow:0 0 0 2px rgba(15,23,42,.65)}
 .cell.applied.off::before{background:var(--warn)}
 
+/* 지난 요일 — Asia/Seoul 오늘 기준 이미 지난 요일은 교체 대상에서 자동 제외 */
+.tt .dh.past{opacity:.62; border-style:dashed}
+.tt .dh.past small{text-decoration:line-through}
+.pastbadge{font-style:normal; font-size:9px; font-weight:900; line-height:1.45; padding:0 4px; border-radius:5px;
+    background:var(--danger-soft); color:var(--danger)}
+.cell.pastday{opacity:.5; cursor:not-allowed; border-style:dashed; box-shadow:none; transform:none}
+.cell.pastday:hover{transform:none; box-shadow:none}
+.cell.pastday .tag{background:var(--danger-soft); color:var(--danger)}
+.pastnote{font-size:11px; font-weight:800; color:var(--muted); line-height:1.5}
+.pastnote b{color:var(--ink)}
+
 /* 교사 이름 검색 */
 .grp.search{position:relative; gap:5px; padding:4px 8px}
 .grp.search .lbl{font-size:11px}
@@ -271,6 +282,9 @@ body.dark .badge.b-info{color:#8fc2ff}
 body.dark .badge.b-warn{color:#fcd34d}
 .badge.b-chain{background:rgba(139,92,246,.13); color:#6d28d9; border-color:rgba(139,92,246,.3)}
 body.dark .badge.b-chain{color:#c4b5fd}
+/* 주간 교차 교체(이번 주 ↔ 다음 주) */
+.badge.b-wk{background:rgba(20,184,166,.14); color:#0f766e; border-color:rgba(20,184,166,.4)}
+body.dark .badge.b-wk{color:#5eead4}
 .rec-main{font-size:13.5px; font-weight:900; line-height:1.5; letter-spacing:-.2px; word-break:keep-all; overflow-wrap:anywhere; white-space:normal; text-wrap:pretty}
 .rec-main .seg{display:inline-block; max-width:100%; vertical-align:top}
 .rec-main .arrow{display:inline-block; color:var(--accent); font-weight:900; padding:0 6px 0 1px; margin:0}
@@ -456,6 +470,7 @@ body.dg-mode .legend .l-target,body.dg-mode .legend .l-dst{display:none}
     color:var(--muted); font-family:inherit; font-size:11.5px; font-weight:900; cursor:pointer;
 }
 .fday.on{border-color:var(--danger); background:var(--danger-soft); color:var(--danger); text-decoration:line-through}
+.fday.past{opacity:.45; border-style:dashed; cursor:not-allowed}
 .dgcheck{
     margin-left:auto; display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px;
     border:1px solid rgba(16,185,129,.32); background:var(--ok-soft); color:#0b7a52;
@@ -605,11 +620,21 @@ body.dark .cell.opp-swap{color:#c4b5fd}
 
     <div class="whint" id="workerHint"></div>
 
+    <!-- 문산중(기존 로직) 필터: 지난 요일 자동 제외 · 이번 주↔다음 주 교차 교체 -->
+    <div class="dgpanel" id="classicPanel">
+        <div class="dgrow">
+            <button class="fchip on" id="clPast" type="button" aria-pressed="true">지난 요일 제외</button>
+            <button class="fchip on" id="clCross" type="button" aria-pressed="true">다음 주 교차 교체</button>
+            <span class="pastnote" id="clPastNote"></span>
+        </div>
+    </div>
+
     <div class="dgpanel" id="dgPanel">
         <div class="dgrow">
             <button class="fchip on" id="dgLast" type="button" aria-pressed="true">1·7교시 제외</button>
             <button class="fchip on" id="dgSubj" type="button" aria-pressed="true">동아·스포츠·보건·한문 제외</button>
-            <button class="fchip" id="dgNext" type="button" aria-pressed="false">다음 주 포함</button>
+            <button class="fchip on" id="dgNext" type="button" aria-pressed="true">다음 주 교차 교체</button>
+            <button class="fchip on" id="dgPast" type="button" aria-pressed="true">지난 요일 제외</button>
             <span class="fsep">제외 요일</span>
             <span class="fdays" id="dgDays">
                 <button class="fday" type="button" data-day="0">월</button>
@@ -619,6 +644,9 @@ body.dark .cell.opp-swap{color:#c4b5fd}
                 <button class="fday" type="button" data-day="4">금</button>
             </span>
             <span class="dgcheck" id="dgCheck">검증 중…</span>
+        </div>
+        <div class="dgrow" style="padding-top:0;border:none;box-shadow:none;background:transparent;margin-top:-6px">
+            <span class="pastnote" id="dgPastNote"></span>
         </div>
     </div>
 
@@ -1001,6 +1029,10 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     var MY_DEFAULT = 35;   // 문산중 과학 박찬
     var DG_DEFAULT = 18;   // 대곡중 과학 문선
 
+    /* 요청 반영 기본값 — 이미 지난 요일 자동 제외, 이번 주 ↔ 다음 주 교차 교체 (둘 다 기본 ON) */
+    var PAST = { on: true };
+    var CROSS = { on: true };
+
     /* 학교 레지스트리 — 문산중은 기존 로직(classic), 대곡중은 별도 엔진(dg) */
     var SCHOOLS = {
         munsan: { key: 'munsan', name: '경남 문산중학교', short: '문산중', code: '61208', mode: 'classic', defTeacher: MY_DEFAULT, snapshot: function () { return typeof SNAPSHOT !== 'undefined' ? SNAPSHOT : null; } },
@@ -1135,14 +1167,21 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
        ============================================================ */
     function slotKey(t, d, p) { return t + '|' + d + '|' + p; }
 
-    // deltas: [{t,d,p,on}]
-    function teacherRun(D, t, d, deltas) {
-        var arr = [], map = D.busy();
+    /* 교시 점유 계산은 주차별로 따로 — 이번 주 변화(w0)와 다음 주 변화(w2)를 섞지 않는다.
+       deltas 항목의 w가 없으면 그 계산에 쓰이는 주(w)로 본다. */
+    function deltaMatches(dl, w, t, d, p) {
+        if (dl.t !== t || dl.d !== d || dl.p !== p) return false;
+        return dl.w == null ? true : +dl.w === +w;
+    }
+
+    // deltas: [{t,w,d,p,on}]
+    function teacherRunW(D, w, t, d, deltas) {
+        var arr = [], map = dgBusyMap(D, w);
         for (var p = 0; p < MAXP; p++) {
             var on = map[slotKey(t, d, p)] !== undefined;
             for (var i = 0; i < deltas.length; i++) {
                 var dl = deltas[i];
-                if (dl.t === t && dl.d === d && dl.p === p) on = dl.on;
+                if (deltaMatches(dl, w, t, d, p)) on = !!dl.on;
             }
             arr.push(on);
         }
@@ -1152,16 +1191,27 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         }
         return { max: max, at: at };
     }
-    function baseRun(D, t, d) { return teacherRun(D, t, d, []).max; }
 
-    // 같은 반에서 내 과목이 하루에 몇 번/연속인지 (변경 후 deltas 반영)
-    function classDup(D, cls, d, t, deltas) {
-        var cells = D.week(ST.week).cells[cls], arr = [];
+    // 하루 총 시수 (변경 후) — 교사·주차별
+    function dayTotal(D, w, t, d, deltas) {
+        var map = dgBusyMap(D, w), n = 0;
+        for (var p = 0; p < MAXP; p++) {
+            var on = map[slotKey(t, d, p)] !== undefined;
+            for (var i = 0; i < deltas.length; i++) if (deltaMatches(deltas[i], w, t, d, p)) on = !!deltas[i].on;
+            if (on) n++;
+        }
+        return n;
+    }
+
+    // 같은 반에서 내 과목이 하루에 몇 번/연속인지 (해당 주차·변경 후 deltas 반영)
+    function classDupW(D, w, cls, d, t, deltas) {
+        var cells = D.week(w).cells[cls], arr = [];
         for (var p = 0; p < MAXP; p++) {
             var v = cells.days[d][p], on = !!(v && v.t === t);
             for (var i = 0; i < deltas.length; i++) {
                 var dl = deltas[i];
-                if (dl.d === d && dl.p === p && dl.cls === cls) on = dl.on;
+                if (dl.d !== d || dl.p !== p || dl.cls !== cls) continue;
+                if (dl.w == null || +dl.w === +w) on = !!dl.on;
             }
             arr.push(on);
         }
@@ -1171,28 +1221,37 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     }
 
     /* 후보 점수화
-       1) 최소 교체 횟수(1:1 우선)  2) 같은 요일  3) 연강 증가 최소  4) 같은 반 2회/연강 회피 */
+       1) 최소 교체 횟수(1:1 우선)  2) 같은 요일  3) 연강 증가 최소  4) 같은 반 2회/연강 회피
+       주간 교차(이번 주 남은 수업 ↔ 다음 주 수업)는 같은 주 후보보다 살짝 뒤로 둔다.
+       연강·하루 시수·같은 반 중복은 모두 그 교시가 속한 주차(w) 기준으로 계산한다. */
     function evaluate(D, cand) {
         var me = ST.teacher, pen = 0, badges = [], warn = [], good = [];
+        var w0 = cand.w0 == null ? ST.week : +cand.w0;
+        var w2 = cand.w2 == null ? w0 : +cand.w2;
+        var cross = w0 !== w2;
+        cand.w0 = w0; cand.w2 = w2; cand.cross = cross;
 
         if (cand.type === 'swap') {
-            badges.push({ k: '1:1 맞교체', c: 'b-info' });
+            badges.push(cross ? { k: weekShort(w0) + '↔' + weekShort(w2) + ' 교차', c: 'b-wk' }
+                : { k: '1:1 맞교체', c: 'b-info' });
         } else {
             badges.push({ k: '2단계 연쇄', c: 'b-chain' });
         }
         if (cand.sameDay) { pen -= 12; good.push('같은 요일'); }
+        if (cross) pen -= 10;
 
-        // 연강 검사
-        var teachers = [{ t: me, d: cand.d0 }, { t: me, d: cand.d2 }];
-        if (cand.type === 'swap') teachers.push({ t: cand.t2, d: cand.d0 }, { t: cand.t2, d: cand.d2 });
-        else teachers.push({ t: cand.t2, d: cand.d0 }, { t: cand.t2, d: cand.d2 }, { t: cand.t3, d: cand.d0 }, { t: cand.t3, d: cand.d3 });
+        // 연강 검사 (주차별)
+        var pairs = [{ t: me, w: w0, d: cand.d0 }, { t: me, w: w2, d: cand.d2 }];
+        if (cand.type === 'swap') pairs.push({ t: cand.t2, w: w0, d: cand.d0 }, { t: cand.t2, w: w2, d: cand.d2 });
+        else pairs.push({ t: cand.t2, w: w0, d: cand.d0 }, { t: cand.t2, w: w2, d: cand.d2 },
+            { t: cand.t3, w: w0, d: cand.d0 }, { t: cand.t3, w: w0, d: cand.d3 });
 
         var seen = {};
-        for (var i = 0; i < teachers.length; i++) {
-            var td = teachers[i], id = td.t + '|' + td.d;
+        for (var i = 0; i < pairs.length; i++) {
+            var td = pairs[i], id = td.t + '|' + td.w + '|' + td.d;
             if (seen[id]) continue; seen[id] = 1;
-            var before = baseRun(D, td.t, td.d);
-            var after = teacherRun(D, td.t, td.d, cand.deltas).max;
+            var before = teacherRunW(D, td.w, td.t, td.d, []).max;
+            var after = teacherRunW(D, td.w, td.t, td.d, cand.deltas).max;
             if (after >= 3 && after > before) {
                 pen -= (after - 2) * 9;
                 var tag = after + '연강';
@@ -1202,11 +1261,25 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             }
         }
 
-        // 같은 반 중복 회피
-        var dup1 = classDup(D, cand.cls, cand.d0, me, cand.deltas);
-        var dup2 = classDup(D, cand.cls, cand.d2, me, cand.deltas);
+        /* 하루 총 시수 — 주간 교차는 두 주를 따로 본다(내 5시간·상대 5시간 이상 경고) */
+        if (cross) {
+            for (var k = 0; k < pairs.length; k += 1) {
+                var p2 = pairs[k];
+                var nb = dayTotal(D, p2.w, p2.t, p2.d, []);
+                var na = dayTotal(D, p2.w, p2.t, p2.d, cand.deltas);
+                if (na > nb && na >= 5) {
+                    pen -= (p2.t === me ? 4 : 6);
+                    var lbl = weekShort(p2.w) + ' ' + wdLabel(p2.d) + ' 일 ' + na + '시간';
+                    if (warn.indexOf(lbl) < 0) warn.push(lbl);
+                }
+            }
+        }
+
+        // 같은 반 중복 회피 (주차별)
+        var dup1 = classDupW(D, w0, cand.cls, cand.d0, me, cand.deltas);
+        var dup2 = classDupW(D, w2, cand.cls, cand.d2, me, cand.deltas);
         if (dup2.n >= 2) { pen -= 14; warn.push('같은 반 2회'); }
-        if (dup2.adj || (cand.d2 === cand.d0 && dup1.adj)) { pen -= 8; warn.push('같은 반 연강'); }
+        if (dup2.adj || (!cross && cand.d2 === cand.d0 && dup1.adj)) { pen -= 8; warn.push('같은 반 연강'); }
 
         cand.score = (cand.type === 'swap' ? 100 : 62) + pen;
         cand.warn = warn;
@@ -1217,60 +1290,65 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
 
     function findRecs(D, sel) {
         var me = ST.teacher, cls = sel.cls, d0 = sel.d, p0 = sel.p;
-        var cell0 = D.classAt(cls, d0, p0);
+        var w0 = sel.w == null ? ST.week : +sel.w;
+        if (isPastDay(w0, d0)) return [];
+        var cell0 = D.week(w0).cells[cls].days[d0][p0];
         if (!cell0 || cell0.t !== me) return [];
-        var cellsC = D.week(ST.week).cells[cls], out = [];
+        var cellsC = D.week(w0).cells[cls], same = [], cross = [];
 
-        // ---- 1:1 맞교체: 같은 반의 다른 시간 ----
+        // ---- 1:1 맞교체: 같은 주, 같은 반의 다른 시간 ----
         for (var d2 = 0; d2 < DAYS; d2++) {
+            if (isPastDay(w0, d2)) continue;                 // 이미 지난 요일은 후보에서 자동 제외
             for (var p2 = 0; p2 < MAXP; p2++) {
                 if (d2 === d0 && p2 === p0) continue;
                 var v = cellsC.days[d2][p2];
                 if (!v || v.t === me) continue;
-                if (!D.isFree(v.t, d0, p0)) continue;   // 상대가 그 교시에 비어야
-                if (!D.isFree(me, d2, p2)) continue;    // 내가 옮길 교시에 비어야
-                if (absOff(ST.week, d2, p2)) continue;  // 연가·부재 시간은 후보에서 뺀다    // 내가 옮길 교시에 비어야
-                out.push(evaluate(D, {
-                    type: 'swap', cls: cls, d0: d0, p0: p0, d2: d2, p2: p2,
+                if (!dgFree(D, w0, v.t, d0, p0)) continue;   // 상대가 그 교시에 비어야
+                if (!dgFree(D, w0, me, d2, p2)) continue;    // 내가 옮길 교시에 비어야
+                if (absOff(w0, d2, p2)) continue;            // 연가·부재 시간은 후보에서 뺀다
+                same.push(evaluate(D, {
+                    type: 'swap', cls: cls, w0: w0, w2: w0, d0: d0, p0: p0, d2: d2, p2: p2,
                     t2: v.t, s2: v.s, sameDay: d2 === d0,
                     deltas: [
-                        { t: me, d: d0, p: p0, on: false, cls: cls }, { t: me, d: d2, p: p2, on: true, cls: cls },
-                        { t: v.t, d: d0, p: p0, on: true }, { t: v.t, d: d2, p: p2, on: false }
+                        { w: w0, t: me, d: d0, p: p0, on: false, cls: cls }, { w: w0, t: me, d: d2, p: p2, on: true, cls: cls },
+                        { w: w0, t: v.t, d: d0, p: p0, on: true }, { w: w0, t: v.t, d: d2, p: p2, on: false }
                     ]
                 }));
             }
         }
 
         // ---- 2단계 연쇄: 1:1이 3개 미만일 때만 ----
-        if (out.length < 3) {
+        if (same.length < 3) {
             for (var d2b = 0; d2b < DAYS; d2b++) {
+                if (isPastDay(w0, d2b)) continue;
                 for (var p2b = 0; p2b < MAXP; p2b++) {
                     if (d2b === d0 && p2b === p0) continue;
                     var v2 = cellsC.days[d2b][p2b];
                     if (!v2 || v2.t === me) continue;
-                    if (D.isFree(v2.t, d0, p0)) continue;      // 1:1이 되는 경우는 위에서 처리
-                    if (!D.isFree(me, d2b, p2b)) continue;
-                    if (absOff(ST.week, d2b, p2b)) continue;
-                    var xCls = D.busy()[slotKey(v2.t, d0, p0)];  // T2가 그 교시에 가르치는 반
+                    if (dgFree(D, w0, v2.t, d0, p0)) continue;      // 1:1이 되는 경우는 위에서 처리
+                    if (!dgFree(D, w0, me, d2b, p2b)) continue;
+                    if (absOff(w0, d2b, p2b)) continue;
+                    var xCls = dgBusyMap(D, w0)[slotKey(v2.t, d0, p0)];  // T2가 그 교시에 가르치는 반
                     if (xCls === undefined) continue;
-                    var xCells = D.week(ST.week).cells[xCls];
+                    var xCells = D.week(w0).cells[xCls];
                     for (var d3 = 0; d3 < DAYS; d3++) {
+                        if (isPastDay(w0, d3)) continue;
                         for (var p3 = 0; p3 < MAXP; p3++) {
                             if ((d3 === d0 && p3 === p0) || (d3 === d2b && p3 === p2b)) continue;
                             var v3 = xCells.days[d3][p3];
                             if (!v3) continue;
                             if (v3.t === me || v3.t === v2.t) continue;
-                            if (!D.isFree(v3.t, d0, p0)) continue;   // T3가 내 교시에 비어야
-                            if (!D.isFree(v2.t, d3, p3)) continue;   // T2가 T3 교시에 비어야
-                            out.push(evaluate(D, {
-                                type: 'chain', cls: cls, d0: d0, p0: p0, d2: d2b, p2: p2b,
+                            if (!dgFree(D, w0, v3.t, d0, p0)) continue;   // T3가 내 교시에 비어야
+                            if (!dgFree(D, w0, v2.t, d3, p3)) continue;   // T2가 T3 교시에 비어야
+                            same.push(evaluate(D, {
+                                type: 'chain', cls: cls, w0: w0, w2: w0, d0: d0, p0: p0, d2: d2b, p2: p2b,
                                 t2: v2.t, s2: v2.s, xCls: xCls, d3: d3, p3: p3, t3: v3.t, s3: v3.s,
                                 sameDay: d2b === d0,
                                 deltas: [
-                                    { t: me, d: d0, p: p0, on: false, cls: cls }, { t: me, d: d2b, p: p2b, on: true, cls: cls },
-                                    { t: v2.t, d: d0, p: p0, on: true }, { t: v2.t, d: d2b, p: p2b, on: false },
-                                    { t: v2.t, d: d3, p: p3, on: true },
-                                    { t: v3.t, d: d0, p: p0, on: true }, { t: v3.t, d: d3, p: p3, on: false }
+                                    { w: w0, t: me, d: d0, p: p0, on: false, cls: cls }, { w: w0, t: me, d: d2b, p: p2b, on: true, cls: cls },
+                                    { w: w0, t: v2.t, d: d0, p: p0, on: true }, { w: w0, t: v2.t, d: d2b, p: p2b, on: false },
+                                    { w: w0, t: v2.t, d: d3, p: p3, on: true },
+                                    { w: w0, t: v3.t, d: d0, p: p0, on: true }, { w: w0, t: v3.t, d: d3, p: p3, on: false }
                                 ]
                             }));
                         }
@@ -1279,11 +1357,50 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             }
         }
 
-        out.sort(function (a, b) {
+        /* ---- 주간 교차: 내 이번 주(w0) 수업 ↔ 상대 B의 다음 주(w2) 수업,
+               같은 반(cls)을 서로 맞바꿔 서로의 시간표를 채운다.
+           정합성: B는 이번 주 내 교시(w0,d0,p0)에 공강, 나는 다음 주(w2,d2,p2)에 공강. */
+        var w2 = otherWeek(w0);
+        if (CROSS.on && hasWeek(w2)) {
+            var cellsX = D.week(w2).cells[cls];
+            for (var d2c = 0; d2c < DAYS; d2c++) {
+                if (isPastDay(w2, d2c)) continue;              // 다음 주라도 이미 지난 날짜면 제외(주가 넘어간 경우)
+                for (var p2c = 0; p2c < MAXP; p2c++) {
+                    var vx = cellsX.days[d2c][p2c];
+                    if (!vx || vx.t === me) continue;
+                    if (!dgFree(D, w0, vx.t, d0, p0)) continue;   // 상대 B가 이번 주 내 교시에 공강
+                    if (!dgFree(D, w2, me, d2c, p2c)) continue;   // 내가 다음 주 그 교시에 공강
+                    if (absOff(w2, d2c, p2c)) continue;
+                    cross.push(evaluate(D, {
+                        type: 'swap', cls: cls, w0: w0, w2: w2, d0: d0, p0: p0, d2: d2c, p2: p2c,
+                        t2: vx.t, s2: vx.s, sameDay: false,
+                        deltas: [
+                            { w: w0, t: me, d: d0, p: p0, on: false, cls: cls },
+                            { w: w2, t: me, d: d2c, p: p2c, on: true, cls: cls },
+                            { w: w0, t: vx.t, d: d0, p: p0, on: true, cls: cls },
+                            { w: w2, t: vx.t, d: d2c, p: p2c, on: false, cls: cls }
+                        ]
+                    }));
+                }
+            }
+        }
+
+        function byScore(a, b) {
             return b.score - a.score || (b.sameDay ? 1 : 0) - (a.sameDay ? 1 : 0) ||
                 a.d2 - b.d2 || a.p2 - b.p2;
-        });
-        return out.slice(0, 8);
+        }
+        same.sort(byScore);
+        cross.sort(byScore);
+
+        /* 이번 주 후보를 먼저 보여 주고, 남는 자리에 다음 주 교차 후보를 붙인다.
+           이번 주 후보가 8건 넘개라도 교차 후보를 최소 1건은 보여 줘 토글이 일한 것을 알 수 있게 한다. */
+        var out = same.slice(0, 8);
+        if (cross.length) {
+            var room = 8 - out.length;
+            if (room > 0) out = out.concat(cross.slice(0, room));
+            else out = out.slice(0, 7).concat(cross.slice(0, 1));
+        }
+        return out;
     }
 
     /* 목표 교시(내 공강)를 지정한 경우: 그 칸으로 내 수업을 옮기는 교체만 찾는다 */
@@ -1292,6 +1409,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var cell0 = D.classAt(cls, d0, p0);
         if (!cell0 || cell0.t !== me) return [];
         if (tgt.d === d0 && tgt.p === p0) return [];
+        if (isPastDay(ST.week, d0) || isPastDay(ST.week, tgt.d)) return [];   // 지난 요일은 목표가 될 수 없다
         if (absOff(ST.week, tgt.d, tgt.p)) return [];   // 연가·부재 시간으로는 옮기지 않는다
         var v2 = D.classAt(cls, tgt.d, tgt.p);
         if (!v2 || v2.t === me) return [];      // 그 교시에 같은 반 수업이 없으면 맞바꿀 상대가 없다
@@ -1401,34 +1519,40 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function appliedMark(d, p) {
         var out = null;
         for (var i = 0; i < ST.applied.length; i++) {
-            var st = ST.applied[i], dls = st.deltas || [];
-            if (st.w !== ST.week) continue;
+            var dls = ST.applied[i].deltas || [];
             for (var j = 0; j < dls.length; j++) {
                 var dl = dls[j];
-                if (dl.t === ST.teacher && dl.d === d && dl.p === p) out = !!dl.on;
+                if (dl.t !== ST.teacher || dl.d !== d || dl.p !== p) continue;
+                if (dl.w != null && +dl.w !== +ST.week) continue;   // 그 주차 시간표에만 표시
+                out = !!dl.on;
             }
         }
         return out;
     }
 
     function stepHead(r, w) {
-        return dayLabel(w, r.d0) + ' ' + perLabel(r.p0) + ' → ' + dayLabel(w, r.d2) + ' ' + perLabel(r.p2);
+        var w0 = r.w0 == null ? (w == null ? ST.week : w) : +r.w0;
+        var w2 = r.w2 == null ? w0 : +r.w2;
+        var cross = w0 !== w2;
+        var at = function (ww, d, p) { return cross ? wkAt(ww, d, p) : dayLabel(ww, d) + ' ' + perLabel(p); };
+        return at(w0, r.d0, r.p0) + ' → ' + at(w2, r.d2, r.p2);
     }
 
     /* 추천 후보를 확정해 가상 시간표에 누적 반영하고, 그 시간표를 기준으로 다시 추천을 계산한다 */
     function commitRec(i) {
         var r = ST.recs[i];
         if (!r || isDG()) return;
-        var D = ST.data, w = ST.week;
+        var D = ST.data, w = r.w0 == null ? ST.week : +r.w0, w2 = r.w2 == null ? w : +r.w2;
         var step = {
             w: w,
+            w0: w, w2: w2,
             teacher: ST.teacher,
             who: D.teacherOf(ST.teacher),
             kind: r.type,
-            short: stepHead(r, w) + ' · ' + (r.type === 'chain' ? '3인 연쇄' : '1:1 맞교체'),
+            short: stepHead(r, w) + ' · ' + (r.type === 'chain' ? '3인 연쇄' : (w !== w2 ? '주간 교차' : '1:1 맞교체')),
             text: recText(r),
             deltas: r.deltas.map(function (dl) {
-                return { t: dl.t, w: w, d: dl.d, p: dl.p, on: !!dl.on, cls: dl.cls == null ? null : dl.cls };
+                return { t: dl.t, w: dl.w == null ? w : +dl.w, d: dl.d, p: dl.p, on: !!dl.on, cls: dl.cls == null ? null : dl.cls };
             })
         };
         ST.applied.push(step);
@@ -1562,11 +1686,69 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         return dt;
     }
     function md(dt) { return (dt.getMonth() + 1) + '/' + dt.getDate(); }
+
+    /* ---------- Asia/Seoul 오늘 날짜 · 지난 요일 ----------
+       요일 후보는 스냅샷의 주 시작일(월요일) 기준 날짜로 계산하므로,
+       '오늘'도 Asia/Seoul 기준으로 뽑아야 지난 요일 판정이 맞는다. */
+    function seoulToday() {
+        try {
+            var s = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(new Date());
+            var p = String(s).split('-');
+            if (p.length === 3) return new Date(+p[0], +p[1] - 1, +p[2]);
+        } catch (e) {}
+        var now = new Date();
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    var TODAY = { d: null, t: 0 };
+    function todayDate() {
+        var now = Date.now();
+        if (TODAY.d && now - TODAY.t < 60000) return TODAY.d;
+        TODAY.d = seoulToday(); TODAY.t = now;
+        return TODAY.d;
+    }
+    function todayDowName() { return ['일', '월', '화', '수', '목', '금', '토'][todayDate().getDay()]; }
+
+    /* 이번 주(w)에서 그 요일이 이미 지났는가 — 오늘 이전 날짜면 지난 요일 */
+    function isPastDay(w, d) {
+        if (!PAST.on) return false;
+        if (!ST.data || !ST.data.weeks[String(w)]) return false;
+        return dateOf(w, d).getTime() < todayDate().getTime();
+    }
+    function pastDaysOf(w) {
+        var out = [];
+        for (var d = 0; d < DAYS; d++) if (isPastDay(w, d)) out.push(d);
+        return out;
+    }
+    function otherWeek(w) { return +w === 2 ? 1 : 2; }
+    function hasWeek(w) { return !!(ST.data && ST.data.weeks[String(w)]); }
+
+    /* 지난 요일 안내 문구 — 패널에 '왜 빠졌는지'를 보여 준다 */
+    function renderPastNotes() {
+        var pd = pastDaysOf(1);
+        var head = '오늘 ' + md(todayDate()) + '(' + todayDowName() + ') 기준';
+        var body = pd.length
+            ? ' · 이번 주 ' + pd.map(function (d) { return wdLabel(d); }).join('·') + '요일은 지나서 자동 제외'
+            : (hasWeek(1) ? ' · 이번 주는 지난 요일이 없습니다' : '');
+        var a = $('#clPastNote');
+        if (a) a.innerHTML = PAST.on ? head + body : head + ' · 지난 요일 제외 꺼짐(모든 요일 후보)';
+        var b = $('#dgPastNote');
+        if (b) b.innerHTML = PAST.on ? head + body : head + ' · 지난 요일 제외 꺼짐(모든 요일 후보)';
+        var pc = document.querySelectorAll('#dgDays [data-day]');
+        for (var i = 0; i < pc.length; i++) {
+            var d = +pc[i].dataset.day, past = isPastDay(ST.week, d);
+            pc[i].classList.toggle('past', past);
+            pc[i].title = past ? '지난 요일이라 후보에서 자동 제외됩니다' : '';
+        }
+    }
     /* 요일·교시는 문맥 키로 번역한다("월"=month, "금"=gold 같은 동음이의어 오역 방지) */
     function L(s) { try { return window.SVL_I18N ? window.SVL_I18N.tr(s) : s; } catch (e) { return s; } }
     function wdLabel(d) { return L(DOW[d]); }
     function dayLabel(w, d) { return md(dateOf(w, d)) + '(' + wdLabel(d) + ')'; }
     function perLabel(p) { return L((p + 1) + '교시'); }
+    /* 주차까지 붙인 교시 표기 — 주간 교차 안에서만 '이번 주/다음 주'를 앞에 붙인다 */
+    function wkAt(w, d, p) { return weekShort(w) + ' ' + dayLabel(w, d) + ' ' + perLabel(p); }
 
     /* ============================================================
        4. 렌더
@@ -1668,7 +1850,10 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         for (var d = 0; d < DAYS; d++) {
             var dt = dateOf(w, d);
             var isToday = (dt.getFullYear() + '-' + (dt.getMonth() + 1) + '-' + dt.getDate()) === todayStr;
-            html += '<div class="dh' + (isToday ? ' today' : '') + '">' + wdLabel(d) + '<small>' + md(dt) + '</small></div>';
+            var past = isPastDay(w, d);
+            html += '<div class="dh' + (isToday ? ' today' : '') + (past ? ' past' : '') + '" title="' +
+                (past ? '이미 지난 요일이라 교체 대상에서 제외됩니다' : '') + '">' + wdLabel(d) + '<small>' + md(dt) + '</small>' +
+                (past ? '<i class="pastbadge">지난</i>' : '') + '</div>';
         }
         for (var p = 0; p < MAXP; p++) {
             html += '<div class="ph">' + (p + 1) + '<small>' + (D.periods[p] || '') + '</small></div>';
@@ -1676,7 +1861,13 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         }
         grid.innerHTML = html;
 
-        grid.querySelectorAll('.cell.mine').forEach(function (el) {
+        grid.querySelectorAll('.cell.mine.pastday').forEach(function (el) {
+            el.addEventListener('click', function () {
+                toast('🗓️ ' + wdLabel(+el.dataset.d) + '요일은 이미 지나 교체 대상에서 제외됩니다 · 위의 ‘지난 요일 제외’를 끄면 선택됩니다');
+                buzz();
+            });
+        });
+        grid.querySelectorAll('.cell.mine:not(.pastday)').forEach(function (el) {
             el.addEventListener('click', function () {
                 var d = +el.dataset.d, p = +el.dataset.p;
                 var cls = +el.dataset.cls;
@@ -1707,6 +1898,14 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         /* 누적 확정 반영으로 바뀜 교시 — ● 표시 */
         var ap = appliedMark(d, p);
         var apCls = ap === true ? ' applied' : (ap === false ? ' applied off' : '');
+        /* 이미 지난 요일 — 교체 대상 선택에서 자동 제외 (왜 빠졌는지 칸에 표시) */
+        var past = isPastDay(ST.week, d);
+
+        if (mine && past) {
+            return '<div class="cell mine pastday" data-d="' + d + '" data-p="' + p + '" title="' +
+                h(wdLabel(d) + '요일은 이미 지나 교체 대상에서 제외됩니다 · ‘지난 요일 제외’를 끄면 선택됩니다') + '">' +
+                '<span class="tag">지난</span><span class="txt">' + h(D.subjectOf(mine.s)) + '</span><small>' + h(W.cells[mine.cls].name) + '</small></div>';
+        }
 
         if (mine) {
             var cls = 'cell mine' + (sel ? ' sel' : '') + (isSwap ? ' swap' : (isSrc ? ' src' : '')) +
@@ -1724,7 +1923,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 h(D.subjectOf(myS)) + '</span><small>' + h(W.cells[aCls].name) + '</small></div>';
         }
         // 내 공강 칸 — 내 수업을 고른 상태에서는 눌러서 '옮길 목표 교시'로 지정할 수 있다 (문산중 전용)
-        var canPick = ST.sel.length && !isDG() && !absOff(ST.week, d, p);
+        var canPick = ST.sel.length && !isDG() && !past && !absOff(ST.week, d, p);
         var base = 'cell ' + (any ? 'other' : 'empty') + (canPick ? ' pickable' : '') + (isTgt ? ' target' : '') + apCls;
         if (canPick) {
             return '<button type="button" class="' + base + '" data-td="' + d + '" data-tp="' + p + '" aria-label="' +
@@ -1770,6 +1969,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     }
 
     function toggleSel(s) {
+        var w = s.w == null ? ST.week : +s.w;
+        if (isPastDay(w, s.d)) {
+            toast('🗓️ ' + wdLabel(s.d) + '요일은 이미 지나 교체 대상에서 제외됩니다 · 위의 ‘지난 요일 제외’를 끄면 선택됩니다');
+            buzz();
+            return;
+        }
         var i = ST.sel.findIndex(function (x) { return x.cls === s.cls && x.d === s.d && x.p === s.p; });
         if (i >= 0) {
             if (ST.sel.length === 1) ST.sel = [];        // 같은 교시를 다시 누르면 해제
@@ -1804,6 +2009,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function compute() {
         var D = ST.data;
         if (!D) return;
+        renderPastNotes();
         renderApplied();
         if (isDG()) { dgCompute(); return; }
         clearOpp();
@@ -1821,6 +2027,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
 
     // 목표 교시로 옮길 수 없을 때 이유 + 가능한 다른 교시 안내
     function targetReason(D, s0, tgt) {
+        if (isPastDay(ST.week, s0.d)) {
+            return h(wdLabel(s0.d)) + '요일은 이미 지나 교체 대상에서 제외됩니다.<br>‘지난 요일 제외’를 끄면 다시 계산합니다.';
+        }
+        if (tgt && isPastDay(ST.week, tgt.d)) {
+            return h(wdLabel(tgt.d)) + '요일은 이미 지나 목표 교시가 될 수 없습니다.<br>이번 주 남은 요일이나 다음 주 교차 교체를 골라 보세요.';
+        }
         if (!tgt) {
             return '같은 반의 다른 시간 중 상대 교사가 비어 있는 경우가 없습니다.<br>공강 칸을 눌러 목표 교시를 지정하거나 다른 교시를 골라 보세요.';
         }
@@ -1844,6 +2056,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             ? '<b>😥 ' + h(dayLabel(ST.week, tgt.d) + ' ' + perLabel(tgt.p)) + '로는 옮기기 어려워요</b>'
             : '<b>😥 이 교시는 맞교체가 어려워요</b>';
         var html = '<div class="emptyrec">' + head + targetReason(D, s0, tgt);
+        var pds = pastDaysOf(ST.week);
+        if (pds.length) {
+            html += '<div style="font-size:11px;font-weight:800;color:var(--muted)">🗓️ 이미 지난 ' +
+                h(pds.map(function (d) { return wdLabel(d); }).join('·')) +
+                '요일은 후보에서 자동 제외했습니다' + (CROSS.on ? ' · 다음 주 교차 후보도 찾았지만 성립하는 조합이 없습니다' : ' · ‘다음 주 교차 교체’를 켜면 다음 주 수업까지 찾습니다') + '.</div>';
+        }
         var alt = ST.altRecs || [];
         if (tgt && alt.length) {
             html += '<div style="width:100%;margin-top:2px"><b>가능한 다른 교시</b>' +
@@ -1858,15 +2076,17 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     }
 
     function recSteps(r) {
-        var D = ST.data, clsName = D.week(ST.week).cells[r.cls].name;
-        var at = function (d, p) { return dayLabel(ST.week, d) + ' ' + perLabel(p); };
-        var out = [{ who: D.teacherOf(ST.teacher), what: at(r.d0, r.p0) + '(' + clsName + ') → ' + at(r.d2, r.p2) + '(' + clsName + ')' }];
+        var D = ST.data;
+        var w0 = r.w0 == null ? ST.week : +r.w0, w2 = r.w2 == null ? w0 : +r.w2, cross = w0 !== w2;
+        var clsName = D.week(w0).cells[r.cls].name;
+        var at = function (w, d, p) { return cross ? wkAt(w, d, p) : dayLabel(w, d) + ' ' + perLabel(p); };
+        var out = [{ who: D.teacherOf(ST.teacher), what: at(w0, r.d0, r.p0) + '(' + clsName + ') → ' + at(w2, r.d2, r.p2) + '(' + clsName + ')' }];
         if (r.type === 'swap') {
-            out.push({ who: D.teacherOf(r.t2), what: at(r.d2, r.p2) + '(' + clsName + ') → ' + at(r.d0, r.p0) + '(' + clsName + ')' });
+            out.push({ who: D.teacherOf(r.t2), what: at(w2, r.d2, r.p2) + '(' + clsName + ') → ' + at(w0, r.d0, r.p0) + '(' + clsName + ')' });
         } else {
-            var xName = D.week(ST.week).cells[r.xCls].name;
-            out.push({ who: D.teacherOf(r.t2), what: at(r.d2, r.p2) + '(' + clsName + ') → ' + at(r.d0, r.p0) + '(' + clsName + '), ' + at(r.d0, r.p0) + '(' + xName + ') → ' + at(r.d3, r.p3) + '(' + xName + ')' });
-            out.push({ who: D.teacherOf(r.t3), what: at(r.d3, r.p3) + '(' + xName + ') → ' + at(r.d0, r.p0) + '(' + xName + ')' });
+            var xName = D.week(w0).cells[r.xCls].name;
+            out.push({ who: D.teacherOf(r.t2), what: at(w0, r.d2, r.p2) + '(' + clsName + ') → ' + at(w0, r.d0, r.p0) + '(' + clsName + '), ' + at(w0, r.d0, r.p0) + '(' + xName + ') → ' + at(w0, r.d3, r.p3) + '(' + xName + ')' });
+            out.push({ who: D.teacherOf(r.t3), what: at(w0, r.d3, r.p3) + '(' + xName + ') → ' + at(w0, r.d0, r.p0) + '(' + xName + ')' });
         }
         return out;
     }
@@ -1885,9 +2105,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var cum = ST.applied.length ? ('누적 ' + ST.applied.length + '단계 반영 기준 · ') : '';
         var where = dayLabel(ST.week, s0.d) + ' ' + perLabel(s0.p);
         var tgt = ST.target;
+        var nMine = 0, nCross = 0;
+        ST.recs.forEach(function (r) { if (r.cross) nCross++; else nMine++; });
         sub.textContent = cum + (tgt
             ? where + ' → ' + dayLabel(ST.week, tgt.d) + ' ' + perLabel(tgt.p) + ' 이동 · ' + ST.recs.length + '건'
-            : where + ' 비우기 · ' + ST.recs.length + '건 · 공강을 누르면 그 교시로 옮기는 방법도 나옵니다');
+            : where + ' 비우기 · ' + ST.recs.length + '건' + (nCross ? ' (이번 주 ' + nMine + ' · 다음 주 교차 ' + nCross + ')' : '') +
+              ' · 공강을 누르면 그 교시로 옮기는 방법도 나옵니다');
         if (!ST.recs.length) {
             box.innerHTML = emptyRecHTML(D, s0, tgt);
             box.querySelectorAll('[data-at]').forEach(function (el) {
@@ -1905,16 +2128,18 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var meName = D.teacherOf(ST.teacher);
         var html = '';
         ST.recs.forEach(function (r, i) {
-            var clsName = D.week(ST.week).cells[r.cls].name;
-            var v0 = D.classAt(r.cls, r.d0, r.p0);
+            var w0 = r.w0 == null ? ST.week : +r.w0, w2 = r.w2 == null ? w0 : +r.w2, cross = w0 !== w2;
+            var at = function (w, d, p) { return cross ? wkAt(w, d, p) : dayLabel(w, d) + ' ' + perLabel(p); };
+            var clsName = D.week(w0).cells[r.cls].name;
+            var v0 = D.week(w0).cells[r.cls].days[r.d0][r.p0];
             var t2Name = D.teacherOf(r.t2);
-            var a = '① ' + meName + '(' + clsName + ') ' + dayLabel(ST.week, r.d0) + ' ' + perLabel(r.p0);
-            var b = '② ' + t2Name + '(' + clsName + ') ' + dayLabel(ST.week, r.d2) + ' ' + perLabel(r.p2);
+            var a = '① ' + meName + '(' + clsName + ') ' + at(w0, r.d0, r.p0);
+            var b = '② ' + t2Name + '(' + clsName + ') ' + at(w2, r.d2, r.p2);
             var c = '';
             var xName = '';
             if (r.type === 'chain') {
-                xName = D.week(ST.week).cells[r.xCls].name;
-                c = ' · ③ ' + D.teacherOf(r.t3) + '(' + xName + ') ' + dayLabel(ST.week, r.d3) + ' ' + perLabel(r.p3);
+                xName = D.week(w0).cells[r.xCls].name;
+                c = ' · ③ ' + D.teacherOf(r.t3) + '(' + xName + ') ' + at(w0, r.d3, r.p3);
             }
             var why;
             if (r.warn.length) why = '⚠ ' + r.warn.join(' · ');
@@ -1975,7 +2200,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     var DG = {
         last: true,     // 1·7교시 제외
         subj: true,     // 제외 과목
-        next: false,    // 다음 주 포함
+        next: true,     // 다음 주 교차 교체 포함(기본 ON)
+        past: true,     // 지난 요일 자동 제외(기본 ON)
         skip: {},       // 제외 요일
         res: null,
         check: null
@@ -2015,8 +2241,9 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         return { n: n, max: max };
     }
 
-    function dgSlotOK(d, p) {
+    function dgSlotOK(w, d, p) {
         if (DG.skip[d]) return false;
+        if (isPastDay(w == null ? ST.week : w, d)) return false;   // 이미 지난 요일
         if (DG.last && (p === 0 || p === 6)) return false;   // 1교시·7교시
         return true;
     }
@@ -2030,6 +2257,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var parts = [];
         if (b.subj) parts.push('제외 과목');
         if (b.slot) parts.push('1·7교시·제외 요일');
+        if (b.past) parts.push('지난 요일');
         if (b.abs) parts.push('연가·부재 시간');
         if (b.busy) parts.push('상대 교사가 그 시간에 수업');
         if (b.me) parts.push('내가 옮길 시간에 수업');
@@ -2042,9 +2270,10 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var w0 = slot.w, cls = slot.cls, d0 = slot.d, p0 = slot.p;
         var v0 = dgCellAt(D, w0, cls, d0, p0);
         if (!v0 || v0.t !== A) return { list: [], why: '내 수업이 아닙니다' };
+        if (isPastDay(w0, d0)) return { list: [], why: '이미 지난 요일입니다(′지난 요일 제외′를 끄면 선택)' };
         var s0 = D.subjectOf(v0.s);
         if (DG.subj && dgSubjExcluded(s0)) return { list: [], why: '대상 과목이 제외 과목(' + s0 + ')입니다' };
-        var weeks = DG.next ? [w0, w0 === 1 ? 2 : 1] : [w0];
+        var weeks = DG.next && hasWeek(otherWeek(w0)) ? [w0, otherWeek(w0)] : [w0];
         var list = [], blocked = {};
         weeks.forEach(function (w2) {
             var cells = D.week(w2).cells;
@@ -2054,7 +2283,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                     var v = cells[cls].days[d2][p2];
                     if (!v || v.t === A) continue;
                     if (DG.subj && dgSubjExcluded(D.subjectOf(v.s))) { blocked.subj = 1; continue; }
-                    if (!dgSlotOK(d2, p2)) { blocked.slot = 1; continue; }
+                    if (!dgSlotOK(w2, d2, p2)) { blocked[isPastDay(w2, d2) ? 'past' : 'slot'] = 1; continue; }
                     if (absOff(w2, d2, p2)) { blocked.abs = 1; continue; }   // 연가·부재 시간
                     if (!dgFree(D, w0, v.t, d0, p0)) { blocked.busy = 1; continue; }
                     if (!dgFree(D, w2, A, d2, p2)) { blocked.me = 1; continue; }
@@ -2076,7 +2305,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 var v2 = cells[cls].days[d2][p2];
                 if (!v2 || v2.t === A) continue;
                 if (DG.subj && dgSubjExcluded(D.subjectOf(v2.s))) continue;
-                if (!dgSlotOK(d2, p2)) continue;
+                if (!dgSlotOK(w0, d2, p2)) continue;
                 if (absOff(w0, d2, p2)) continue;   // 연가·부재 시간
                 if (dgFree(D, w0, v2.t, d0, p0)) continue;
                 if (!dgFree(D, w0, A, d2, p2)) continue;
@@ -2089,7 +2318,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                         var v3 = xCells.days[d3][p3];
                         if (!v3 || v3.t === A || v3.t === v2.t) continue;
                         if (DG.subj && dgSubjExcluded(D.subjectOf(v3.s))) continue;
-                        if (!dgSlotOK(d3, p3)) continue;
+                        if (!dgSlotOK(w0, d3, p3)) continue;
                         if (!dgFree(D, w0, v3.t, d0, p0)) continue;
                         if (!dgFree(D, w0, v2.t, d3, p3)) continue;
                         out.push({ type: 'chain', w0: w0, d0: d0, p0: p0, cls: cls, s0: null, w2: w0, d2: d2, p2: p2, t2: v2.t, s2: v2.s, xCls: xCls, d3: d3, p3: p3, t3: v3.t, s3: v3.s });
@@ -2175,6 +2404,13 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
 
         badges.push(chain ? { k: '3자 연쇄', c: 'b-chain' } : { k: '1:1 맞교환', c: 'b-info' });
         if (picks.length > 1) badges.push({ k: picks.length + '교시 동시 교체', c: 'b-info' });
+        /* 이번 주↔다음 주 교차 — 같은 주 후보보다 살짝 뒤로 */
+        var xwk = 0;
+        picks.forEach(function (pk) { if (pk.w2 !== pk.w0) xwk = 1; });
+        if (xwk) {
+            pen -= 6;
+            badges.push({ k: '이번 주↔다음 주 교차', c: 'b-wk' });
+        }
 
         return { picks: picks, score: (chain ? 70 : 100) + pen, rows: rows, deltas: deltas, warn: uniq(warn), good: good, badges: badges, chain: chain };
     }
@@ -2240,15 +2476,14 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
 
     function dgSmsText(D, ev) {
         var A = ST.teacher, me = D.teacherOf(A), out = [];
-        var w2Word = function (w) { return w === 2 ? '다음 주' : '이번 주'; };
         out.push('안녕하세요, ' + (D.teacherOf(ev.picks[0].t2) || '선생님') + ' 선생님. ' + (SCHOOLS[ST.school] || {}).name + ' ' + me + '입니다.');
         ev.picks.forEach(function (pk) {
             var clsName = D.week(pk.w0).cells[pk.cls].name;
             var s0 = D.subjectOf(dgCellAt(D, pk.w0, pk.cls, pk.d0, pk.p0) ? dgCellAt(D, pk.w0, pk.cls, pk.d0, pk.p0).s : 0);
-            out.push(w2Word(pk.w0) + ' ' + dayLabel(pk.w0, pk.d0) + ' ' + perLabel(pk.p0) + ' ' + clsName + ' ' + s0 + ' 수업을 ' +
-                w2Word(pk.w2) + ' ' + dayLabel(pk.w2, pk.d2) + ' ' + perLabel(pk.p2) + '로 옮겨야 해서 연락드립니다.');
-            out.push('선생님께서 ' + dayLabel(pk.w0, pk.d0) + ' ' + perLabel(pk.p0) + '에 공강이시고, 제가 ' +
-                dayLabel(pk.w2, pk.d2) + ' ' + perLabel(pk.p2) + '에 공강이라 1:1로 맞바꿀 수 있을 것 같습니다.');
+            out.push(weekShort(pk.w0) + ' ' + dayLabel(pk.w0, pk.d0) + ' ' + perLabel(pk.p0) + ' ' + clsName + ' ' + s0 + ' 수업을 ' +
+                weekShort(pk.w2) + ' ' + dayLabel(pk.w2, pk.d2) + ' ' + perLabel(pk.p2) + '로 옮겨야 해서 연락드립니다.');
+            out.push('선생님께서 ' + weekShort(pk.w0) + ' ' + dayLabel(pk.w0, pk.d0) + ' ' + perLabel(pk.p0) + '에 공강이시고, 제가 ' +
+                weekShort(pk.w2) + ' ' + dayLabel(pk.w2, pk.d2) + ' ' + perLabel(pk.p2) + '에 공강이라 1:1로 맞바꿀 수 있을 것 같습니다.');
         });
         out.push('혹시 어려우시면 편하게 말씀해 주세요. 감사합니다.');
         return out.join('\n');
@@ -2269,7 +2504,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var cond = [];
         if (DG.last) cond.push('1·7교시 제외');
         if (DG.subj) cond.push('동아·스포츠·보건·한문 제외');
-        if (DG.next) cond.push('다음 주 포함');
+        if (DG.next) cond.push('다음 주 교차 교체');
+        if (PAST.on) cond.push('지난 요일 제외');
         var sk = Object.keys(DG.skip).filter(function (k) { return DG.skip[k]; });
         if (sk.length) cond.push('제외 ' + sk.map(function (d) { return wdLabel(+d); }).join('·'));
 
@@ -2309,7 +2545,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             else if (c.list.length) tail = '<b>후보 ' + c.list.length + '가지</b> · 다른 교시와 시간이 겹쳐 이번 조합에서 제외';
             else tail = h(c.why || '후보 없음');
             out += '<div style="font-size:11px;font-weight:800;color:var(--muted);line-height:1.6">' +
-                '• ' + h(dayLabel(s.w, s.d) + ' ' + perLabel(s.p) + ' ' + clsName) + ' — ' + tail + '</div>';
+                '• ' + h(weekShort(s.w) + ' ' + dayLabel(s.w, s.d) + ' ' + perLabel(s.p) + ' ' + clsName) + ' — ' + tail + '</div>';
         });
         return out + '</div>';
     }
@@ -2317,6 +2553,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function dgRowsHTML(D, ev) {
         var A = ST.teacher, groups = {};
         ev.rows.forEach(function (r) { (groups[r.t] = groups[r.t] || []).push(r); });
+        var multi = ev.picks.some(function (pk) { return pk.w2 !== pk.w0; });
         var html = '<div class="rec-meta">';
         Object.keys(groups).forEach(function (tk) {
             var t = +tk, arr = groups[t];
@@ -2325,7 +2562,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 var cls = mark > 0 ? 'up' : (mark < 0 ? 'down' : '');
                 var runMark = r.am - r.bm;
                 var runCls = runMark > 0 ? 'up' : (runMark < 0 ? 'down' : '');
-                return wdLabel(r.d) + ' <span class="' + cls + '">' + r.bn + '→' + r.an + '시간</span> · 최장 <span class="' + runCls + '">' + r.bm + '→' + r.am + '연강</span>';
+                return (multi ? weekShort(r.w) + ' ' : '') + wdLabel(r.d) + ' <span class="' + cls + '">' + r.bn + '→' + r.an + '시간</span> · 최장 <span class="' + runCls + '">' + r.bm + '→' + r.am + '연강</span>';
             }).join(' / ');
             html += '<div><b>' + (t === A ? '나' : dgName(D, t)) + '</b> · ' + parts + '</div>';
         });
@@ -2338,7 +2575,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         ev.picks.forEach(function (pk, k) {
             var clsName = D.week(pk.w0).cells[pk.cls].name;
             var v0 = dgCellAt(D, pk.w0, pk.cls, pk.d0, pk.p0);
-            var at = function (w, d, p) { return dayLabel(w, d) + ' ' + perLabel(p); };
+            var xw = pk.w2 !== pk.w0;
+            var at = function (w, d, p) { return (xw ? weekShort(w) + ' ' : '') + dayLabel(w, d) + ' ' + perLabel(p); };
             steps.push({ who: (k + 1) + '. ' + dgName(D, A), what: at(pk.w0, pk.d0, pk.p0) + '(' + clsName + ' ' + D.subjectOf(v0 ? v0.s : 0) + ') → ' + at(pk.w2, pk.d2, pk.p2) });
             steps.push({ who: dgName(D, pk.t2), what: at(pk.w2, pk.d2, pk.p2) + '(' + clsName + ' ' + D.subjectOf(pk.s2) + ') → ' + at(pk.w0, pk.d0, pk.p0) });
             if (pk.type === 'chain') {
@@ -2349,7 +2587,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         });
         var first = ev.picks[0];
         var clsName = D.week(first.w0).cells[first.cls].name;
-        var at = function (w, d, p) { return dayLabel(w, d) + ' ' + perLabel(p); };
+        var fx = first.w2 !== first.w0;
+        var at = function (w, d, p) { return (fx ? weekShort(w) + ' ' : '') + dayLabel(w, d) + ' ' + perLabel(p); };
         var main = '<span class="seg">① ' + h(D.teacherOf(A) + '(' + clsName + ') ' + at(first.w0, first.d0, first.p0)) + '</span>' +
             '<span class="seg"><span class="arrow">→</span>' + h(at(first.w2, first.d2, first.p2)) + '</span>' +
             '<span class="seg"><span class="arrow">⇄</span>' + h(D.teacherOf(first.t2) + '(' + clsName + ') ' + at(first.w2, first.d2, first.p2)) + '</span>' +
@@ -2484,19 +2723,44 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         $('#dgLast').addEventListener('click', function () { DG.last = !DG.last; setChip('#dgLast', DG.last); compute(); });
         $('#dgSubj').addEventListener('click', function () { DG.subj = !DG.subj; setChip('#dgSubj', DG.subj); compute(); });
         $('#dgNext').addEventListener('click', function () { DG.next = !DG.next; setChip('#dgNext', DG.next); compute(); });
+        $('#dgPast').addEventListener('click', function () { PAST.on = !PAST.on; setChip('#dgPast', PAST.on); compute(); });
         $('#dgDays').addEventListener('click', function (e) {
             var b = e.target.closest('[data-day]');
             if (!b) return;
             var d = +b.dataset.day;
+            if (isPastDay(ST.week, d)) { toast('🗓️ ' + wdLabel(d) + '요일은 이미 지나 후보에서 자동 제외됩니다'); return; }
             DG.skip[d] = !DG.skip[d];
             b.classList.toggle('on', !!DG.skip[d]);
             compute();
         });
     }
 
+    /* 문산중(기존 로직) 필터 — 지난 요일 제외 · 다음 주 교차 교체 */
+    function initClassicFilters() {
+        var setChip = function (id, on) {
+            var el = $(id);
+            if (!el) return;
+            el.classList.toggle('on', !!on);
+            el.setAttribute('aria-pressed', on ? 'true' : 'false');
+        };
+        var a = $('#clPast'), b = $('#clCross');
+        if (a) a.addEventListener('click', function () {
+            PAST.on = !PAST.on; setChip('#clPast', PAST.on); compute(); buzz();
+        });
+        if (b) b.addEventListener('click', function () {
+            CROSS.on = !CROSS.on; setChip('#clCross', CROSS.on); compute(); buzz();
+        });
+        setChip('#clPast', PAST.on);
+        setChip('#clCross', CROSS.on);
+        if ($('#dgPast')) setChip('#dgPast', PAST.on);
+        if ($('#dgNext')) setChip('#dgNext', DG.next);
+    }
+
     function setDGSchoolUI(on) {
         var p = $('#dgPanel');
         if (p) p.classList.toggle('on', !!on);
+        var c = $('#classicPanel');
+        if (c) c.classList.toggle('on', !on);
         document.body.classList.toggle('dg-mode', !!on);
     }
 
@@ -2506,11 +2770,15 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         ST.preview = { i: i, cls: r.cls, d0: r.d0, p0: r.p0, d2: r.d2, p2: r.p2 };
         if (!silent) renderTT();
         var D = ST.data;
-        var src = D.classAt(r.cls, r.d0, r.p0), dst = D.classAt(r.cls, r.d2, r.p2);
+        var w0 = r.w0 == null ? ST.week : +r.w0, w2 = r.w2 == null ? w0 : +r.w2, cross = w0 !== w2;
+        var at = function (w, d, p) { return cross ? wkAt(w, d, p) : dayLabel(w, d) + ' ' + perLabel(p); };
+        var src = D.week(w0).cells[r.cls].days[r.d0][r.p0];
+        var dst = D.week(w2).cells[r.cls].days[r.d2][r.p2];
         var note = $('#prevNote');
         $('#prevTxt').innerHTML = '<b>' + h((i + 1) + '순위 미리보기') + '</b> · ' +
-            h(dayLabel(ST.week, r.d0) + ' ' + perLabel(r.p0) + ' ' + D.subjectOf(src.s)) + ' → ' +
-            h(dayLabel(ST.week, r.d2) + ' ' + perLabel(r.p2) + ' ' + D.subjectOf(dst.s) + ' · ' + D.teacherOf(r.t2)) +
+            h(at(w0, r.d0, r.p0) + ' ' + D.subjectOf(src.s)) + ' → ' +
+            h(at(w2, r.d2, r.p2) + ' ' + D.subjectOf(dst.s) + ' · ' + D.teacherOf(r.t2)) +
+            (cross ? ' <b>주간 교차</b>' : '') +
             ' <span style="font-weight:800;opacity:.85">— 아래 상대 선생님 시간표와 비교하세요</span>';
         note.classList.add('on');
         buzz();
@@ -2809,22 +3077,28 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         OPP.selI = i;
         setPreview(i, true);
         var tgt = ST.target;
+        var w0 = r.w0 == null ? ST.week : +r.w0, w2 = r.w2 == null ? w0 : +r.w2, cross = w0 !== w2;
+        var at = function (w, d, p) { return cross ? wkAt(w, d, p) : dayLabel(w, d) + ' ' + perLabel(p); };
         applyOppModel(ST.data, r.deltas,
-            '<b>' + (i + 1) + '순위</b> 후보 · ' + (r.type === 'chain' ? '2단계 연쇄' : '1:1 맞교체') + ' · ' +
-            dayLabel(ST.week, r.d0) + ' ' + perLabel(r.p0) +
-            (tgt ? ' → ' + dayLabel(ST.week, r.d2) + ' ' + perLabel(r.p2) + ' 이동' : ' 비우기'));
+            '<b>' + (i + 1) + '순위</b> 후보 · ' + (r.type === 'chain' ? '2단계 연쇄' : (cross ? '주간 교차 맞교체' : '1:1 맞교체')) + ' · ' +
+            at(w0, r.d0, r.p0) +
+            (tgt ? ' → ' + at(w2, r.d2, r.p2) + ' 이동' : ' 비우기'));
     }
 
     function recText(r) {
-        var D = ST.data, clsName = D.week(ST.week).cells[r.cls].name;
-        var v0 = D.classAt(r.cls, r.d0, r.p0);
-        var a = dayLabel(ST.week, r.d0) + ' ' + perLabel(r.p0) + ' [' + clsName + ' ' + D.subjectOf(v0.s) + ']';
-        var b = dayLabel(ST.week, r.d2) + ' ' + perLabel(r.p2) + ' [' + clsName + ' ' + D.subjectOf(r.s2) + ' · ' + D.teacherOf(r.t2) + ']';
+        var D = ST.data;
+        var w0 = r.w0 == null ? ST.week : +r.w0, w2 = r.w2 == null ? w0 : +r.w2, cross = w0 !== w2;
+        var at = function (w, d, p) { return cross ? wkAt(w, d, p) : dayLabel(w, d) + ' ' + perLabel(p); };
+        var clsName = D.week(w0).cells[r.cls].name;
+        var v0 = D.week(w0).cells[r.cls].days[r.d0][r.p0];
+        var a = at(w0, r.d0, r.p0) + ' [' + clsName + ' ' + D.subjectOf(v0 ? v0.s : 0) + ']';
+        var b = at(w2, r.d2, r.p2) + ' [' + clsName + ' ' + D.subjectOf(r.s2) + ' · ' + D.teacherOf(r.t2) + ']';
         var t = a + ' ⇄ ' + b;
+        if (cross) t = '[주간 교차] ' + t;
         if (r.type === 'chain') {
-            t += '\n3인 연쇄: ' + D.teacherOf(r.t2) + ' → ' + dayLabel(ST.week, r.d0) + ' ' + perLabel(r.p0) +
-                ' / ' + D.teacherOf(r.t3) + ' → ' + dayLabel(ST.week, r.d3) + ' ' + perLabel(r.p3) +
-                ' (' + D.week(ST.week).cells[r.xCls].name + ')';
+            t += '\n3인 연쇄: ' + D.teacherOf(r.t2) + ' → ' + at(w0, r.d0, r.p0) +
+                ' / ' + D.teacherOf(r.t3) + ' → ' + at(w0, r.d3, r.p3) +
+                ' (' + D.week(w0).cells[r.xCls].name + ')';
         }
         return t;
     }
@@ -3341,17 +3615,28 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
               '는 내가 없는 시간이라 목표·추천 후보에서 제외</b>합니다.' +
               (isDG() && ST.abs && ST.abs.full ? ' (대곡중 제외 요일에도 반영)' : '')
             : '';
-        var found = [];
+        var foundAll = [], skipped = {};
         days.forEach(function (d) {
             p.periods.forEach(function (per) {
                 var slot = mySlotAt(d, per - 1);
-                if (slot) found.push(slot);
+                if (slot) foundAll.push(slot);
             });
         });
+        /* 이미 지난 요일은 교체 대상에서 자동 제외 — 왜 빠졌는지 함께 알려 준다 */
+        var found = foundAll.filter(function (s) {
+            if (isPastDay(p.week, s.d)) { skipped[s.d] = 1; return false; }
+            return true;
+        });
+        var skipNote = Object.keys(skipped).length
+            ? '<br>🗓️ 지난 요일(' + h(Object.keys(skipped).map(function (d) { return wdLabel(+d); }).join('·')) +
+              ')은 이미 지나 후보에서 제외했습니다.'
+            : '';
         var cond = weekLabel(p.week) + ' · ' + dayListLabel(days) + ' ' + periodListLabel(p.periods);
         if (!found.length) {
             out.className = 'situ-out warn';
-            out.innerHTML = '<b>' + h(cond) + '</b> 시간은 원래 공강입니다! 다른 교시를 적어 주세요.' + absNote;
+            out.innerHTML = (foundAll.length && Object.keys(skipped).length)
+                ? '‘<b>' + h(cond) + '</b>’는 이미 지난 요일이라 교체 대상에서 제외됩니다. 이번 주 남은 요일이나 다음 주를 적어 주세요.' + skipNote
+                : '<b>' + h(cond) + '</b> 시간은 원래 공강입니다! 다른 교시를 적어 주세요.' + absNote;
             compute();
             return;
         }
@@ -3367,7 +3652,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             : ('추천 ' + ST.recs.length + '건');
         out.className = 'situ-out ok';
         out.innerHTML = '적용 조건: <b>' + h(cond) + '</b> (' + h(detail) + (found.length > 4 ? ' 외 ' + (found.length - 4) + '교시' : '') + ')' +
-            absNote +
+            absNote + skipNote +
             '<br>첫 교시를 기준으로 ' + cnt + '을 보여 줍니다.';
     }
 
@@ -3558,6 +3843,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         initSearch();
         initSituation();
         initDG();
+        initClassicFilters();
         initCum();
         initSchools();
         if (!currentSnapshot()) {
