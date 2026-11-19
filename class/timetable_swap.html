@@ -169,6 +169,8 @@ body.dark .cell.dst{color:#6ee7b7}
 .legend .l-src{background:var(--danger)}
 .legend .l-dst{background:var(--ok)}
 .legend .l-target{background:linear-gradient(135deg,var(--ok),#34d399)}
+.legend .l-applied{background:#0b7a52; border-radius:50%}
+body.dark .legend .l-applied{background:#6ee7b7}
 
 /* 목표(공강) 칸 지정 */
 .cell.pickable{cursor:pointer; border-style:dashed}
@@ -178,6 +180,14 @@ body.dark .cell.dst{color:#6ee7b7}
 body.dark .cell.target{color:#6ee7b7}
 .cell.target .tag{background:var(--ok); color:#fff}
 .cell.target .txt{font-size:11.5px; font-weight:900}
+
+/* 누적 확정 반영 표시 (●) — 들어온 교시는 초록, 비운 교시는 주황 */
+.cell.applied::before{
+    content:''; position:absolute; top:4px; left:4px; width:7px; height:7px; border-radius:50%;
+    background:var(--ok); box-shadow:0 0 0 2px rgba(255,255,255,.85); z-index:1;
+}
+body.dark .cell.applied::before{box-shadow:0 0 0 2px rgba(15,23,42,.65)}
+.cell.applied.off::before{background:var(--warn)}
 
 /* 교사 이름 검색 */
 .grp.search{position:relative; gap:5px; padding:4px 8px}
@@ -284,6 +294,45 @@ body.dark .target-hint{color:#6ee7b7}
     background:transparent; color:var(--muted); font-family:inherit; font-size:10.5px; font-weight:900; cursor:pointer;
 }
 .mini:hover{border-color:var(--accent); color:var(--accent)}
+.go-commit{
+    display:block; width:100%; margin-top:7px; padding:8px 10px; border-radius:11px;
+    border:1px solid rgba(16,185,129,.45); background:var(--ok-soft); color:#0b7a52;
+    font-family:inherit; font-size:12px; font-weight:900; cursor:pointer; letter-spacing:-.2px;
+    line-height:1.45; word-break:keep-all; overflow-wrap:anywhere; text-align:center;
+}
+.go-commit:hover{border-color:var(--ok); box-shadow:0 6px 14px rgba(16,185,129,.18)}
+.go-commit span{font-weight:800; opacity:.85}
+body.dark .go-commit{color:#6ee7b7}
+
+/* 누적 교체 시뮬레이션 패널 */
+.cum{
+    display:flex; flex-direction:column; gap:7px; margin:10px 0 0; padding:10px 12px; border-radius:16px;
+    background:var(--ok-soft); border:1px solid rgba(16,185,129,.35);
+}
+.cum[hidden]{display:none}
+.cum-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; font-weight:900; color:#0b7a52}
+body.dark .cum-head{color:#6ee7b7}
+.cum-head .cum-sub{font-size:11.5px; font-weight:800; color:var(--muted)}
+.cum-acts{display:flex; gap:6px; flex-wrap:wrap; margin-left:auto}
+.cum-acts .mini{background:var(--card-solid); border-color:rgba(16,185,129,.4); color:#0b7a52}
+body.dark .cum-acts .mini{color:#6ee7b7}
+.cum .chips{margin-top:0}
+.cum .cumchip{font-size:11px}
+.cum .cumchip.on{border-color:var(--ok); background:var(--card-solid); color:#0b7a52}
+body.dark .cum .cumchip.on{color:#6ee7b7}
+.cum-note{font-size:11px; font-weight:800; color:#0b7a52; line-height:1.55; word-break:keep-all; overflow-wrap:anywhere}
+body.dark .cum-note{color:#6ee7b7}
+.cum-note b{text-decoration:underline}
+
+/* 확정·취소 안내 토스트 */
+.tt-toast{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(12px);
+    z-index:960; max-width:calc(100% - 28px); padding:9px 14px; border-radius:14px;
+    background:rgba(15,23,42,.94); color:#fff; font-size:12.5px; font-weight:800; line-height:1.5;
+    text-align:center; word-break:keep-all; overflow-wrap:anywhere;
+    opacity:0; pointer-events:none; transition:opacity .18s ease, transform .18s ease;
+}
+.tt-toast.on{opacity:1; transform:translateX(-50%) translateY(0)}
 .emptyrec{
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center;
     padding:26px 16px; border-radius:16px; border:1px dashed var(--line); color:var(--muted);
@@ -573,6 +622,20 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         </div>
     </div>
 
+    <div class="cum" id="cumPanel" hidden aria-live="polite">
+        <div class="cum-head">
+            <b>🧾 적용된 변경</b>
+            <span class="cum-sub" id="cumSub"></span>
+            <div class="cum-acts">
+                <button class="mini" id="cumUndo" type="button">↩️ 직전 취소</button>
+                <button class="mini" id="cumReset" type="button">🔄 전체 초기화</button>
+                <button class="mini" id="cumCopy" type="button">📋 전체 변경 요약 복사</button>
+            </div>
+        </div>
+        <div class="chips" id="cumChips"></div>
+        <div class="cum-note" id="cumNote"></div>
+    </div>
+
     <div class="cols">
       <div class="colL">
         <section class="card">
@@ -595,6 +658,7 @@ body.dark .cell.opp-swap{color:#c4b5fd}
                 <span><i class="l-src"></i>나감 · 비우는 교시</span>
                 <span><i class="l-dst"></i>들어옴 · 옮겨가는 교시</span>
                 <span><i class="l-swap"></i>교체 · 같은 교시 반 이동</span>
+                <span><i class="l-applied"></i>● 누적 확정 반영된 교시</span>
             </div>
         </section>
 
@@ -955,6 +1019,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         altRecs: [],
         preview: null,
         marks: [],        // 고른 후보의 내 교시 변경 [{w,d,p,b,a}] — 내 시간표 나감·들어옴 표시
+        applied: [],      // 누적 확정한 교체 단계 [{w, teacher, who, kind, short, text, deltas}] — 가상 시간표에 반영
         abs: null,        // 연가·출장 등으로 내가 없는 시간 {week, days:{d:1}, periods:{1교시:1}}
         absAuto: [],      // 연가로 자동 설정한 대곡중 제외 요일
         workerUrl: '',
@@ -1279,6 +1344,188 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     }
 
     /* ============================================================
+       2-C. 누적 교체 시뮬레이션 (문산중)
+         확정한 추천안의 deltas를 '가상 시간표'(모든 교사의 주간 시간표)에 실제로 반영하고,
+         그렇게 바뀐 시간표를 기준으로 다음 교체를 이어서 추천한다.
+         원본 스냅샷·실시간 자료는 건드리지 않고, 확정한 단계만 다시 얹어 가상 시간표를 만든다.
+       ============================================================ */
+    var CUM_TTL = 0;
+
+    /* 한 단계의 deltas를 가상 시간표에 반영한다.
+       buildOppModel이 정한 교시별 '비는 반 → 들어올 반(b→a)' 배정을 그대로 쓴다.
+       과목은 그 선생님이 그 단계에서 떠나는 수업의 과목을 그대로 가져간다. */
+    function applyDeltasTo(D, deltas) {
+        var model = buildOppModel(D, deltas), clears = [], fills = [], carry = {};
+        Object.keys(model).forEach(function (tk) {
+            var t = +tk, g = model[t];
+            Object.keys(g).forEach(function (wk) {
+                var w = +wk, wg = g[wk];
+                Object.keys(wg).forEach(function (sk) {
+                    var s = wg[sk];
+                    if (s.b === s.a) return;
+                    var cells = D.week(w).cells;
+                    if (s.b != null && cells[s.b]) {
+                        var cell = cells[s.b].days[s.d][s.p];
+                        if (cell && cell.t === t) {
+                            clears.push({ w: w, cls: s.b, d: s.d, p: s.p });
+                            if (carry[t] == null) carry[t] = cell.s;
+                        }
+                    }
+                    if (s.a != null) fills.push({ w: w, t: t, cls: s.a, d: s.d, p: s.p });
+                });
+            });
+        });
+        clears.forEach(function (c) {
+            var cls = D.week(c.w).cells[c.cls];
+            if (cls) cls.days[c.d][c.p] = null;
+        });
+        fills.forEach(function (f) {
+            var cls = D.week(f.w).cells[f.cls];
+            if (!cls) return;
+            var s = carry[f.t] != null ? carry[f.t] : teacherMainSubject(D, f.t, f.w);
+            cls.days[f.d][f.p] = { t: f.t, s: s };
+        });
+        D.busyCache = {}; D.bwCache = {};
+    }
+
+    /* 확정한 단계들을 원본 자료에 순서대로 다시 얹어 가상 시간표를 재구성한다(취소·초기화용) */
+    function rebuildWork() {
+        if (!ST.data || !ST.data.raw) return;
+        var D = new Data(ST.data.raw);
+        ST.applied.forEach(function (st) { applyDeltasTo(D, st.deltas); });
+        ST.data = D;
+        D.busyCache = {}; D.bwCache = {};
+    }
+
+    /* 지금 보는 선생님의 시간표에서 누적 확정으로 바뀐 교시: true=내가 들어옴, false=내가 비움 */
+    function appliedMark(d, p) {
+        var out = null;
+        for (var i = 0; i < ST.applied.length; i++) {
+            var st = ST.applied[i], dls = st.deltas || [];
+            if (st.w !== ST.week) continue;
+            for (var j = 0; j < dls.length; j++) {
+                var dl = dls[j];
+                if (dl.t === ST.teacher && dl.d === d && dl.p === p) out = !!dl.on;
+            }
+        }
+        return out;
+    }
+
+    function stepHead(r, w) {
+        return dayLabel(w, r.d0) + ' ' + perLabel(r.p0) + ' → ' + dayLabel(w, r.d2) + ' ' + perLabel(r.p2);
+    }
+
+    /* 추천 후보를 확정해 가상 시간표에 누적 반영하고, 그 시간표를 기준으로 다시 추천을 계산한다 */
+    function commitRec(i) {
+        var r = ST.recs[i];
+        if (!r || isDG()) return;
+        var D = ST.data, w = ST.week;
+        var step = {
+            w: w,
+            teacher: ST.teacher,
+            who: D.teacherOf(ST.teacher),
+            kind: r.type,
+            short: stepHead(r, w) + ' · ' + (r.type === 'chain' ? '3인 연쇄' : '1:1 맞교체'),
+            text: recText(r),
+            deltas: r.deltas.map(function (dl) {
+                return { t: dl.t, w: w, d: dl.d, p: dl.p, on: !!dl.on, cls: dl.cls == null ? null : dl.cls };
+            })
+        };
+        ST.applied.push(step);
+        rebuildWork();
+        ST.sel = []; ST.target = null; ST.recs = []; ST.altRecs = [];
+        clearOpp();
+        compute();
+        renderMySub();
+        buzz(20);
+        toast('✅ ' + ST.applied.length + '단계 교체를 확정 반영했습니다 · 바뀐 시간표에서 다음 교체를 이어가세요');
+    }
+
+    function undoApplied() {
+        if (!ST.applied.length) return;
+        ST.applied.pop();
+        rebuildWork();
+        ST.sel = []; ST.target = null; ST.recs = []; ST.altRecs = [];
+        clearOpp();
+        compute();
+        renderMySub();
+        buzz(20);
+        toast(ST.applied.length
+            ? '↩️ 직전 단계를 취소했습니다 · 지금 ' + ST.applied.length + '단계까지 반영된 상태입니다'
+            : '↩️ 직전 단계를 취소해 원래 시간표로 돌아왔습니다');
+    }
+
+    function resetApplied() {
+        if (!ST.applied.length) return;
+        var n = ST.applied.length;
+        ST.applied = [];
+        rebuildWork();
+        ST.sel = []; ST.target = null; ST.recs = []; ST.altRecs = [];
+        clearOpp();
+        compute();
+        renderMySub();
+        buzz(20);
+        toast('🔄 누적 ' + n + '단계를 모두 지우고 원래 시간표로 돌아왔습니다');
+    }
+
+    function appliedText() {
+        var sch = (SCHOOLS[ST.school] || {}).name || '경남 문산중학교';
+        var out = ['[누적 교체 시뮬레이션] ' + sch];
+        ST.applied.forEach(function (st, i) {
+            out.push('');
+            out.push((i + 1) + '단계 · ' + weekShort(st.w) + ' · ' + (st.kind === 'chain' ? '3인 연쇄 교체' : '1:1 맞교체'));
+            out.push(st.text);
+        });
+        out.push('');
+        out.push('※ 실제 컴시간 시간표는 바뀌지 않습니다 · 확인용 시뮬레이션입니다.');
+        return out.join('\n');
+    }
+
+    function renderApplied() {
+        var panel = $('#cumPanel');
+        if (!panel) return;
+        var show = !isDG() && ST.applied.length > 0;
+        panel.hidden = !show;
+        if (!show) return;
+        $('#cumSub').textContent = '지금 시간표는 ' + ST.applied.length + '단계까지 반영된 상태입니다';
+        var html = '';
+        ST.applied.forEach(function (st, i) {
+            html += '<button type="button" class="chip cumchip' + (st.w === ST.week ? ' on' : '') + '" data-cumi="' + i + '"' +
+                ' title="' + h(st.text) + '">' + (i + 1) + '단계 · ' + h(weekShort(st.w)) + ' · ' + h(st.short) + '</button>';
+        });
+        $('#cumChips').innerHTML = html;
+        $('#cumNote').innerHTML = '● 표시 = 누적 반영으로 바뀐 교시 · 다음에 바꿀 <b>내 수업</b>을 누르면 이 바뀐 시간표를 기준으로 다시 추천합니다.';
+        $('#cumChips').querySelectorAll('[data-cumi]').forEach(function (el) {
+            el.addEventListener('click', function () {
+                var i = +el.dataset.cumi, st = ST.applied[i];
+                if (!st) return;
+                alert((i + 1) + '단계 · ' + weekShort(st.w) + ' · ' + (st.kind === 'chain' ? '3인 연쇄 교체' : '1:1 맞교체') + '\n\n' + st.text);
+            });
+        });
+    }
+
+    function toast(msg) {
+        var el = document.getElementById('ttToast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'ttToast';
+            el.className = 'tt-toast';
+            document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        el.classList.add('on');
+        clearTimeout(CUM_TTL);
+        CUM_TTL = setTimeout(function () { el.classList.remove('on'); }, 3600);
+    }
+
+    function initCum() {
+        var u = $('#cumUndo'), r = $('#cumReset'), c = $('#cumCopy');
+        if (u) u.addEventListener('click', undoApplied);
+        if (r) r.addEventListener('click', resetApplied);
+        if (c) c.addEventListener('click', function () { copyText(appliedText(), c); });
+    }
+
+    /* ============================================================
        3. 날짜 표기
        ============================================================ */
     function weekStart(w) {
@@ -1434,9 +1681,13 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var isSwap = !!(mk && mk.b != null && mk.a != null && mk.b !== mk.a);
         var sel = mine && ST.sel.some(function (x) { return x.d === d && x.p === p && x.cls === mine.cls; });
         var isTgt = !!(ST.target && ST.target.d === d && ST.target.p === p);
+        /* 누적 확정 반영으로 바뀜 교시 — ● 표시 */
+        var ap = appliedMark(d, p);
+        var apCls = ap === true ? ' applied' : (ap === false ? ' applied off' : '');
 
         if (mine) {
-            var cls = 'cell mine' + (sel ? ' sel' : '') + (isSwap ? ' swap' : (isSrc ? ' src' : ''));
+            var cls = 'cell mine' + (sel ? ' sel' : '') + (isSwap ? ' swap' : (isSrc ? ' src' : '')) +
+                (isSwap || isSrc || sel ? '' : apCls);
             var tag = isSwap ? '교체' : (isSrc ? '나감' : (sel ? '선택' : ''));
             var sub2 = isSwap ? (h(W.cells[mine.cls].name) + '→' + h(W.cells[mk.a].name)) : h(W.cells[mine.cls].name);
             return '<button type="button" class="' + cls + '" data-d="' + d + '" data-p="' + p + '" data-cls="' + mine.cls + '">' +
@@ -1451,7 +1702,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         }
         // 내 공강 칸 — 내 수업을 고른 상태에서는 눌러서 '옮길 목표 교시'로 지정할 수 있다 (문산중 전용)
         var canPick = ST.sel.length && !isDG() && !absOff(ST.week, d, p);
-        var base = 'cell ' + (any ? 'other' : 'empty') + (canPick ? ' pickable' : '') + (isTgt ? ' target' : '');
+        var base = 'cell ' + (any ? 'other' : 'empty') + (canPick ? ' pickable' : '') + (isTgt ? ' target' : '') + apCls;
         if (canPick) {
             return '<button type="button" class="' + base + '" data-td="' + d + '" data-tp="' + p + '" aria-label="' +
                 h(wdLabel(d) + ' ' + perLabel(p) + ' 공강' + (isTgt ? ' (옮길 목표)' : '')) + '">' +
@@ -1530,6 +1781,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function compute() {
         var D = ST.data;
         if (!D) return;
+        renderApplied();
         if (isDG()) { dgCompute(); return; }
         clearOpp();
         if (!ST.sel.length) ST.target = null;
@@ -1607,11 +1859,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             return;
         }
         var s0 = ST.sel[0];
+        var cum = ST.applied.length ? ('누적 ' + ST.applied.length + '단계 반영 기준 · ') : '';
         var where = dayLabel(ST.week, s0.d) + ' ' + perLabel(s0.p);
         var tgt = ST.target;
-        sub.textContent = tgt
+        sub.textContent = cum + (tgt
             ? where + ' → ' + dayLabel(ST.week, tgt.d) + ' ' + perLabel(tgt.p) + ' 이동 · ' + ST.recs.length + '건'
-            : where + ' 비우기 · ' + ST.recs.length + '건 · 공강을 누르면 그 교시로 옮기는 방법도 나옵니다';
+            : where + ' 비우기 · ' + ST.recs.length + '건 · 공강을 누르면 그 교시로 옮기는 방법도 나옵니다');
         if (!ST.recs.length) {
             box.innerHTML = emptyRecHTML(D, s0, tgt);
             box.querySelectorAll('[data-at]').forEach(function (el) {
@@ -1661,7 +1914,9 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 '<div class="rec-acts"><button class="mini" type="button" data-cmp="' + i + '">👥 시간표 비교</button>' +
                 '<button class="mini" type="button" data-copy="' + i + '">📋 복사</button>' +
                 (r.type === 'chain' ? '<button class="mini" type="button" data-chain="' + i + '">연쇄 단계 보기</button>' : '') +
-                '</div></div>';
+                '</div>' +
+                '<button class="go-commit" type="button" data-apply="' + i + '">✅ 이 교체 확정 반영 <span>— 다음 교체 이어가기</span></button>' +
+                '</div>';
         });
         box.innerHTML = html;
 
@@ -1670,8 +1925,12 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 if (ev.target.closest('[data-copy]')) return;
                 if (ev.target.closest('[data-chain]')) return;
                 if (ev.target.closest('[data-cmp]')) return;
+                if (ev.target.closest('[data-apply]')) return;
                 selectRec(+el.dataset.i);
             });
+        });
+        box.querySelectorAll('[data-apply]').forEach(function (el) {
+            el.addEventListener('click', function (ev) { ev.stopPropagation(); commitRec(+el.dataset.apply); });
         });
         box.querySelectorAll('[data-cmp]').forEach(function (el) {
             el.addEventListener('click', function (ev) { ev.stopPropagation(); selectRec(+el.dataset.cmp); });
@@ -2616,6 +2875,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         ST.teacher = defaultTeacher(ST.data);
         ST.abs = null;
         ST.absAuto = [];
+        var hadCum = ST.applied.length;
+        ST.applied = [];
         renderTeacherSelect();
         ST.sel = [];
         ST.target = null;
@@ -2626,12 +2887,15 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         if (isDG()) dgRenderCheck();
         compute();
         renderMySub();
+        if (hadCum) toast('🔄 시간표를 새로 받아 누적 ' + hadCum + '단계 변경을 초기화했습니다');
     }
 
     function renderMySub() {
         var D = ST.data, w = D.week(ST.week), cnt = D.mySlots(ST.teacher).length;
         var who = isDG() ? (optLabel(D, ST.teacher)) : D.teacherLabel(ST.teacher);
-        $('#mySub').textContent = who + ' · ' + w.start + ' 주 · 주 ' + cnt + '시간';
+        var cum = (ST.applied || []).filter(function (st) { return st.w === ST.week; }).length;
+        $('#mySub').textContent = who + ' · ' + w.start + ' 주 · 주 ' + cnt + '시간' +
+            (cum ? ' · 누적 ' + cum + '단계 반영' : '');
     }
 
     // 실패 응답이면 JSON의 error 메시지를 우선 사용 (없으면 HTTP 코드)
@@ -2851,6 +3115,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
 
     function pickTeacher(t, fromSearch) {
         if (!ST.data) return;
+        var prev = ST.teacher;
         ST.teacher = t;
         try { localStorage.setItem(TEACHER_KEY + ST.school, String(t)); } catch (e) {}
         $('#tSel').value = String(t);
@@ -2858,6 +3123,9 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         $('#prevNote').classList.remove('on');
         compute();
         renderMySub();
+        if (prev !== t && ST.applied.length) {
+            toast('👤 ' + ST.data.teacherOf(t) + ' 선생님 화면입니다 · 누적 ' + ST.applied.length + '단계 변경은 그대로 유지됩니다');
+        }
         if (fromSearch) {
             $('#tSearch').value = '';
             $('#tSearchList').classList.remove('on');
@@ -3225,6 +3493,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
     function setSchool(k) {
         if (!SCHOOLS[k]) k = 'munsan';
         if (ST.school === k && ST.data) return;
+        var had = ST.applied.length;
         ST.school = k;
         try { localStorage.setItem(SCHOOL_KEY, k); } catch (e) {}
         markSchoolTabs();
@@ -3235,6 +3504,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var sn = currentSnapshot();
         if (sn) applyData(sn, false);
         loadLive(false);
+        if (had) toast('🔄 ' + ((SCHOOLS[k] || {}).short || '') + ' 탭으로 바꿔 누적 ' + had + '단계 변경을 초기화했습니다');
         buzz();
     }
 
@@ -3265,6 +3535,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         initSearch();
         initSituation();
         initDG();
+        initCum();
         initSchools();
         if (!currentSnapshot()) {
             $('#lock').classList.remove('hide');
