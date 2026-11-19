@@ -614,10 +614,10 @@ body.dark .cell.opp-swap{color:#c4b5fd}
             </div>
             <div class="situ">
                 <div class="situ-row">
-                    <input type="text" id="situIn" placeholder="예: 목요일 1교시에 애기 등원 때문에 비워야 해요" autocomplete="off" aria-label="상황 입력">
+                    <input type="text" id="situIn" placeholder="예: 금요일 연가 써야 해 · 목요일 1교시에 아이 등원" autocomplete="off" aria-label="상황 입력">
                     <button class="btn" type="button" id="situBtn">추천 찾기</button>
                 </div>
-                <div class="situ-out" id="situOut">이번 주·다음 주, 요일, 교시(1교시 · 2~3교시 · 오전 · 오후 · 하루 종일)를 적으면 그 교시를 자동으로 골라 추천합니다.</div>
+                <div class="situ-out" id="situOut">이번 주·다음 주, 요일, 교시(1교시 · 2~3교시 · 오전 · 오후 · 하루 종일)를 적으면 그 교시를 자동으로 골라 추천합니다. ‘금요일 연가’, ‘다음 주 월요일 출장’, ‘오후 반차’처럼 적어도 알아듣습니다.</div>
             </div>
             <div class="reclist" id="recList"></div>
         </section>
@@ -954,6 +954,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         altRecs: [],
         preview: null,
         marks: [],        // 고른 후보의 내 교시 변경 [{w,d,p,b,a}] — 내 시간표 나감·들어옴 표시
+        abs: null,        // 연가·출장 등으로 내가 없는 시간 {week, days:{d:1}, periods:{1교시:1}}
+        absAuto: [],      // 연가로 자동 설정한 대곡중 제외 요일
         workerUrl: '',
         liveData: null
     };
@@ -1161,6 +1163,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 if (!v || v.t === me) continue;
                 if (!D.isFree(v.t, d0, p0)) continue;   // 상대가 그 교시에 비어야
                 if (!D.isFree(me, d2, p2)) continue;    // 내가 옮길 교시에 비어야
+                if (absOff(ST.week, d2, p2)) continue;  // 연가·부재 시간은 후보에서 뺀다    // 내가 옮길 교시에 비어야
                 out.push(evaluate(D, {
                     type: 'swap', cls: cls, d0: d0, p0: p0, d2: d2, p2: p2,
                     t2: v.t, s2: v.s, sameDay: d2 === d0,
@@ -1181,6 +1184,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                     if (!v2 || v2.t === me) continue;
                     if (D.isFree(v2.t, d0, p0)) continue;      // 1:1이 되는 경우는 위에서 처리
                     if (!D.isFree(me, d2b, p2b)) continue;
+                    if (absOff(ST.week, d2b, p2b)) continue;
                     var xCls = D.busy()[slotKey(v2.t, d0, p0)];  // T2가 그 교시에 가르치는 반
                     if (xCls === undefined) continue;
                     var xCells = D.week(ST.week).cells[xCls];
@@ -1222,6 +1226,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var cell0 = D.classAt(cls, d0, p0);
         if (!cell0 || cell0.t !== me) return [];
         if (tgt.d === d0 && tgt.p === p0) return [];
+        if (absOff(ST.week, tgt.d, tgt.p)) return [];   // 연가·부재 시간으로는 옮기지 않는다
         var v2 = D.classAt(cls, tgt.d, tgt.p);
         if (!v2 || v2.t === me) return [];      // 그 교시에 같은 반 수업이 없으면 맞바꿀 상대가 없다
         var out = [];
@@ -1345,6 +1350,38 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         return D.mainSubject(ST.teacher);
     }
 
+    /* 연가·출장 등으로 내가 학교에 없는 시간인가.
+       그 요일·시간대로는 수업을 옮기지 않는다(목표·추천 후보에서 제외). */
+    function absOff(w, d, p) {
+        var a = ST.abs;
+        if (!a || !a.days || !a.days[d]) return false;
+        if (a.week && w != null && +a.week !== +w) return false;
+        return !!(a.periods && a.periods[p + 1]);
+    }
+
+    /* 부재 설정 — 요일·교시 집합으로 받아 저장하고, 대곡중이면 제외 요일 칩에도 반영한다 */
+    function setAbsence(a) {
+        ST.abs = null;
+        if (a && a.days && a.days.length) {
+            var dm = {}, pm = {};
+            a.days.forEach(function (d) { dm[d] = 1; });
+            (a.periods || []).forEach(function (p) { pm[p] = 1; });
+            ST.abs = { week: a.week == null ? null : +a.week, days: dm, periods: pm, full: (a.periods || []).length >= 7 };
+        }
+        if (isDG()) {
+            (ST.absAuto || []).forEach(function (d) { DG.skip[d] = false; });
+            ST.absAuto = [];
+            if (ST.abs && ST.abs.full) {
+                Object.keys(ST.abs.days).forEach(function (dk) {
+                    var d = +dk; DG.skip[d] = true; ST.absAuto.push(d);
+                });
+            }
+            document.querySelectorAll('#dgDays [data-day]').forEach(function (b) {
+                b.classList.toggle('on', !!DG.skip[+b.dataset.day]);
+            });
+        }
+    }
+
     // 같은 이름을 쓰는 교사 번호 목록(동명이인)
     function sameNameIds(D, t) {
         var nm = D.teacherOf(t), out = [];
@@ -1412,7 +1449,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 h(D.subjectOf(myS)) + '</span><small>' + h(W.cells[aCls].name) + '</small></div>';
         }
         // 내 공강 칸 — 내 수업을 고른 상태에서는 눌러서 '옮길 목표 교시'로 지정할 수 있다 (문산중 전용)
-        var canPick = ST.sel.length && !isDG();
+        var canPick = ST.sel.length && !isDG() && !absOff(ST.week, d, p);
         var base = 'cell ' + (any ? 'other' : 'empty') + (canPick ? ' pickable' : '') + (isTgt ? ' target' : '');
         if (canPick) {
             return '<button type="button" class="' + base + '" data-td="' + d + '" data-tp="' + p + '" aria-label="' +
@@ -1710,6 +1747,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var parts = [];
         if (b.subj) parts.push('제외 과목');
         if (b.slot) parts.push('1·7교시·제외 요일');
+        if (b.abs) parts.push('연가·부재 시간');
         if (b.busy) parts.push('상대 교사가 그 시간에 수업');
         if (b.me) parts.push('내가 옮길 시간에 수업');
         return parts.length ? parts.join(' · ') : '같은 반에 맞바꿀 다른 수업이 없습니다';
@@ -1734,6 +1772,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                     if (!v || v.t === A) continue;
                     if (DG.subj && dgSubjExcluded(D.subjectOf(v.s))) { blocked.subj = 1; continue; }
                     if (!dgSlotOK(d2, p2)) { blocked.slot = 1; continue; }
+                    if (absOff(w2, d2, p2)) { blocked.abs = 1; continue; }   // 연가·부재 시간
                     if (!dgFree(D, w0, v.t, d0, p0)) { blocked.busy = 1; continue; }
                     if (!dgFree(D, w2, A, d2, p2)) { blocked.me = 1; continue; }
                     list.push({ type: 'swap', w0: w0, d0: d0, p0: p0, cls: cls, s0: v0.s, w2: w2, d2: d2, p2: p2, t2: v.t, s2: v.s });
@@ -1755,6 +1794,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
                 if (!v2 || v2.t === A) continue;
                 if (DG.subj && dgSubjExcluded(D.subjectOf(v2.s))) continue;
                 if (!dgSlotOK(d2, p2)) continue;
+                if (absOff(w0, d2, p2)) continue;   // 연가·부재 시간
                 if (dgFree(D, w0, v2.t, d0, p0)) continue;
                 if (!dgFree(D, w0, A, d2, p2)) continue;
                 var xCls = dgBusyMap(D, w0)[v2.t + '|' + d0 + '|' + p0];
@@ -2573,6 +2613,8 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             sync.title = '내장 스냅샷 — Worker를 연결하면 실시간으로 바뀝니다';
         }
         ST.teacher = defaultTeacher(ST.data);
+        ST.abs = null;
+        ST.absAuto = [];
         renderTeacherSelect();
         ST.sel = [];
         ST.target = null;
@@ -2869,10 +2911,28 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
        6-3. 상황 입력 → 요일·교시 자동 선택
        ============================================================ */
     var DOW_NAME = { '월': 0, '화': 1, '수': 2, '목': 3, '금': 4 };
+    /* 연가·출장 등 '하루(또는 반나절)를 비워야 하는' 표현 */
+    var ABS_RE = /연가|연차|휴가|병가|공가|휴무|출장|결근|종일|반차|조퇴|외출|비워야|비우는|쉬어야|쉬는/;
+
+    /* 오늘·내일·모레 → 이번 주·다음 주의 그 요일 */
+    function dateSlot(offset) {
+        var now = new Date();
+        var t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+        for (var w = 1; w <= 2; w++) {
+            if (!ST.data || !ST.data.weeks[String(w)]) continue;
+            for (var d = 0; d < DAYS; d++) {
+                var dt = dateOf(w, d);
+                if (dt.getFullYear() === t.getFullYear() && dt.getMonth() === t.getMonth() && dt.getDate() === t.getDate())
+                    return { w: w, d: d };
+            }
+        }
+        return null;
+    }
 
     function parseSituation(text) {
         var s = String(text || '').replace(/\s+/g, ' ');
-        var res = { week: ST.week, days: [], periods: [] };
+        var res = { week: ST.week, days: [], periods: [], absent: false, note: '' };
+        var weekSpoken = /다음\s*주|다음주|담주|내주|이번\s*주|이번주|금주/.test(s);
         if (/다음\s*주|다음주|담주|내주/.test(s)) res.week = 2;
         else if (/이번\s*주|이번주|금주/.test(s)) res.week = 1;
 
@@ -2889,18 +2949,40 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
             var dre2 = /([월화수목금])\s*(?:[,·\/]|과|와)\s*([월화수목금])/g;
             while ((m = dre2.exec(s))) { dset[DOW_NAME[m[1]]] = 1; dset[DOW_NAME[m[2]]] = 1; }
         }
+        // 오늘·내일·모레는 날짜로 요일을 찾고, 주도 그 날짜에 맞춘다
+        var off = /모레/.test(s) ? 2 : (/내일/.test(s) ? 1 : (/오늘/.test(s) ? 0 : -1));
+        if (off >= 0) {
+            var ds = dateSlot(off);
+            if (ds) {
+                if (!Object.keys(dset).length) dset[ds.d] = 1;
+                if (!weekSpoken) res.week = ds.w;
+            } else res.note = '그 날짜는 이번 주·다음 주 수업일이 아닙니다.';
+        }
         res.days = Object.keys(dset).map(Number).sort(function (x, y) { return x - y; });
 
-        var pset = {};
-        function addRange(x, y) { for (var k = Math.max(1, x); k <= Math.min(7, y); k++) pset[k] = 1; }
-        if (/하루\s*종일|종일|전\s*교시|전체\s*교시/.test(s)) addRange(1, 7);
-        if (/오전/.test(s)) addRange(1, 4);
-        if (/오후/.test(s)) addRange(5, 7);
+        res.absent = ABS_RE.test(s);
+        var pset = {}, explicit = {};
+        function addTo(set, x, y) { for (var k = Math.max(1, x); k <= Math.min(7, y); k++) set[k] = 1; }
         var rp = /(\d)\s*(?:~|～|부터)\s*(\d)\s*교시?/g;
-        while ((m = rp.exec(s))) { var x = +m[1], y = +m[2]; if (x >= 1 && y <= 7 && x <= y) addRange(x, y); }
+        while ((m = rp.exec(s))) { var x = +m[1], y = +m[2]; if (x >= 1 && y <= 7 && x <= y) addTo(explicit, x, y); }
         var rpc = /((?:\d\s*(?:[,·\/]|와|과|랑|하고)?\s*)+)교시/g;
         while ((m = rpc.exec(s))) {
-            (m[1].match(/\d/g) || []).forEach(function (n) { var v = +n; if (v >= 1 && v <= 7) pset[v] = 1; });
+            (m[1].match(/\d/g) || []).forEach(function (n) { var v = +n; if (v >= 1 && v <= 7) explicit[v] = 1; });
+        }
+        if (Object.keys(explicit).length) {
+            pset = explicit;                 // 교시를 집어 적었으면 그 교시만
+        } else {
+            if (res.absent) {
+                /* 교시를 안 적은 연가·출장·병가는 그 요일 전체를 비우는 것으로 본다.
+                   '오전 반차'는 1~4교시, '오후 반차'·'조퇴'는 5~7교시만. */
+                if (/오전/.test(s) && !/오후/.test(s)) addTo(pset, 1, 4);
+                else if (/오후/.test(s) || /조퇴/.test(s)) addTo(pset, 5, 7);
+                else addTo(pset, 1, 7);
+            } else {
+                if (/오전/.test(s)) addTo(pset, 1, 4);
+                if (/오후/.test(s)) addTo(pset, 5, 7);
+            }
+            if (/하루\s*종일|종일|전\s*교시|전체\s*교시/.test(s)) { pset = {}; addTo(pset, 1, 7); }
         }
         res.periods = Object.keys(pset).map(Number).sort(function (x, y) { return x - y; });
         return res;
@@ -2950,11 +3032,23 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var p = parseSituation(raw);
         if (!p.periods.length) {
             out.className = 'situ-out err';
-            out.textContent = '교시를 찾지 못했습니다. 예: 목요일 1교시 · 다음 주 2~3교시 · 오전 · 하루 종일';
+            out.textContent = '교시를 찾지 못했습니다. 예: 금요일 연가 · 다음 주 2~3교시 · 오전 반차 · 하루 종일';
             return;
         }
         var days = p.days.length ? p.days.slice() : [0, 1, 2, 3, 4];
+        if (p.note) {
+            out.className = 'situ-out warn';
+            out.innerHTML = h(p.note) + ' 이번 주·다음 주 요일로 다시 적어 주세요.';
+            return;
+        }
         setWeek(p.week);
+        /* 연가·출장·반차는 내가 학교에 없는 시간 — 그 요일·교시로는 옮길 목표·추천 후보를 만들지 않는다 */
+        setAbsence(p.absent ? { week: p.week, days: days, periods: p.periods } : null);
+        var absNote = p.absent
+            ? '<br><b>' + h(dayListLabel(days)) + ' ' + h(periodListLabel(p.periods)) +
+              '은(는) 내가 없는 시간이라 목표·추천 후보에서 제외</b>합니다.' +
+              (isDG() && ST.abs && ST.abs.full ? ' (대곡중 제외 요일에도 반영)' : '')
+            : '';
         var found = [];
         days.forEach(function (d) {
             p.periods.forEach(function (per) {
@@ -2965,7 +3059,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var cond = weekLabel(p.week) + ' · ' + dayListLabel(days) + ' ' + periodListLabel(p.periods);
         if (!found.length) {
             out.className = 'situ-out warn';
-            out.innerHTML = '<b>' + h(cond) + '</b> 시간은 원래 공강입니다! 다른 교시를 적어 주세요.';
+            out.innerHTML = '<b>' + h(cond) + '</b> 시간은 원래 공강입니다! 다른 교시를 적어 주세요.' + absNote;
             compute();
             return;
         }
@@ -2979,6 +3073,7 @@ var SNAPSHOT_DG = {"school":"경남 대곡중학교","code":"94305","updated":"2
         var cnt = isDG() ? (DG.res ? (DG.res.full ? DG.res.slots.length + '개 모두 가능한 조합 ' + DG.res.full + '가지' : DG.res.bestCover + '개까지 가능') : '0건') : (ST.recs.length + '건');
         out.className = 'situ-out ok';
         out.innerHTML = '적용 조건: <b>' + h(cond) + '</b> (' + h(detail) + (found.length > 4 ? ' 외 ' + (found.length - 4) + '교시' : '') + ')' +
+            absNote +
             '<br>첫 교시를 기준으로 추천 ' + cnt + '을 보여 줍니다.';
     }
 
