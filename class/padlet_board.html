@@ -725,7 +725,7 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
                 <button class="btn small" id="tpWorkerSave" type="button">저장하고 연결</button>
                 <button class="btn ghost small" id="tpWordTest" type="button">연결 테스트</button>
             </div>
-            <p class="sheet-note" id="tpWorkerNote">기본 주소를 그대로 저장하면 QR로 들어온 학생도 자동으로 실시간 연결됩니다. 비워 두면 같은 브라우저 탭끼리만 연습 모드로 동작합니다.</p>
+            <p class="sheet-note" id="tpWorkerNote">기본 주소가 미리 들어 있습니다. 그대로 저장하거나 비워 두면 QR·코드로 들어온 학생도 자동으로 실시간 연결되고, Worker에 닿지 않으면 같은 브라우저 탭끼리 연습 모드로 동작합니다.</p>
         </div>
     </div>
 </aside>
@@ -1018,17 +1018,19 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
     /* =========================================================
        3. 연결 계층 (WebSocket ↔ 같은 브라우저 BroadcastChannel)
        ========================================================= */
-    /* Worker 는 '한 번 저장한 주소' 또는 교사가 나눠 준 링크(?w=)로만 쓴다.
-       저장 전에는 조용히 브라우저 연습 모드로 동작한다(주소가 없는데 붙으려 하면
-       콘솔에 연결 오류만 쌓인다). */
+    /* 연결 순서: 교사가 저장한 주소(WORKER_KEY) → 링크로 함께 나눠 준 주소(?w=) → 기본 Worker.
+       기본 Worker 가 응답하지 않으면 connect() 가 5.5초 뒤 브라우저 연습 모드로 내려간다. */
     function workerURL() {
         var saved = String(lsGet(WORKER_KEY, '') || '').trim();
         if (saved) return saved.replace(/\/+$/, '');
         var m = /[?&]w=([^&]+)/.exec(location.search || '');
         if (m) {
-            try { return decodeURIComponent(m[1]).replace(/\/+$/, ''); } catch (e) {}
+            try {
+                var shared = decodeURIComponent(m[1]).replace(/\/+$/, '');
+                if (shared) return shared;
+            } catch (e) {}
         }
-        return '';
+        return String(DEFAULT_WORKER || '').replace(/\/+$/, '');
     }
     function wsURL(code, role) {
         var base = workerURL().replace(/^http/i, 'ws');
@@ -2220,7 +2222,7 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
         $('#tpWorkerSave').addEventListener('click', function () {
             var v = ($('#tpWorker').value || '').trim().replace(/\/+$/, '');
             lsSet(WORKER_KEY, v);
-            toast(v ? 'Worker 주소를 저장했습니다 · 다시 연결합니다' : '연습 모드로 바꿨습니다');
+            toast(v ? 'Worker 주소를 저장했습니다 · 다시 연결합니다' : '기본 주소로 연결합니다 · 다시 연결합니다');
             reconnectAll();
         });
         $('#tpWordTest').addEventListener('click', testWorker);
