@@ -272,6 +272,14 @@ body.dark-mode .verybad{color:#ff9b8f}
        ============================================================ */
     var SCHOOL_KEY = 'svl_tt_school';        /* 시간표 변경 관리와 같은 키 */
     var TEACHER_KEY = 'svl_tt_teacher_';     /* + 학교 키 — 같은 키를 함께 쓴다 */
+    /* 학교별 기본 교사 — 저장된 선택이 없을 때 이 선생님 시간표로 시작한다.
+       공개 저장소에 실명을 두지 않도록 교사 번호(idx)와 이름 해시(h·h2)만 둔다.
+       h = 세 글자 성명의 해시, h2 = Worker가 성명 앞 두 글자만 내려줄 때의 해시.
+       번호는 「시간표 변경 관리」와 같은 값(문산중 35 · 대곡중 18)이다. */
+    var DEF_TEACHER = {
+        munsan: { idx: 35, h: 'a84a196c', h2: '6d6ed2d4' },
+        daegok: { idx: 18, h: '8a4204c7', h2: '5b811525' }
+    };
     var WORKER_KEY = 'svl_tt_worker';
     var DEFAULT_WORKER = 'https://munsan-comci.lovesyat.workers.dev/';
     var NEIS_KEY = 'svl_neis_key';           /* 나이스 인증키(선택) — 없으면 키 없이 호출 */
@@ -302,6 +310,16 @@ body.dark-mode .verybad{color:#ff9b8f}
     function $(s) { return document.querySelector(s); }
     function pad2(n) { return (n < 10 ? '0' : '') + n; }
     function lsGet(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }
+    /* 이름 대조용 짧은 해시(FNV-1a 32bit) — 실명을 코드에 남기지 않고 해시만 비교한다 */
+    function nameKey(s) {
+        var h = 0x811c9dc5, i;
+        s = String(s || '').trim();
+        for (i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 0x01000193) >>> 0;
+        }
+        return ('0000000' + h.toString(16)).slice(-8);
+    }
     function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
     function ssGet(k) { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } }
     function lang() {
@@ -557,7 +575,7 @@ body.dark-mode .verybad{color:#ff9b8f}
             var p = new Prep(r.json);
             p.at = Date.now();
             S.comci[school] = p;
-            if (S.teacher > p.teachers.length - 1) S.teacher = 0;
+            if (S.school === school) applyTeacher(school);
         }).catch(function (e) {
             S.err['comci:' + school] = (e && e.name === 'AbortError') ? 'timeout' : 'net';
         }).then(function () {
@@ -1176,10 +1194,36 @@ body.dark-mode .verybad{color:#ff9b8f}
         });
     }
 
+    /* 저장된 선택('' = 없음, '0' = 직접 '선생님 선택')과 기본 교사를 구분한다 */
+    function savedTeacher(k) { return lsGet(TEACHER_KEY + k); }
+
+    /* 기본 교사: 이름 해시로 먼저 찾고, 못 찾으면 교사 번호로 (자료가 없으면 0) */
+    function defaultTeacher(k, P) {
+        var d = DEF_TEACHER[k], i, nm, hit = 0;
+        if (!d || !P || !P.teachers) return 0;
+        for (i = 1; i < P.teachers.length; i++) {
+            nm = String(P.teachers[i] || '').trim();
+            if (!nm) continue;
+            if (nameKey(nm) === d.h || nameKey(nm.slice(0, 2)) === d.h2) { hit = i; break; }
+        }
+        if (hit) return hit;
+        if (P.teachers[d.idx] && String(P.teachers[d.idx]).trim()) return d.idx;
+        return 0;
+    }
+
+    /* 학교 하나의 교사 선택을 확정한다 — 저장된 선택이 있으면 그대로, 없으면 기본 교사 */
+    function applyTeacher(k) {
+        var P = S.comci[k], v = savedTeacher(k), n;
+        n = (v !== '') ? (+v || 0) : defaultTeacher(k, P);
+        if (P && (n < 0 || n > P.teachers.length - 1 || (n && !String(P.teachers[n] || '').trim()))) n = 0;
+        S.teacher = n;
+        return n;
+    }
+
     function pickSchool(k, save) {
         if (!SCHOOLS[k]) k = 'munsan';
         S.school = k;
-        S.teacher = +lsGet(TEACHER_KEY + k) || 0;
+        applyTeacher(k);
         if (save) lsSet(SCHOOL_KEY, k);
         S.err = {};
         renderAll();
@@ -1259,7 +1303,7 @@ body.dark-mode .verybad{color:#ff9b8f}
         initTheme();
         var savedSchool = lsGet(SCHOOL_KEY) || 'munsan';
         S.school = SCHOOLS[savedSchool] ? savedSchool : 'munsan';
-        S.teacher = +lsGet(TEACHER_KEY + S.school) || 0;
+        applyTeacher(S.school);
 
         $('#schoolTabs').addEventListener('click', function (e) {
             var b = e.target.closest('.sc-btn');
