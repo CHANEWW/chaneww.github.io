@@ -1415,21 +1415,23 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
         const moonDir = new THREE.Vector3(1, 0, 0);
         const rightVec = new THREE.Vector3();
         const UP = new THREE.Vector3(0, 1, 0);
+        // 공전면(지구-태양 면) 안에서 태양 방향에 수직인 기준선.
+        // 달이 이 방향(+)에 있으면 삭→망으로 차오르는 구간, (-)에 있으면 망→삭으로 기우는 구간.
+        const ELONG_PERP = new THREE.Vector3().crossVectors(UP, SUN_DIR).normalize();
 
-        function phaseInfo(cosElong) {
+        // 이각(0~180°)만으로는 차오르는지 기우는지 알 수 없으므로,
+        // 부호가 있는 이각(sin 성분)을 함께 받아 위상 이름을 정한다.
+        function phaseInfo(cosElong, sinElong) {
             const elongate = Math.acos(Math.max(-1, Math.min(1, cosElong))) * 180 / Math.PI;
             const lit = (1 - cosElong) / 2;
+            const waxing = sinElong >= 0;   // 차오르는 구간(삭 → 상현 → 망)
             let name;
             if (elongate < 22.5) name = '삭 (신월)';
-            else if (elongate < 67.5) name = '초승달';
-            else if (elongate < 112.5) name = '상현달';
-            else if (elongate < 157.5) name = '차오르는 달';
-            else if (elongate < 202.5) name = '보름달 (망)';
-            else if (elongate < 247.5) name = '기우는 달';
-            else if (elongate < 292.5) name = '하현달';
-            else if (elongate < 337.5) name = '그믐달';
-            else name = '삭 (신월)';
-            return { elong: elongate, lit: lit, name: name };
+            else if (elongate < 67.5) name = waxing ? '초승달' : '그믐달';
+            else if (elongate < 112.5) name = waxing ? '상현달' : '하현달';
+            else if (elongate < 157.5) name = waxing ? '차오르는 달' : '기우는 달';
+            else name = '보름달 (망)';
+            return { elong: elongate, lit: lit, name: name, waxing: waxing };
         }
 
         // --- 7. 지구에서 본 위상 캔버스 ---
@@ -1501,7 +1503,8 @@ body.dark .side-ctrl-panel .control-tab-btn { color: #e6edf9; }
             // 위상 계산
             moonDir.copy(moon.position).normalize();
             const cosElong = moonDir.dot(SUN_DIR);
-            const info = phaseInfo(cosElong);
+            const sinElong = moonDir.dot(ELONG_PERP);
+            const info = phaseInfo(cosElong, sinElong);
 
             // 지구에서 보았을 때 태양이 달의 어느 쪽에 있는지
             rightVec.crossVectors(moonDir, UP).normalize();
