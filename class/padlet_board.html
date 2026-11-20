@@ -1246,6 +1246,7 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
         $('#viewBoard').hidden = false;
         $('#bbCode').textContent = '#' + code;
         try { history.replaceState(null, '', location.pathname + '?board=' + code); } catch (e) {}
+        try { window.scrollTo(0, 0); } catch (e) {}
         $('#bbSearch').value = '';
         $('#filterNote').hidden = true;
         $('#boardBody').innerHTML = '<div class="empty-board"><b>보드를 여는 중입니다</b>잠시만 기다려 주세요</div>';
@@ -1471,17 +1472,26 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
     /* =========================================================
        5. 보드 그리기
        ========================================================= */
+    function orderedCards(list) {
+        var idx = {};
+        list.forEach(function (c, i) { idx[c.id] = i; });
+        return list.slice().sort(function (a, b) {
+            if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
+            return (idx[a.id] || 0) - (idx[b.id] || 0);
+        });
+    }
+
     function visibleCards() {
         var b = S.board;
         if (!b) return [];
         var q = S.q.trim().toLowerCase();
-        return b.cards.filter(function (c) {
+        return orderedCards(b.cards.filter(function (c) {
             if (!c.approved && !S.host && c.owner !== S.cid) return false;
             if (!q) return true;
             var hay = [c.title, c.body, c.author || '', c.link || ''].join(' ');
             (c.comments || []).forEach(function (m) { hay += ' ' + m.text + ' ' + (m.author || ''); });
             return hay.toLowerCase().indexOf(q) >= 0;
-        });
+        }));
     }
 
     function authorOf(c) {
@@ -1552,6 +1562,7 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
     function renderBoard() {
         var b = S.board;
         if (!b) return;
+        if (!S.layoutTouched && LAYOUTS.indexOf(b.layout) >= 0) S.layout = b.layout;
         applyBoardTheme(b.theme);
         $('#bdTitle').textContent = b.title || '실시간 공유 보드';
         $('#bdSub').textContent = b.subtitle || '';
@@ -2142,7 +2153,7 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
             sendOp({ t: 'column', op: 'add', title: '' });
         });
         $('#tpPreview').addEventListener('click', function () {
-            var url = joinLink((S.board && S.board.code) || S.code) + '&role=student';
+            var url = joinLink((S.board && S.board.code) || S.code) + '&role=student&preview=1';
             try { window.open(url, '_blank', 'noopener'); } catch (e) { location.href = url; }
         });
         $('#tpExport').addEventListener('click', exportJSON);
@@ -2216,6 +2227,8 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
             if (CODE_RE.test(code)) {
                 var asStudent = /[?&](role|as)=student\b/.test(location.search || '');
                 if (!asStudent && lsGet(tokenKey(code), '')) { openBoard(code, true); return; }
+                /* 교사 미리보기는 이름 없는 학생으로 연다 */
+                if (/[?&]preview=1/.test(location.search || '')) { openBoard(code, false, { name: '' }); return; }
                 /* 한 번 이름을 적어 둔 학생은 QR·링크로 들어오면 이름 없이 바로 입장한다 */
                 var savedName = lsGet(NAME_KEY, '');
                 if (savedName) { openBoard(code, false, { name: savedName }); return; }
