@@ -18,6 +18,9 @@ Object.assign(window.SVL_I18N_DICT, {"📌 새 보드 만들기":["📌 New boar
 /* 실시간 공유 보드 — 남은 문구 2개 */
 Object.assign(window.SVL_I18N_DICT, {"교사 관리":["Teacher tools","教員メニュー","教师管理","Herramientas del docente"],"실시간 공유 보드":["Live sharing board","リアルタイム共有ボード","实时共享看板","Tablero compartido en vivo"]});
 
+/* 실시간 공유 보드 — 기본 칼럼 이름(번호 포함) */
+Object.assign(window.SVL_I18N_DICT, {"모둠 {0}": ["Group {0}", "班 {0}", "第 {0} 组", "Grupo {0}"]});
+
 /* ============================================================================
    Science Virtual LAB — 공용 다국어 모듈 (labs/common/i18n.js)
    ----------------------------------------------------------------------------
