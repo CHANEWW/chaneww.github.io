@@ -145,7 +145,7 @@ Object.assign(window.SVL_I18N_DICT, {
   "불가능 도형·인지": ["Impossible figures & perception", "不可能図形・認知", "不可能图形·认知", "Figuras imposibles y percepción"],
   "🎲 랜덤 1분 뽑기": ["🎲 Random pick", "🎲 ランダムに1つ", "🎲 随机抽一个", "🎲 Elegir al azar"],
   "⛶ 발표 모드": ["⛶ Presentation mode", "⛶ 発表モード", "⛶ 演示模式", "⛶ Modo presentación"],
-  "크게 보기": ["View large", "大きく見る", "放大查看", "Ver en grande"],
+  "크게 보기": ["Large", "大きく見る", "放大查看", "Ampliar"],
   "착시를 크게 봅니다": ["View this illusion large", "この錯視を大きく見る", "放大查看这个错觉", "Ver esta ilusión en grande"],
   "✕ 닫기": ["✕ Close", "✕ 閉じる", "✕ 关闭", "✕ Cerrar"],
   "◀ 이전": ["◀ Previous", "◀ 前へ", "◀ 上一个", "◀ Anterior"],
