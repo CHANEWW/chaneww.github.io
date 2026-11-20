@@ -25,6 +25,7 @@
     --card:rgba(255,255,255,.9); --card-solid:#fff; --accent:#0a84ff; --accent-soft:rgba(10,132,255,.12);
     --ok:#10b981; --ok-soft:rgba(16,185,129,.13); --warn:#f59e0b; --warn-soft:rgba(245,158,11,.14);
     --danger:#ef4444; --danger-soft:rgba(239,68,68,.12);
+    --chg:#84cc16; --chg-soft:rgba(132,204,22,.22); --chg-line:rgba(101,163,13,.55); --chg-ink:#3f6212;
     --shadow:0 10px 30px rgba(15,23,42,.10);
 }
 body.dark{
@@ -32,6 +33,7 @@ body.dark{
     --card:rgba(26,32,45,.9); --card-solid:#1a2130; --accent:#4aa3ff; --accent-soft:rgba(74,163,255,.18);
     --ok:#34d399; --ok-soft:rgba(52,211,153,.16); --warn:#fbbf24; --warn-soft:rgba(251,191,36,.16);
     --danger:#f87171; --danger-soft:rgba(248,113,113,.16);
+    --chg:#a3e635; --chg-soft:rgba(163,230,53,.18); --chg-line:rgba(163,230,53,.5); --chg-ink:#d9f99d;
     --shadow:0 10px 30px rgba(0,0,0,.5);
 }
 html,body{margin:0;padding:0;width:100%;height:100%}
@@ -147,6 +149,16 @@ select.tt-sel:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accen
 }
 body.dark .cell.mine{color:#8fc2ff}
 .cell.mine:hover{transform:translateY(-1px); box-shadow:0 8px 18px rgba(10,132,255,.18)}
+/* 컴시간 알리미에서 이미 변경된 교시 — 연두색.
+   선택(sel)·나감(src)·들어옴(dst)·교체(swap)·목표(target) 색이 뒤에 와서 우선한다.
+   상태 색 위에서도 구분되도록 왼쪽 아래에 연두 점(chgdot)을 남긴다. */
+.cell.chg{background:var(--chg-soft); border-color:var(--chg-line); color:var(--chg-ink)}
+.cell.chg .chgdot{
+    position:absolute; left:4px; bottom:4px; width:6px; height:6px; border-radius:50%;
+    background:var(--chg); box-shadow:0 0 0 1.5px rgba(255,255,255,.9); z-index:1;
+}
+body.dark .cell.chg .chgdot{box-shadow:0 0 0 1.5px rgba(15,23,42,.75)}
+.cell.chg.pastday{opacity:.5}
 .cell.mine.sel{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset; background:rgba(10,132,255,.22)}
 .cell .tag{
     position:absolute; top:2px; right:3px; font-size:9.5px; font-weight:900; letter-spacing:-.2px;
@@ -171,6 +183,9 @@ body.dark .cell.dst{color:#6ee7b7}
 .legend .l-target{background:linear-gradient(135deg,var(--ok),#34d399)}
 .legend .l-applied{background:#0b7a52; border-radius:50%}
 body.dark .legend .l-applied{background:#6ee7b7}
+.legend .l-chg{background:linear-gradient(135deg,#bef264,#65a30d); border-radius:3px}
+body.dark .legend .l-chg{background:linear-gradient(135deg,#d9f99d,#84cc16)}
+.legend .lg-chg[hidden]{display:none}
 
 /* 목표(공강) 칸 지정 */
 .cell.pickable{cursor:pointer; border-style:dashed}
@@ -710,6 +725,7 @@ body.dark .cell.opp-swap{color:#c4b5fd}
                 <span><i class="l-dst"></i>들어옴 · 옮겨가는 교시</span>
                 <span><i class="l-swap"></i>교체 · 같은 교시 반 이동</span>
                 <span><i class="l-applied"></i>● 누적 확정 반영된 교시</span>
+                <span class="lg-chg" id="lgChg" hidden><i class="l-chg"></i>컴시간 변경됨 · 알리미에서 이미 바뀐 교시</span>
             </div>
         </section>
 
@@ -856,7 +872,12 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         this.weeks = {};
         for (var k in d.weeks) {
             var w = d.weeks[k];
-            this.weeks[k] = { start: w.start, perDay: w.perDay, cells: this.build(w.grid) };
+            this.weeks[k] = {
+                start: w.start, perDay: w.perDay, cells: this.build(w.grid),
+                /* 컴시간에서 이미 변경된 교시 (Worker 새버전만 내려준다 → 없으면 null) */
+                chg: this.buildChg(w.changed),
+                chgCount: (typeof w.changedCount === 'number' ? w.changedCount : null)
+            };
         }
         this.busyCache = {};
         this.bwCache = {};
@@ -879,6 +900,51 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         return out;
     };
     Data.prototype.week = function (w) { return this.weeks[String(w)] || this.weeks['1']; };
+
+    /* Worker 의 weeks[주].changed — grid 와 같은 학급 순서의 '0/1' 문자열 배열.
+       필드가 없는 구버전 Worker 응답이면 null 을 돌려주고 화면은 지금과 똑같이 동작한다. */
+    Data.prototype.buildChg = function (chg) {
+        if (!chg || !chg.length) return null;
+        var out = [], i = 0;
+        for (var g = 1; g <= 3; g++) {
+            for (var c = 1; c <= this.counts[g]; c++, i++) {
+                var rows = String(chg[i] || '').split('|'), days = [];
+                for (var d = 0; d < DAYS; d++) {
+                    var parts = String(rows[d] || '').split(','), cells = [];
+                    for (var p = 0; p < MAXP; p++) cells.push(parts[p] === '1');
+                    days.push(cells);
+                }
+                out.push(days);
+            }
+        }
+        return out;
+    };
+    Data.prototype.hasChg = function (w) {
+        var wk = this.weeks[String(w == null ? ST.week : w)];
+        return !!(wk && wk.chg);
+    };
+    /* 해당 주·학급·요일·교시가 컴시간에서 이미 변경된 교시인가 */
+    Data.prototype.changedAt = function (cls, w, d, p) {
+        var wk = this.weeks[String(w == null ? ST.week : w)];
+        if (!wk || !wk.chg || !wk.chg[cls]) return false;
+        var days = wk.chg[cls];
+        return !!(days[d] && days[d][p]);
+    };
+    /* 이번 주 내 수업 중 컴시간에서 이미 바뀐 교시 수 */
+    Data.prototype.myChangedCount = function (t, w) {
+        var wk = this.weeks[String(w == null ? ST.week : w)];
+        if (!wk || !wk.chg) return 0;
+        var n = 0;
+        for (var i = 0; i < wk.cells.length; i++) {
+            for (var d = 0; d < DAYS; d++) {
+                for (var p = 0; p < MAXP; p++) {
+                    var v = wk.cells[i].days[d][p];
+                    if (v && v.t === t && wk.chg[i] && wk.chg[i][d] && wk.chg[i][d][p]) n++;
+                }
+            }
+        }
+        return n;
+    };
     Data.prototype.subjectOf = function (s) { return this.subjects[s] || ''; };
     Data.prototype.teacherOf = function (t) { return this.teachers[t] || ''; };
     Data.prototype.classAt = function (cls, d, p) { return this.week(ST.week).cells[cls].days[d][p]; };
@@ -1797,6 +1863,9 @@ body.dark .cell.opp-swap{color:#c4b5fd}
 
     function renderTT() {
         var D = ST.data, w = ST.week, grid = $('#ttGrid');
+        /* 범례의 연두색 안내는 Worker 가 변경 교시 정보를 내려줄 때만 보인다 (구버전 응답 호환) */
+        var lg = $('#lgChg');
+        if (lg) lg.hidden = !(D && D.hasChg(w));
         var today = new Date(), todayStr = today.getFullYear() + '-' + (today.getMonth() + 1) + '-' + today.getDate();
         var html = '<div class="ph" style="visibility:hidden"></div>';
         for (var d = 0; d < DAYS; d++) {
@@ -1852,23 +1921,27 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         var apCls = ap === true ? ' applied' : (ap === false ? ' applied off' : '');
         /* 이미 지난 요일 — 교체 대상 선택에서 자동 제외 (왜 빠졌는지 칸에 표시) */
         var past = isPastDay(ST.week, d);
+        /* 컴시간 알리미에서 이미 변경된 교시 — 이 칸이 내 수업인 학급 기준 */
+        var chg = !!(mine && D.changedAt(mine.cls, ST.week, d, p));
+        var chgDot = chg ? '<i class="chgdot" aria-hidden="true"></i>' : '';
 
         if (mine && past) {
-            return '<div class="cell mine pastday" data-d="' + d + '" data-p="' + p + '" title="' +
-                h(wdLabel(d) + '요일은 이미 지나 교체 대상에서 제외됩니다 · ‘지난 요일 제외’를 끄면 선택됩니다') + '">' +
-                '<span class="tag">지난</span><span class="txt">' + h(D.subjectOf(mine.s)) + '</span><small>' + h(W.cells[mine.cls].name) + '</small></div>';
+            return '<div class="cell mine pastday' + (chg ? ' chg' : '') + '" data-d="' + d + '" data-p="' + p + '" title="' +
+                h(wdLabel(d) + '요일은 이미 지나 교체 대상에서 제외됩니다' + (chg ? ' · 컴시간에서 이미 변경된 교시' : '') + ' · ‘지난 요일 제외’를 끄면 선택됩니다') + '">' +
+                '<span class="tag">지난</span><span class="txt">' + h(D.subjectOf(mine.s)) + '</span><small>' + h(W.cells[mine.cls].name) + '</small>' + chgDot + '</div>';
         }
 
         if (mine) {
             var cls = 'cell mine' + (sel ? ' sel' : '') + (isSwap ? ' swap' : (isSrc ? ' src' : '')) +
-                (isSwap || isSrc || sel ? '' : apCls);
+                (isSwap || isSrc || sel ? '' : apCls) + (chg ? ' chg' : '');
             var tag = isSwap ? '교체' : (isSrc ? '나감' : (sel ? '선택' : ''));
             var sub2 = isSwap ? (h(W.cells[mine.cls].name) + '→' + h(W.cells[mk.a].name)) : h(W.cells[mine.cls].name);
             /* 반이 바뀌는 교체면 그 반에서 가르치는 내 과목을, 아니면 내가 내어주는 수업 과목을 쓴다 */
             var myTxt = isSwap ? D.subjectOf(myLessonSubject(D, mk, d, p)) : D.subjectOf(mine.s);
-            return '<button type="button" class="' + cls + '" data-d="' + d + '" data-p="' + p + '" data-cls="' + mine.cls + '">' +
+            return '<button type="button" class="' + cls + '" data-d="' + d + '" data-p="' + p + '" data-cls="' + mine.cls + '"' +
+                (chg ? ' title="컴시간 알리미에서 이미 변경된 교시입니다"' : '') + '>' +
                 (tag ? '<span class="tag">' + tag + '</span>' : '') +
-                '<span class="txt">' + h(myTxt) + '</span><small>' + sub2 + '</small></button>';
+                '<span class="txt">' + h(myTxt) + '</span><small>' + sub2 + '</small>' + chgDot + '</button>';
         }
         if (isDst || isSwap) {
             /* 들어가는 반은 바뀌어도 내 과목은 내 과목 — 그 반에 있던 상대 과목을 쓰지 않는다 */
@@ -2981,20 +3054,25 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         var ownSubj = function (cls) { return subjOf(cls) || tSubj; };
         /* 그 교시로 가져가는 수업의 과목(교과 배정) — 목적지에 있던 남의 과목을 쓰지 않는다 */
         var keepSubj = (s && s.s != null) ? D.subjectOf(s.s) : '';
+        /* 상대 선생님 수업 칸이 컴시간에서 이미 변경된 교시인가 */
+        var chg = b != null && D.changedAt(b, w, d, p);
+        var chgCls = chg ? ' chg' : '';
+        var chgDot = chg ? '<i class="chgdot" aria-hidden="true"></i>' : '';
         if (b != null && a == null) {
-            return '<div class="cell src opp-out"><span class="tag">나감</span><span class="txt">' + h(keepSubj || ownSubj(b)) +
-                '</span><small>' + h(nameOf(b)) + '</small></div>';
+            return '<div class="cell src opp-out' + chgCls + '"><span class="tag">나감</span><span class="txt">' + h(keepSubj || ownSubj(b)) +
+                '</span><small>' + h(nameOf(b)) + '</small>' + chgDot + '</div>';
         }
         if (b == null && a != null) {
             return '<div class="cell dst opp-in"><span class="tag">들어옴</span><span class="txt">' + h(keepSubj || tSubj || '') +
                 '</span><small>' + h(nameOf(a)) + '</small></div>';
         }
         if (b != null && a != null && b !== a) {
-            return '<div class="cell opp-swap"><span class="tag">교체</span><span class="txt">' + h(keepSubj || ownSubj(b)) +
-                '</span><small>' + h(nameOf(b)) + '→' + h(nameOf(a)) + '</small></div>';
+            return '<div class="cell opp-swap' + chgCls + '"><span class="tag">교체</span><span class="txt">' + h(keepSubj || ownSubj(b)) +
+                '</span><small>' + h(nameOf(b)) + '→' + h(nameOf(a)) + '</small>' + (chg ? chgDot : '') + '</div>';
         }
         if (b != null) {
-            return '<div class="cell opp-cls"><span class="txt">' + h(subjOf(b)) + '</span><small>' + h(nameOf(b)) + '</small></div>';
+            return '<div class="cell opp-cls' + chgCls + '"' + (chg ? ' title="컴시간 알리미에서 이미 변경된 교시입니다"' : '') + '><span class="txt">' + h(subjOf(b)) +
+                '</span><small>' + h(nameOf(b)) + '</small>' + chgDot + '</div>';
         }
         return '<div class="cell empty opp-free"><span class="ftxt">공강</span></div>';
     }
@@ -3058,10 +3136,12 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         Object.keys(g).map(Number).sort(function (a, b) { return a - b; }).forEach(function (w) {
             html += oppWeekHTML(D, t, w, g[w]);
         });
+        var anyChg = Object.keys(g).some(function (kw) { return D.hasChg(+kw); });
         html += '<div class="legend opp-legend">' +
             '<span><i class="l-src"></i>나감 · 내어주는 수업</span>' +
             '<span><i class="l-dst"></i>들어옴 · 대신 들어가는 수업</span>' +
             '<span><i class="l-swap"></i>교체 · 같은 교시 반 이동</span>' +
+            (anyChg ? '<span><i class="l-chg"></i>컴시간 변경됨 · 알리미에서 이미 바뀐 교시</span>' : '') +
             '<span><i class="l-free"></i>공강</span></div>';
         $('#oppBody').innerHTML = html;
         $('#oppSub').innerHTML = OPP.label || '';
@@ -3241,7 +3321,9 @@ body.dark .cell.opp-swap{color:#c4b5fd}
         var D = ST.data, w = D.week(ST.week), cnt = D.mySlots(ST.teacher).length;
         var who = isDG() ? (optLabel(D, ST.teacher)) : D.teacherLabel(ST.teacher);
         var cum = (ST.applied || []).filter(function (st) { return st.w === ST.week; }).length;
+        var chgN = D.myChangedCount(ST.teacher, ST.week);
         $('#mySub').textContent = who + ' · ' + w.start + ' 주 · 주 ' + cnt + '시간' +
+            (chgN ? ' · 컴시간 변경 ' + chgN + '교시' : '') +
             (cum ? ' · 누적 ' + cum + '단계 반영' : '');
     }
 
