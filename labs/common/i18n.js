@@ -244,6 +244,25 @@ Object.assign(window.SVL_I18N_DICT, {
   "가운데에 하얀 삼각형이 보이나요?": ["Do you see a white triangle in the middle?", "中央に白い三角形が見えますか？", "中间能看到一个白色三角形吗？", "¿Ves un triángulo blanco en el centro?"],
   "세 원의 잘린 부분을 뇌가 이어 붙여 윤곽선이 없는 삼각형을 만들어 냅니다. 실제로 그려진 삼각형은 없습니다.": ["The brain joins the cut edges of the three circles and invents a triangle with no outline. No triangle is actually drawn.", "3つの円の欠けた部分を脳がつなぎ、輪郭のない三角形を作り出します。実際には三角形は描かれていません。", "大脑把三个圆的缺口连起来，造出一个没有轮廓的三角形。其实并没有画三角形。", "El cerebro une los cortes de los tres círculos e inventa un triángulo sin contorno. No hay ningún triángulo dibujado."]
 });
+
+/* 실시간 학급 퀴즈·투표(class/live_quiz.html) — 게임쇼 개편: 아바타·카운트다운·사운드·콤보 */
+Object.assign(window.SVL_I18N_DICT, {
+  "내 아바타를 고르세요": ["Pick your avatar", "アバターを選んでください", "请选择你的头像", "Elige tu avatar"],
+  "사운드": ["Sound", "サウンド", "声音", "Sonido"],
+  "QR로 바로 입장": ["Scan to join", "QRで入室", "扫码进入", "Escanea para entrar"],
+  "게임 시작!": ["Game start!", "ゲームスタート！", "开始游戏！", "¡Empieza el juego!"],
+  "학생이 다 들어오면 시작하세요": ["Start when everyone is in", "生徒がそろったら始めてください", "学生到齐后开始", "Empieza cuando estén todos"],
+  "문항 {0}개": ["{0} items", "問題 {0}問", "{0} 道题", "{0} ítems"],
+  "문항 {0}개 · 게임 시작을 누르면 3·2·1 카운트다운이 시작됩니다": ["{0} items · Game start begins a 3·2·1 countdown", "問題 {0}問・ゲームスタートを押すと3・2・1のカウントダウンが始まります", "{0} 道题 · 按开始游戏即启动 3·2·1 倒计时", "{0} ítems · Al pulsar Empieza el juego arranca la cuenta 3·2·1"],
+  "곧 시작합니다": ["Get ready", "まもなく始まります", "即将开始", "Prepárate"],
+  "준비!": ["Ready!", "用意！", "准备！", "¡Listo!"],
+  "준비 중…": ["Getting ready…", "準備中…", "准备中…", "Preparando…"],
+  "⏳ 준비 중…": ["⏳ Getting ready…", "⏳ 準備中…", "⏳ 准备中…", "⏳ Preparando…"],
+  "{0}연속 콤보!": ["{0} in a row!", "{0}連続コンボ！", "连续 {0} 次！", "¡{0} seguidas!"],
+  "{0}계단 상승!": ["Up {0} places!", "{0}段アップ！", "上升 {0} 名！", "¡Subes {0} puestos!"],
+  "다음엔 맞힐 수 있어요!": ["You'll get the next one!", "次は当たるよ！", "下一题一定行！", "¡La próxima la aciertas!"]
+});
+
 /* ============================================================================
    Science Virtual LAB — 공용 다국어 모듈 (labs/common/i18n.js)
    ----------------------------------------------------------------------------
