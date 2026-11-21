@@ -45,11 +45,12 @@
         ox_speed_quiz: { name: '과학 오개념 OX 스피드 퀴즈', icon: '⏱️', unit: '점', tab: '과학 오개념 OX 스피드 퀴즈' },
         digital_escape_room: { name: '디지털 과학 방탈출', icon: '🔐', unit: '초', tab: '디지털 과학 방탈출' },
         festival_booth: { name: '과학 축제 부스', icon: '🎪', unit: '점', tab: '과학 축제 부스' },
-        electron_runner: { name: '내가 전자다', icon: '⚡', unit: '점', tab: '내가 전자다' }
+        electron_runner: { name: '내가 전자다', icon: '⚡', unit: '점', tab: '내가 전자다' },
+        fact_check: { name: '생활 속 과학 팩트체크', icon: '🔬', unit: '점', tab: '생활 속 과학 팩트체크' }
     };
     var ORDER = ['element_ninja', 'air_bounce', 'finger_shooting', 'red_light_green_light',
         'silhouette_pose', 'school_challenge', 'ox_speed_quiz', 'digital_escape_room', 'festival_booth',
-        'electron_runner'];
+        'electron_runner', 'fact_check'];
 
     /* 게임별 한 줄 설명 — 모달 위쪽 안내에 표시 */
     var HINT = {
@@ -62,7 +63,8 @@
         ox_speed_quiz: '정답률(높을수록 좋아요)',
         digital_escape_room: '탈출 성공 시 남은 시간(클수록 좋아요)',
         festival_booth: '다섯 미니게임 합계 점수',
-        electron_runner: '전구까지 도달한 진행도(높을수록 좋아요)'
+        electron_runner: '전구까지 도달한 진행도(높을수록 좋아요)',
+        fact_check: '속도·콤보 보너스까지 더한 점수(높을수록 좋아요)'
     };
 
     function isLive() {
@@ -484,7 +486,8 @@
         ox_speed_quiz: 'game/ox_speed_quiz.html',
         digital_escape_room: 'game/digital_escape_room.html',
         festival_booth: 'game/festival_booth_kiosk.html',
-        electron_runner: 'game/electron_runner.html'
+        electron_runner: 'game/electron_runner.html',
+        fact_check: 'game/fact_check.html'
     };
     var PREFIX = (function () {
         /* hall-of-fame.js 는 labs/common/ 에 있으므로 사이트 뿌리는 ../../ */
