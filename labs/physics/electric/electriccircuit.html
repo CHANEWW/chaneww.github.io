@@ -870,13 +870,17 @@ const isMeter = t => t==='vMeter'||t==='iMeter';
 
 const mod=(a,b)=>((a%b)+b)%b;
 
-/* 포맷팅 함수 */
+/* 포맷팅 함수 — 표시 전용 반올림(계산값은 그대로 둔다)
+   · 유효숫자 3자리로 정돈한 뒤 단위 접두어를 다시 고른다.
+     ex) 1.4995 → '1.5 A', 0.99973 → '1 A' (예전엔 '1000 mA')
+   · 0.1 mA(1e-4 A) 미만은 '0 A'로 본다(도선 기생저항 잔여값·개방회로 표시). */
 function fmt(v,u){
   const a=Math.abs(v);
-  if(a<1e-4)return '0 '+u;
+  if(!isFinite(v)||a<1e-4) return '0 '+u;
+  const mag=+a.toPrecision(3);
   for(const[s,p]of[[1e6,'M'],[1e3,'k'],[1,''],[1e-3,'m']])
-    if(a>=s)return(+(v/s).toPrecision(3))+' '+p+u;
-  return '0 '+u;
+    if(mag>=s) return (+(v/s).toPrecision(3))+' '+p+u;
+  return (+(v/1e-3).toPrecision(3))+' m'+u;
 }
 
 /* 3D 렌더러 & 씬 기본 설정 */
@@ -1295,7 +1299,11 @@ function simulate(){
   const numNodes = pts.length;
   if(numNodes === 0) return;
 
-  const WIRE_R = 1e-4;
+  /* 도선·전류계·닫힌 스위치의 기생 저항.
+     1e-4 Ω는 1.5V + 1Ω 직렬 회로에서 전류를 1.4995 A로 만들어
+     V/I로 구한 저항이 1.0003 Ω이 되는 0.05% 오차를 냈다(수행평가 버전에서 11-14 교정).
+     1 μΩ(1e-6)으로 낮춰 도선을 여러 개 붙여도 오차를 0.001% 미만으로 유지한다. */
+  const WIRE_R = 1e-6;
   const effR = p => (p.type==='wire'||p.type==='iMeter'||p.type==='sw') ? WIRE_R : p.R;
   const batteries = parts.filter(p=>p.type==='batt');
 
