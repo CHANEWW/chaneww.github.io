@@ -191,6 +191,29 @@ body.dark-mode .meal-top{background:rgba(255,135,171,.14)}
 .dday-list li{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:11px;background:var(--card2);font-size:12px;font-weight:900;color:var(--ink2)}
 .dday-list .d{margin-left:auto;color:var(--grape);font-variant-numeric:tabular-nums}
 
+/* ---------- 이번 달 생일 (「우리 반 D-Day」 카드 안) ---------- */
+.bday-month{margin-top:12px;padding-top:11px;border-top:1px dashed var(--line)}
+.bm-h{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.bm-h b{font-size:12px;font-weight:900;color:var(--ink);letter-spacing:-.2px}
+.bm-h .bm-m{margin-left:auto;padding:2px 9px;border-radius:999px;background:var(--pink-soft);color:var(--pink);font-size:11px;font-weight:900;white-space:nowrap}
+.bm-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.bm-row{display:flex;align-items:center;gap:7px;padding:6px 9px;border-radius:11px;background:var(--card2);font-size:12px;font-weight:900;color:var(--ink2);line-height:1.35}
+.bm-who{display:inline-flex;align-items:baseline;gap:5px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bm-who b{font-size:11px;font-weight:900;color:var(--ink3);font-variant-numeric:tabular-nums;flex:0 0 auto}
+.bm-ini{font-size:12.5px;color:var(--ink);letter-spacing:-.2px}
+.bm-date{margin-left:auto;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bm-tag{flex:0 0 auto;padding:2px 7px;border-radius:999px;background:var(--pink-soft);color:var(--pink);font-size:10.5px;font-weight:900;white-space:nowrap;font-variant-numeric:tabular-nums}
+.bm-row.today{background:var(--pink-soft);box-shadow:inset 0 0 0 1.5px rgba(255,93,143,.35)}
+.bm-row.today .bm-tag{background:var(--pink);color:#fff}
+.bm-row.past{opacity:.55}
+.bm-row.past .bm-tag{background:var(--line2);color:var(--ink3)}
+.bm-empty{margin:2px 0 0;font-size:12px;font-weight:800;color:var(--ink3);line-height:1.55;word-break:keep-all}
+.bm-next{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 0;padding:7px 9px;border-radius:11px;background:var(--grape-soft);font-size:11.5px;font-weight:900;color:var(--grape);line-height:1.45;word-break:keep-all}
+.bm-next .bm-next-l{color:var(--ink3)}
+.bm-next b{font-variant-numeric:tabular-nums}
+.bm-next .bm-next-w{color:var(--ink2);font-weight:900}
+.bm-next .bm-tag{padding:2px 7px;border-radius:999px;background:var(--card);color:var(--grape);font-size:10.5px;font-weight:900;white-space:nowrap;font-variant-numeric:tabular-nums}
+
 /* ---------- 알림판 ---------- */
 .board-sec + .board-sec{margin-top:10px}
 .board-sec > b{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:900;color:var(--ink3);letter-spacing:-.2px}
@@ -395,6 +418,7 @@ body.dark-mode .lock-card p{color:var(--ink2)}
     <section class="card dday">
       <h2><span class="ic" aria-hidden="true">🎯</span> <span>우리 반 D-Day</span></h2>
       <div id="ddayBody"><div class="empty">불러오는 중…</div></div>
+      <div class="bday-month" id="bdayMonth" hidden></div>
     </section>
 
     <section class="card board">
@@ -536,7 +560,7 @@ body.dark-mode .lock-card p{color:var(--ink2)}
   };
   /* 첫 방문에도 당번이 돌아가도록 1~28번 빈 이니셜 명단을 기본으로 둔다.
      (실제 이름·생일은 선생님이 편집 시트에서 넣는다 → 공개 코드에 개인정보 0건) */
-  for (var di = 1; di <= 28; di++) CFG_DEFAULT.roster.push({ n: di, ini: '', bday: '' });
+  for (var di = 1; di <= 27; di++) CFG_DEFAULT.roster.push({ n: di, ini: '', bday: '' });
 
   var S = {
     pin: '', live: false, worker: DEFAULT_WORKER,
@@ -1315,6 +1339,74 @@ body.dark-mode .lock-card p{color:var(--ink2)}
     }
   }
 
+  /* ---- 이번 달 생일: 번호 · 이니셜 · 날짜 ---- */
+  function bdayParts(s) {
+    var m = /^(\d{2})-(\d{2})$/.exec(String((s && s.bday) || '').trim());
+    if (!m) return null;
+    var mm = +m[1], dd = +m[2];
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+    return { m: mm, d: dd };
+  }
+  function renderBdayMonth() {
+    var box = $('#bdayMonth');
+    if (!box) return;
+    box.innerHTML = '';
+    var roster = ((S.cfg && S.cfg.roster) || []).filter(function (s) { return s && bdayParts(s); });
+    if (!roster.length) { show(box, false); return; }
+    show(box, true);
+
+    var today = kstNow();
+    var y = today.getFullYear(), tm = today.getMonth() + 1, td = today.getDate();
+
+    var head = el('div', 'bm-h');
+    head.appendChild(el('b', null, '🎂 ' + T('이번 달 생일')));
+    head.appendChild(el('span', 'bm-m', fmtDate(new Date(y, tm - 1, 1), { month: 'long' })));
+    box.appendChild(head);
+
+    var mine = roster.map(function (s) { var p = bdayParts(s); return { s: s, m: p.m, d: p.d }; })
+      .filter(function (r) { return r.m === tm; })
+      .sort(function (a, b) { return a.d - b.d; });
+
+    if (mine.length) {
+      var ul = el('ul', 'bm-list');
+      mine.forEach(function (r) {
+        var left = r.d - td;
+        var li = el('li', 'bm-row' + (left === 0 ? ' today' : (left < 0 ? ' past' : '')));
+        var who = el('span', 'bm-who');
+        who.appendChild(el('b', null, T('{0}번', r.s.n)));
+        if (r.s.ini) who.appendChild(el('span', 'bm-ini', r.s.ini));
+        li.appendChild(who);
+        li.appendChild(el('span', 'bm-date', fmtDate(new Date(y, tm - 1, r.d), { month: 'long', day: 'numeric' })));
+        li.appendChild(el('span', 'bm-tag', left === 0 ? 'D-DAY' : (left < 0 ? T('지남') : T('D-{0}', left))));
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+    } else {
+      box.appendChild(el('p', 'bm-empty', T('이번 달 생일 친구가 없어요')));
+    }
+
+    /* 이번 달에 남은 생일이 없으면 가장 가까운 다음 생일을 작게 안내 (교실 화면이 비지 않게) */
+    var upcoming = mine.some(function (r) { return r.d >= td; });
+    if (upcoming) return;
+    var best = null;
+    roster.forEach(function (s) {
+      var p = bdayParts(s);
+      var dt = new Date(y, p.m - 1, p.d);
+      if (dt.getMonth() !== p.m - 1) return;             /* 2월 29일처럼 없는 날짜는 건너뛴다 */
+      if (dayDiff(today, dt) < 0) dt = new Date(y + 1, p.m - 1, p.d);
+      var diff = dayDiff(today, dt);
+      if (!best || diff < best.diff) best = { s: s, dt: dt, diff: diff };
+    });
+    if (!best) return;
+    var nx = el('p', 'bm-next');
+    nx.appendChild(el('span', 'bm-next-l', T('다음 생일')));
+    nx.appendChild(el('span', 'bm-next-w', '·'));
+    nx.appendChild(el('b', null, fmtDate(best.dt, { month: 'long', day: 'numeric' })));
+    nx.appendChild(el('span', 'bm-next-w', '(' + T('{0}번', best.s.n) + (best.s.ini ? ' ' + best.s.ini : '') + ')'));
+    nx.appendChild(el('span', 'bm-tag', best.diff === 0 ? 'D-DAY' : T('D-{0}', best.diff)));
+    box.appendChild(nx);
+  }
+
   function renderDday() {
     var box = $('#ddayBody');
     box.innerHTML = '';
@@ -1491,6 +1583,7 @@ body.dark-mode .lock-card p{color:var(--ink2)}
     renderDday();
     renderBoard();
     renderBday();
+    renderBdayMonth();
     setText('#className', (S.cfg && S.cfg.className) || '2학년 5반');
   }
 
@@ -1694,8 +1787,11 @@ body.dark-mode .lock-card p{color:var(--ink2)}
 
     clearInterval(S.tick);
     S.tick = setInterval(function () {
+      var before = S.now;
       S.now = kstNow();
       renderHero();
+      /* 자정을 넘기면 날짜에 따라 달라지는 카드(당번·D-Day·이번 달 생일)를 다시 그린다 */
+      if (before && ymd(before) !== ymd(S.now)) renderConfig();
       if (S.now.getSeconds() % 20 === 0) renderTimetable();
     }, 1000);
     clearInterval(S.pollTimer);
