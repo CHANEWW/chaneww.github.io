@@ -1149,7 +1149,7 @@ body.pseudo-fullscreen .svl-fb-btn { display: none !important; }
             </div>
             <button type="button" class="smc-close" onclick="closeSubmitModal()" aria-label="닫기">✕</button>
         </div>
-        <p class="smc-sub">작성한 보고서를 학교 구글 드라이브에 보관하고 담당 교사용 시트에 등록합니다.</p>
+        <p class="smc-sub">작성한 보고서를 학교 구글 드라이브에 보관하고 담당 교사용 시트에 등록합니다.<br>수행평가 기간에는 그 반이 열려 있을 때만 제출되므로 <b>입장 코드(반별 PIN)</b>를 함께 넣어 주세요.</p>
 
         <div class="smc-form">
             <div class="smc-row-2">
@@ -1173,6 +1173,8 @@ body.pseudo-fullscreen .svl-fb-btn { display: none !important; }
                         <option value="10">10반</option>
                         <option value="11">11반</option>
                         <option value="12">12반</option>
+                        <option value="13">13반</option>
+                        <option value="14">14반</option>
                     </select>
                 </div>
             </div>
@@ -1184,6 +1186,21 @@ body.pseudo-fullscreen .svl-fb-btn { display: none !important; }
                 <div class="smc-field">
                     <label class="smc-label">학생 성명</label>
                     <input type="text" id="subName" class="smc-input" placeholder="이름 (예: 홍길동)">
+                </div>
+            </div>
+            <div class="smc-row-2">
+                <div class="smc-field">
+                    <label class="smc-label">학년</label>
+                    <select id="subGrade" class="smc-select">
+                        <option value="">학년</option>
+                        <option value="1">1학년</option>
+                        <option value="2">2학년</option>
+                        <option value="3">3학년</option>
+                    </select>
+                </div>
+                <div class="smc-field">
+                    <label class="smc-label">입장 코드 (반별 PIN)</label>
+                    <input type="text" id="subPin" class="smc-input" inputmode="numeric" autocomplete="off" placeholder="예: 1005">
                 </div>
             </div>
             <div class="smc-field">
@@ -1814,16 +1831,36 @@ function escapeHtml(str) {
 
 /* ==========================================================================
    온라인 제출 시스템 (구글 드라이브 / 스프레드시트 연동)
+   --------------------------------------------------------------------------
+   Apps Script v2 웹앱(수행평가 제출함, 2026-11-14 배포)으로 보낸다.
+   v2 규칙: · '시험관리' 탭에서 그 반이 '열림'일 때만 접수
+            · 반별 입장 코드(PIN)가 같아야 접수
+            · 1인1회제출=예이면 같은 학번 재제출 불가
+   그래서 예전 v1처럼 '보내고 무조건 완료'가 아니라, 서버 응답(ok:false + 이유)을
+   받아 그대로 보여 준다. 응답을 읽을 수 없을 때는 '확인하지 못했다'고 분명히 말하고
+   보고서 이미지 저장 버튼을 같이 둔다.
    ========================================================================== */
-var SUBMIT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwd5wqz7a5PPsbBzHqe-2flS3mLQ9n1J0cXAevRWUhliO-InpTGM-uD5Yi041_1wk4o7g/exec';
+var SUBMIT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwqsSkfPB9mF2DCKisEgZ26wngeh06p9WlQSMxjxDm8wdbDLsZ7FG2DHaYL_89u7qTE/exec';
+/* 예전 v1 주소 — 브라우저에 이 주소가 남아 있으면 v2로 갈아 끼운다 */
+var LEGACY_V1_TOKEN = 'AKfycbwd5wqz7a5PPsbBzHqe-2flS3mLQ9n1J0cXAevRWUhliO-InpTGM-uD5Yi041_1wk4o7g';
 
 function getWebhookUrl() {
     var params = new URLSearchParams(window.location.search);
-    var hook = params.get('hook') || localStorage.getItem('svl_report_hook') || SUBMIT_WEBHOOK_URL;
-    if (params.get('hook')) {
-        try { localStorage.setItem('svl_report_hook', params.get('hook').trim()); } catch (e) {}
+    var paramHook = params.get('hook');
+    var stored = null;
+    try { stored = localStorage.getItem('svl_report_hook'); } catch (e) {}
+    /* 예전 v1 주소가 브라우저에 남아 있으면 지운다 (코드 상수를 이겨서 옛 주소로 보내는 사고 방지) */
+    if (stored && stored.indexOf(LEGACY_V1_TOKEN) >= 0) {
+        try { localStorage.removeItem('svl_report_hook'); } catch (e) {}
+        stored = null;
     }
-    return hook.trim();
+    /* 예전에 ?hook=v1주소 로 저장해 둔 경우도 이번 한 번만 v2 기본값으로 간다 */
+    if (paramHook && paramHook.indexOf(LEGACY_V1_TOKEN) >= 0) paramHook = null;
+    if (paramHook) {
+        try { localStorage.setItem('svl_report_hook', paramHook.trim()); } catch (e) {}
+    }
+    var hook = paramHook || stored || SUBMIT_WEBHOOK_URL;
+    return String(hook).trim();
 }
 
 function openSubmitModal() {
@@ -1834,6 +1871,9 @@ function openSubmitModal() {
     var savedCls = localStorage.getItem('svl_report_class') || '';
     var savedNum = localStorage.getItem('svl_report_num') || '';
     var savedName = localStorage.getItem('svl_report_name') || document.getElementById('inpName').value || '';
+    var savedGrade = localStorage.getItem('svl_report_grade') || '';
+    var savedPin = localStorage.getItem('svl_report_pin') || '';
+    var paramPin = new URLSearchParams(window.location.search).get('pin') || '';
 
     var classNumStr = document.getElementById('inpClassNum').value || '';
     var matchCls = classNumStr.match(/(\d+)\s*반/);
@@ -1845,6 +1885,8 @@ function openSubmitModal() {
     if (savedCls) document.getElementById('subClass').value = savedCls;
     if (savedNum) document.getElementById('subNum').value = savedNum;
     if (savedName) document.getElementById('subName').value = savedName;
+    document.getElementById('subGrade').value = savedGrade || '';
+    document.getElementById('subPin').value = paramPin || savedPin || '';
 
     var title = document.getElementById('inpTitle').value || '자유 과학 탐구 보고서';
     var motive = document.getElementById('inpMotive').value || '';
@@ -2120,6 +2162,8 @@ function doSubmitReport() {
     var cls = document.getElementById('subClass').value;
     var num = document.getElementById('subNum').value.trim();
     var name = document.getElementById('subName').value.trim();
+    var grade = document.getElementById('subGrade').value;
+    var pin = document.getElementById('subPin').value.trim();
     var st = document.getElementById('subStatus');
     var btn = document.getElementById('btnDoSubmit');
     var label = document.getElementById('subBtnLabel');
@@ -2128,12 +2172,15 @@ function doSubmitReport() {
     if (!cls) { alert('학급(반)을 선택해 주세요.'); return; }
     if (!num) { alert('출석 번호를 입력해 주세요.'); return; }
     if (!name) { alert('학생 이름을 입력해 주세요.'); return; }
+    if (!pin) { alert('입장 코드(반별 PIN)를 입력해 주세요.\n' + cls + '반 코드를 모르면 선생님께 물어보세요.'); document.getElementById('subPin').focus(); return; }
 
     try {
         localStorage.setItem('svl_report_school', school);
         localStorage.setItem('svl_report_class', cls);
         localStorage.setItem('svl_report_num', num);
         localStorage.setItem('svl_report_name', name);
+        localStorage.setItem('svl_report_grade', grade);
+        localStorage.setItem('svl_report_pin', pin);
     } catch (e) {}
 
     document.getElementById('inpSchool').value = school;
@@ -2169,33 +2216,67 @@ function doSubmitReport() {
                 studentNum: String(num),
                 studentName: String(name),
                 school: school,
+                grade: String(grade || ''),
+                pin: String(pin),
                 title: title,
                 summary: '[' + title + '] ' + (conclusion.length > 50 ? conclusion.substring(0, 50) + '...' : conclusion),
                 timestamp: nowFormatted,
                 fileStamp: fileStamp,
+                securityLog: '탐구보고서 생성기 제출 · ' + (grade ? grade + '학년 ' : '') + cls + '반 ' + num + '번 ' + name,
                 imageBase64: dataUrl
             };
 
             var hookUrl = getWebhookUrl();
+            var fileName = (grade ? grade + '학년_' : '') + cls + '반_' + num + '번_' + name + '_탐구보고서.png';
+            var saveBtnHtml = '<div style="margin-top:8px;"><button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 10px;" onclick="downloadReportImage(\'' + dataUrl + '\', \'' + fileName + '\')">💾 내 기기에도 이미지 저장</button></div>';
+            var dlBtnHtml = '<button type="button" class="btn btn-primary" style="margin-top:6px; font-size:11.5px; padding:4px 10px;" onclick="downloadReportImage(\'' + dataUrl + '\', \'' + fileName + '\')">📥 보고서 이미지 파일 다운로드</button>';
 
+            function fail(msg) {
+                st.className = 'smc-status error';
+                st.innerHTML = '⚠️ ' + msg + '<br><span style="font-size:11px;">보고서는 이 기기에 이미지로 저장해 둘 수 있습니다.</span><br>' + dlBtnHtml;
+                btn.disabled = false;
+                if (label) label.textContent = '다시 시도';
+            }
+
+            /* v2 웹앱은 {ok:true} / {ok:false, code, error} 로 답한다.
+               no-cors 로 보내면 그 답을 못 읽어 '무조건 완료'가 되므로 응답을 읽는다. */
             fetch(hookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload),
-                mode: 'no-cors'
-            }).then(function() {
-                st.className = 'smc-status success';
-                st.innerHTML = '🎉 <b>구글 드라이브 및 스프레드시트에 제출이 완료되었습니다!</b><br>'
-                    + cls + '반 ' + num + '번 ' + name + ' 학생의 탐구 보고서가 안전하게 보관되었습니다.<br>'
-                    + '<div style="margin-top:8px;"><button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 10px;" onclick="downloadReportImage(\'' + dataUrl + '\', \'' + cls + '반_' + num + '번_' + name + '_탐구보고서.png\')">💾 내 기기에도 이미지 저장</button></div>';
-                btn.disabled = false;
-                if (label) label.textContent = '제출 완료됨';
-            }).catch(function(err) {
+                cache: 'no-store',
+                redirect: 'follow'
+            }).then(function (res) {
+                return res.text();
+            }).then(function (txt) {
+                var j = null;
+                try { j = JSON.parse(txt); } catch (e) { j = null; }
+                if (j && j.ok === true) {
+                    st.className = 'smc-status success';
+                    st.innerHTML = '🎉 <b>구글 드라이브 및 스프레드시트에 제출이 완료되었습니다!</b><br>'
+                        + cls + '반 ' + num + '번 ' + name + ' 학생의 탐구 보고서가 안전하게 보관되었습니다.<br>'
+                        + saveBtnHtml;
+                    btn.disabled = false;
+                    if (label) label.textContent = '제출 완료됨';
+                    return;
+                }
+                if (j && j.ok === false) {
+                    var code = j.code || '';
+                    if (code === 'CLOSED') return fail('지금은 ' + cls + '반 응시 시간이 아니라 제출이 닫혀 있습니다. 선생님께 확인해 주세요.');
+                    if (code === 'BAD_PIN') return fail('입장 코드가 ' + cls + '반 코드와 다릅니다. 반별 PIN을 다시 확인해 주세요.');
+                    if (code === 'EXPIRED') return fail('응시 마감 시간이 지나 제출할 수 없습니다.');
+                    if (code === 'ALREADY_SUBMITTED') return fail('이미 제출 완료된 학번입니다(1인 1회 제출).');
+                    if (code === 'BUSY') return fail('제출이 몰려 잠시 지연되고 있습니다. 잠시 후 다시 눌러 주세요.');
+                    return fail(j.error || '서버가 제출을 받지 않았습니다.');
+                }
+                /* 응답을 해석하지 못한 경우 — 성공으로 단정하지 않는다 */
                 st.className = 'smc-status error';
-                st.innerHTML = '⚠️ 온라인 전송 중 일시적인 네트워크 오류가 발생했습니다.<br>'
-                    + '<button type="button" class="btn btn-primary" style="margin-top:6px; font-size:11.5px; padding:4px 10px;" onclick="downloadReportImage(\'' + dataUrl + '\', \'' + cls + '반_' + num + '번_' + name + '_탐구보고서.png\')">📥 보고서 이미지 파일 다운로드</button>';
+                st.innerHTML = '📨 전송은 보냈지만 서버 확인 응답을 읽지 못했습니다(학교 네트워크 제한일 수 있습니다).'
+                    + '<br>제출 여부를 선생님께 꼭 확인해 주세요.' + '<br>' + dlBtnHtml;
                 btn.disabled = false;
                 if (label) label.textContent = '다시 시도';
+            }).catch(function (err) {
+                fail('온라인 전송 중 네트워크 오류가 발생했습니다.');
             });
         } catch (ex) {
             st.className = 'smc-status error';
