@@ -1529,3 +1529,19 @@ Object.assign(window.SVL_I18N_DICT, {
     "혼합물 분리(3가지 방법)": ["Separating Mixtures (3 Methods)", "混合物の分離（3つの方法）", "混合物分离（3种方法）", "Separación de mezclas (3 métodos)"],
     "혼합물은 성질(끓는점·용해도·이동 속도)이 서로 다른 성분의 차이를 이용해 분리합니다.": ["A mixture is separated by using differences in the properties of its components: boiling point, solubility and travel speed.", "混合物は、沸点・溶解度・移動速度という成分ごとの性質の違いを利用して分離します。", "混合物利用各成分在沸点、溶解度、移动速度上的性质差异进行分离。", "Una mezcla se separa aprovechando las diferencias de propiedades de sus componentes: punto de ebullición, solubilidad y velocidad de avance."]
 });
+
+/* 혼합물 분리 3D — 조작 타일 버튼 문구 */
+Object.assign(window.SVL_I18N_DICT, {
+    "가열 멈춤": ["Stop heating", "加熱を止める", "停止加热", "Parar calentamiento"],
+    "가열 시작": ["Start heating", "加熱開始", "开始加热", "Iniciar calentamiento"],
+    "거르기": ["Filter", "ろ過", "过滤", "Filtrar"],
+    "검정 사인펜": ["Black marker", "黒サインペン", "黑色签字笔", "Rotulador negro"],
+    "녹이기": ["Dissolve", "溶かす", "溶解", "Disolver"],
+    "다시 채우기": ["Refill", "入れ直す", "重新装入", "Rellenar"],
+    "새 거름종이": ["New filter paper", "新しいろ紙", "新滤纸", "Papel nuevo"],
+    "식히기": ["Cool", "冷やす", "冷却", "Enfriar"],
+    "엽록소": ["Chlorophyll", "クロロフィル", "叶绿素", "Clorofila"],
+    "이어서 전개": ["Resume", "展開を続ける", "继续展开", "Reanudar"],
+    "전개 시작": ["Start developing", "展開開始", "开始展开", "Iniciar desarrollo"],
+    "처음부터": ["From the start", "最初から", "从头开始", "Desde el principio"]
+});
