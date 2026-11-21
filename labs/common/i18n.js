@@ -1424,3 +1424,21 @@ Object.assign(window.SVL_I18N_DICT, {
     "아직 명단이 없어요. 선생님이 명단을 넣으면 청소 순서가 자동으로 돌아가요.": ["No roster yet. Once the teacher adds it, the cleaning order rotates automatically.", "まだ名簿がありません。先生が名簿を入れると掃除の順番が自動で回ります。", "还没有名单，老师录入后打扫顺序会自动轮换。", "Aún no hay lista. Cuando el docente la añada, el orden de limpieza rota solo."],
     "‘번호:다시 넣는 주(월요일)’ 순서로 쉼표로 구분해요. 12:2026-11-30 이면 12번은 그 주부터 다시 들어오고, 숫자만 적으면 계속 뺐다. 비우면 첫 주 청소 4명 다음 번호부터 4명씩 이어서 돌아가요.": ["Separate with commas as “number:week it comes back (Monday)”. With 12:2026-11-30, No. 12 returns from that week; a number on its own stays out. If it is empty, the four numbers after the first week follow on.", "「番号:戻る週（月曜日）」の順にカンマで区切ります。12:2026-11-30 なら12番はその週から戻り、数字だけならずっと外します。空なら初週の4名の次の番号から4名ずつ続きます。", "按「编号:恢复的周（周一）」用逗号分隔。12:2026-11-30 表示 12 号从那一周起恢复，只写编号则一直排除。留空则从第一周 4 人的下一个编号起每 4 人继续。", "Separa con comas como «número:semana en que vuelve (lunes)». Con 12:2026-11-30, el n.º 12 vuelve esa semana; un número solo queda fuera siempre. Si lo dejas vacío, siguen los cuatro números siguientes."]
 });
+
+/* 지금 우리 반은 — 「오늘의 한마디」·주간 시간표·학생/교사 PIN 분리 (v3) */
+Object.assign(window.SVL_I18N_DICT, {
+    "오늘의 한마디": ["Today's message", "今日のひとこと", "今日一句话", "Mensaje de hoy"],
+    "이번 주 시간표": ["This week's timetable", "今週の時間割", "本周课表", "Horario de esta semana"],
+    "다음 주 시간표": ["Next week's timetable", "来週の時間割", "下周课表", "Horario de la próxima semana"],
+    "교시": ["Period", "時限", "节次", "Periodo"],
+    "점심시간": ["Lunch break", "昼休み", "午休", "Hora de comer"],
+    "지금": ["Now", "いま", "现在", "Ahora"],
+    "변경": ["Changed", "変更", "变更", "Cambiado"],
+    "샘플": ["Sample", "サンプル", "示例", "Ejemplo"],
+    "{0} ~ {1}": ["{0} – {1}", "{0}〜{1}", "{0} – {1}", "{0} – {1}"],
+    "시간표를 불러오지 못했어요.": ["Could not load the timetable.", "時間割を読み込めませんでした。", "无法加载课表。", "No se pudo cargar el horario."],
+    "PIN을 확인하는 중…": ["Checking the PIN…", "PIN を確認中…", "正在确认 PIN…", "Comprobando el PIN…"],
+    "PIN을 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.": ["Could not check the PIN. Try again in a moment.", "PIN を確認できませんでした。しばらくしてからもう一度お試しください。", "无法确认 PIN，请稍后再试。", "No se pudo comprobar el PIN. Inténtalo de nuevo en un momento."],
+    "지금은 연결할 수 없어요. 인터넷을 확인하고 다시 넣어 주세요.": ["Cannot connect right now. Check the internet and enter it again.", "いま接続できません。インターネットを確認して、もう一度入力してください。", "现在无法连接。请检查网络后重新输入。", "No se puede conectar ahora. Revisa la conexión e inténtalo otra vez."],
+    "선생님만 바꿀 수 있어요.": ["Only the teacher can change this.", "先生だけが変更できます。", "只有老师可以修改。", "Solo el docente puede cambiarlo."]
+});
