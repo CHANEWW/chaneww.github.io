@@ -4,6 +4,7 @@
    · 인증 게이트: work.html 에서 PIN 인증을 마친 같은 탭에서만 열린다.
    · AI Worker 설정(⚙️): localStorage 'svl_ai_worker' 에 주소를 저장하고
      Gemini API 를 중계하는 Cloudflare Worker 를 X-Pin 헤더로 호출한다.
+     저장된 주소가 없으면 아래 DEFAULT_WORKER_URL(운영 Worker)을 그대로 쓴다.
    · Worker 가 없거나 실패하면 각 도구의 '즉시 초안'(draft)으로 대신 채운다.
    · 결과는 축약 마크다운(## 소제목, - 목록, | 표 |)으로 받아 문서로 그린다.
 
@@ -19,6 +20,9 @@
     var AUTH_KEY = 'svl_work_unlocked';
     var PIN_KEY = 'svl_tt_pin';
     var WORKER_KEY = 'svl_ai_worker';
+    var WORKER_OFF = 'svl_ai_worker_off';   /* [해제]를 누른 기기에서 기본 주소로 되돌아가지 않게 */
+    /* 기본 Worker — 저장된 주소가 없는 기기에서도 바로 AI 를 쓴다 */
+    var DEFAULT_WORKER_URL = 'https://sv1-work-ai.lovesyat.workers.dev/';
     var PATH_UP = /\/class\//.test(location.pathname) ? '../' : '';
 
     var WT = {};
@@ -114,7 +118,14 @@
     };
 
     /* ---------------- AI Worker 설정 ---------------- */
-    WT.workerUrl = function () { return lsGet(WORKER_KEY); };
+    WT.DEFAULT_WORKER_URL = DEFAULT_WORKER_URL;
+    /* 저장값(사용자가 입력한 주소) > 기본 Worker 주소 순으로 쓴다.
+       [해제]를 누른 기기만 빈 값(즉시 초안 모드)이 된다. */
+    WT.workerUrl = function () {
+        var saved = lsGet(WORKER_KEY);
+        if (saved) return saved;
+        return lsGet(WORKER_OFF) === '1' ? '' : DEFAULT_WORKER_URL;
+    };
     function normUrl(u) {
         u = String(u || '').trim();
         if (!u) return '';
@@ -160,7 +171,11 @@
         }
         function open() {
             urlEl.value = WT.workerUrl();
-            status(WT.workerUrl() ? WT.P({ ko: '지금 연결된 주소가 저장되어 있습니다.', en: 'A worker address is saved.', ja: '接続先が保存されています。', zh: '已保存连接地址。', es: 'Hay una dirección guardada.' }) : '', '');
+            status(WT.workerUrl()
+                ? (lsGet(WORKER_KEY)
+                    ? WT.P({ ko: '지금 연결된 주소가 저장되어 있습니다.', en: 'A worker address is saved.', ja: '接続先が保存されています。', zh: '已保存连接地址。', es: 'Hay una dirección guardada.' })
+                    : WT.P({ ko: '기본 Worker 주소가 채워져 있습니다. 그대로 [저장하고 연결]을 눌러 보세요.', en: 'The default worker address is filled in. Press Save and connect.', ja: '既定のWorkerアドレスが入っています。そのまま[保存して接続]を押してください。', zh: '已填入默认 Worker 地址，直接按[保存并连接]即可。', es: 'La dirección por defecto ya está puesta. Pulsa Guardar y conectar.' }))
+                : '', '');
             modal.hidden = false;
             setTimeout(function () { try { urlEl.focus(); } catch (e) {} }, 30);
         }
@@ -175,6 +190,7 @@
             var u = normUrl(urlEl.value);
             if (!u) { status(WT.P({ ko: '주소를 입력해 주세요.', en: 'Enter an address.', ja: 'アドレスを入力してください。', zh: '请输入地址。', es: 'Introduce una dirección.' }), 'err'); return; }
             lsSet(WORKER_KEY, u);
+            lsDel(WORKER_OFF);
             status(WT.P({ ko: '저장했습니다. 연결을 확인합니다…', en: 'Saved. Checking the connection…', ja: '保存しました。接続を確認します…', zh: '已保存，正在检查连接…', es: 'Guardado. Comprobando la conexión…' }), '');
             ping(u).then(function (ok) {
                 status(ok
@@ -197,6 +213,7 @@
         });
         modal.querySelector('#wtAiClear').addEventListener('click', function () {
             lsDel(WORKER_KEY);
+            lsSet(WORKER_OFF, '1');
             urlEl.value = '';
             status(WT.P({ ko: '연결을 해제했습니다. 즉시 초안으로 동작합니다.', en: 'Disconnected. Drafts only.', ja: '解除しました。即時下書きで動きます。', zh: '已解除，将使用即时草稿。', es: 'Desconectado. Solo borradores.' }), '');
             paintAiState();
