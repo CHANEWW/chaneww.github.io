@@ -1545,3 +1545,9 @@ Object.assign(window.SVL_I18N_DICT, {
     "전개 시작": ["Start developing", "展開開始", "开始展开", "Iniciar desarrollo"],
     "처음부터": ["From the start", "最初から", "从头开始", "Desde el principio"]
 });
+
+/* 혼합물 분리 3D — 거름 단계 이전 표기 */
+Object.assign(window.SVL_I18N_DICT, {
+    "녹인 물": ["Water added", "溶かした水", "溶解的水", "Agua añadida"],
+    "비커의 모래": ["Sand in the beaker", "ビーカーの砂", "烧杯中的沙子", "Arena en el vaso"]
+});
