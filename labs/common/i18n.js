@@ -260,7 +260,8 @@ Object.assign(window.SVL_I18N_DICT, {
   "⏳ 준비 중…": ["⏳ Getting ready…", "⏳ 準備中…", "⏳ 准备中…", "⏳ Preparando…"],
   "{0}연속 콤보!": ["{0} in a row!", "{0}連続コンボ！", "连续 {0} 次！", "¡{0} seguidas!"],
   "{0}계단 상승!": ["Up {0} places!", "{0}段アップ！", "上升 {0} 名！", "¡Subes {0} puestos!"],
-  "다음엔 맞힐 수 있어요!": ["You'll get the next one!", "次は当たるよ！", "下一题一定行！", "¡La próxima la aciertas!"]
+  "다음엔 맞힐 수 있어요!": ["You'll get the next one!", "次は当たるよ！", "下一题一定行！", "¡La próxima la aciertas!"],
+  "방을 열면 QR과 6자리 코드가 나옵니다. 학생은 아바타를 골라 폰으로 들어와 3·2·1 카운트다운과 함께 게임쇼처럼 문제를 풉니다 — 콤보·꽃가루·시상대까지, 4지선다·O/X·워드클라우드·막대 투표·익명 의견 모두.": ["Open a room to get a QR and a 6-character code. Students pick an avatar, join from their phones and play game-show style with a 3·2·1 countdown — combos, confetti and a podium, plus 4-choice, O/X, word cloud, bar polls and anonymous comments.", "部屋を開くと QR と6桁のコードが出ます。生徒はアバターを選んでスマホから入り、3・2・1のカウントダウンでゲーム番組のように挑戦します。コンボ・紙吹雪・表彰台まで、4択・O/X・ワードクラウド・棒グラフ投票・匿名の意見もそのままです。", "开启房间会显示 QR 和 6 位代码。学生选好头像后用手机进入，伴着 3·2·1 倒计时像游戏节目一样作答——连击、彩带、领奖台，四选一、O/X、词云、柱状投票与匿名意见都保留。", "Al abrir una sala aparecen un QR y un código de 6 caracteres. El alumnado elige un avatar, entra desde el móvil y juega como en un concurso con cuenta 3·2·1: combos, confeti y podio, además de 4 opciones, O/X, nube de palabras, votación con barras y comentarios anónimos."]
 });
 
 /* ============================================================================
