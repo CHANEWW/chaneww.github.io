@@ -324,6 +324,42 @@ Object.assign(window.SVL_I18N_DICT, {
   "자동 진행 · ⏭ 자동 진행을 켜면 정답 공개 → 3초 → 중간 순위표 → 3초 → 다음 문제로 넘어갑니다.": ["Auto-play · turn on ⏭ Auto-play and it goes reveal → 3 s → standings → 3 s → next question.", "自動進行・⏭自動進行をオンにすると 正解発表 → 3秒 → 中間順位 → 3秒 → 次の問題 と進みます。", "自动进行 · 开启 ⏭ 自动进行后，公布答案 → 3 秒 → 中途排名 → 3 秒 → 下一题。", "Avance automático · activa ⏭ y pasa de respuesta → 3 s → clasificación → 3 s → siguiente pregunta."],
   "마무리 · 시상대로 1·2·3위를 보여 주고, 📊 결과 리포트에서 정답률과 CSV를 받습니다.": ["Wrap up · show the 1-2-3 podium, then get accuracy and a CSV from 📊 Result report.", "まとめ・表彰台で1・2・3位を見せ、📊結果レポートで正答率とCSVを得ます。", "收尾 · 用领奖台展示前三名，并在 📊 结果报告中获取正确率与 CSV。", "Cierre · muestra el podio de los tres primeros y obtén la precisión y el CSV en 📊 Informe."]
 });
+/* 실시간 퀴즈·투표 — BGM 테마 5종 · 문항 이미지(자동 압축·무료 이미지 검색) */
+Object.assign(window.SVL_I18N_DICT, {
+  "BGM 테마": ["BGM theme", "BGMテーマ", "BGM 主题", "Tema de BGM"],
+  "클래식 퀴즈쇼": ["Classic quiz show", "クラシック・クイズショー", "经典问答秀", "Concurso clásico"],
+  "8비트 아케이드": ["8-bit arcade", "8ビット・アーケード", "8 位街机", "Arcade de 8 bits"],
+  "긴장 서스펜스": ["Suspense", "サスペンス", "紧张悬念", "Suspense"],
+  "펑키 팝": ["Funky pop", "ファンキーポップ", "放克流行", "Pop funk"],
+  "차분한 집중": ["Calm focus", "静かな集中", "平静专注", "Concentración tranquila"],
+  "BGM 테마 · {0}": ["BGM theme · {0}", "BGMテーマ · {0}", "BGM 主题 · {0}", "Tema de BGM · {0}"],
+  "이미지 첨부": ["Add image", "画像を追加", "添加图片", "Añadir imagen"],
+  "이미지 검색": ["Image search", "画像検索", "搜索图片", "Buscar imagen"],
+  "🔍 이미지 검색": ["🔍 Image search", "🔍 画像検索", "🔍 搜索图片", "🔍 Buscar imagen"],
+  "이미지 지우기": ["Remove image", "画像を削除", "删除图片", "Quitar imagen"],
+  "긴 변 1000px로 줄여 저장": ["Saved with the long side at 1000 px", "長辺1000pxに縮小して保存", "长边缩至 1000px 保存", "Se guarda con 1000 px en el lado largo"],
+  "{0}KB · 자동 압축됨": ["{0} KB · auto-compressed", "{0}KB・自動圧縮済み", "{0}KB · 已自动压缩", "{0} KB · comprimido automáticamente"],
+  "이 문항의 이미지를 지울까요?": ["Remove the image from this item?", "この問題の画像を削除しますか？", "要删除这道题的图片吗？", "¿Quitar la imagen de este ítem?"],
+  "이미지를 넣었습니다 · {0}KB": ["Image added · {0} KB", "画像を入れました・{0}KB", "已添加图片 · {0}KB", "Imagen añadida · {0} KB"],
+  "이미지 준비 중…": ["Preparing the image…", "画像を準備中…", "正在准备图片…", "Preparando la imagen…"],
+  "이미지 파일만 넣을 수 있어요": ["Only image files can be added", "画像ファイルだけ入れられます", "只能添加图片文件", "Solo se pueden añadir imágenes"],
+  "이미지를 넣지 못했습니다": ["Could not add the image", "画像を入れられませんでした", "无法添加图片", "No se pudo añadir la imagen"],
+  "문항을 먼저 고른 뒤 붙여넣어 주세요": ["Choose an item first, then paste", "先に問題を選んでから貼り付けてください", "请先选择题目再粘贴", "Elige un ítem y luego pega"],
+  "문항을 눌러 Ctrl+V 로 붙여넣어 주세요": ["Tap an item, then press Ctrl+V to paste", "問題を押して Ctrl+V で貼り付けてください", "点击题目后按 Ctrl+V 粘贴", "Toca un ítem y pulsa Ctrl+V para pegar"],
+  "클립보드에 이미지가 없습니다": ["There is no image in the clipboard", "クリップボードに画像がありません", "剪贴板中没有图片", "No hay ninguna imagen en el portapapeles"],
+  "세트가 너무 커서 브라우저에 저장하지 못했습니다 · 이미지를 줄이거나 내보낸 뒤 정리하세요": ["The set is too large to save in this browser · shrink the images or export it and tidy up", "セットが大きすぎてブラウザに保存できません・画像を減らすか書き出して整理してください", "套组太大，无法保存到此浏览器 · 请减少图片或导出后整理", "El conjunto es demasiado grande para guardarlo en este navegador · reduce las imágenes o expórtalo y ordena"],
+  "검색어를 넣고 이미지를 찾아보세요 (예: 화산, 현미경, DNA)": ["Type a word and find an image (e.g. volcano, microscope, DNA)", "検索語を入れて画像を探してください（例：火山、顕微鏡、DNA）", "输入关键词搜索图片（例：火山、显微镜、DNA）", "Escribe una palabra y busca una imagen (p. ej. volcán, microscopio, ADN)"],
+  "찾는 중…": ["Searching…", "検索中…", "正在搜索…", "Buscando…"],
+  "검색 결과가 없습니다. 다른 낱말로 해 보세요.": ["No results. Try another word.", "検索結果がありません。別の言葉で試してください。", "没有搜索结果，请换个词试试。", "Sin resultados. Prueba otra palabra."],
+  "이미지를 불러오는 중…": ["Loading the image…", "画像を読み込み中…", "正在加载图片…", "Cargando la imagen…"],
+  "문항 이미지": ["Item image", "問題の画像", "题目图片", "Imagen del ítem"],
+  "무료 공개 이미지(위키백과·위키미디어 공용)를 검색해 고르거나, 내 사진을 골라 넣으세요. 넣은 그림은 긴 변 1000px로 자동으로 줄여 저장합니다.": ["Search free public images (Wikipedia and Wikimedia Commons) or add your own photo. Added pictures are scaled down to 1000 px on the long side and saved.", "無料の公開画像（ウィキペディア・ウィキメディア・コモンズ）を検索して選ぶか、自分の写真を入れてください。入れた画像は長辺1000pxに自動で縮小して保存します。", "可搜索并选择免费公开图片（维基百科、维基共享资源），也可添加自己的照片。添加的图片会自动将长边缩至 1000px 后保存。", "Busca imágenes públicas gratuitas (Wikipedia y Wikimedia Commons) o añade tu propia foto. Las imágenes se reducen a 1000 px en el lado largo y se guardan."],
+  "검색어 (예: 화산, 현미경, DNA)": ["Search (e.g. volcano, microscope, DNA)", "検索語（例：火山、顕微鏡、DNA）", "关键词（例：火山、显微镜、DNA）", "Buscar (p. ej. volcán, microscopio, ADN)"],
+  "이미지 검색어": ["Image search words", "画像の検索語", "图片关键词", "Palabras de búsqueda"],
+  "위키백과·위키미디어 공용의 자유 이용 이미지입니다. 출처 표기는 수업 자료에 함께 적어 주세요.": ["Free-to-use images from Wikipedia and Wikimedia Commons. Please credit the source in your class materials.", "ウィキペディア・ウィキメディア・コモンズの自由利用画像です。出典を授業資料に添えてください。", "这些是维基百科、维基共享资源的自由使用图片，请在上课资料中标明出处。", "Imágenes de uso libre de Wikipedia y Wikimedia Commons. Cita la fuente en tus materiales de clase."],
+  "📁 내 파일": ["📁 My file", "📁 自分のファイル", "📁 我的文件", "📁 Mi archivo"],
+  "📋 붙여넣기": ["📋 Paste", "📋 貼り付け", "📋 粘贴", "📋 Pegar"]
+});
 /* ============================================================================
    Science Virtual LAB — 공용 다국어 모듈 (labs/common/i18n.js)
    ----------------------------------------------------------------------------
