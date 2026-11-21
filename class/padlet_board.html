@@ -408,7 +408,7 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
 .join-box{display:flex; flex-direction:column; align-items:center; gap:10px}
 .join-code{font-size:34px; font-weight:900; letter-spacing:.22em; padding-left:.22em; color:var(--ink)}
 .join-qr{width:min(260px,70vw); aspect-ratio:1; background:#fff; border-radius:14px; padding:10px; border:1px solid var(--line)}
-.join-qr svg{display:block; width:100%; height:100%}
+.join-qr svg, .join-qr img, .join-qr canvas{display:block; width:100%; height:100%}
 .join-url{
     width:100%; display:flex; align-items:center; gap:8px; padding:9px 11px; border-radius:11px;
     background:var(--card2); border:1px solid var(--line); font-size:11px; font-weight:800; color:var(--ink2);
@@ -2061,26 +2061,30 @@ body.dark-mode .cmt-form input{background:rgba(0,0,0,.26); border-color:rgba(255
     function drawQr(box, url) {
         if (!box) return;
         box.innerHTML = '';
-        if (typeof window.QRCode !== 'function') {
+        var shown = function () {
             box.innerHTML = '<div style="font-size:11px;font-weight:800;color:#555;padding:10px;text-align:center;word-break:break-all">' + esc(url) + '</div>';
-            return;
-        }
+        };
+        if (typeof window.QRCode !== 'function') { shown(); return; }
         var tmp = document.createElement('div');
         try {
             new window.QRCode(tmp, { text: url, width: 640, height: 640, correctLevel: window.QRCode.CorrectLevel.M });
-        } catch (e) {
-            box.innerHTML = '<div style="font-size:11px;font-weight:800;color:#555;padding:10px">' + esc(url) + '</div>';
-            return;
+        } catch (e) { shown(); return; }
+        /* qrcodejs는 다 그린 뒤 캔버스를 display:none으로 숨기고 img로 갈아 끼운다.
+           그 img는 tmp 안에서 비동기로 준비되므로, 지금 그려진 캔버스 그림을 img로 옮겨 바로 보여 준다. */
+        var made = tmp.querySelector('canvas');
+        if (made) {
+            try {
+                var pic = new Image();
+                pic.src = made.toDataURL('image/png');
+                pic.alt = '참여 QR 코드';
+                made = pic;
+            } catch (e) {}
         }
-        var made = tmp.querySelector('canvas') || tmp.querySelector('img');
-        if (!made) {
-            box.innerHTML = '<div style="font-size:11px;font-weight:800;color:#555;padding:10px">' + esc(url) + '</div>';
-            return;
-        }
+        if (!made) made = tmp.querySelector('img');
+        if (!made || (made.tagName === 'IMG' && !made.getAttribute('src'))) { shown(); return; }
         made.style.width = '100%';
         made.style.height = '100%';
         made.style.display = 'block';
-        made.style.imageRendering = 'pixelated';
         box.appendChild(made);
     }
 
